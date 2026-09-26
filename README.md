@@ -2537,6 +2537,16 @@ drives the real window offscreen and writes `docs/learn/img/`:
 Re-run it after any UI change and commit what moves — otherwise the guide
 slowly starts describing an app that no longer exists.
 
+It needs `vidforge/` beside the checkout and refuses to run without it, because
+the Video shots would otherwise show the "vidforge unavailable" notice. A Claude
+worktree has no `vidforge/` (it is its own git-ignored repo), so symlink the main
+checkout's copy in for the run and remove the link afterwards. Each shot's setup
+reaches its control through the owning panel (`w.video_panel.video_tabs`, not
+`w.video_tabs`) and selects sub-tabs by caption, not index, so a reordered tab
+raises instead of photographing the wrong page. `tests/test_learning_shots.py`
+runs every setup against a real window, so drift after a panel refactor fails
+the suite rather than the next regeneration.
+
 `tests/test_learning_center.py` guards the parts that rot silently: manifest and
 module coverage, lesson contracts, anchored search, evidence taxonomy, Best Fit
 semantics, image/link resolution, reproducible screenshots, agent coverage, and

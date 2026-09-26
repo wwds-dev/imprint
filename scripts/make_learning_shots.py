@@ -29,31 +29,63 @@ OUT_DIR = PROJECT_ROOT / "docs" / "learn" / "img"
 # needs from a reference screenshot.
 WINDOW = (1760, 1080)
 
+def _show_tab(tabs, label: str) -> None:
+    """Switch a QTabWidget to the tab captioned `label`.
+
+    By caption, not index: inserting a tab shifts every index after it, and a
+    wrong index still grabs *a* tab, so the screenshot silently shows the wrong
+    page — Social's Accounts shot was capturing Analytics that way. A caption
+    that no longer exists raises instead.
+
+    Also scrolls the tab widget into view: Creator's tabs sit below a form that
+    grew past the window, and a selected tab whose page is off-screen makes a
+    screenshot of the form instead.
+    """
+    from PySide6.QtWidgets import QScrollArea
+
+    captions = [tabs.tabText(i) for i in range(tabs.count())]
+    if label not in captions:
+        raise LookupError(f"no tab {label!r}; tabs are {captions}")
+    tabs.setCurrentIndex(captions.index(label))
+    parent = tabs.parentWidget()
+    while parent is not None and not isinstance(parent, QScrollArea):
+        parent = parent.parentWidget()
+    if parent is not None:
+        parent.ensureWidgetVisible(tabs, 0, 0)
+
+
 # (filename, agent key, optional setup callable)
+#
+# Setups reach each control through the panel that owns it — since the
+# 2026-09-21 extractions the window carries no aliases for panel widgets.
+# tests/test_learning_shots.py runs every setup, so drift fails the suite
+# instead of this script.
 SHOTS: list[tuple[str, str, object]] = [
     ("workspace-draft.png", "author", None),
     ("workspace-publish.png", "author",
-     lambda w: (w._author_set_mode("pubmkt"), w._author_set_sub_mode("publish"))),
+     lambda w: (w.author_panel.set_mode("pubmkt"),
+                w.author_panel.set_sub_mode("publish"))),
     ("workspace-market.png", "author",
-     lambda w: (w._author_set_mode("pubmkt"), w._author_set_sub_mode("market"))),
+     lambda w: (w.author_panel.set_mode("pubmkt"),
+                w.author_panel.set_sub_mode("market"))),
     ("agent-manuscript.png", "manuscript", None),
     ("agent-music.png", "music", None),
     ("agent-webdesign.png", "webdesign", None),
     ("agent-fiverr.png", "fiverr", None),
     ("agent-video.png", "video", None),
     ("agent-video-library.png", "video",
-     lambda w: w.video_tabs.setCurrentIndex(1)),
+     lambda w: _show_tab(w.video_panel.video_tabs, "Library")),
     ("agent-social.png", "social", None),
     ("agent-social-accounts.png", "social",
-     lambda w: w.social_tabs.setCurrentIndex(2)),
+     lambda w: _show_tab(w.social_panel.social_tabs, "Accounts")),
     ("agent-creator.png", "creator", None),
     ("agent-creator-earnings.png", "creator",
-     lambda w: w.creator_tabs.setCurrentIndex(2)),
+     lambda w: _show_tab(w.creator_panel.creator_tabs, "Earnings")),
     ("agent-venture.png", "venture", None),
     ("agent-venture-content.png", "venture",
-     lambda w: w.venture_dashboard.sections.setCurrentIndex(2)),
+     lambda w: _show_tab(w.venture_dashboard.sections, "Content Intelligence")),
     ("agent-audiobook-listen.png", "audiobook",
-     lambda w: w.audiobook_tabs.setCurrentIndex(1)),
+     lambda w: _show_tab(w.audiobook_panel.audiobook_tabs, "Listen")),
 ]
 
 
@@ -70,6 +102,14 @@ def main() -> int:
     try:
         app = QApplication.instance() or QApplication([])
         window = app_main.GodAI()
+        # Without vidforge the Video panel is a notice, not the workspace —
+        # the shots would document an error. A worktree has no vidforge/
+        # (it is its own git-ignored repo), so this is the usual way in.
+        if not window.video_panel._available:
+            print("vidforge is not importable from this checkout; the Video "
+                  "shots would show the unavailable notice. Run from a "
+                  "checkout with vidforge/ in it.", file=sys.stderr)
+            return 1
         window.show()
         _settle(app)
         window.resize(*WINDOW)
