@@ -8,5 +8,6 @@
 315882efd1746f0005b4f65e96faf45c56ca90d8:services/database.py:generic-api-key:198
 
 # Same false positive, caught in this file: an earlier revision of these
-# comments quoted the offending line verbatim.
-50c01218c548a3bf863ad6488d535d61db6479ef:.gitleaksignore:generic-api-key:2
+# comments quoted the offending line verbatim. Re-pinned after the 2026-09-27
+# history rewrite changed that revision's commit SHA.
+5f0664cbe7a2a68c06b790da5643826c87f310e7:.gitleaksignore:generic-api-key:2
