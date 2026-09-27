@@ -44,11 +44,14 @@ class SunoPanel(QWidget):
         self.generate = QPushButton("Draft songs & Suno prompts")
         self.generate.clicked.connect(self.draft)
         layout.addWidget(self.generate)
+        # Named, not anonymous: Learning Centre "Show me" steps point at them.
         row = QHBoxLayout()
-        for label, action in [("New", self.new), ("Save", self.save),
-                              ("Copy selected / all", self.copy), ("Open Suno", self.open_suno)]:
+        for name, label, action in [("new_btn", "New", self.new), ("save_btn", "Save", self.save),
+                                    ("copy_btn", "Copy selected / all", self.copy),
+                                    ("open_suno_btn", "Open Suno", self.open_suno)]:
             button = QPushButton(label)
             button.clicked.connect(action)
+            setattr(self, name, button)
             row.addWidget(button)
         layout.addLayout(row)
         self.tracks = QListWidget()
@@ -56,10 +59,13 @@ class SunoPanel(QWidget):
         self.tracks.itemDoubleClicked.connect(self.play)
         layout.addWidget(self.tracks)
         row = QHBoxLayout()
-        for label, action in [("Import audio", self.import_audio), ("Move up", lambda: self.move(-1)),
-                              ("Move down", lambda: self.move(1)), ("Open album folder", self.open_folder)]:
+        for name, label, action in [("import_btn", "Import audio", self.import_audio),
+                                    ("up_btn", "Move up", lambda: self.move(-1)),
+                                    ("down_btn", "Move down", lambda: self.move(1)),
+                                    ("folder_btn", "Open album folder", self.open_folder)]:
             button = QPushButton(label)
             button.clicked.connect(action)
+            setattr(self, name, button)
             row.addWidget(button)
         layout.addLayout(row)
         self.status = QLabel("Double-click an imported track to listen in your audio player.")

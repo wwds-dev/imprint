@@ -14,7 +14,7 @@
 
   "author_title_input": "draft#control-atlas",
   "author_name_input": "draft#control-atlas",
-  "author_type_box": "draft#control-atlas",
+  "author_content_type_box": "draft#control-atlas",
   "author_genre_box": "draft#control-atlas",
   "author_tone_box": "draft#control-atlas",
   "author_pov_box": "draft#control-atlas",
@@ -57,7 +57,7 @@
 
   "music_provider_box": "best-fit#the-two-recommendations",
   "music_model_box": "best-fit#the-two-recommendations",
-  "music_generate_btn": "music#worked-run",
+  "music_analyse_btn": "music#step-9-optional-plan-the-release",
   "music_save_btn": "music#verification",
   "music_clear_btn": "music#control-atlas",
   "music_stop_btn": "music#cost-cancellation-and-gates",
@@ -96,7 +96,7 @@
 
   "webdesign_provider_box": "best-fit#the-two-recommendations",
   "webdesign_model_box": "best-fit#the-two-recommendations",
-  "webdesign_generate_btn": "site-builder#worked-run",
+  "webdesign_generate_btn": "site-builder#step-5-generate",
   "webdesign_copy_btn": "site-builder#control-atlas",
   "webdesign_save_btn": "site-builder#verification",
   "webdesign_clear_btn": "site-builder#control-atlas",

@@ -743,6 +743,43 @@ def test_workspace_names_are_never_elided(app, window):
     ]
 
 
+def test_narrow_header_overflows_workspaces_instead_of_scrolling(app, window):
+    """Scroll arrows clipped "Assistant" to "Assist" and sat on top of it.
+
+    Narrow headers now drop chrome, then list trailing workspaces under
+    More; a tab that is shown is shown whole, and the selected workspace is
+    always a real tab.
+    """
+    tabs = window.workspace_tabs
+    assert not tabs.usesScrollButtons()
+
+    _settle(app, window, (1500, 950), "author")
+    assert window.header_fitter.hidden_tabs() == []
+    assert not window.workspace_more_btn.isVisible()
+
+    for size in ((1100, 700), (1000, 600)):
+        _settle(app, window, size, "chat")
+        hidden = window.header_fitter.hidden_tabs()
+        assert hidden and window.workspace_more_btn.isVisible()
+        assert tabs.isTabVisible(tabs.currentIndex())
+        assert tabs.tabText(tabs.currentIndex()) == "Assistant"
+        assert tabs.width() >= tabs.sizeHint().width()
+        assert [a.text() for a in window.header_fitter.menu.actions()] == [
+            tabs.tabText(i) for i in hidden]
+        assert window.workspace_more_btn.geometry().right() < (
+            window.settings_btn.geometry().left())
+
+    # Picking from the menu opens that workspace and makes it a real tab.
+    target = window.header_fitter.hidden_tabs()[0]
+    window.header_fitter.menu.actions()[0].trigger()
+    for _ in range(6):
+        app.processEvents()
+    assert tabs.currentIndex() == target and tabs.isTabVisible(target)
+
+    _settle(app, window, (1500, 950), "author")
+    assert window.header_fitter.hidden_tabs() == []
+
+
 def test_studio_assistant_workspace_opens_the_existing_chat_panel(app, window):
     window.select_agent("chat")
     app.processEvents()

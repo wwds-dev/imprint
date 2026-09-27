@@ -34,6 +34,17 @@ remain at the location chosen by the user, including after Project deletion.
   - `AuthorAgent.build_publish_messages(prompt, book_profile_context)` /
     `build_market_messages(prompt, book_profile_context)` — same pattern using
     `PUBLISH_SYSTEM_PROMPT` / `MARKET_SYSTEM_PROMPT`.
+- `panel.py` — `AuthorPanel`, the manuscript workbench: the project bar and
+  Book Profile, the Write page (compose deck, manuscript/outline/characters/
+  world tabs, chapters tab, document bar), and the Publish & Market sub-pages,
+  each of the three flows (write/continue, publish, market) keeping its own
+  request token and running-worker guard so Stop only ever cancels its own
+  flow. Save Draft and EPUB/DOCX/PDF export record project artifact links
+  without taking ownership of the files on disk. Host-control aliases were
+  retired 2026-09-21: the panel no longer mirrors its widgets onto the
+  umbrella (`HOST_CONTROLS` stays only as the published contract of what it
+  owns); the next-step advisor now reads this panel directly, with a `None`
+  guard for when it has not been built yet.
 - `book_exporter.py` — chapter detection (`split_into_chapters()`,
   `find_chapter_offsets()`) and EPUB/DOCX/PDF export (`export_book()`).
 - `recommendations.py` — exports `RECOMMENDATION_PROFILE` (an `AgentProfile`)

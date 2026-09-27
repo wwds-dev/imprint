@@ -80,6 +80,22 @@ def test_resource_monitor_degrades_when_os_metrics_are_unavailable(monkeypatch):
     assert snapshot["battery_percent"] is None
 
 
+def test_resource_monitor_never_sleeps_on_the_ui_thread(monkeypatch):
+    """The window samples every second on the UI thread. interval=0.2 made
+    psutil sleep there for a fifth of every second; with five windows in one
+    test process the event loop did nothing but sleep and the suite stalled."""
+    intervals = []
+
+    def cpu_percent(*_args, interval=0.0, **_kwargs):
+        intervals.append(interval)
+        return 12.5
+
+    monkeypatch.setattr(resource_monitor.psutil, "cpu_percent", cpu_percent)
+    snapshot = resource_monitor.ResourceMonitor().snapshot()
+    assert snapshot["cpu_percent"] == 12.5
+    assert intervals and all(interval is None for interval in intervals)
+
+
 def test_every_workspace_agent_is_registered_and_enabled(tmp_path, monkeypatch):
     """A panel the validator refuses is a button that never works.
 

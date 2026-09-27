@@ -79,3 +79,69 @@ Calendar and Media default to all work under the selected account; each has a
   hurt a live content calendar — and a `provider_affinity` table ranking
   Anthropic (.98) and OpenAI (.96) above Gemini (.91), Qwen (.85), Kimi (.83)
   and DeepSeek (.78) for this task type.
+
+- **`panel.py`** — owns the complete Brand Creator workspace: the profile
+  form, consent-aware compose controls, and all seven tabs (Draft, Calendar,
+  Earnings, Voice, Media, Agency, Records) with every handler, moved here
+  from `main.py` in the Phase 4 extraction. Request tokens live on the
+  panel — "creator" is shared by the text drafting flow and the Higgsfield
+  teaser (whose token rides in its own job context) — so nothing resolves a
+  request by agent name alone. The Earnings tab wires `earnings_csv.py`'s
+  importer and `insights.py`'s outcome recorder to `CreatorEarningsView`; the
+  Voice/persona tab reads and writes through `profile.py`; the account form's
+  policy status/button go through `platform_policy.py`. The old
+  `setattr(host, name, ...)` alias loop that mirrored every `HOST_CONTROLS`
+  widget onto the umbrella was retired 2026-09-21 (commit `8de6d7c`) — shared
+  code that used to read `window.<control>` directly now goes through
+  `host._find_control()`; `HOST_CONTROLS` stays defined as the published
+  contract of what this panel owns. Workers (chat generation, video estimate,
+  video render) stay host attributes so the umbrella's global shutdown sweep
+  keeps seeing them.
+
+- **`profile.py`** — voice profiles and persona bibles, kept out of `agent.py`
+  so the prompt builder stays about prompts and this stays about storage.
+  `load_voice`/`save_voice`/`voice_block(account_id)` hold an account's own
+  writing samples (capped at `MAX_SAMPLES=6`), tone, emoji style, banned
+  words and typical length — `voice_block()` is what stops drafts reading
+  like generic AI copy, since the model is shown how the account actually
+  writes rather than told to be "engaging." `load_persona`/`save_persona`/
+  `persona_block(account_id)` hold a synthetic persona's appearance,
+  backstory, personality and boundaries plus a locked `seed` and
+  `reference_images`, so repeated Higgsfield renders stay the same character
+  rather than drifting between requests; `save_persona` explicitly preserves
+  any field the caller doesn't pass (a past bug wiped `reference_images` on
+  every save by defaulting every omitted field to `""`). Also defines
+  `SEGMENTS` — the new-subscriber / loyal / lapsed / big-spender audience
+  notes `agent.py.build_draft_prompt` injects into the brief.
+
+- **`platform_policy.py`** — the reviewed, per-platform rule store behind
+  `require_ready()`'s persona/AI-disclosure checks in `agent.py`. `get_policy`/
+  `save_policy` persist whether synthetic personas and AI disclosure are
+  `unknown` / `allowed` / `prohibited` for a platform, with `save_policy`
+  refusing to record a definite (non-`unknown`) rule unless a source URL and
+  a reviewed-on date are given — an unverified guess about a platform's rules
+  is treated as worse than not knowing, per the module's own docstring
+  ("unknown rules never imply permission").
+
+- **`earnings_csv.py`** — statement importer for subscription platforms with
+  no public API: `parse_creator_csv(path)` matches gross/net/subscriber/
+  period columns by case-insensitive substring (header names differ between
+  platforms and change over time) and keeps each parsed row's raw source data
+  alongside the totals, so a number that looks wrong can be traced back.
+  `ingest_creator_csv(account_id, path)` stores the parsed statement into
+  `creator_earnings`, keyed on `(account_id, source_file)` so re-importing the
+  same export updates it instead of double-counting revenue. Modelled
+  directly on `agents/manuscript/kdp_csv_parser.py`, for the same reason.
+
+- **`insights.py`** — the loop back from posted content to the next draft.
+  `record_outcome(...)` attaches a manually verified outcome (reach, clicks,
+  subscriptions, PPV purchases, revenue, attributable cost, source and
+  measurement window) to a piece of content; `price_history(account_id)`
+  summarizes revenue by PPV price point and feeds straight into
+  `agent.py.build_draft_prompt`'s `price_history` argument, so a PPV price is
+  pitched against what has actually converted rather than picked blind.
+  Below `CONFIDENT_SAMPLE = 5` sends at a price point, the summary flags it as
+  "(few sends)" rather than presenting an anecdote as a finding.
+  `agency_overview()` backs the Agency tab (every account's net, subscribers
+  and open drafts side by side); `commission()` splits a managed account's
+  net between creator and manager at an agreed rate.

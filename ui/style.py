@@ -554,6 +554,18 @@ GLOBAL_STYLESHEET = f"""
             border-bottom: 2px solid {ACCENT};
             font-weight: 650;
         }}
+        /* Overflow for workspaces that do not fit; reads as one more tab. */
+        QToolButton#WorkspaceMore {{
+            background: transparent;
+            color: {TEXT_MUTE};
+            border: none;
+            padding: 0 3px;
+            margin: 0 7px;
+            font-size: 12px;
+            font-weight: 550;
+        }}
+        QToolButton#WorkspaceMore:hover {{ color: {TEXT_DIM}; }}
+        QToolButton#WorkspaceMore::menu-indicator {{ image: none; width: 0; }}
 
         /* ── Feedback ──────────────────────────────────────────────── */
         QProgressBar {{

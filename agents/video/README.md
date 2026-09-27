@@ -23,8 +23,33 @@ Run focused coverage with `pytest tests/test_media_generation.py tests/test_vidf
 - `panel.py` — owns the Render/Library workspace, provider/model constraints,
   preflight estimates, exact request tokens, pipeline and direct-provider
   lifecycles, safe cancellation semantics, progress, errors and the shared
-  vidforge output library. The umbrella retains only compatibility delegates
-  and worker visibility for global shutdown.
+  vidforge output library. Host-control aliases were retired 2026-09-21: the
+  panel no longer mirrors its widgets onto the umbrella (`HOST_CONTROLS`
+  stays only as the published contract of what it owns); the umbrella now
+  retains only thin compatibility delegates plus the worker attributes its
+  global shutdown sweep watches, with shared consumers resolving controls
+  through `GodAI._find_control()`.
+- `jobs.py` — the durable `video_jobs` record behind direct-provider render
+  resume: `record_submission()` writes the intent row before the create POST
+  (so a row with no `job_id` means the app died between the POST and the
+  provider's reply, not that money definitely moved); `update_job()` persists
+  each provider transition; `mark_terminal()` closes a row while keeping
+  whatever terminal status the provider already stamped; `pending_rows()`
+  lists acknowledged-but-unfinished jobs for `VideoPanel.resume_pending_jobs()`
+  to pick back up after a restart; `sweep_lost()` marks never-acknowledged
+  submissions `lost` and releases their budget reservation instead of
+  silently billing or dropping them. Qt-free on purpose so tests and CLI
+  tools can use it.
+- `workers.py` — `VideoResumeWorker` (`QThread`), the resume half of the
+  render workers (the submit-and-wait workers live in `ui/workers.py`):
+  re-polls a persisted provider job by rebuilding the provider-specific job
+  object (Higgsfield/Qwen from the saved job id, Gemini via `resume_video()`,
+  since reconstructing that job is itself a network poll), then waits,
+  downloads and reports completion — it only ever reads status and
+  downloads, so resuming can never double-spend. A local poll timeout is
+  tracked separately from a provider-reported terminal status, so a
+  timed-out row stays pending for the next launch instead of being marked
+  failed.
 - `studio.py` — the adapter to `vidforge`, a **separate git repository**
   nested at `imprint/vidforge/` and imported rather than vendored, so the
   standalone `vidforge.app` and Imprint's Video mode share one checkout, one

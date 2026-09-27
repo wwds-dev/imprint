@@ -96,15 +96,15 @@ class ResourceStatusCard(RailCard):
 
 
 class RoutingStatusCard(RailCard):
-    """Last route and explainable best-fit recommendation."""
+    """Last Chat route and recommendation for the current Chat prompt."""
 
     def __init__(self):
-        super().__init__("Routing status and best-fit recommendation")
+        super().__init__("Chat routing and recommendation for the current prompt")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SM, SM, SM, SM)
         layout.setSpacing(XS)
 
-        layout.addWidget(_label("Last decision", "RailFieldName"))
+        layout.addWidget(_label("Last Chat request", "RailFieldName"))
         self.route_value = _label("Not computed", "RailPrimaryValue")
         layout.addWidget(self.route_value)
 
@@ -115,7 +115,7 @@ class RoutingStatusCard(RailCard):
 
         heading = QHBoxLayout()
         heading.setSpacing(XS)
-        heading.addWidget(_label("Best fit", "RailFieldName"))
+        heading.addWidget(_label("Best fit for Chat prompt", "RailFieldName"))
         heading.addStretch()
         self.score_badge = _label("—", "RailScoreBadge")
         self.score_badge.setAlignment(Qt.AlignCenter)
@@ -125,7 +125,7 @@ class RoutingStatusCard(RailCard):
         self.recommendation_value = _label("Not calculated", "RailPrimaryValue")
         layout.addWidget(self.recommendation_value)
         self.reason_label = _label(
-            "Choose a task to calculate a recommendation.", "RailDetail")
+            "Type a Chat prompt to refine this recommendation.", "RailDetail")
         layout.addWidget(self.reason_label)
         self.availability_label = _label("", "RailAvailability")
         layout.addWidget(self.availability_label)

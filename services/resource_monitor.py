@@ -5,6 +5,12 @@ from types import SimpleNamespace
 class ResourceMonitor:
     def __init__(self):
         self.previous = None  # stores the previous snapshot so we can detect whether values are rising or falling
+        # Start the CPU measurement window, so the first snapshot reports
+        # usage since construction rather than a meaningless 0.
+        try:
+            psutil.cpu_percent(interval=None)
+        except (OSError, RuntimeError):
+            pass
 
     def _trend(self, current_value: float, previous_value: float | None, tolerance: float = 0.5) -> str:
         if previous_value is None:
@@ -36,8 +42,11 @@ class ResourceMonitor:
             sm = psutil.swap_memory()
         except (OSError, RuntimeError):
             sm = SimpleNamespace(percent=0.0, used=0, total=0)
+        # interval=None: usage since the previous call, returned at once. The
+        # window samples this every second on the UI thread, and interval=0.2
+        # slept there for 200 ms of every second — a fifth of all UI time.
         try:
-            cpu = psutil.cpu_percent(interval=0.2)
+            cpu = psutil.cpu_percent(interval=None)
         except (OSError, RuntimeError):
             cpu = 0.0
 

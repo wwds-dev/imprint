@@ -105,6 +105,45 @@ def _resolve_attribute(root, path: str):
     return value
 
 
+def resolve_control(host, path: str):
+    """Find the control a help target or "Show me" link names.
+
+    The first name goes through the host's ``_find_control`` when it has
+    one, so it also finds controls the agent panels own: since the panel
+    extraction the host no longer mirrors them, and a plain getattr on the
+    host missed 119 of the 139 help targets. Later names are attributes,
+    for controls inside a sub-panel (``music_suno_panel.brief``).
+    """
+    first, _, rest = path.partition(".")
+    finder = getattr(host, "_find_control", None)
+    value = finder(first) if callable(finder) else getattr(host, first, None)
+    if value is None or not rest:
+        return value
+    return _resolve_attribute(value, rest)
+
+
+SHOW_ME_LINK = re.compile(r"\[([^\]]+)\]\(show:([\w.]+)\)")
+
+
+def show_me_steps(text: str) -> dict[str, tuple[str, str]]:
+    """Map each "Show me" control path in a lesson to its step heading.
+
+    Returns ``{path: (heading, anchor)}``. The heading is what the callout
+    says beside the control; the anchor is where "Back to lesson" returns.
+    A path is expected once per lesson — a test holds lessons to that.
+    """
+    steps: dict[str, tuple[str, str]] = {}
+    heading, anchor = "", ""
+    for line in text.splitlines():
+        match = re.match(r"^#{1,4}\s+(.+?)\s*$", line)
+        if match:
+            heading, anchor = _plain(match.group(1)), _anchor(match.group(1))
+            continue
+        for _label, path in SHOW_ME_LINK.findall(line):
+            steps.setdefault(path, (heading, anchor))
+    return steps
+
+
 def install_learning_targets(host, resource_dir: Path) -> int:
     """Attach manifest-backed help targets to currently built controls."""
     path = learn_dir(resource_dir) / "help_map.json"
@@ -113,7 +152,7 @@ def install_learning_targets(host, resource_dir: Path) -> int:
     mapping = json.loads(path.read_text(encoding="utf-8"))
     installed = 0
     for attribute, target in mapping.items():
-        widget = _resolve_attribute(host, attribute)
+        widget = resolve_control(host, attribute)
         if widget is not None and hasattr(widget, "setProperty"):
             widget.setProperty("imprintLearnTarget", target)
             installed += 1
@@ -232,7 +271,18 @@ td {{ color: {TEXT_DIM}; border: 1px solid {BORDER}; padding: 9px 11px;
       vertical-align: top; }}
 hr {{ border: 0; border-top: 1px solid {BORDER}; margin: 30px 0; }}
 img {{ margin: 15px 0 9px 0; }}
+a.showme {{ color: {ACCENT}; background: {ACCENT_WASH}; font-weight: 650;
+           font-size: 13px; }}
 """
+
+
+def _style_show_me(html: str) -> str:
+    """Make "Show me" links read as an action, not as another cross-reference.
+
+    QTextBrowser's CSS has no attribute selectors, so the class is added here.
+    """
+    return re.sub(r'<a href="show:([\w.]+)">([^<]+)</a>',
+                  r'<a class="showme" href="show:\1">&nbsp;▶ \2&nbsp;</a>', html)
 
 
 def _fit_images(html: str, viewport_width: int) -> str:
@@ -262,6 +312,7 @@ class LearningCentreDialog(QDialog):
         self.settings = QSettings("Imprint", "Imprint")
         self.current_page: LearnPage | None = None
         self.current_anchor = ""
+        self.current_raw = ""
         self._nav_forced = False
         self._building_navigation = False
 
@@ -613,6 +664,8 @@ class LearningCentreDialog(QDialog):
         html = markdown.markdown(
             raw, extensions=["tables", "fenced_code", "toc", "sane_lists"])
         html = _fit_images(html, max(self.browser.viewport().width(), 700))
+        html = _style_show_me(html)
+        self.current_raw = raw
         self.browser.setSearchPaths([
             str(path.parent), str(self.base), str(self.base / "modules")])
         self.browser.document().setDefaultStyleSheet(DOCUMENT_CSS)
@@ -707,8 +760,10 @@ class LearningCentreDialog(QDialog):
             "social": "social_tabs",
             "creator": "creator_tabs",
         }
-        tab_widget = getattr(
-            self.host, tab_widgets.get(self.current_page.agent, ""), None)
+        # Through resolve_control: these tabs moved into the agent panels,
+        # and a getattr on the host found none of them.
+        name = tab_widgets.get(self.current_page.agent, "")
+        tab_widget = resolve_control(self.host, name) if name else None
         if tab_widget is not None and self.current_page.tab:
             for index in range(tab_widget.count()):
                 if tab_widget.tabText(index) == self.current_page.tab:
@@ -732,6 +787,9 @@ class LearningCentreDialog(QDialog):
 
     def _on_link(self, url: QUrl) -> None:
         path = url.path()
+        if url.scheme() == "show":
+            self.show_me(path)
+            return
         if path.endswith(".md"):
             self.select_page(Path(path).name, url.fragment())
             return
@@ -742,6 +800,46 @@ class LearningCentreDialog(QDialog):
         if url.fragment():
             self.current_anchor = url.fragment()
             self.browser.scrollToAnchor(url.fragment())
+
+
+    def show_me(self, control_path: str) -> bool:
+        """Close the lesson and ring the real control it is talking about.
+
+        The lesson's agent is opened first so the control is on screen; the
+        spotlight then switches whichever tabs hold it. "Back to lesson"
+        reopens this page at the step the link sits under.
+        """
+        page = self.current_page
+        if page is None:
+            return False
+        if page.agent:
+            selector = getattr(self.host, "select_agent", None)
+            if callable(selector):
+                selector(page.agent)
+        widget = resolve_control(self.host, control_path)
+        if widget is None:
+            self.lesson_meta.setText(
+                "That control has moved — this step needs updating.")
+            return False
+        heading, anchor = show_me_steps(
+            self.current_raw).get(control_path, (page.title, ""))
+        reopen = getattr(self.host, "show_learning_center", None)
+        page_id = page.id
+
+        def back() -> None:
+            if callable(reopen):
+                try:
+                    reopen(start_page=page_id, start_anchor=anchor)
+                except TypeError:
+                    reopen()
+
+        from ui.spotlight import spotlight
+        self.spotlight = spotlight(
+            widget, heading, page.title, back if callable(reopen) else None)
+        self.settings.setValue("learning/last_page", page_id)
+        self.settings.setValue("learning/last_anchor", anchor)
+        self.accept()
+        return True
 
 
 def show_learning_center(app, resource_dir: Path,

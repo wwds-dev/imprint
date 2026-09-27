@@ -2563,6 +2563,16 @@ The interactive worksheets perform deterministic arithmetic on user-supplied
 observations or explicitly hypothetical scenarios. They do not fetch market
 data, fill missing denominators, predict demand, or project lifetime value.
 
+## Housekeeping
+
+`_to_delete/` holds stray, empty `.git/index.lock` files quarantined from an
+earlier device-bridge session (the bridge's shell can create a transient lock
+during a read-only `git status`/`git diff` call but cannot delete it
+afterward — see the Lab Project Monitor's own documentation for the full
+explanation). They are 0-byte and safe to delete by hand; kept here rather
+than left scattered in `.git/` so a future cleanup pass can remove them in
+one place.
+
 <!--
 Legacy pre-v2 income examples retained temporarily in source history for the
 documentation migration. They are intentionally hidden because their dated

@@ -274,3 +274,130 @@ def test_focused_control_resolves_to_contextual_help(app):
     parent.setProperty("imprintLearnTarget", "draft#control-atlas")
     child = QPushButton(parent)
     assert learning_target_for_widget(child) == ("draft", "control-atlas")
+
+
+# ── "Show me" and context help against the real window ────────────────────
+#
+# A lesson that names a control is only as good as the name. These build the
+# window once and hold every name in the handbook to a control that exists,
+# so moving or renaming one fails here instead of in front of a learner.
+
+SHOW_ME_PAGES = [page for page in _pages()
+                 if "(show:" in (LEARN_DIR / page.filename).read_text(encoding="utf-8")]
+
+
+@pytest.fixture(scope="module")
+def window(app):
+    from PySide6.QtWidgets import QMessageBox
+    import main
+
+    saved = (QMessageBox.warning, QMessageBox.information)
+    QMessageBox.warning = staticmethod(lambda *a, **k: None)
+    QMessageBox.information = staticmethod(lambda *a, **k: None)
+    try:
+        built = main.GodAI()
+        built.resize(1500, 950)
+        built.show()
+        app.processEvents()
+        yield built
+    finally:
+        QMessageBox.warning, QMessageBox.information = saved
+        # hide(), not close(): closing the last visible window asks the
+        # application to quit, and every later module's event loops then
+        # crawl — the full suite went from 95 s to not finishing.
+        built.hide()
+
+
+def _settle(app, rounds=8):
+    for _ in range(rounds):
+        app.processEvents()
+
+
+def test_every_context_help_target_names_a_real_control(window):
+    """install_learning_targets used a plain getattr on the host, and the
+    panel extraction had moved 119 of the 139 controls off it — F1 on
+    them fell back to the agent's page without anyone noticing."""
+    from ui.learning_center_v2 import resolve_control
+
+    mapping = json.loads((LEARN_DIR / "help_map.json").read_text(encoding="utf-8"))
+    missing = [name for name in mapping if resolve_control(window, name) is None]
+    assert not missing, f"help_map names controls that do not exist: {missing}"
+    widget = resolve_control(window, "webdesign_generate_btn")
+    assert widget.property("imprintLearnTarget") == "site-builder#step-5-generate"
+
+
+def test_recipes_exist_for_the_first_two_agents():
+    assert {page.id for page in SHOW_ME_PAGES} >= {"music", "site-builder"}
+
+
+@pytest.mark.parametrize("page", SHOW_ME_PAGES, ids=lambda page: page.id)
+def test_every_show_me_link_names_a_real_control_under_a_step(window, page):
+    from ui.learning_center_v2 import SHOW_ME_LINK, resolve_control, show_me_steps
+
+    text = (LEARN_DIR / page.filename).read_text(encoding="utf-8")
+    paths = [path for _label, path in SHOW_ME_LINK.findall(text)]
+    assert paths
+    # One link per control per lesson: the callout finds its step by path.
+    assert len(paths) == len(set(paths)), f"{page.id} repeats a Show me target"
+    steps = show_me_steps(text)
+    for path in paths:
+        assert resolve_control(window, path) is not None, f"{page.id}: {path} not found"
+        heading, anchor = steps[path]
+        assert heading.startswith("Step") and anchor, f"{page.id}: {path} not under a step"
+
+
+def test_show_me_links_render_as_actions():
+    from ui.learning_center_v2 import _style_show_me
+
+    html = _style_show_me('<p><a href="show:music_suno_panel.brief">Show me</a></p>')
+    assert 'class="showme"' in html and "▶ Show me" in html
+
+
+def test_show_me_opens_the_agent_tab_and_rings_the_control(app, window, monkeypatch):
+    """Show me in the song recipe must land on the Songs & Albums tab even
+    when Music was last left on another tab, and Back to lesson must return
+    to the same step."""
+    from ui.learning_center_v2 import LearningCentreDialog
+    import main
+
+    window.select_agent("author")
+    window.music_panel.music_tabs.setCurrentIndex(0)
+    _settle(app)
+
+    # Patched before Show me: the callout captures the reopen callback, and
+    # the real one would open a modal dialog nobody closes.
+    reopened = []
+    monkeypatch.setattr(window, "show_learning_center",
+                        lambda **kwargs: reopened.append(kwargs))
+    dialog = LearningCentreDialog(window, main.RESOURCE_DIR, "music")
+    assert dialog.show_me("music_suno_panel.brief")
+    _settle(app)
+
+    panel = window.music_panel
+    assert window._current_agent == "music"
+    assert panel.music_tabs.currentWidget() is panel.music_suno_panel
+    brief = panel.music_suno_panel.brief
+    assert brief.isVisible()
+
+    marker = window._spotlight
+    assert marker is not None and marker.isVisible()
+    assert marker.title_label.text() == "Step 4 — Write the creative brief"
+    assert marker.ring.isVisible()
+    assert marker.ring.geometry().contains(marker.target_rect())
+    # The callout must not cover the control it points at.
+    assert not marker.geometry().intersects(marker.target_rect())
+
+    marker.back_btn.click()
+    _settle(app)
+    assert reopened == [{"start_page": "music",
+                         "start_anchor": "step-4-write-the-creative-brief"}]
+    assert window._spotlight is None
+
+
+def test_show_me_for_a_missing_control_says_so_instead_of_closing(app, window):
+    from ui.learning_center_v2 import LearningCentreDialog
+    import main
+
+    dialog = LearningCentreDialog(window, main.RESOURCE_DIR, "site-builder")
+    assert not dialog.show_me("webdesign_no_such_control")
+    assert "moved" in dialog.lesson_meta.text()

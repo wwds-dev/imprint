@@ -16,8 +16,13 @@ User guidance: `docs/agents/fiverr.md`.  Run focused coverage with
 - **`panel.py`** — owns the complete Client Gigs workspace: brief and model
   controls, price estimate, guarded prompt/image/delivery/gig request
   lifecycles with exact tokens, result tabs, order log, save, clear and Stop.
-  Thin host delegates and worker aliases remain for umbrella integrations and
-  shutdown handling.
+  The workers themselves stay on the host so the umbrella's global Stop and
+  shutdown sweeps keep seeing them. The old `setattr(host, name, ...)` alias
+  loop that mirrored every `HOST_CONTROLS` widget onto the umbrella was
+  retired 2026-09-21 (commit `8de6d7c`) — shared code that used to read
+  `window.<control>` directly now goes through `host._find_control()`;
+  `HOST_CONTROLS` stays defined as the published contract of what this panel
+  owns.
 
 - **`agent.py`** — the implementation. `SYSTEM_PROMPT` casts the model as a
   5-star Fiverr freelancer specialising in logo design, and defines three

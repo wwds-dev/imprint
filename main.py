@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
     QLabel, QTextEdit, QPushButton, QComboBox, QListWidget, QListWidgetItem,
     QMessageBox, QCheckBox, QTextBrowser, QSplitter, QLineEdit, QFileDialog,
     QProgressBar, QDialog, QTabWidget, QTabBar, QFrame, QScrollArea, QStackedWidget, QLayout,
-    QInputDialog, QMenu, QTableWidget, QTableWidgetItem, QHeaderView,
+    QInputDialog, QMenu, QTableWidget, QTableWidgetItem, QHeaderView, QToolButton,
 )
 
 from ui.style import (
@@ -167,6 +167,7 @@ from ui.status_cards import (
 from agents.venture import VentureDashboard, format_creator_brief
 from agents.social import SocialPanel
 from ui.tooltips import seed_tooltips
+from ui.header_fit import HeaderFitter
 
 class GodAI(QWidget):
     def __init__(self):
@@ -280,7 +281,7 @@ class GodAI(QWidget):
         install_learning_targets(self, RESOURCE_DIR)
         self.learning_shortcut = QShortcut(QKeySequence("F1"), self)
         self.learning_shortcut.setContext(Qt.ApplicationShortcut)
-        self.learning_shortcut.activated.connect(self.show_learning_center)
+        self.learning_shortcut.activated.connect(lambda: self.show_learning_center())
         self._polish_tab_widgets()
         self._seed_tooltips()
         # Install global event filter so we can suppress ToolTip events when disabled
@@ -1177,7 +1178,10 @@ class GodAI(QWidget):
         if not hasattr(self, "recommendation_engine"):
             return
         for agent_key in AGENT_SETUP_WIDGETS:
-            self.refresh_recommendation_marks(agent_key)
+            if agent_key == "chat" and hasattr(self, "recommendation_label"):
+                self.update_recommendation_label()
+            else:
+                self.refresh_recommendation_marks(agent_key)
         self.refresh_video_recommendations()
         self._refresh_fiverr_image_recommendation()
 
@@ -1309,17 +1313,25 @@ class GodAI(QWidget):
         self.workspace_tabs.setDrawBase(False)
         # These are product areas, not disposable document tabs. Qt's default
         # ElideRight turned "Audio & Music" and "Video & Ads" into ambiguous
-        # labels even when the header had enough room. Keep the complete names
-        # and fall back to the native scroll affordance only at narrow widths.
+        # labels even when the header had enough room. Keep the complete names.
+        # No scroll arrows either: they clipped the last tab mid-word and sat
+        # on top of it. A narrow header overflows into a More menu instead —
+        # see ui/header_fit.py.
         self.workspace_tabs.setElideMode(Qt.ElideNone)
-        self.workspace_tabs.setUsesScrollButtons(True)
-        self.workspace_tabs.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Fixed)
+        self.workspace_tabs.setUsesScrollButtons(False)
+        self.workspace_tabs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         for workspace_name in WORKSPACES:
             self.workspace_tabs.addTab(workspace_name)
         # Connected only after every tab exists: addTab on an empty bar sets the
         # current index and would fire the handler before the panels are built.
         self.workspace_tabs.currentChanged.connect(self._workspace_changed)
         row.addWidget(self.workspace_tabs, 0, Qt.AlignVCenter)
+
+        self.workspace_more_btn = QToolButton()
+        self.workspace_more_btn.setObjectName("WorkspaceMore")
+        self.workspace_more_btn.setText("More ▾")
+        self.workspace_more_btn.setToolTip("Workspaces that do not fit in the header")
+        row.addWidget(self.workspace_more_btn, 0, Qt.AlignVCenter)
 
         row.addStretch()
 
@@ -1351,6 +1363,14 @@ class GodAI(QWidget):
         self.settings_btn.setFixedWidth(78)
         self.settings_btn.clicked.connect(self.show_settings)
         row.addWidget(self.settings_btn)
+
+        # The pill only ever reads "Ready" and the version is also in the
+        # window title, so both give way before any workspace does. The
+        # wordmark carries the version tooltip so hovering still answers it.
+        brand.setToolTip(self.version_badge.toolTip())
+        self.header_fitter = HeaderFitter(
+            header, self.workspace_tabs, self.workspace_more_btn,
+            sheddable=[self.agent_status_pill, self.version_badge])
 
         return header
 
@@ -2279,7 +2299,7 @@ class GodAI(QWidget):
         links.addWidget(self.run_log_btn)
 
         self.learn_btn = quiet("Learning Centre")
-        self.learn_btn.clicked.connect(self.show_learning_center)
+        self.learn_btn.clicked.connect(lambda: self.show_learning_center())
         links.addWidget(self.learn_btn)
         layout.addLayout(links)
 
@@ -2305,7 +2325,7 @@ class GodAI(QWidget):
         system_card.addWidget(system_body)
         reference.addWidget(system_card)
 
-        routing_card = CollapsibleSection("Routing", expanded=False)
+        routing_card = CollapsibleSection("Chat routing", expanded=False)
         routing_body = QWidget()
         routing_body.setObjectName("Transparent")
         routing_layout = QVBoxLayout(routing_body)
@@ -3133,6 +3153,7 @@ class GodAI(QWidget):
         self.session_cost_total += entry.get("estimated_cost", 0.0)
         self.session_request_count += 1
         self.update_usage_labels()
+        self.refresh_all_recommendations()
 
         if messages is None:
             messages = [{"role": "user", "content": context["prompt"]}]
@@ -3295,6 +3316,7 @@ class GodAI(QWidget):
         self.session_cost_total += usage_entry["estimated_cost"]
         self.session_request_count += 1
         self.update_usage_labels()
+        self.refresh_all_recommendations()
 
         run_id = getattr(self, "active_run_id", None)
         if run_id:
@@ -3974,23 +3996,27 @@ class GodAI(QWidget):
     def show_model_guide(self):
         from ui.dialogs import show_model_guide as _show_model_guide
         return _show_model_guide(self)
-    def show_learning_center(self):
-        """Open the operating lesson for the active agent (F1 does the same)."""
+    def show_learning_center(self, start_page=None, start_anchor=""):
+        """Open the operating lesson for the active agent (F1 does the same).
+
+        An explicit page wins: a "Show me" callout's Back to lesson returns
+        to the step it came from, not to whatever control has focus now."""
         from ui.learning_center import (
             learning_target_for_widget, show_learning_center as _show,
         )
-        contextual = learning_target_for_widget(QApplication.focusWidget())
-        agent = getattr(self, "_current_agent", "")
-        start_page = {
-            "author": "draft", "manuscript": "publish",
-            "audiobook": "audiobooks", "music": "music",
-            "video": "video", "social": "social",
-            "webdesign": "site-builder", "fiverr": "client-gigs",
-            "creator": "creator", "venture": "venture",
-        }.get(agent)
-        start_anchor = ""
-        if contextual:
-            start_page, start_anchor = contextual
+        if not start_page:
+            contextual = learning_target_for_widget(QApplication.focusWidget())
+            agent = getattr(self, "_current_agent", "")
+            start_page = {
+                "author": "draft", "manuscript": "publish",
+                "audiobook": "audiobooks", "music": "music",
+                "video": "video", "social": "social",
+                "webdesign": "site-builder", "fiverr": "client-gigs",
+                "creator": "creator", "venture": "venture",
+            }.get(agent)
+            start_anchor = ""
+            if contextual:
+                start_page, start_anchor = contextual
         return _show(
             self, RESOURCE_DIR, start_page=start_page,
             start_anchor=start_anchor)
