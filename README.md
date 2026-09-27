@@ -1613,8 +1613,7 @@ images of other people, moderate prompts, reference images *and* outputs, and
 treat circumventing moderation as its own violation. `check_prompt()` refuses
 those locally, before the spend, with a reason attached — and is negation-aware,
 because a filter that rejects "no nudity" is one people route around rather than
-trust. The practical consequence: **explicit content cannot come from
-Higgsfield**; its role is the safe-for-work teaser for off-platform funnels.
+trust. Its role here is the safe-for-work promotional teaser.
 
 The exact provider estimate is shown before approval and counted against the
 budget caps. Every remote state is retained in `creator_video_jobs`; completed
@@ -1633,14 +1632,6 @@ same pattern as the KDP importer, because there is no API — keyed on
 written against what has actually earned. Thin evidence is labelled as such;
 three sends at $15 is an anecdote, and presenting it as a finding would be
 worse than staying quiet.
-
-#### Performer records
-
-`creator_performers` records **that** age and identity documents exist for
-anyone depicted, and where they are held — never the documents themselves.
-In the US, 18 U.S.C. 2257 puts that obligation on the producer whether or not
-the tooling knows about it; keeping scans of passports in an app database would
-create a second problem rather than solve the first.
 
 ## 8. Tools
 

@@ -295,7 +295,7 @@ def test_creator_panel_has_every_tab(window):
     titles = [window.creator_panel.creator_tabs.tabText(i)
               for i in range(window.creator_panel.creator_tabs.count())]
     for expected in ("Draft", "Calendar", "Earnings", "Voice", "Media",
-                     "Agency", "Records"):
+                     "Agency"):
         assert any(expected in t for t in titles), f"missing {expected} tab"
     assert "Trends" not in titles
 

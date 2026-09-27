@@ -50,8 +50,8 @@ Calendar and Media default to all work under the selected account; each has a
     line.
   - `SYSTEM_PROMPT` — the ground rules every draft operates under: it's for
     human review before sending; no fabricated claims, false scarcity, or
-    fake testimonials; personas stay fictional; adult-platform copy is
-    suggestive, not explicit; zero tolerance for any minors framing.
+    fake testimonials; personas stay fictional; zero tolerance for any
+    minors framing.
   - `CreatorAgent` — the class the rest of the app calls:
     - `build_messages(prompt)` — wraps a prompt with `SYSTEM_PROMPT`.
     - `build_draft_prompt(account, kind, brief, *, price_usd=0.0,
@@ -80,8 +80,8 @@ Calendar and Media default to all work under the selected account; each has a
   and DeepSeek (.78) for this task type.
 
 - **`panel.py`** — owns the complete Brand Creator workspace: the profile
-  form, consent-aware compose controls, and all seven tabs (Draft, Calendar,
-  Earnings, Voice, Media, Agency, Records) with every handler, moved here
+  form, consent-aware compose controls, and all six tabs (Draft, Calendar,
+  Earnings, Voice, Media, Agency) with every handler, moved here
   from `main.py` in the Phase 4 extraction. Request tokens live on the
   panel — "creator" is shared by the text drafting flow and the Higgsfield
   teaser (whose token rides in its own job context) — so nothing resolves a

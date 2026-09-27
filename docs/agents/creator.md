@@ -89,8 +89,7 @@ those requests locally, before the spend, with a reason — negated mentions
 ("no nudity") are allowed, since those are instructions to the model rather
 than requests for it.
 
-The practical consequence: **explicit content cannot come from Higgsfield.**
-Its role here is the teaser, not the product.
+Its role here is the safe-for-work promotional teaser.
 
 ## Earnings
 `📥 Import Earnings CSV` reads a statement exported from the platform — the
@@ -116,12 +115,12 @@ remain visible for like-for-like comparisons.
 | `agents/creator/agent.py` | `CreatorAgent`, `require_ready()`, prompt construction. |
 | `services/higgsfield_client.py` | Official video API lifecycle, upload, estimate, cancellation and content-policy guard. |
 | `agents/creator/earnings_csv.py` | Earnings statement parsing and ingest. |
-| `main.py: build_creator_panel()` | Account section, compose section, seven tabs. |
+| `main.py: build_creator_panel()` | Account section, compose section, six tabs. |
 | `main.py: creator_generate()/creator_schedule()/creator_import_earnings()` | Lifecycle. |
 | `creator_accounts` / `creator_content` / `creator_earnings` | Tables. |
 
 ## Notes
 - Nothing here touches the platform. Removing an account removes it from
   Imprint only.
-- Adult content platforms have their own rules about AI-assisted material, and
-  they change. Read them; this app does not track them for you.
+- Platforms have their own rules about AI-assisted material, and they change.
+  Read them; this app does not track them for you.

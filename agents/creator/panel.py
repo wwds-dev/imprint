@@ -1,7 +1,7 @@
 """Brand Creator workspace and its guarded drafting/teaser lifecycles.
 
-Phase 4 extraction: the profile form, compose controls and the seven tabs
-(Draft, Calendar, Earnings, Voice, Media, Agency, Records) and every
+Phase 4 extraction: the profile form, compose controls and the six tabs
+(Draft, Calendar, Earnings, Voice, Media, Agency) and every
 handler moved here from main.py. The host supplies shared budget
 authorization, usage records, the chat-worker factory, `_note_failure`
 and the Higgsfield permission checkbox; the workers stay host attributes
@@ -68,7 +68,6 @@ class CreatorPanel(QWidget):
         "creator_revenue_btn", "creator_import_btn", "creator_voice_tab",
         "creator_media_scope", "creator_media_table", "creator_add_media_btn",
         "creator_agency_table",
-        "creator_records_table", "creator_add_performer_btn",
         "creator_voice_samples", "creator_voice_tone", "creator_voice_emoji",
         "creator_voice_length", "creator_voice_banned",
         "creator_persona_group", "creator_persona_appearance",
@@ -315,18 +314,6 @@ class CreatorPanel(QWidget):
             0, QHeaderView.Stretch)
         self.creator_tabs.addTab(self.creator_agency_table, "Agency")
 
-        self.creator_records_table = QTableWidget(0, 5)
-        self.creator_records_table.setHorizontalHeaderLabels(
-            ["Performer", "Verified", "ID on file", "Release", "Records held at"])
-        self.creator_records_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.Stretch)
-        self.creator_add_performer_btn = QPushButton("Add Performer Record")
-        self.creator_add_performer_btn.clicked.connect(self.add_performer)
-        self.creator_tabs.addTab(
-            self._tab_with_actions(
-                self.creator_records_table, [self.creator_add_performer_btn]),
-            "Records")
-
         layout.addWidget(self.creator_tabs, 1)
 
         # Aliases retired 2026-09-21: shared wiring resolves controls
@@ -541,7 +528,6 @@ class CreatorPanel(QWidget):
         self.refresh_earnings()
         self.load_voice_tab()
         self.refresh_media()
-        self.refresh_records()
         self.refresh_agency()
 
     def current_account(self) -> dict | None:
@@ -618,7 +604,7 @@ class CreatorPanel(QWidget):
                     (account["id"],))
                 for table in (
                         "creator_video_jobs", "creator_media", "creator_voice",
-                        "creator_persona", "creator_performers",
+                        "creator_persona",
                         "creator_content", "creator_earnings"):
                     conn.execute(f"DELETE FROM {table} WHERE account_id = ?",
                                  (account["id"],))
@@ -1280,73 +1266,6 @@ class CreatorPanel(QWidget):
             for col, value in enumerate([Path(row["path"]).name, row["kind"],
                                          row["source"], row["caption"]]):
                 self.creator_media_table.setItem(r, col, QTableWidgetItem(str(value)))
-
-    # ── performer records ───────────────────────────────────────────────
-    def add_performer(self):
-        """Record that age/identity records exist for someone depicted.
-
-        Deliberately records *that* documents are held and where — not the
-        documents. In the US, 18 U.S.C. 2257 puts this obligation on the
-        producer; storing scans of passports in an app database would create a
-        second problem rather than solve the first.
-        """
-        account = self.current_account()
-        if not account:
-            QMessageBox.warning(self, "No Account", "Select an account first.")
-            return
-        name, ok = QInputDialog.getText(
-            self, "Add Performer Record",
-            "Performer's legal name (as it appears on their ID):")
-        if not ok or not name.strip():
-            return
-        location, ok = QInputDialog.getText(
-            self, "Records Location",
-            "Where are the ID and release documents actually held?\n"
-            "(This app stores the reference, never the documents.)")
-        if not ok:
-            return
-        try:
-            with get_connection() as conn:
-                conn.execute("""
-                    INSERT INTO creator_performers
-                      (account_id, legal_name, date_verified, id_on_file,
-                       release_signed, records_location, created_at)
-                    VALUES (?,?,?,1,1,?,?)
-                """, (account["id"], name.strip(),
-                      datetime.now().strftime("%Y-%m-%d"),
-                      location.strip(),
-                      datetime.now().isoformat(timespec="seconds")))
-                conn.commit()
-        except Exception as exc:
-            self.host._note_failure("creator: add performer", exc)
-            return
-        self.refresh_records()
-        self.creator_tabs.setCurrentWidget(self.creator_records_table)
-
-    def refresh_records(self):
-        account = self.current_account()
-        self.creator_records_table.setRowCount(0)
-        if not account:
-            return
-        try:
-            with get_connection() as conn:
-                rows = conn.execute(
-                    "SELECT legal_name, date_verified, id_on_file, "
-                    "release_signed, records_location FROM creator_performers "
-                    "WHERE account_id = ? ORDER BY legal_name",
-                    (account["id"],)).fetchall()
-        except Exception as exc:
-            self.host._note_failure("creator: load records", exc)
-            return
-        for row in rows:
-            r = self.creator_records_table.rowCount()
-            self.creator_records_table.insertRow(r)
-            for col, value in enumerate([
-                    row["legal_name"], row["date_verified"],
-                    "yes" if row["id_on_file"] else "no",
-                    "yes" if row["release_signed"] else "no",
-                    row["records_location"]]):
-                self.creator_records_table.setItem(r, col, QTableWidgetItem(str(value)))
 
     # ── revenue attribution ─────────────────────────────────────────────
     def record_outcome(self):

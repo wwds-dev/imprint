@@ -11,7 +11,6 @@
 - Recorded authorisation for managed work; disclosure for synthetic personas.
 - A dated platform-policy record with source before any wholly synthetic persona
   is used. Unknown is not permission.
-- Performer identity/age/consent/release records where applicable.
 - One bounded campaign hypothesis, account, segment, and measurement window.
 
 ## Profile and compose controls
@@ -32,7 +31,7 @@
 | Generate/Cancel Teaser | Paid Higgsfield SFW promotional render and provider-dependent cancellation |
 | Stop | Stops active text generation locally where possible |
 
-## Seven output tabs
+## Six output tabs
 
 ![Creator earnings and owned-report tools](../img/agent-creator-earnings.png)
 
@@ -44,7 +43,6 @@
 | Voice | Manage authorised voice/character settings and test samples before use. |
 | Media | Add Media with kind, source, caption, and rights/provenance. |
 | Agency | Compare accounts/types/authorisation/net receipts/subscribers/draft counts cautiously. |
-| Records | Performer, verification, ID-on-file, release, and records location; presence is not legal sufficiency. |
 
 ## Worked run
 
@@ -78,7 +76,7 @@ conversion, along with production, fees, promotion, and human time.
 
 ## Acceptance checklist
 
-- [ ] Ownership, authorisation/disclosure, identity, age, consent, and releases pass.
+- [ ] Ownership, authorisation/disclosure, and consent pass verification.
 - [ ] No impersonation, unauthorised likeness/voice, private material, or false claim.
 - [ ] Public interaction/posting and money movement remain human-controlled.
 - [ ] Calendar/status describes reality; imported actuals preserve source/window/currency.

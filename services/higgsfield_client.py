@@ -12,17 +12,12 @@ Higgsfield's Terms of Use prohibit **sexually explicit material** and
 reference images *and* outputs are scanned), and treat circumventing moderation
 as its own violation. Breaching it terminates the account.
 
-That is not a footnote for this app in particular, which is used alongside
-subscription-platform work — so the guard is in the code rather than in a
-comment nobody reads. `check_prompt()` refuses the obvious cases before a
-request is spent, and the panel routes everything through it.
-
-The point is not to police the user's business. It is that generating this
-material through Higgsfield does not work: the model filters catch it, the
-request is wasted, and the account is at risk. Explicit content has to come
-from somewhere else. Higgsfield's role here is promotional — safe-for-work
-teasers for the off-platform funnels where subscription traffic actually
-originates.
+So the guard is in the code rather than in a comment nobody reads.
+`check_prompt()` refuses the obvious cases before a request is spent, and the
+panel routes everything through it: the model filters would catch them anyway,
+the request would be wasted, and the account would be at risk. Higgsfield's
+role here is promotional — safe-for-work teasers for the funnels where traffic
+actually originates.
 """
 
 from __future__ import annotations
@@ -78,7 +73,7 @@ _REFUSED_PATTERNS = [
     (r"\b(explicit|hardcore|pornographic|porn|nude|nudity|naked|sex scene|sexual)\b",
      "Higgsfield prohibits sexually explicit material and moderates prompts, "
      "reference images and outputs. Generate promotional, safe-for-work video "
-     "here and source explicit content elsewhere."),
+     "only."),
     (r"\b(deepfake|face swap|faceswap|undress|deep nude|deepnude)\b",
      "Higgsfield prohibits identity manipulation and unauthorised images of "
      "other people."),

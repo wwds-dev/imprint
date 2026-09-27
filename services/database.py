@@ -486,25 +486,6 @@ CREATE TABLE IF NOT EXISTS creator_variants (
     FOREIGN KEY (content_id) REFERENCES creator_content(id)
 );
 
--- Records for anyone depicted in produced content. In the US, 18 U.S.C. 2257
--- puts this obligation on the producer regardless of whether their tooling
--- knows about it. Storing identity documents inside an app database would be
--- the wrong call, so this records *that* records exist and where they are
--- held, not the documents themselves.
-CREATE TABLE IF NOT EXISTS creator_performers (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id     INTEGER NOT NULL,
-    legal_name     TEXT NOT NULL DEFAULT '',
-    stage_name     TEXT NOT NULL DEFAULT '',
-    date_verified  TEXT NOT NULL DEFAULT '',
-    id_on_file     INTEGER NOT NULL DEFAULT 0,
-    release_signed INTEGER NOT NULL DEFAULT 0,
-    records_location TEXT NOT NULL DEFAULT '',  -- where the actual documents live
-    notes          TEXT NOT NULL DEFAULT '',
-    created_at     TEXT NOT NULL,
-    FOREIGN KEY (account_id) REFERENCES creator_accounts(id)
-);
-
 CREATE INDEX IF NOT EXISTS idx_creator_content_account ON creator_content(account_id);
 CREATE INDEX IF NOT EXISTS idx_creator_media_account   ON creator_media(account_id);
 CREATE INDEX IF NOT EXISTS idx_creator_video_jobs_account ON creator_video_jobs(account_id);

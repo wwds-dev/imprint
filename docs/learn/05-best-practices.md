@@ -112,16 +112,15 @@ For AI-assisted books, media, music, ads, and persona content, check current
 disclosure, copyright, likeness, voice, and synthetic-media requirements. An
 API accepting a request does not grant rights to the input or output.
 
-## Creator, managed account, and adult-platform safeguards
+## Creator and managed-account safeguards
 
 - Use `managed` only with recorded authorisation.
 - Use `persona` only with an accurate disclosure.
-- Keep performer identity, age, consent, release, and records location current.
 - Never upload an unauthorised likeness, cloned voice, or private material.
 - Do not use Creator drafts to impersonate a specific real person in a live
   conversation.
 - Higgsfield teaser generation is subject to its own moderation and is designed
-  here for safe-for-work promotion, not explicit content.
+  here for safe-for-work promotion only.
 
 The app can enforce some missing-field gates. It cannot determine whether a
 record is legally sufficient or whether real-world consent remains valid.

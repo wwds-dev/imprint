@@ -134,9 +134,8 @@
   "creator_video_btn": "creator#cost-cancellation-and-gates",
   "creator_video_cancel_btn": "creator#cost-cancellation-and-gates",
   "creator_stop_btn": "creator#cost-cancellation-and-gates",
-  "creator_tabs": "creator#seven-output-tabs",
+  "creator_tabs": "creator#six-output-tabs",
   "creator_revenue_btn": "creator#how-to-read-the-output-and-analytics",
   "creator_import_btn": "creator#how-to-read-the-output-and-analytics",
-  "creator_add_media_btn": "creator#seven-output-tabs",
-  "creator_add_performer_btn": "creator#acceptance-checklist"
+  "creator_add_media_btn": "creator#six-output-tabs"
 }

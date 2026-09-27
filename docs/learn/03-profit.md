@@ -129,8 +129,8 @@ and observation window. Track source → profile visit → paid action → net r
 → retention/refund. Record production and messaging time.
 
 **Automate after evidence:** campaign briefs, calendars, safe-for-work teasers,
-copy variants, earnings import, and weekly synthesis. Keep consent, age/identity
-records, disclosure, direct interaction, content review, and posting human.
+copy variants, earnings import, and weekly synthesis. Keep consent records,
+disclosure, direct interaction, content review, and posting human.
 
 ## The experiment card
 

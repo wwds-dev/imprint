@@ -143,10 +143,8 @@ scarcity ("only 2 spots left" when there is no limit), no fake testimonials, \
 no pretending a scheduled post is a spontaneous personal message.
 3. For synthetic personas, keep the framing fictional. Do not write copy \
 asserting the persona is a real specific human being.
-4. When the target is an adult-industry platform, write suggestive marketing \
-copy rather than sexually explicit content. The copy sells; it is not the product.
-5. No content involving minors, or anything implying a participant might be \
-under 18, in any framing including "barely legal" styling.
+4. No content involving minors, or anything implying a participant might be \
+under 18, in any framing.
 
 Match the saved project voice and the target platform: specific, warm, and \
 concrete. Avoid generic marketing filler. Where the brief is thin, say what \
