@@ -16,7 +16,7 @@
 | Productised client service | Fast buyer feedback and a tightly scoped deliverable | Economic contribution per accepted order and human hour | Client Gigs or Site Builder |
 | Owned catalogue | A demonstrated reader/listener need and reusable IP | Contribution by release cohort and attributed source | Draft → Publish |
 | Content-to-offer funnel | One existing offer with a trackable next action | Paid/intended actions per qualified visit | Social Media Campaign Manager → Video & Ad Generator → Web Developer |
-| Authorised creator venture | An owned, managed, or accurately disclosed profile | Contribution and retention by buyer/subscriber cohort | Venture signals → Creator |
+| Authorised creator venture | An owned, managed, or accurately disclosed profile | Contribution and retention by buyer/subscriber cohort | Brand Creator → Earnings |
 
 ## Choose with evidence, not excitement
 

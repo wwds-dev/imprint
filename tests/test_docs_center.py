@@ -70,7 +70,7 @@ def test_overview_explains_docs_learning_and_evidence_boundaries():
 
 
 @pytest.mark.parametrize(
-    "agent", ["chat", "course", "fiverr", "music", "venture", "webdesign"])
+    "agent", ["chat", "course", "fiverr", "music", "webdesign"])
 def test_short_reference_pages_include_an_operating_contract(agent):
     text = (DOCS_DIR / f"{agent}.md").read_text(encoding="utf-8").casefold()
     assert "before you" in text

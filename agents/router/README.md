@@ -12,7 +12,7 @@ execute provider calls or bypass the shared request guard.
 - `__init__.py` — public surface of the package: re-exports `ROUTES` and
   `RouterAgent` from `agent.py`.
 - `agent.py` — the whole implementation. `ROUTES` is an ordered tuple of
-  `(agent_key, keyword_tuple)` pairs covering ten modes — `venture`,
+  `(agent_key, keyword_tuple)` pairs covering nine modes —
   `video`, `social`, `audiobook`, `music`, `webdesign`, `fiverr`, `creator`,
   `manuscript`, `author` — each matched against a handful of lowercase
   trigger phrases (e.g. `video` matches "video", "youtube", "shorts",

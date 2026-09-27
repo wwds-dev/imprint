@@ -29,8 +29,7 @@ Imprint umbrella
 Video deliberately keeps Vidforge as its separately versioned engine.  The
 Video package owns Imprint's orchestration boundary, while
 `agents/video/studio.py` is the adapter and `vidforge/` remains the companion
-repository.  Venture deliberately composes Creator rather than copying its
-drafting logic.
+repository.
 
 ## Contracts
 
@@ -65,7 +64,7 @@ permissions and ranking policy. See `docs/recommendation_system.md`.
 
 - Keeping one parent repository is less autonomous than nested Git repos, but a
   clone remains complete and releases remain atomic.
-- Several panels still live in `main.py`; Venture, Music, Site Builder,
+- Several panels still live in `main.py`; Music, Site Builder,
   Audiobook, Client Gigs and Video own their panels and workflows. The
   remaining panel and handler extraction is the next phase.
 - Shared services reduce drift but mean an extracted agent needs a declared

@@ -5,18 +5,13 @@
 ## What it does
 Creates concepts, captions, campaigns, posting plans, promotional asset briefs,
 and calendars for every Imprint venture. A profile records its platform or
-venture, so books and publishing, music, AltMerch, Venture, and future work can
+venture, so books and publishing, music, AltMerch, and future work can
 share one production tool without sharing business-specific assumptions.
-
-Venture trends, monetization, market context, and strategy live in the
-top-level Venture workspace. Its **Create Campaign in Creator** action fills a
-structured Creator brief while retaining source, freshness, confidence, risk,
-format, pricing hypothesis, and requested deliverables.
 
 ## What it deliberately does not do
 **It does not publish unattended, and it has no direct send path.**
 
-Imprint has no authorised Venture posting integration. It does not use browser
+Imprint has no authorised platform posting integration. It does not use browser
 automation or a private endpoint. Platform rules change and may only be
 available inside a logged-in creator account, so this agent produces drafts
 you review and publish manually rather than claiming an unverified rule allows

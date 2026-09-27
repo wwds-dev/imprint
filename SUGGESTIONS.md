@@ -41,7 +41,7 @@ consequences of what just landed rather than new ideas.
 | # | Suggestion | Category | Effort | Status |
 |---|---|---|---|---|
 | 40 | DONE — **Price the second provider.** Per-unit billing now covers Fiverr images and TTS; Creator renders use Higgsfield's authenticated estimate for the exact prepared payload and pass that amount through the same budget guard. | security | M | DONE |
-| 41 | **A doc test that fails when an agent has no guide.** The Learning Centre silently fell a full agent behind twice. `WORKSPACES` is now checked against both `docs/learn/02-agents.md` and `docs/agents/*.md`; the missing Venture sheet was added with the test. | testing | S | DONE |
+| 41 | **A doc test that fails when an agent has no guide.** The Learning Centre silently fell a full agent behind twice. `WORKSPACES` is now checked against both `docs/learn/02-agents.md` and `docs/agents/*.md`; a missing agent sheet was added with the test. | testing | S | DONE |
 | 43 | DONE — **Video mode.** vidforge imported from the nested repo (not vendored), long-form and clips as one pipeline, cost estimated per stage and charged against the caps. | feature | L | DONE |
 | 44 | DONE — **Social mode.** Campaigns, per-platform drafting, cadence scheduling, and real posting for the three platforms where that is possible from a personal account. | feature | L | DONE |
 | 45 | **Charts, not monospace.** Three panels now compute genuinely interesting numbers (KDP royalties, creator price points, cost history) and all three render them as aligned text. One small charting layer would serve all of them. | design | M | IDEA |
@@ -53,7 +53,6 @@ consequences of what just landed rather than new ideas.
 | 53 | DONE — **Learning Centre v2 / Income Lab.** Replaced the five-page guide with a 26-lesson manifest-driven academy built around an evidence-gated income methodology (label evidence → pre-register a fair experiment → unit economics → honest attribution → decide under uncertainty → automate only after the gates pass), rather than dated per-stream/platform earnings figures. | docs | L | DONE |
 | 54 | DONE — **Structured status cards.** `ui/status_cards.py` replaced the collapsed System/Routing/API-key panels' prose with scannable rows, state badges and a separate "last decision" vs. "best fit recommendation" view. | design | M | DONE |
 | 55 | DONE — **Suno-assisted Songs & Albums.** A new Music tab drafts lyrics and Suno-ready style prompts, hands off to the user's own Suno account for generation (no API key, no auto-generation), and imports the downloaded audio into the music library. | feature | M | DONE |
-| 56 | DONE — **Venture → Creator direct teaser handoff.** A third Venture action, Generate SFW Teaser, requests a real safe-for-work promotional clip through Creator's Higgsfield pipeline instead of only drafting a campaign brief. | feature | S | DONE |
 
 ## v3 — bigger swings
 
@@ -70,8 +69,8 @@ consequences of what just landed rather than new ideas.
 | #42 Project as the shared production object — work identity and Write state, cross-agent output links and Project views, immutable approved manuscript versions, fingerprinted exports, and clearly self-reported retailer submission notes | Sep 2026 |
 | Documentation centre + Learning Centre v2 / Income Lab — searchable technical reference browser, and a 26-lesson evidence-gated income academy replacing dated forecast-style earnings guidance | Sep 2026 |
 | Structured System/Routing/API-key status cards replacing collapsed diagnostic paragraphs | Sep 2026 |
-| Suno-assisted Songs & Albums workflow in the Music agent, and an Venture → Creator direct "Generate SFW Teaser" handoff | Sep 2026 |
-| Agents renamed to role-based, self-explanatory labels — `Draft`/`Publish` → `Book Author`/`Publishing Manager`, `Music` → `Music Artist Generator`, `Site Builder` → `Web Developer`, `Audiobooks` → `Audiobook Producer`, `Client Gigs` → `Brand & Logo Designer`, `Creator` → `Brand Creator`, `Social` → `Social Media Campaign Manager`, `Venture` → `Venture Agent` — and matching workspace groupings (`Write` → `Author`, `Audio` → `Audio + Music`, `Video` → `Video + Ads`, `Gigs` → `Brand Design`) in `agents/catalog.py`'s `AgentSpec`. Resolves the `Write`/`Draft`/`Publish` naming collision tracked in TODO. | Sep 2026 |
+| Suno-assisted Songs & Albums workflow in the Music agent | Sep 2026 |
+| Agents renamed to role-based, self-explanatory labels — `Draft`/`Publish` → `Book Author`/`Publishing Manager`, `Music` → `Music Artist Generator`, `Site Builder` → `Web Developer`, `Audiobooks` → `Audiobook Producer`, `Client Gigs` → `Brand & Logo Designer`, `Creator` → `Brand Creator`, `Social` → `Social Media Campaign Manager` — and matching workspace groupings (`Write` → `Author`, `Audio` → `Audio + Music`, `Video` → `Video + Ads`, `Gigs` → `Brand Design`) in `agents/catalog.py`'s `AgentSpec`. Resolves the `Write`/`Draft`/`Publish` naming collision tracked in TODO. | Sep 2026 |
 | Video mode — vidforge as an eighth agent, imported from its nested repo rather than vendored; long-form and social clips are one pipeline | Sep 2026 |
 | Social mode — the public funnel: campaigns, per-platform drafting, cadence scheduling, and posting for YouTube/Reddit/Pinterest | Sep 2026 |
 | Per-unit billing — images, renders and TTS count against the budget caps instead of pricing a $0.04 image at €0.000001 | Sep 2026 |

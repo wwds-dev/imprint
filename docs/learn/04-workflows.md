@@ -135,9 +135,10 @@ Community fit → factual/rights review → render approval → publish confirma
 Likes and views are diagnostic only unless the hypothesis was explicitly about
 reach.
 
-## Playbook D · Venture signal to measured campaign
+## Playbook D · Creator campaign to measured cohort
 
-**Trigger:** a sourced, fresh signal suggests one content/offer experiment.
+**Trigger:** one content/offer experiment is worth testing for a subscription
+profile.
 
 **Best for:** an owned account, an authorised managed account, or a clearly
 disclosed synthetic persona.
@@ -145,26 +146,23 @@ disclosed synthetic persona.
 ### Inputs
 
 - Account ownership, authorisation or disclosure, records location, audience
-  segment, source, freshness, risk, content format, price hypothesis, and window.
+  segment, content format, price hypothesis, and window.
 
 ### Run
 
-1. In **Venture**, select geography and window, then refresh. Confirm whether
-   the source note says **sample data**. Sample data is not a basis for spend.
-2. In **Trends & Opportunities**, select one row. Inspect source, freshness,
-   saturation, risk, and suggested format. Treat the score as directional.
-3. Click **Create Campaign in Creator**. The source context travels into the
-   brief; review it before generation.
-4. Select or create the correct Creator profile. Managed profiles require
-   authorisation; personas require disclosure. Add representative Voice samples.
-5. Choose one Kind and audience segment. Draft, edit, and Add to Calendar.
-6. If a safe-for-work external teaser is justified, request **Generate Teaser**,
+1. In **Brand Creator**, select or create the correct profile. Managed profiles
+   require authorisation; personas require disclosure. Add representative Voice
+   samples.
+2. Write the brief: one proposition, one audience segment, one price, and the
+   window you will judge it over.
+3. Choose one Kind and audience segment. Draft, edit, and Add to Calendar.
+4. If a safe-for-work external teaser is justified, request **Generate Teaser**,
    inspect the exact Higgsfield quote, and review the completed result. It is
    promo material, not explicit content.
-7. Publish and interact manually under current platform rules.
-8. Import the platform statement or Record Revenue. Attribute only what the
+5. Publish and interact manually under current platform rules.
+6. Import the platform statement or Record Revenue. Attribute only what the
    available data supports; keep “unknown” where source cannot be determined.
-9. Review net receipts, retained buyers/subscribers, refunds, production cost,
+7. Review net receipts, retained buyers/subscribers, refunds, production cost,
    acquisition source, and human time for this cohort.
 
 ### Human gates
@@ -174,7 +172,7 @@ approval → posting and interaction → revenue attribution.
 
 ### Metric
 
-Contribution per retained subscriber or buyer cohort. A rising signal without
+Contribution per retained subscriber or buyer cohort. A campaign without
 retention or collected receipts does not earn automation.
 
 ## Playbook E · Music release preparation

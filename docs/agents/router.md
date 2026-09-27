@@ -8,7 +8,7 @@ Reads a line of text and returns the key of the agent that should handle it. Whe
 It is infrastructure rather than a creative workspace, which is why there is no tab for it. You will only notice it working — or getting something wrong.
 
 ## How it decides
-A plain substring match, in order. `ROUTES` is a fixed tuple of `(agent_key, keywords)` pairs covering ten modes — venture, video, social, audiobook, music, webdesign, fiverr, creator, manuscript, author — each with a handful of lowercase trigger phrases:
+A plain substring match, in order. `ROUTES` is a fixed tuple of `(agent_key, keywords)` pairs covering nine modes — video, social, audiobook, music, webdesign, fiverr, creator, manuscript, author — each with a handful of lowercase trigger phrases:
 
 | Agent | Triggers include |
 |---|---|

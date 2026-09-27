@@ -138,14 +138,5 @@
   "creator_revenue_btn": "creator#how-to-read-the-output-and-analytics",
   "creator_import_btn": "creator#how-to-read-the-output-and-analytics",
   "creator_add_media_btn": "creator#seven-output-tabs",
-  "creator_add_performer_btn": "creator#acceptance-checklist",
-
-  "venture_dashboard.category_box": "venture#control-atlas-filters-and-source-state",
-  "venture_dashboard.geography_box": "venture#control-atlas-filters-and-source-state",
-  "venture_dashboard.window_box": "venture#control-atlas-filters-and-source-state",
-  "venture_dashboard.refresh_btn": "venture#control-atlas-filters-and-source-state",
-  "venture_dashboard.sections": "venture#five-tabs",
-  "venture_dashboard.table": "venture#score-interpretation",
-  "venture_dashboard.create_campaign_btn": "venture#worked-run",
-  "venture_dashboard.build_test_btn": "venture#worked-run"
+  "creator_add_performer_btn": "creator#acceptance-checklist"
 }

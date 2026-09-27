@@ -1,7 +1,6 @@
 """Intent router implementation owned by the internal Router package."""
 
 ROUTES = (
-    ("venture", ("venture", "subscriber", "ppv", "fan retention")),
     ("video", ("video", "youtube", "shorts", "reel", "storyboard", "sora")),
     ("social", ("social post", "caption", "schedule post", "pinterest", "reddit")),
     ("audiobook", ("audiobook", "narrate", "narration", "text to speech", "tts")),

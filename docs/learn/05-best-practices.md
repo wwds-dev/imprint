@@ -122,8 +122,6 @@ API accepting a request does not grant rights to the input or output.
   conversation.
 - Higgsfield teaser generation is subject to its own moderation and is designed
   here for safe-for-work promotion, not explicit content.
-- Treat the Venture opportunity dashboard as directional unless the source
-  note identifies real configured inputs; sample data is demonstration only.
 
 The app can enforce some missing-field gates. It cannot determine whether a
 record is legally sufficient or whether real-world consent remains valid.

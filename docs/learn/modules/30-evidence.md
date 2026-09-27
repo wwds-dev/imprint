@@ -60,7 +60,7 @@ Interpretation not allowed:
 
 ## Worked example
 
-Raw input: an Venture demonstration table shows Demand 76, Competition 54,
+Raw input: a demonstration trend table shows Demand 76, Competition 54,
 Revenue fit 84, observed on a displayed date. No account exposures, profile
 visits, purchases, receipts, or costs exist.
 

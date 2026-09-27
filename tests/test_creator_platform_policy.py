@@ -16,7 +16,7 @@ def policy_db(tmp_path, monkeypatch):
 def test_unknown_policy_blocks_platform_persona(policy_db):
     from agents.creator.agent import ConsentError, require_ready
     with pytest.raises(ConsentError, match="not confirmed"):
-        require_ready({"platform": "Venture", "account_type": "persona",
+        require_ready({"platform": "Example", "account_type": "persona",
                        "disclosure": "fictional character"})
 
 

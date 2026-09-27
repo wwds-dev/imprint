@@ -14,7 +14,7 @@ real execution path for that action.
 | Control | What it does | Best use |
 |---|---|---|
 | **New Project** | Creates a separate saved context. | One project per sellable output or client order. |
-| **Workspace tabs** | Moves between Write, Audio, Video, Social, Web, Gigs, Creator, and Venture. | Start from the business stage, not the model name. |
+| **Workspace tabs** | Moves between Write, Audio, Video, Social, Web, Gigs, and Creator. | Start from the business stage, not the model name. |
 | **Provider** | Selects the service account that receives the request. | Choose for privacy, price, capability, or reliability. |
 | **Model** | Selects a model exposed by that provider. | Use the recommended model until a comparison proves a better route. |
 | **Refresh Models** | Re-reads selectable models and availability. | Use after changing keys, permissions, or provider configuration. |
@@ -266,26 +266,6 @@ representative writing samples in **Voice** before evaluating output quality.
 Import statements or Record Revenue in **Earnings**; Add Media in **Media**;
 store verification and releases in **Records**. These records support review
 but do not replace legal or platform obligations.
-
-## Venture Agent → Venture Agent (`venture`)
-
-Venture is venture intelligence, separate from content production.
-
-| Control | Meaning |
-|---|---|
-| **Niche / Geography / Time window** | Filters the currently loaded signal set. |
-| **Refresh signals** | Reloads configured sources; the source note says when results are sample data. |
-| **Overview** | Directional opportunity, momentum, demand, and saturation views. |
-| **Trends & Opportunities** | Ranked hypotheses with source, freshness, risk, format, and pricing idea. |
-| **Content Intelligence** | A testable content direction for the selected signal. |
-| **Monetization & Analytics** | Imported receipts and attribution beside the hypothesis. |
-| **Market & Strategy** | Competition and positioning context. |
-| **Create Campaign in Creator** | Sends the selected signal and provenance into Creator as a draft brief. |
-| **Generate SFW Teaser** | Sends the selected signal to Creator and renders a real Higgsfield promotional video after account, policy, price, permission, and budget checks. The result is saved locally for review. |
-
-An opportunity score is **not** a creator ranking, live revenue forecast, or
-proof of demand. Sample data is interface demonstration only. The correct loop
-is signal → small campaign → observed response → imported actuals → decision.
 
 ---
 

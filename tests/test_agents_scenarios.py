@@ -86,7 +86,6 @@ class TestRouterAgent:
 
     def test_case_insensitive_routing(self):
         assert self.agent.classify("MAKE A SPOTIFY MUSIC RELEASE PLAN") == "music"
-        assert self.agent.classify("ANALYSE VENTURE PPV PRICING") == "venture"
 
 
 # 3. ChatAgent

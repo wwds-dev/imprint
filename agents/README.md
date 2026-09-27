@@ -11,7 +11,7 @@ submodule.  This avoids the broken-clone state caused by ignored nested repos.
 agents/<key>/
 ├── __init__.py       public API imported by Imprint
 ├── agent.py          usual domain-logic module
-├── panel.py          optional owned UI (Venture already uses this)
+├── panel.py          optional owned UI (most workspaces use this)
 ├── <adapter>.py      optional named runtime adapter (Video uses studio.py)
 ├── README.md         purpose, boundary and dependencies
 ├── TODO.md           committed work for this agent

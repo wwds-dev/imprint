@@ -5,8 +5,7 @@ captions, campaigns, promotional assets, calendars, account consent and
 performance-informed drafting.  Its public API is `agents.creator` (see
 `__init__.py` for the exact re-exports).
 
-Creator is platform-neutral.  Venture composes this capability through the
-umbrella and owns its own venture rules.  User guidance:
+Creator is platform-neutral.  User guidance:
 `docs/agents/creator.md`.  Run focused coverage with
 `pytest tests/test_creator_agent.py tests/test_creator_v2.py`.
 
@@ -27,8 +26,8 @@ Calendar and Media default to all work under the selected account; each has a
 
 - **`agent.py`** — the implementation. Creator is a drafting tool, not an
   unattended publisher — it has no send path, which matters most for
-  Venture (no public posting API exists; automation that *replaces* a human
-  rather than assisting one risks a permanent ban). Key pieces:
+  subscription platforms (few offer a public posting API, and automation that
+  *replaces* a human rather than assisting one risks a ban). Key pieces:
   - `ACCOUNT_TYPES = ("own", "managed", "persona")` — the three account
     kinds, each carrying different obligations.
   - `KINDS` — every draft type Creator can produce (`post`, `caption`,

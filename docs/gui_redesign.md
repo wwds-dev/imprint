@@ -106,9 +106,7 @@ inside the currently selected provider. See `docs/recommendation_system.md`.
 Wide analytical tables show only the fields needed to compare rows. Evidence,
 freshness, proposed actions and caveats move into a selected-row detail card or
 tooltip. Decision-oriented tabs begin with a short “how to use this” card and
-end in a concrete action or stop/continue rule. The Venture opportunity table
-is the reference implementation: seven stable columns, one selected signal,
-and separate content, monetization and market-strategy explanations.
+end in a concrete action or stop/continue rule.
 
 ## Order of work
 

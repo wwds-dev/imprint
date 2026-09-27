@@ -517,7 +517,7 @@ class DocsCentreDialog(QDialog):
             "author": "draft", "manuscript": "publish",
             "audiobook": "audiobooks", "music": "music", "video": "video",
             "social": "social", "webdesign": "site-builder",
-            "fiverr": "client-gigs", "creator": "creator", "venture": "venture",
+            "fiverr": "client-gigs", "creator": "creator",
         }.get(agent, "home")
         show_learning_center(self.host, self.base.parent.parent, start_page=lesson)
 

@@ -13,7 +13,7 @@
 
 | Region | Purpose | Do not confuse it with |
 |---|---|---|
-| Header workspace tabs | Select the business stage: Author, Audio + Music, Video + Ads, Social, Web, Brand Design, Brand Creator, Venture Agent | A model family or autonomous business process |
+| Header workspace tabs | Select the business stage: Author, Audio + Music, Video + Ads, Social, Web, Brand Design, Brand Creator | A model family or autonomous business process |
 | Tool switcher | Selects related agents inside a workspace, such as Draft/Publish | A project; switching tools does not create one |
 | Project rail | Creates, searches, opens, renames, and removes saved contexts | A file browser or undo history |
 | Centre canvas | The current agent's brief, actions, status, and output | A universal form; each agent has different contracts |

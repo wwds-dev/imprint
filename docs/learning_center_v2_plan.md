@@ -15,8 +15,7 @@ Prepared: 2026-09-15
 - Seven deterministic Income Lab worksheets delivered with golden formula and
   refusal-state tests.
 - Music income prompt corrected to scenarios rather than earnings forecasts.
-- Sixteen current UI screenshots regenerated, including Creator Earnings and
-  two Venture decision surfaces.
+- Current UI screenshots regenerated, including Creator Earnings.
 - Full application test suite passed: 621 tests.
 
 Remaining release refinements are content/version migration rather than a
@@ -56,9 +55,8 @@ The highest-impact problems are:
 5. The content describes controls that are hidden or have changed. In
    particular, it teaches the old Studio Assistant `Use Recommended` flow
    instead of the visible `BEST FIT` / `BEST AVAILABLE` provider and model
-   recommendations. Settings/key guidance and several Venture labels have
-   also drifted.
-6. Important Creator, Publish, Social, Video, Audiobook, and Venture states are
+   recommendations. Settings/key guidance has also drifted.
+6. Important Creator, Publish, Social, Video, and Audiobook states are
    summarized rather than taught.
 7. Tests prove that documents exist, but not that a person can find or complete
    a lesson or that all visible controls are accurately covered.
@@ -116,7 +114,6 @@ One standardised module for each visible agent:
 16. Site Builder
 17. Client Gigs
 18. Creator
-19. Venture
 
 Each agent module contains:
 
@@ -128,7 +125,7 @@ Each agent module contains:
 - expected cost category, cancellation behavior, privacy/rights gates;
 - handoffs to other agents, common failures, and next action.
 
-Creator, Venture, Publish, Social, Video, and Draft receive the first detailed
+Creator, Publish, Social, Video, and Draft receive the first detailed
 passes because they currently have the largest gap between UI depth and guide
 depth. Music also receives an early correction because its current prompt asks
 for “realistic monthly projections,” which conflicts with the evidence standard.
@@ -270,7 +267,7 @@ a competing page count and summary.
 
 ### Phase 0 — accuracy and contracts
 
-- Correct stale setup, key, Best Fit, Venture, launcher, and agent-guide claims.
+- Correct stale setup, key, Best Fit, launcher, and agent-guide claims.
 - Remove or qualify Music income projections and invalid confidence language.
 - Define `LearnModule`, the help manifest, evidence taxonomy, metric dictionary,
   content block syntax, and learning/content lint rules.
@@ -301,8 +298,8 @@ point of use.
 
 ### Phase 3 — Agent Academy
 
-- Build the ten standardised agent modules.
-- First wave: Venture, Creator, Publish, Social, Video, Draft.
+- Build the nine standardised agent modules.
+- First wave: Creator, Publish, Social, Video, Draft.
 - Second wave: Audiobooks, Music, Site Builder, Client Gigs.
 - Regenerate annotated/cropped images for important tabs and states.
 

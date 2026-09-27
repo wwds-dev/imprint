@@ -1,23 +1,16 @@
 """Creator implementation owned by the Creator agent package.
 
 Creator turns venture context into concepts, captions, campaigns, posting
-plans, and promotional assets. It is platform-agnostic: Venture, books,
-music, AltMerch, and future ventures use the same production surface.
+plans, and promotional assets. It is platform-agnostic: books, music,
+AltMerch, and future ventures use the same production surface.
 
 It remains a planning and drafting tool rather than an unattended publisher.
-For Venture that boundary is especially important:
-
-**There is no Venture API to post through.** Venture has no public API — the
-limited access introduced in 2024 is for verified business partners only. Every
-third-party "Venture API" is browser automation or reverse-engineered private
-endpoints, which their Terms of Service prohibit, and the documented outcome is
-a permanent ban and lost earnings. For an account that *is* the income, that is
-not a tradeoff worth making.
-
-Their terms draw the useful line themselves: automation that **assists** a
-human is acceptable, automation that **replaces** one is not. So this agent
-writes drafts the user reviews and sends. It has no send path at all, which is
-the only version of "automated" that is safe here.
+**It has no send path at all.** Subscription platforms rarely offer a public
+posting API, and third-party "APIs" for them are usually browser automation
+or reverse-engineered private endpoints that their terms prohibit — the
+documented outcome is a banned account. Automation that **assists** a human
+is the useful line; automation that **replaces** one is not. So this agent
+writes drafts the user reviews and sends.
 
 ## Account types
 
@@ -108,7 +101,7 @@ def require_ready(account: dict) -> None:
 def _account_context(account: dict) -> str:
     account_type = (account.get("account_type") or "own").lower()
     handle = account.get("handle", "the account")
-    lines = [f"Account: {handle} ({account.get('platform', 'venture')})."]
+    lines = [f"Account: {handle} ({account.get('platform') or 'General'})."]
 
     if account_type == "managed":
         holder = account.get("consent_holder", "")

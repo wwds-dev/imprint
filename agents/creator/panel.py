@@ -101,7 +101,7 @@ class CreatorPanel(QWidget):
         self.creator_account_box.currentIndexChanged.connect(self._account_changed)
         self.creator_handle_input = line_edit("@handle")
         self.creator_platform_box = combo([
-            "General", "Venture", "Writing / Publishing", "Music",
+            "General", "Writing / Publishing", "Music",
             "AltMerch", "Instagram", "TikTok", "X / Twitter", "Reddit",
             "YouTube", "Other",
         ], "General")
@@ -166,7 +166,7 @@ class CreatorPanel(QWidget):
         self.creator_segment_box = combo(
             ["(any)", "new", "loyal", "lapsed", "big_spender"])
         self.creator_channel_box = combo(list(PROMO_CHANNELS))
-        for _extra_channel in ("Venture", "Website", "Email", "Other"):
+        for _extra_channel in ("Website", "Email", "Other"):
             self.creator_channel_box.addItem(_extra_channel)
         self.creator_campaign_input = line_edit("Campaign or test name")
 
@@ -533,8 +533,6 @@ class CreatorPanel(QWidget):
         platform = account.get("platform", "General") or "General"
         platform_index = self.creator_platform_box.findText(
             platform, Qt.MatchFixedString)
-        if platform_index < 0 and platform.lower() == "venture":
-            platform_index = self.creator_platform_box.findText("Venture")
         self.creator_platform_box.setCurrentIndex(max(0, platform_index))
         self.creator_type_box.setCurrentText(account.get("account_type", "own"))
         self.creator_consent_input.setText(account.get("consent_holder", ""))
@@ -568,7 +566,7 @@ class CreatorPanel(QWidget):
             return
         account_type = self.creator_type_box.currentText()
         platform = self.creator_platform_box.currentText().strip() or "General"
-        stored_platform = "venture" if platform == "Venture" else platform
+        stored_platform = platform
         consent = self.creator_consent_input.text().strip()
         if account_type == "managed" and not consent:
             QMessageBox.warning(

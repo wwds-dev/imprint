@@ -739,7 +739,7 @@ def test_workspace_names_are_never_elided(app, window):
     assert [window.workspace_tabs.tabText(i)
             for i in range(window.workspace_tabs.count())] == [
         "Author", "Audio + Music", "Video + Ads", "Social", "Web",
-        "Brand Design", "Brand Creator", "Venture Agent", "Assistant",
+        "Brand Design", "Brand Creator", "Assistant",
     ]
 
 

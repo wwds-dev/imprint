@@ -46,12 +46,10 @@ def test_every_workspace_agent_has_a_panel():
     assert not labelled, f"workspace agents with no stage label: {labelled}"
 
 
-def test_venture_is_a_venture_and_creator_stays_shared():
+def test_creator_is_its_own_workspace():
     import main
 
-    assert main.WORKSPACES["Venture Agent"] == ("venture",)
     assert main.WORKSPACES["Brand Creator"] == ("creator",)
-    assert "venture" not in main.WORKSPACES["Brand Creator"]
 
 
 def test_registry_exposes_only_focused_agents():

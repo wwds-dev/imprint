@@ -116,7 +116,7 @@ claims, replies, and publishing approval human.
 
 ### D. Creator subscription or managed venture
 
-**Use:** Venture signals → Brand Creator → Earnings.
+**Use:** Brand Creator → Earnings.
 
 Test one clearly disclosed content proposition for an owned, authorised, or
 synthetic profile. Directional trend data can suggest a test; only imported or

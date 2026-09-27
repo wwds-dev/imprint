@@ -91,12 +91,6 @@ local (Ollama) and cloud (Anthropic, OpenAI, DeepSeek, Gemini). It provides:
 - A **Narrator** agent that converts ebooks to MP3 using OpenAI TTS, with progress tracking and quota-failure detection.
 - A standalone, GUI-less **Course Generator** (`run_course.py`) that turns a topic into a packaged mini-course — slides, narration, and an avatar-presented video (see §5.8).
 - A full Settings panel for configuring pricing, budgets, agents, and tools without touching any file.
-- A top-level **Venture** venture dashboard for content-level demand,
-  opportunity, saturation, monetization hypotheses, owned analytics, and
-  compliance review, with a structured campaign handoff to the shared Creator.
-  Connector setup and
-  data limitations are documented in
-  [`docs/creator_trend_intelligence.md`](docs/creator_trend_intelligence.md).
 
 The application is entirely self-contained: no server, no web interface, no external database. All data is stored in a local SQLite database (`data/imprint.db`).
 
@@ -133,7 +127,7 @@ tests run every panel down to that size.
 
 ## 3. Header Bar — Modes and Chrome
 
-**Mode tabs** — `Author` · `Audio + Music` · `Video + Ads` · `Social` · `Web` · `Brand Design` · `Brand Creator` · `Venture Agent` · `Assistant`. Each opens the
+**Mode tabs** — `Author` · `Audio + Music` · `Video + Ads` · `Social` · `Web` · `Brand Design` · `Brand Creator` · `Assistant`. Each opens the
 last tool used in that workspace. Where a workspace holds two related tools
 (Author → Book Author / Publishing Manager, Audio + Music → Audiobook Producer / Music Artist Generator) a second tab row appears
 above the page title.
@@ -1568,25 +1562,21 @@ engagement bait, as a rule rather than a hope.
 full sheet in `docs/agents/creator.md`
 
 The shared content-production workspace for every venture: books and
-publishing, music, AltMerch, Venture, and future projects. It turns a saved
+publishing, music, AltMerch, and future projects. It turns a saved
 voice plus platform context into concepts, captions, campaigns, posting plans,
-promotional asset briefs, and a reviewable calendar. Venture-specific business
-intelligence lives in its own top-level workspace and hands selected
-opportunities into Creator as structured campaign briefs. A third handoff,
-**Generate SFW Teaser**, skips the campaign brief and requests a real,
-safe-for-work promotional clip directly through Creator's Higgsfield pipeline
-(below) for the same selected opportunity.
+promotional asset briefs, and a reviewable calendar. **Generate Teaser**
+requests a real, safe-for-work promotional clip through Creator's Higgsfield
+pipeline (below).
 
-**It has no posting path, by design.** Venture has no public API — the limited
-access introduced in 2024 is for verified business partners only, and every
-third-party "Venture API" is browser automation or a reverse-engineered
-private endpoint, which their terms prohibit with permanent ban and lost
-earnings as the documented outcome. Their terms draw the line themselves:
-automation that *assists* a human is acceptable, automation that *replaces* one
-is not. So the agent drafts, and the user posts.
+**It has no posting path, by design.** Subscription platforms rarely offer a
+public posting API, and third-party "APIs" for them are usually browser
+automation or reverse-engineered private endpoints that their terms prohibit,
+with a banned account as the documented outcome. Automation that *assists* a
+human is the useful line; automation that *replaces* one is not. So the agent
+drafts, and the user posts.
 
-For adult subscription work it will not write a message posing as a specific
-real person in a live conversation with a paying subscriber.
+It will not write a message posing as a specific real person in a live
+conversation with a paying subscriber.
 
 #### Account types
 
@@ -2155,7 +2145,7 @@ imprint/
 │   ├── author/                    # Each project has __init__.py + agent.py
 │   ├── manuscript/                # plus its own README / TODO / SUGGESTIONS
 │   ├── audiobook/  music/  video/  social/
-│   ├── webdesign/  fiverr/  creator/  venture/
+│   ├── webdesign/  fiverr/  creator/
 │   └── course/  chat/  router/    # CLI/internal capabilities use the same shape
 │
 │   # osint_agent.py, osint_heavy_agent.py, wifi_agent.py, bug_bounty_agent.py,

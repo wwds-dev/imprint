@@ -235,7 +235,7 @@ CREATE TABLE IF NOT EXISTS audiobook_marks (
 CREATE TABLE IF NOT EXISTS creator_accounts (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     handle        TEXT NOT NULL UNIQUE,
-    platform      TEXT NOT NULL DEFAULT 'venture',
+    platform      TEXT NOT NULL DEFAULT 'General',
     -- 'own'      — the user's own account
     -- 'managed'  — someone else's, run with their permission
     -- 'persona'  — a synthetic character the user operates
@@ -780,7 +780,6 @@ def _sync_agent_labels(conn: sqlite3.Connection) -> None:
         "creator":     "Brand Creator",
         "video":       "Video & Ad Generator",
         "social":      "Social Media Campaign Manager",
-        "venture":    "Venture Agent",
     }
     for name, label in rename_map.items():
         conn.execute("UPDATE agents SET label = ? WHERE name = ?", (label, name))
@@ -1002,17 +1001,6 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
             # backend the guard authorises against and so has to be permitted here.
             "allowed_providers": json.dumps(["anthropic", "openai", "deepseek",
                                              "gemini", "kimi", "qwen", "higgsfield"]),
-            "allowed_tools": None,
-            "budget_limit_eur": None,
-            "requires_approval": 0,
-            "log_path": "data/logs/runs.jsonl",
-            "auto_generated": 0,
-        },
-        {
-            "name": "venture",
-            "label": "Venture Agent",
-            "description": "Venture venture intelligence — trends, opportunities, monetization hypotheses, owned analytics, market context, and strategy. No automated posting.",
-            "allowed_providers": json.dumps([]),
             "allowed_tools": None,
             "budget_limit_eur": None,
             "requires_approval": 0,

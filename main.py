@@ -164,7 +164,6 @@ from ui.status_cards import (
     ApiKeysStatusCard, ResourceStatusCard, RoutingStatusCard,
     STATUS_CARD_STYLES,
 )
-from agents.venture import VentureDashboard, format_creator_brief
 from agents.social import SocialPanel
 from ui.tooltips import seed_tooltips
 from ui.header_fit import HeaderFitter
@@ -1865,38 +1864,6 @@ class GodAI(QWidget):
     def video_reveal_selected(self):
         self.video_panel.reveal_selected()
 
-    # ── Venture venture intelligence ────────────────────────────────────────
-    def build_venture_panel(self):
-        """Business intelligence stays with the venture, not the making tool."""
-        self.venture_panel = QWidget()
-        self.venture_panel.setObjectName("VenturePanel")
-        layout = QVBoxLayout(self.venture_panel)
-        layout.setContentsMargins(0, 0, 0, 0)
-        self.venture_dashboard = VentureDashboard()
-        self.venture_dashboard.campaign_requested.connect(
-            self._venture_create_campaign)
-        self.venture_dashboard.teaser_requested.connect(
-            self._venture_generate_teaser)
-        layout.addWidget(self.venture_dashboard)
-        self.venture_panel.hide()
-
-    def _venture_create_campaign(self, context: dict) -> None:
-        """Carry a selected business signal into the shared Creator tool."""
-        self.select_agent("creator")
-        panel = self.creator_panel
-        panel.creator_platform_box.setCurrentText("Venture")
-        panel.creator_kind_box.setCurrentText("campaign")
-        panel.creator_brief_input.setPlainText(format_creator_brief(context))
-        panel.creator_tabs.setCurrentIndex(0)
-        panel.creator_status_label.setText(
-            "Venture opportunity loaded — choose an account, review the brief, then Draft.")
-        panel.creator_brief_input.setFocus()
-
-    def _venture_generate_teaser(self, context: dict) -> None:
-        """Generate a real SFW clip through Creator's Higgsfield pipeline."""
-        self._venture_create_campaign(context)
-        self.creator_generate_video()
-
     # ── Creator (shared content production) ──────────────────────────────────
     def build_creator_panel(self):
         """Compose the Brand Creator workspace owned by its agent package."""
@@ -1904,8 +1871,8 @@ class GodAI(QWidget):
 
     # ── Creator handlers ─────────────────────────────────────────────────────
     # Compatibility delegates: the workspace and its lifecycle live in
-    # agents/creator/panel.py; these keep existing umbrella bindings, the
-    # Venture handoff and the panel tests' entry points stable.
+    # agents/creator/panel.py; these keep existing umbrella bindings and the
+    # panel tests' entry points stable.
     def creator_load_models(self):
         self.creator_panel.load_models()
 
@@ -2622,8 +2589,6 @@ class GodAI(QWidget):
             self._refresh_next_step_tip()
         elif agent_name == "video":
             self.refresh_video_library()
-        elif agent_name == "venture":
-            self.venture_dashboard.refresh()
         elif not is_custom:
             self.output_label.setText("Output")
 
@@ -4012,7 +3977,7 @@ class GodAI(QWidget):
                 "audiobook": "audiobooks", "music": "music",
                 "video": "video", "social": "social",
                 "webdesign": "site-builder", "fiverr": "client-gigs",
-                "creator": "creator", "venture": "venture",
+                "creator": "creator",
             }.get(agent)
             start_anchor = ""
             if contextual:

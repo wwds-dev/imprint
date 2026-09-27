@@ -81,8 +81,7 @@ def test_incompatible_retired_over_budget_media_are_never_ranked():
 
 def test_each_selectable_agent_owns_a_requirement_profile():
     for key in ("chat", "author", "manuscript", "music", "webdesign",
-                "fiverr", "creator", "social", "video", "audiobook",
-                "venture"):
+                "fiverr", "creator", "social", "video", "audiobook"):
         profile = profile_for(key)
         assert profile.key == key
         assert profile.task_tags

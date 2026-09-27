@@ -20,7 +20,7 @@ fastest way to waste money is to automate output before anyone has wanted it.
 | Region | What it controls | Use it well |
 |---|---|---|
 | **Project rail** | New Project and your saved projects. | Keep one project per product, offer, client order, or venture. |
-| **Workspace tabs** | Write, Audio, Video, Social, Web, Gigs, Creator, Venture. | Choose the business stage first; then choose the tool inside it. |
+| **Workspace tabs** | Write, Audio, Video, Social, Web, Gigs, Creator. | Choose the business stage first; then choose the tool inside it. |
 | **Tool switcher** | The agents available in that workspace. | Draft creates; Publish packages; the other workspaces specialise. |
 | **Provider / Model** | Which AI service performs the current task. | Start with **Use Recommended**. Change models only for a measured reason. |
 | **Estimate / Spend** | Expected request cost, last cost, session and daily totals. | Set caps before a long job. Treat “not priced” as unknown, not free. |

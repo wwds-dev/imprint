@@ -80,12 +80,6 @@ AGENT_SPECS = (
         recommendation_profile="agents.creator.recommendations",
     ),
     AgentSpec(
-        "venture", "Venture Agent", "Venture Agent",
-        "Operate the consent-aware Venture venture and analytics workflow.",
-        "agents.venture",
-        recommendation_profile="agents.venture.recommendations",
-    ),
-    AgentSpec(
         "course", "Course Generator", None,
         "Produce packaged courses from the command line.",
         "agents.course", panel=False,

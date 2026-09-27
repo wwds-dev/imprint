@@ -10,7 +10,7 @@
 - An `own`, `managed`, or accurately disclosed `persona` profile.
 - Recorded authorisation for managed work; disclosure for synthetic personas.
 - A dated platform-policy record with source before any wholly synthetic persona
-  is used. Unknown is not permission, especially for Venture.
+  is used. Unknown is not permission.
 - Performer identity/age/consent/release records where applicable.
 - One bounded campaign hypothesis, account, segment, and measurement window.
 
@@ -105,5 +105,4 @@ and an owned outcome can later be joined without invented attribution.
 
 ## Next action
 
-For Venture opportunity selection, continue to [Venture](29-venture.md); for
-measurement, create an [evidence passport](30-evidence.md).
+For measurement, create an [evidence passport](30-evidence.md).
