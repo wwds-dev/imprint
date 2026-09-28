@@ -16,6 +16,7 @@ from datetime import date, datetime, timedelta
 # distinguishes a real time from a date-only entry so the week grid and
 # the ICS export can treat "sometime that day" honestly.
 _FORMATS = (
+    ("%Y-%m-%dT%H:%M:%S.%f", True),
     ("%Y-%m-%dT%H:%M:%S", True),
     ("%Y-%m-%dT%H:%M", True),
     ("%Y-%m-%d %H:%M:%S", True),

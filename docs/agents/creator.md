@@ -47,9 +47,16 @@ just in the dialog — a rule enforced only by a UI prompt is not enforced.
 | Provider / Model | Routed through the normal budget guard. |
 
 ## Outputs
-The **Draft** tab has editable output; **Calendar** holds items you post by
-hand, and **Earnings** joins imported statements to manually recorded asset
-outcomes without adding overlapping receipts. Voice, Media, Agency and Records
+The **Draft** tab has editable output; **Calendar** is a week view of the
+items you post by hand — one column per day, ‹/› and This week to navigate,
+each cell one planned item. Scheduling uses a real date-and-time picker (or
+"no date yet"); **Reschedule…** (or double-click) moves an item and follows it
+to its new week, and it is also how legacy free-text entries — kept visible in
+the Undated lane rather than guessed at — get their first real date.
+**Export…** writes the plan as an `.ics` calendar (dated items, importable
+into any calendar app for posting reminders) or CSV (everything, raw text
+preserved). **Earnings** joins imported statements to manually recorded asset
+outcomes without adding overlapping receipts. Voice, Media and Agency
 remain separate tabs.
 
 With a named Project selected, a generated draft carries that Project and its

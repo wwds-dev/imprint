@@ -899,8 +899,10 @@ class CreatorPanel(QWidget):
             return None
 
     @staticmethod
-    def _calendar_cell(row, when) -> QTableWidgetItem:
-        time_part = when.strftime("%H:%M") if when else "—"
+    def _calendar_cell(row, when, has_time) -> QTableWidgetItem:
+        # "—" for date-only entries: showing midnight would invent a time
+        # the user never chose.
+        time_part = when.strftime("%H:%M") if has_time else "—"
         item = QTableWidgetItem(
             f"{time_part}  {row['kind']}: {row['title'] or '(untitled)'}")
         item.setData(Qt.UserRole, row["id"])
@@ -935,15 +937,17 @@ class CreatorPanel(QWidget):
             if parsed is None:
                 undated.append(row)
                 continue
-            when, _has_time = parsed
+            when, has_time = parsed
             if start <= when.date() < end:
-                by_day[(when.date() - start).days].append((when, row))
+                by_day[(when.date() - start).days].append(
+                    (when, has_time, row))
         depth = max((len(items) for items in by_day.values()), default=0)
         grid.setRowCount(depth)
         for day, items in by_day.items():
-            for slot, (when, row) in enumerate(sorted(
-                    items, key=lambda pair: (pair[0], pair[1]["id"]))):
-                grid.setItem(slot, day, self._calendar_cell(row, when))
+            for slot, (when, has_time, row) in enumerate(sorted(
+                    items, key=lambda entry: (entry[0], entry[2]["id"]))):
+                grid.setItem(slot, day,
+                             self._calendar_cell(row, when, has_time))
         for row in undated:
             r = undated_table.rowCount()
             undated_table.insertRow(r)

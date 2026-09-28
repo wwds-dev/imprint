@@ -539,7 +539,6 @@ def test_existing_creator_tables_gain_optional_project_columns(tmp_path, monkeyp
 def test_creator_schedule_and_teaser_keep_origin_project_and_account(
         window, db, tmp_path, monkeypatch):
     from types import SimpleNamespace
-    from PySide6.QtWidgets import QInputDialog
     from services.registry import Registry
     from services.project_artifacts import list_for_project
 
@@ -555,7 +554,7 @@ def test_creator_schedule_and_teaser_keep_origin_project_and_account(
         window, "_active_project",
         lambda: registry.get_project("creator-second"))
     monkeypatch.setattr(
-        QInputDialog, "getText", staticmethod(lambda *a, **k: ("Friday", True)))
+        panel, "_ask_schedule_datetime", lambda *a, **k: "2026-10-02T18:00")
     panel.schedule()
     with database.get_connection() as conn:
         content = conn.execute(
@@ -631,18 +630,34 @@ def test_creator_calendar_and_media_keep_all_and_project_views(
     monkeypatch.setattr(window, "_active_project", lambda: {
         "id": "creator-campaign", "name": "Campaign"})
     try:
+        def calendar_items():
+            from PySide6.QtCore import Qt as _Qt
+            found = []
+            grid = panel.creator_calendar_table
+            for r in range(grid.rowCount()):
+                for c in range(grid.columnCount()):
+                    item = grid.item(r, c)
+                    if item is not None and item.data(_Qt.UserRole) is not None:
+                        found.append(item)
+            undated = panel.creator_calendar_undated_table
+            for r in range(undated.rowCount()):
+                item = undated.item(r, 0)
+                if item is not None and item.data(_Qt.UserRole) is not None:
+                    found.append(item)
+            return found
+
         panel.refresh_accounts()
         panel.creator_calendar_scope.setCurrentIndex(0)
         panel.creator_media_scope.setCurrentIndex(0)
         panel.refresh_calendar()
         panel.refresh_media()
-        assert panel.creator_calendar_table.rowCount() == 2
+        assert len(calendar_items()) == 2
         assert panel.creator_media_table.rowCount() == 2
         panel.creator_calendar_scope.setCurrentIndex(1)
         panel.creator_media_scope.setCurrentIndex(1)
-        assert panel.creator_calendar_table.rowCount() == 1
-        assert panel._calendar_ids and len(panel._calendar_ids) == 1
-        assert panel.creator_calendar_table.item(0, 2).text() == "Linked post"
+        scoped = calendar_items()
+        assert len(scoped) == 1
+        assert "Linked post" in scoped[0].text()
         assert panel.creator_media_table.rowCount() == 1
         assert panel.creator_media_table.item(0, 0).text() == "linked.jpg"
     finally:
