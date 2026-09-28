@@ -127,7 +127,8 @@ def test_reconciliation_finishes_and_bills_a_stranded_teaser(
         video_url="https://api.higgsfield.ai/v.mp4")
     fake_client = types.SimpleNamespace(
         configured=True,
-        wait=lambda job, timeout, on_progress, should_cancel: completed)
+        wait=lambda job, timeout, on_progress, should_cancel,
+        cancel_at_provider: completed)
     from agents.creator import panel as creator_panel_module
     monkeypatch.setattr(creator_panel_module, "HiggsfieldClient",
                         lambda: fake_client)
@@ -201,7 +202,8 @@ def test_timeout_and_local_exceptions_keep_the_row_reserved(
         status="failed", error="Timed out after 900s", video_url="")
     fake_client = types.SimpleNamespace(
         configured=True,
-        wait=lambda job, timeout, on_progress, should_cancel: stalled)
+        wait=lambda job, timeout, on_progress, should_cancel,
+        cancel_at_provider: stalled)
     from agents.creator import panel as creator_panel_module
     monkeypatch.setattr(creator_panel_module, "HiggsfieldClient",
                         lambda: fake_client)
@@ -229,7 +231,8 @@ def test_provider_verdict_releases_the_row(window, account, tmp_path,
         status="nsfw", error="moderation", video_url="")
     fake_client = types.SimpleNamespace(
         configured=True,
-        wait=lambda job, timeout, on_progress, should_cancel: rejected)
+        wait=lambda job, timeout, on_progress, should_cancel,
+        cancel_at_provider: rejected)
     from agents.creator import panel as creator_panel_module
     monkeypatch.setattr(creator_panel_module, "HiggsfieldClient",
                         lambda: fake_client)
@@ -247,3 +250,87 @@ def test_provider_verdict_releases_the_row(window, account, tmp_path,
     assert window.usage_tracker.get_agent_today_total(
         "creator") == pytest.approx(before)
     assert not window._pending_requests
+
+
+def test_live_local_exception_keeps_the_teaser_reserved(window, account):
+    """The HIGH finding: a mid-render exception must not release the row."""
+    panel = window.creator_panel
+    request_id = _insert_job(account, request_id="req-net")
+    token = window.restore_request(
+        "creator", "higgsfield", "/bytedance/x", "a teaser",
+        label="promo teaser", flat_cost_eur=0.5)
+    panel._video_context = {
+        "account_id": account, "request_token": token,
+        "job_id": request_id, "provider_completed": False}
+    window.creator_video_worker = types.SimpleNamespace(
+        timed_out=False, retryable=True)
+    try:
+        panel._video_error("network died mid-render")
+    finally:
+        window.creator_video_worker = None
+        panel._video_context = {}
+    assert token not in window._pending_requests
+    row = _job_row(request_id)
+    assert row["spend_state"] == "reserved"
+
+
+def test_stale_worker_flag_cannot_mislabel_an_estimate_failure(
+        window, account):
+    """The estimate stage has no token; a leftover timed-out worker from an
+    earlier render must not trigger the keep-watching message."""
+    panel = window.creator_panel
+    panel._video_context = {
+        "account_id": account, "request_token": None,
+        "job_id": "", "provider_completed": False}
+    window.creator_video_worker = types.SimpleNamespace(
+        timed_out=True, retryable=True)
+    try:
+        panel._video_error("estimate failed")
+    finally:
+        window.creator_video_worker = None
+        panel._video_context = {}
+    assert panel.creator_video_status.text() == "[Error] estimate failed"
+
+
+def test_settle_survives_a_billing_failure(window, account, tmp_path,
+                                           monkeypatch):
+    """Settle-before-bill: a record_request failure (or a crash in the
+    window between the two) resolves as an undercount, never a later
+    double-bill of a still-reserved row."""
+    output_path = tmp_path / "t.mp4"
+    output_path.write_bytes(b"clip")
+    request_id = _insert_job(account, request_id="req-settle",
+                             output_path=str(output_path))
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("billing exploded")
+
+    monkeypatch.setattr(window, "record_request", boom)
+    monkeypatch.setattr(window.creator_panel, "refresh_media", lambda: None)
+    row_dict = dict(_job_row(request_id))
+    worker = types.SimpleNamespace(provider_completed=True, timed_out=False,
+                                   retryable=False)
+    window.creator_panel._resume_teaser_done(
+        row_dict, "tok", worker, str(output_path))
+    row = _job_row(request_id)
+    assert row["spend_state"] == "billed"
+
+
+def test_delete_account_names_open_renders(window, account, monkeypatch):
+    _insert_job(account, request_id="req-open")
+    messages = []
+    from PySide6.QtWidgets import QMessageBox
+
+    def fake_question(parent, title, text, *args, **kwargs):
+        messages.append(text)
+        return QMessageBox.No   # look, do not delete
+    monkeypatch.setattr(QMessageBox, "question",
+                        staticmethod(fake_question))
+    # Select the fixture account in the panel's list.
+    panel = window.creator_panel
+    monkeypatch.setattr(panel, "current_account",
+                        lambda: {"id": account, "handle": "resume-test"})
+    panel.delete_account()
+    assert messages and "still open at Higgsfield" in messages[0]
+    # Declined: nothing was deleted.
+    assert _job_row("req-open") is not None

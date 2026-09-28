@@ -591,13 +591,35 @@ class CreatorPanel(QWidget):
         account = self.current_account()
         if not account:
             return
-        confirm = QMessageBox.question(
-            self, "Remove Profile",
+        open_renders = 0
+        try:
+            with get_connection() as conn:
+                open_renders = conn.execute(
+                    "SELECT COUNT(*) FROM creator_video_jobs "
+                    "WHERE account_id = ? AND spend_state = 'reserved'",
+                    (account["id"],)).fetchone()[0]
+        except Exception as exc:
+            self.host._note_failure("creator: count open renders", exc)
+        message = (
             f"Remove {account['handle']} and its drafts and performance from "
             "Imprint?\n\nThis only affects this app — nothing on the platform "
             "is touched.")
+        if open_renders:
+            message += (
+                f"\n\n{open_renders} teaser render(s) are still open at "
+                "Higgsfield. Deleting removes their record, so any charge "
+                "can no longer be reconciled in Imprint — check the "
+                "provider console first.")
+        confirm = QMessageBox.question(self, "Remove Profile", message)
         if confirm != QMessageBox.Yes:
             return
+        if open_renders:
+            # The erasure of open money rows is deliberate and recorded.
+            self.host._note_failure(
+                "creator: delete account", RuntimeError(
+                    f"{account['handle']} deleted with {open_renders} "
+                    "reserved teaser render(s); their charges are written "
+                    "off unreconciled"))
         try:
             with get_connection() as conn:
                 conn.execute(
@@ -1020,9 +1042,12 @@ class CreatorPanel(QWidget):
                           job_id=context.get("job_id", ""),
                           caption="Higgsfield teaser")
         self._link_project_media(context.get("project_id"), path, "creator_video")
+        # Settle before billing: a crash between the two must resolve as a
+        # one-time undercount (the row still carries actual_usd), never as
+        # a double-bill when the next launch resumes a still-reserved row.
+        self._settle_teaser_job(context.get("job_id", ""), "billed")
         if token:
             self.host.record_request(token, f"teaser: {Path(path).name}")
-        self._settle_teaser_job(context.get("job_id", ""), "billed")
         attached = False
         if context.get("content_id"):
             try:
@@ -1091,26 +1116,37 @@ class CreatorPanel(QWidget):
     def _video_error(self, error: str):
         context = self._video_context
         token = context.get("request_token") if context else None
-        # Same honesty rule as the Video workspace: a local poll deadline
-        # is not a provider verdict — the render may still finish and be
-        # charged, so the row stays 'reserved' for the next launch.
-        timed_out = (not (context or {}).get("provider_completed")
+        # Same honesty rule as the Video workspace: neither a local poll
+        # deadline nor a local exception is a provider verdict — the render
+        # may still finish and be charged, so the row stays 'reserved' for
+        # the next launch. Both flags are gated on this flow's own token so
+        # a stale worker from an earlier render cannot mislabel an
+        # estimate-stage failure.
+        provider_completed = bool((context or {}).get("provider_completed"))
+        timed_out = (bool(token) and not provider_completed
                      and getattr(self.host.creator_video_worker,
                                  "timed_out", False))
+        retryable = (bool(token) and not provider_completed
+                     and bool(context.get("job_id"))
+                     and getattr(self.host.creator_video_worker,
+                                 "retryable", False))
+        keep_open = timed_out or retryable
         if token:
-            if context.get("provider_completed"):
+            if provider_completed:
                 # A completed render is charged even if the local download
-                # later fails; keep spend accounting honest.
+                # later fails; keep spend accounting honest — settle first
+                # so a crash mid-handler can never double-bill on resume.
+                self._settle_teaser_job(context.get("job_id", ""), "billed")
                 self.host.record_request(
                     token, f"render completed; local error: {error}")
-                self._settle_teaser_job(context.get("job_id", ""), "billed")
-            elif timed_out:
-                self.host.abandon_request(token, reason="timeout")
+            elif keep_open:
+                self.host.abandon_request(
+                    token, reason="timeout" if timed_out else "error")
             else:
                 self.host.abandon_request(token)
                 self._settle_teaser_job(context.get("job_id", ""), "released")
         self._video_reset(f"[Error] {error}")
-        if timed_out:
+        if keep_open:
             self.creator_video_status.setText(
                 "Higgsfield may still finish this render — the next launch "
                 "checks and saves the result.")
@@ -1220,8 +1256,13 @@ class CreatorPanel(QWidget):
                           job_id=row["request_id"],
                           caption="Higgsfield teaser")
         self._link_project_media(row.get("project_id"), path, "creator_video")
-        self.host.record_request(
-            token, f"teaser (resumed): {Path(path).name}")
+        # Settle before billing (see _video_done for why).
+        self._settle_teaser_job(row["request_id"], "billed")
+        try:
+            self.host.record_request(
+                token, f"teaser (resumed): {Path(path).name}")
+        except Exception as exc:
+            self.host._note_failure("creator: bill resumed teaser", exc)
         try:
             with get_connection() as conn:
                 conn.execute(
@@ -1234,7 +1275,6 @@ class CreatorPanel(QWidget):
                 conn.commit()
         except Exception as exc:
             self.host._note_failure("creator: attach resumed teaser", exc)
-        self._settle_teaser_job(row["request_id"], "billed")
         if not self._video_context:
             self.creator_video_status.setText(
                 f"Resumed teaser saved: {Path(path).name}")
@@ -1245,10 +1285,11 @@ class CreatorPanel(QWidget):
     def _resume_teaser_error(self, row: dict, token, worker,
                              error: str) -> None:
         if worker.provider_completed:
-            # Charged and rendered; only the local save failed.
+            # Charged and rendered; only the local save failed. Settle
+            # first so a crash mid-handler can never double-bill.
+            self._settle_teaser_job(row["request_id"], "billed")
             self.host.record_request(
                 token, f"resumed render completed; local error: {error}")
-            self._settle_teaser_job(row["request_id"], "billed")
         elif worker.timed_out or worker.retryable:
             # Not a provider verdict — the row stays reserved and the next
             # launch resumes again; only this session's reservation ends.

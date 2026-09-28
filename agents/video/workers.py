@@ -81,9 +81,12 @@ class VideoResumeWorker(QThread):
                     f"[Resume] {self.provider} rendering… ({current.status})")
 
             if self.provider == "higgsfield":
+                # cancel_at_provider=False: this worker's cancel() means
+                # "stop watching for shutdown", never "destroy the render".
                 job = self.client.wait(
                     job, timeout=self.timeout, on_progress=progress,
-                    should_cancel=lambda: self._cancelled)
+                    should_cancel=lambda: self._cancelled,
+                    cancel_at_provider=False)
             else:
                 job = self.client.wait_video(
                     job, timeout=self.timeout, on_progress=progress,

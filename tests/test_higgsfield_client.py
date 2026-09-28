@@ -180,3 +180,18 @@ def test_provider_urls_cannot_redirect_authenticated_reads_to_another_host():
     with pytest.raises(HiggsfieldAPIError, match="unexpected host"):
         client.poll(VideoJob(
             "req-4", status_url="https://attacker.example/status/req-4"))
+
+
+def test_wait_without_provider_cancel_only_stops_watching():
+    """cancel_at_provider=False: the shutdown sweep must never destroy a
+    queued render the user already paid for — it stops polling, nothing
+    else, and the job resumes on the next launch."""
+    session = Session(gets=[])
+    client = client_with(session)
+    job = VideoJob(job_id="req-1")   # rebuilt rows default to "queued"
+    result = client.wait(job, timeout=5,
+                         should_cancel=lambda: True,
+                         cancel_at_provider=False)
+    assert result is job
+    assert result.status == "queued"
+    assert session.calls == []       # no cancel POST, no further polls

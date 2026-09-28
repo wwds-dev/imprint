@@ -258,9 +258,11 @@ class VideoGenerationWorker(QThread):
         self.seconds = seconds
         self.aspect_ratio = aspect_ratio
         self.timeout = timeout
-        # A local poll deadline is not a provider verdict; the panel keeps
-        # the durable job row pending when this is set.
+        # Neither a local poll deadline nor a local exception is a provider
+        # verdict; the panel keeps the durable job row pending when either
+        # flag is set.
         self.timed_out = False
+        self.retryable = False
         self._cancelled = False
 
     def cancel(self):
@@ -304,6 +306,10 @@ class VideoGenerationWorker(QThread):
             self.output_path.write_bytes(self.client.download_video(job))
             self.done_signal.emit(str(self.output_path))
         except Exception as exc:
+            # Provider verdicts exit through the status branch above; only
+            # local failures (network, disk, key) reach here, and the
+            # provider may still finish the submitted render.
+            self.retryable = True
             self.error_signal.emit(str(exc))
 
 
@@ -335,9 +341,11 @@ class HiggsfieldWorker(QThread):
         self.seed = seed
         self.timeout = timeout
         self.prepared_request = prepared_request
-        # A local poll deadline is not a provider verdict; the panel keeps
-        # the durable job row pending when this is set.
+        # Neither a local poll deadline nor a local exception is a provider
+        # verdict; the panel keeps the durable job row pending when either
+        # flag is set.
         self.timed_out = False
+        self.retryable = False
         self._cancel_requested = False
 
     def cancel(self):
@@ -382,6 +390,10 @@ class HiggsfieldWorker(QThread):
                             handle.write(chunk)
             self.done_signal.emit(str(self.output_path))
         except Exception as exc:
+            # Provider verdicts exit through the status branch above; only
+            # local failures (network, disk, key) reach here, and the
+            # provider may still finish the submitted render.
+            self.retryable = True
             self.error_signal.emit(str(exc))
 
 

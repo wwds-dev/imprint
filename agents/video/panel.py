@@ -700,9 +700,11 @@ class VideoPanel(QWidget):
         self._link_project_output(
             project_id, path,
             "video_pipeline" if self._active_kind == "pipeline" else "video_direct")
+        # Settle before billing: a crash between the two must resolve as
+        # a one-time undercount, never a double-bill on resume.
+        self._close_job_row(billed=True)
         if token:
             self.host.record_request(token, f"rendered {slug}")
-        self._close_job_row(billed=True)
         self._reset(f"Done — {Path(path).name}")
         self.refresh_library()
 
@@ -727,38 +729,50 @@ class VideoPanel(QWidget):
             external
             and self._external_context.get("provider_completed", False)
         )
-        # A local poll deadline is not a provider verdict: the render may
-        # still finish and be charged. Same rule as the resume path.
+        # Neither a local poll deadline nor a local exception is a
+        # provider verdict: the render may still finish and be charged.
+        # Same rule as the resume path. retryable is gated on an
+        # acknowledged job id — a failure before the create POST has
+        # nothing to resume.
         timed_out = (external and not provider_completed and
                      getattr(self.host.video_worker, "timed_out", False))
+        retryable = (external and not provider_completed
+                     and bool(self._external_context.get("job_id"))
+                     and getattr(self.host.video_worker, "retryable", False))
+        keep_open = timed_out or retryable
         token, self._request_token = self._request_token, None
         self._render_project_id = None
         if token and provider_completed:
+            # Settle first so a crash mid-handler can never double-bill.
+            self._close_job_row(billed=True, error=error)
             self.host.record_request(
                 token, "provider completed render; local save/index failed")
-        elif token and timed_out:
+        elif token and keep_open:
             # Release only this session's reservation; the durable row
             # stays 'reserved', so the next launch re-reserves and resumes.
-            self.host.abandon_request(token, reason="timeout")
+            self.host.abandon_request(
+                token, reason="timeout" if timed_out else "error")
         elif token:
             # A failed or cancelled render releases the whole-video reserve.
             self.host.abandon_request(token)
-        if timed_out:
+        if keep_open:
             row_id, self._external_context["job_row_id"] = (
                 self._external_context.get("job_row_id"), None)
             if row_id:
                 from agents.video import jobs
                 try:
-                    jobs.update_job(row_id, status="running", error=error)
+                    jobs.update_job(
+                        row_id, status="running" if timed_out else None,
+                        error=error)
                 except Exception as exc:
                     self.host._note_failure(
-                        "video: keep timed-out job pending", exc)
+                        "video: keep open job pending", exc)
             self.video_log.append(
                 "[Resume] Imprint stopped watching locally, but the "
                 "provider may still finish — the next launch checks and "
                 "saves the result.")
-        else:
-            self._close_job_row(billed=provider_completed, error=error)
+        elif not provider_completed:
+            self._close_job_row(billed=False, error=error)
         self.video_log.append(error)
         self._reset(f"[Error] {error}")
 
@@ -874,12 +888,16 @@ class VideoPanel(QWidget):
             # The paid asset is on disk; only the library index failed.
             error = f"saved, but could not join the library: {exc}"
         self._link_project_output(row.get("project"), path, "video_direct")
-        self.host.record_request(token, f"rendered {row['slug']} (resumed)")
+        # Settle before billing (see _on_done for why).
         try:
             jobs.mark_terminal(row["id"], spend_state="billed",
                                fallback_status="completed", error=error)
         except Exception as exc:
             self.host._note_failure("video: close resumed job", exc)
+        try:
+            self.host.record_request(token, f"rendered {row['slug']} (resumed)")
+        except Exception as exc:
+            self.host._note_failure("video: bill resumed render", exc)
         self.video_log.append(
             f"[Resume] {row['slug']} finished and was saved."
             + (f" ({error})" if error else ""))
@@ -891,12 +909,13 @@ class VideoPanel(QWidget):
         try:
             if worker.provider_completed:
                 # Money was spent and the asset exists at the provider;
-                # only the local download/save failed.
+                # only the local download/save failed. Settle first so a
+                # crash mid-handler can never double-bill.
+                jobs.mark_terminal(row["id"], spend_state="billed",
+                                   fallback_status="completed", error=error)
                 self.host.record_request(
                     token, "provider completed resumed render; local save "
                     "failed")
-                jobs.mark_terminal(row["id"], spend_state="billed",
-                                   fallback_status="completed", error=error)
             elif worker.timed_out or worker.retryable:
                 # Neither a deadline nor a local exception is a provider
                 # verdict — the render may still finish. Release only this

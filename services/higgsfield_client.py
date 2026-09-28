@@ -435,16 +435,24 @@ class HiggsfieldClient:
         return response.status_code == 202
 
     def wait(self, job: VideoJob, *, timeout: int = 600,
-             interval: float = 2.0, on_progress=None, should_cancel=None) -> VideoJob:
+             interval: float = 2.0, on_progress=None, should_cancel=None,
+             cancel_at_provider: bool = True) -> VideoJob:
         """Poll until the job finishes or `timeout` seconds elapse.
 
         Bounded on purpose: a render that never completes should surface as a
         timeout the user can see, not a thread parked forever.
+
+        cancel_at_provider=False makes `should_cancel` mean only "stop
+        watching": the loop returns the job unchanged and never asks the
+        provider to cancel — the shutdown sweep uses this so quitting the
+        app cannot destroy a queued render the user already paid for.
         """
         deadline = time.time() + timeout
         delay = max(0.1, float(interval))
         while time.time() < deadline:
             if should_cancel and should_cancel():
+                if not cancel_at_provider:
+                    return job
                 if job.status == "queued" and self.cancel(job):
                     job.status = "canceled"
                     return job

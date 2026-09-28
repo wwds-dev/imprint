@@ -211,7 +211,8 @@ def test_resume_worker_streams_a_higgsfield_url(app, tmp_path, monkeypatch):
     completed = types.SimpleNamespace(
         status="completed", error="", video_url="https://api.higgsfield.ai/v.mp4")
     client = types.SimpleNamespace(
-        wait=lambda job, timeout, on_progress, should_cancel: completed)
+        wait=lambda job, timeout, on_progress, should_cancel,
+        cancel_at_provider: completed)
 
     class FakeResponse:
         def __enter__(self):
@@ -553,3 +554,55 @@ def test_persist_transition_ignores_a_malformed_poll(
     (row,) = jobs.pending_rows()
     assert row["job_id"] == "task-2"
     assert row["status"] == "running"
+
+
+def test_live_worker_marks_local_exceptions_retryable(app, tmp_path):
+    """A mid-render network exception is not a provider verdict (HIGH
+    finding of the teaser-resume review): the live worker must flag it so
+    the panel keeps the row reserved."""
+    from ui.workers import VideoGenerationWorker
+
+    def explode(job, timeout, on_progress, should_cancel):
+        raise ConnectionError("network died mid-render")
+
+    client = types.SimpleNamespace(
+        create_video=lambda prompt, model, seconds, aspect_ratio:
+        types.SimpleNamespace(status="queued", error="", job_id="task-x"),
+        wait_video=explode)
+    worker = VideoGenerationWorker(
+        client, "topic", tmp_path / "o.mp4", provider="Qwen",
+        model="wan3.0-video", seconds=8, aspect_ratio="9:16")
+    errors = []
+    worker.error_signal.connect(errors.append)
+    worker.run()
+    assert worker.retryable is True
+    assert worker.timed_out is False
+    assert errors == ["network died mid-render"]
+
+
+def test_live_local_exception_keeps_the_row_pending(window, clean_jobs_table):
+    """_on_error's retryable carve-out mirrors the timeout one."""
+    if not window.video_panel._available:
+        pytest.skip("vidforge is not importable in this checkout")
+    panel = window.video_panel
+    row_id = _submit(slug="netdrop")
+    jobs.update_job(row_id, job_id="task-13", status="running")
+    token = window.restore_request(
+        "video", "qwen", "wan3.0-video", "a render",
+        label="direct video", flat_cost_eur=0.5)
+    panel._request_token = token
+    panel._active_kind = "qwen-video"
+    panel._external_context = {
+        "job_row_id": row_id, "job_id": "task-13",
+        "provider_completed": False}
+    window.video_worker = types.SimpleNamespace(
+        timed_out=False, retryable=True)
+    try:
+        panel._on_error("network died mid-render")
+    finally:
+        window.video_worker = None
+        panel._active_kind = ""
+    assert token not in window._pending_requests
+    (row,) = jobs.pending_rows()
+    assert row["id"] == row_id
+    assert row["spend_state"] == "reserved"
