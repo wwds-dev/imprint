@@ -451,6 +451,31 @@ CREATE TABLE IF NOT EXISTS creator_video_jobs (
     FOREIGN KEY (content_id) REFERENCES creator_content(id)
 );
 
+-- One row per audiobook conversion. The narrator converter resumes
+-- chunk-by-chunk from its own on-disk manifest; this row is the app-level
+-- memory: which book was in flight when the process died, how far it got
+-- (chunks_done/chunks_total, run_baseline = where the current run began),
+-- and how much of the flat estimate has been billed, so restarts surface
+-- the interruption and the money converges on one estimate across runs.
+-- status: running -> completed | interrupted
+CREATE TABLE IF NOT EXISTS audiobook_conversions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_path   TEXT NOT NULL,
+    output_path   TEXT NOT NULL,
+    voice         TEXT NOT NULL DEFAULT '',
+    chunk_tokens  INTEGER NOT NULL DEFAULT 0,
+    estimate_eur  REAL NOT NULL DEFAULT 0.0,
+    billed_eur    REAL NOT NULL DEFAULT 0.0,
+    chunks_done   INTEGER NOT NULL DEFAULT 0,
+    chunks_total  INTEGER NOT NULL DEFAULT 0,
+    run_baseline  INTEGER NOT NULL DEFAULT 0,
+    project       TEXT,
+    status        TEXT NOT NULL DEFAULT 'running',
+    error         TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+
 -- Direct provider renders from the Video workspace.  A row is written just
 -- before the create POST and updated on every provider transition, so a
 -- render that outlives the process is resumed, downloaded and billed on the
@@ -498,6 +523,7 @@ CREATE INDEX IF NOT EXISTS idx_creator_content_account ON creator_content(accoun
 CREATE INDEX IF NOT EXISTS idx_creator_media_account   ON creator_media(account_id);
 CREATE INDEX IF NOT EXISTS idx_creator_video_jobs_account ON creator_video_jobs(account_id);
 CREATE INDEX IF NOT EXISTS idx_video_jobs_status       ON video_jobs(status);
+CREATE INDEX IF NOT EXISTS idx_audiobook_conversions_status ON audiobook_conversions(status);
 CREATE INDEX IF NOT EXISTS idx_social_publish_jobs_status
     ON social_publish_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_project_artifacts_project

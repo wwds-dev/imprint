@@ -3034,6 +3034,7 @@ class GodAI(QWidget):
         finishes what a previous process left in flight."""
         self.video_panel.resume_pending_jobs()
         self.creator_panel.resume_pending_teasers()
+        self.audiobook_panel.resume_pending_conversions()
 
     def _reserved_in_flight_eur(self) -> float:
         """Estimates of every authorized-but-unresolved request."""

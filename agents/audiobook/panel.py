@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QVBoxLayout, QWidget,
 )
 
+from agents.audiobook import conversions
 from agents.audiobook.audiobook_library import (
     format_time, load_position, mark_unfinished, scan,
 )
@@ -56,6 +57,8 @@ class AudiobookPanel(QWidget):
         self._conversion_project_id = None
         self._conversion_source = None
         self._conversion_output = None
+        self._conversion_job_id = None
+        self._resume_scan_done = False
         self.process = None
         self.setObjectName("AudiobookPanel")
         outer = QVBoxLayout(self)
@@ -409,10 +412,15 @@ class AudiobookPanel(QWidget):
                 f"No text could be extracted from {Path(book_path).name}, so "
                 "the conversion cost cannot be estimated.")
             return
+        # Chunks cached by earlier runs are already paid for: authorize
+        # (and reserve) only what this run can still spend.
+        open_row = conversions.find_open(book_path, str(expected_output))
+        fraction = conversions.remaining_fraction(open_row)
+        remaining_eur = round(estimate["eur"] * fraction, 6)
         token = self.host.authorize_request(
             "audiobook", "openai", "gpt-4o-mini-tts",
             f"{Path(book_path).name} · {estimate['characters']} characters",
-            label="audiobook", flat_cost_eur=estimate["eur"])
+            label="audiobook", flat_cost_eur=remaining_eur)
         if not token:
             return
         self._request_token = token
@@ -421,6 +429,16 @@ class AudiobookPanel(QWidget):
         self._conversion_project_id = project["id"] if project else None
         self._conversion_source = Path(book_path)
         self._conversion_output = expected_output
+        try:
+            job = conversions.open_job(
+                source_path=book_path, output_path=str(expected_output),
+                voice=voice, chunk_tokens=chunk_tokens,
+                estimate_eur=estimate["eur"],
+                project=self._conversion_project_id)
+            self._conversion_job_id = job["id"]
+        except Exception as exc:
+            self._conversion_job_id = None
+            self.host._note_failure("audiobook: persist conversion", exc)
         config = {
             "input": book_path, "output": output_path, "voice": voice,
             "chunk_tokens": chunk_tokens,
@@ -490,6 +508,13 @@ class AudiobookPanel(QWidget):
             self.tool_progress.setValue(int(percent))
             self.audiobook_status_label.setText(
                 f"[Running] {percent:.1f}% ({done}/{total})")
+            if self._conversion_job_id:
+                try:
+                    conversions.update_progress(
+                        self._conversion_job_id, int(done), int(total))
+                except Exception as exc:
+                    self.host._note_failure(
+                        "audiobook: persist progress", exc)
 
     def handle_finished(self, *_args):
         self._reset_conversion_controls()
@@ -580,10 +605,99 @@ class AudiobookPanel(QWidget):
             self.host, "_audiobook_request_token", None)
         self._request_token = None
         self.host._audiobook_request_token = None
+        job_id, self._conversion_job_id = self._conversion_job_id, None
+        row = None
+        if job_id:
+            try:
+                row = conversions.get_job(job_id)
+            except Exception as exc:
+                self.host._note_failure("audiobook: read conversion", exc)
         if token and success:
+            # Settle first (the video-review rule): a crash between the
+            # two undercounts once, never double-bills a later resume.
+            if row is not None:
+                try:
+                    context = self.host.pending_request_snapshot(token)
+                    conversions.settle(
+                        job_id, status="completed",
+                        billed_add=float(
+                            context.get("flat_cost_eur") or 0.0))
+                except Exception as exc:
+                    self.host._note_failure(
+                        "audiobook: settle conversion", exc)
             self.host.record_request(token, "conversion complete")
         elif token:
+            # The chunks this run generated were paid TTS calls even
+            # though the book is unfinished. Release the reservation,
+            # then log the real partial spend.
             self.host.abandon_request(token)
+            if row is not None:
+                spend = conversions.run_spend_eur(row)
+                try:
+                    if spend > 0:
+                        self.host.usage_tracker.log_request(
+                            agent="audiobook", backend="openai",
+                            model="gpt-4o-mini-tts",
+                            prompt_text=f"partial conversion: "
+                            f"{Path(row['source_path']).name}",
+                            response_text=f"{row['chunks_done']}/"
+                            f"{row['chunks_total']} chapters cached",
+                            usage=None, flat_cost_eur=spend,
+                            project=row.get("project"))
+                        self.host.update_usage_labels()
+                    conversions.settle(job_id, status="interrupted",
+                                       billed_add=spend)
+                except Exception as exc:
+                    self.host._note_failure(
+                        "audiobook: settle interrupted conversion", exc)
+
+    def resume_pending_conversions(self) -> None:
+        """Surface conversions the previous process died in the middle of.
+
+        The chunk cache on disk means Start on the same book resumes
+        without re-paying; the row's chunk counts let the dead run's real
+        spend be logged even though its token died with the process.
+        Nothing auto-starts — TTS costs money and Start already carries
+        the guard's confirm.
+        """
+        if self._resume_scan_done:
+            return
+        self._resume_scan_done = True
+        try:
+            rows = conversions.dead_runs()
+        except Exception as exc:
+            self.host._note_failure("audiobook: read conversions", exc)
+            return
+        for row in rows:
+            spend = conversions.run_spend_eur(row)
+            try:
+                if spend > 0:
+                    self.host.usage_tracker.log_request(
+                        agent="audiobook", backend="openai",
+                        model="gpt-4o-mini-tts",
+                        prompt_text=f"partial conversion (previous "
+                        f"session): {Path(row['source_path']).name}",
+                        response_text=f"{row['chunks_done']}/"
+                        f"{row['chunks_total']} chapters cached",
+                        usage=None, flat_cost_eur=spend,
+                        project=row.get("project"))
+                    self.host.update_usage_labels()
+                conversions.settle(row["id"], status="interrupted",
+                                   billed_add=spend)
+            except Exception as exc:
+                self.host._note_failure(
+                    "audiobook: settle dead conversion", exc)
+        if rows:
+            last = rows[-1]
+            done = last.get("chunks_done", 0)
+            total = last.get("chunks_total", 0)
+            cached = (f" {done} of {total} chapters are already generated "
+                      "and cached — you only pay for the rest." if total
+                      else "")
+            self.audiobook_status_label.setText(
+                f"[Interrupted] {Path(last['source_path']).name} did not "
+                "finish last session. Select it and click Start to "
+                f"resume.{cached}")
 
     def _reset_conversion_controls(self):
         self.stop_btn.setEnabled(False)

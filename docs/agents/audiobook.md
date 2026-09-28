@@ -91,6 +91,7 @@ immediately stopping. **Start Over** clears that flag.
 | Location | Role |
 |---|---|
 | `agents/audiobook/audiobook_library.py` | Scan, resume bookkeeping, time formatting. |
+| `agents/audiobook/conversions.py` | Durable conversion ledger: chunk progress, per-run billing baseline, and the startup scan that surfaces an interrupted book and settles its real partial spend. |
 | `agents/audiobook/audio_player.py` | `AudiobookPlayer` widget. |
 | `agents/audiobook/panel.py: _build_library_tab()` | The Listen tab layout and actions; the host retains compatibility entry points for workspace switching. |
 | `audiobook_progress` table | Path, position, duration, finished, last played. |
