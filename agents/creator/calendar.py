@@ -10,7 +10,14 @@ is surfaced in the Undated lane rather than guessed at or lost.
 """
 
 import csv
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
+
+# Hard-coded English names: strftime %a/%b follow the process locale,
+# which Qt resets to the system's — the calendar header should not
+# change language with the OS, and neither should the tests.
+_DAYS = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+_MONTHS = ("Jan", "Feb", "Mar", "Apr", "May", "Jun",
+           "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 
 # The formats the app has ever written, most specific first. `has_time`
 # distinguishes a real time from a date-only entry so the week grid and
@@ -46,16 +53,21 @@ def week_start(anchor: date) -> date:
 def week_label(start: date) -> str:
     end = start + timedelta(days=6)
     if start.month == end.month:
-        return f"{start.day}–{end.day} {end.strftime('%b %Y')}"
+        return f"{start.day}–{end.day} {_MONTHS[end.month - 1]} {end.year}"
     if start.year == end.year:
-        return (f"{start.day} {start.strftime('%b')} – "
-                f"{end.day} {end.strftime('%b %Y')}")
-    return (f"{start.day} {start.strftime('%b %Y')} – "
-            f"{end.day} {end.strftime('%b %Y')}")
+        return (f"{start.day} {_MONTHS[start.month - 1]} – "
+                f"{end.day} {_MONTHS[end.month - 1]} {end.year}")
+    return (f"{start.day} {_MONTHS[start.month - 1]} {start.year} – "
+            f"{end.day} {_MONTHS[end.month - 1]} {end.year}")
 
 
 def day_headers(start: date) -> list[str]:
-    return [(start + timedelta(days=i)).strftime("%a %d %b") for i in range(7)]
+    headers = []
+    for i in range(7):
+        day = start + timedelta(days=i)
+        headers.append(
+            f"{_DAYS[day.weekday()]} {day.day:02d} {_MONTHS[day.month - 1]}")
+    return headers
 
 
 def _ics_escape(text: str) -> str:
@@ -87,7 +99,7 @@ def export_ics(rows: list[dict], path) -> tuple[int, int]:
     Undated rows cannot become events without inventing a date, so they
     are skipped and counted — the caller says so instead of hiding it.
     """
-    stamp = datetime.now().strftime("%Y%m%dT%H%M%S")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -134,17 +146,30 @@ def export_ics(rows: list[dict], path) -> tuple[int, int]:
     return written, skipped
 
 
+def _defuse(value) -> str:
+    """A leading apostrophe stops spreadsheets executing cell content."""
+    text = str(value or "")
+    if text[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + text
+    return text
+
+
 def export_csv(rows: list[dict], path) -> int:
-    """Write every row — dated or not — with the raw text preserved."""
+    """Write every row — dated or not — with the raw text preserved
+    (formula-triggering first characters are defused with an apostrophe)."""
     with open(path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.writer(handle)
         writer.writerow(["scheduled_for", "kind", "title", "status",
                          "price_usd", "channel", "campaign", "body"])
         for row in rows:
             writer.writerow([
-                row.get("scheduled_for", ""), row.get("kind", ""),
-                row.get("title", ""), row.get("status", ""),
-                row.get("price_usd", 0.0), row.get("channel", ""),
-                row.get("campaign", ""), row.get("body", ""),
+                _defuse(row.get("scheduled_for", "")),
+                _defuse(row.get("kind", "")),
+                _defuse(row.get("title", "")),
+                _defuse(row.get("status", "")),
+                row.get("price_usd", 0.0),
+                _defuse(row.get("channel", "")),
+                _defuse(row.get("campaign", "")),
+                _defuse(row.get("body", "")),
             ])
     return len(rows)

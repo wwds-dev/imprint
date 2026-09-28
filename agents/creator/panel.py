@@ -864,6 +864,10 @@ class CreatorPanel(QWidget):
             self.host._note_failure("creator: schedule", exc,
                                     self.creator_status_label)
             return
+        # Land on the week that now holds the item — a correct empty
+        # current week reads as "scheduling failed" and invites a
+        # duplicate.
+        self._show_week_of(when)
         self.refresh_calendar()
         self.creator_tabs.setCurrentIndex(1)
 
@@ -968,11 +972,19 @@ class CreatorPanel(QWidget):
         self.refresh_calendar()
 
     def _calendar_selection_changed(self, source) -> None:
-        """Selections in the grid and the undated lane are exclusive."""
+        """Selections in the grid and the undated lane are exclusive.
+
+        Judged by the selection model, not by items: clicking an EMPTY
+        grid cell is a selection with no QTableWidgetItem behind it, and
+        it must still clear the other lane — otherwise a stale hidden
+        selection there feeds selected_content_id() and money or paid
+        media attaches to an item the user believes they deselected.
+        """
         other = (self.creator_calendar_undated_table
                  if source is self.creator_calendar_table
                  else self.creator_calendar_table)
-        if source.selectedItems() and other.selectedItems():
+        if (source.selectionModel().hasSelection()
+                and other.selectionModel().hasSelection()):
             other.blockSignals(True)
             other.clearSelection()
             other.blockSignals(False)
@@ -1014,6 +1026,9 @@ class CreatorPanel(QWidget):
                 minute=0, second=0, microsecond=0) + timedelta(hours=1)
             picker.setDateTime(QDateTime(upcoming))
         layout.addWidget(field("Date and time", picker))
+        whole_day = QCheckBox("Whole day — no specific time")
+        whole_day.setChecked(bool(parsed) and not parsed[1])
+        layout.addWidget(whole_day)
         undated = QCheckBox("No date yet — keep it in the Undated list")
         layout.addWidget(undated)
         buttons = QDialogButtonBox(
@@ -1025,7 +1040,17 @@ class CreatorPanel(QWidget):
             return None
         if undated.isChecked():
             return ""
+        if whole_day.isChecked():
+            return picker.dateTime().toString("yyyy-MM-dd")
         return picker.dateTime().toString("yyyy-MM-ddTHH:mm")
+
+    def _show_week_of(self, when: str) -> None:
+        """Point the visible week at a stored schedule string, if dated."""
+        parsed = content_calendar.parse_scheduled(when)
+        if parsed:
+            self._calendar_week_start = (
+                parsed[0].date()
+                - timedelta(days=parsed[0].date().weekday()))
 
     def reschedule_selected(self) -> None:
         content_id = self.selected_content_id()
@@ -1059,11 +1084,7 @@ class CreatorPanel(QWidget):
             self.host._note_failure("creator: reschedule", exc,
                                     self.creator_status_label)
             return
-        parsed = content_calendar.parse_scheduled(when)
-        if parsed:
-            self._calendar_week_start = (
-                parsed[0].date()
-                - timedelta(days=parsed[0].date().weekday()))
+        self._show_week_of(when)
         self.refresh_calendar()
 
     def export_calendar(self) -> None:
@@ -1080,9 +1101,12 @@ class CreatorPanel(QWidget):
         if not path:
             return
         destination = Path(path)
-        if not destination.suffix:
-            destination = destination.with_suffix(
-                ".csv" if "CSV" in chosen_filter else ".ics")
+        if destination.suffix.lower() not in (".ics", ".csv"):
+            # An unrelated suffix ("october.plan") is part of the name,
+            # not a format choice — the filter the user picked decides.
+            destination = Path(
+                str(destination)
+                + (".csv" if "CSV" in chosen_filter else ".ics"))
         try:
             if destination.suffix.lower() == ".csv":
                 written = content_calendar.export_csv(rows, destination)

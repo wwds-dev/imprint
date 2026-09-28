@@ -284,3 +284,112 @@ def test_export_calendar_csv_takes_everything(panel, tmp_path, monkeypatch):
     text = target.read_text(encoding="utf-8")
     assert "Dated" in text and "whenever" in text
     assert "Exported 2 items" in panel.creator_status_label.text()
+
+
+# ── regressions from the adversarial review (2026-09-29) ────────────────────
+
+def test_empty_grid_cell_click_clears_the_undated_selection(panel):
+    """The HIGH finding: an itemless grid cell is still a selection and
+    must clear the undated lane, or money flows attach to a stale id."""
+    monday = cal.week_start(date.today())
+    _insert(panel._test_account_id, "Busy Tuesday",
+            (monday + timedelta(days=1)).isoformat() + "T09:00")
+    _insert(panel._test_account_id, "Busy Tuesday II",
+            (monday + timedelta(days=1)).isoformat() + "T10:00")
+    prose_id = _insert(panel._test_account_id, "Stale pick", "later")
+    panel.refresh_calendar()
+    panel.creator_calendar_undated_table.setCurrentCell(0, 0)
+    assert panel.selected_content_id() == prose_id
+    # Wednesday row 1 exists (depth 2) but holds no item.
+    assert panel.creator_calendar_table.item(1, 2) is None
+    panel.creator_calendar_table.setCurrentCell(1, 2)
+    assert panel.selected_content_id() is None
+    assert not (panel.creator_calendar_undated_table
+                .selectionModel().hasSelection())
+
+
+def test_schedule_jumps_to_the_items_week(panel, monkeypatch):
+    """A correct-but-empty current week after scheduling reads as failure
+    and invites a duplicate."""
+    target = cal.week_start(date.today()) + timedelta(weeks=3, days=1)
+    panel.creator_output.setPlainText("A future post")
+    panel._draft_origin = None
+    monkeypatch.setattr(
+        panel, "_ask_schedule_datetime",
+        lambda *a, **k: target.isoformat() + "T09:00")
+    panel.schedule()
+    assert panel._calendar_week_start == cal.week_start(target)
+    assert panel.creator_calendar_week_label.text() == cal.week_label(
+        cal.week_start(target))
+
+
+def test_export_filter_wins_over_an_unrelated_suffix(panel, tmp_path,
+                                                     monkeypatch):
+    """Typing "october.plan" with the CSV filter chosen must not silently
+    produce ICS (dropping the undated rows the filter promised to keep)."""
+    _insert(panel._test_account_id, "Prose entry", "whenever")
+    typed = tmp_path / "october.plan"
+    from PySide6.QtWidgets import QFileDialog
+    monkeypatch.setattr(
+        QFileDialog, "getSaveFileName",
+        staticmethod(lambda *a, **k: (str(typed), "CSV (*.csv)")))
+    panel.export_calendar()
+    written = tmp_path / "october.plan.csv"
+    assert written.exists()
+    assert "Prose entry" in written.read_text(encoding="utf-8")
+
+
+def test_reschedule_can_keep_an_item_whole_day(panel, monkeypatch):
+    prose_id = _insert(panel._test_account_id, "Whole day", "sometime")
+    panel.refresh_calendar()
+    panel.creator_calendar_undated_table.setCurrentCell(0, 0)
+    target = cal.week_start(date.today()) + timedelta(days=4)
+    monkeypatch.setattr(
+        panel, "_ask_schedule_datetime", lambda *a, **k: target.isoformat())
+    panel.reschedule_selected()
+    _row, column, item = _grid_cell(panel, prose_id)
+    assert column == 4
+    assert item.text().startswith("—")     # no invented midnight
+
+
+def test_ics_dtstamp_is_utc():
+    import re
+    rows = [{"id": 4, "scheduled_for": "2026-10-02T09:00", "kind": "post",
+             "title": "T", "status": "draft", "price_usd": 0.0,
+             "channel": "", "campaign": "", "body": ""}]
+    import tempfile
+    from pathlib import Path as _P
+    with tempfile.TemporaryDirectory() as tmp:
+        target = _P(tmp) / "z.ics"
+        cal.export_ics(rows, target)
+        text = target.read_text(encoding="utf-8")
+    assert re.search(r"DTSTAMP:\d{8}T\d{6}Z", text)
+
+
+def test_csv_export_defuses_formula_cells(tmp_path):
+    rows = [{"id": 5, "scheduled_for": "2026-10-02", "kind": "post",
+             "title": "=SUM(A1:A9)", "status": "draft", "price_usd": 0.0,
+             "channel": "@handle", "campaign": "+launch", "body": "-x"}]
+    target = tmp_path / "d.csv"
+    cal.export_csv(rows, target)
+    text = target.read_text(encoding="utf-8")
+    assert "'=SUM(A1:A9)" in text
+    assert "'@handle" in text and "'+launch" in text and "'-x" in text
+
+
+def test_week_labels_are_locale_independent():
+    """strftime %b follows the process locale; the hard-coded names
+    must not."""
+    import locale
+    saved = locale.setlocale(locale.LC_TIME)
+    try:
+        for candidate in ("de_DE.UTF-8", "de_DE", "C"):
+            try:
+                locale.setlocale(locale.LC_TIME, candidate)
+                break
+            except locale.Error:
+                continue
+        assert cal.week_label(date(2026, 10, 5)) == "5–11 Oct 2026"
+        assert cal.day_headers(date(2026, 9, 28))[0] == "Mon 28 Sep"
+    finally:
+        locale.setlocale(locale.LC_TIME, saved)
