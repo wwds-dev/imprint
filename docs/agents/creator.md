@@ -78,8 +78,12 @@ Renders can be canceled while queued. Once processing begins Higgsfield cannot
 cancel them, so Imprint keeps watching and saves the finished file. Job state,
 price, policy outcome and correlation ID are stored in `creator_video_jobs`, and
 the output is copied into the Media library because hosted output URLs are not
-permanent. Select a Calendar row before clicking `Generate Teaser` to attach the
-finished video directly to that item.
+permanent. Since 2026-09-28 the ledger also settles the money: each render is
+`reserved` until it is billed or released, and a render that outlives the app
+is resumed on the next launch — re-polled, downloaded, billed once and saved —
+with timeouts and local errors retried rather than written off. Select a
+Calendar row before clicking `Generate Teaser` to attach the finished video
+directly to that item.
 
 Higgsfield's Terms of Use prohibit **sexually explicit material** and
 **unauthorised images of other people**, and moderate prompts, reference images

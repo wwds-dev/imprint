@@ -320,6 +320,8 @@ class CreatorPanel(QWidget):
         # through host._find_control(); HOST_CONTROLS stays as the
         # published contract of what this panel owns.
         host.creator_panel = self
+        host.creator_resume_workers = []
+        self._resume_started = False
         host.creator_worker = None
         host.creator_video_estimate_worker = None
         host.creator_video_worker = None
@@ -917,8 +919,9 @@ class CreatorPanel(QWidget):
             self._video_reset("Render not approved.")
             return
         context["request_token"] = token
-        context["project_id"] = self.host.pending_request_snapshot(token).get(
-            "project")
+        snapshot = self.host.pending_request_snapshot(token)
+        context["project_id"] = snapshot.get("project")
+        context["run_id"] = snapshot.get("run_id", "")
 
         render_worker = HiggsfieldWorker(
             client, context["prompt"], context["output_path"],
@@ -971,8 +974,10 @@ class CreatorPanel(QWidget):
                        created_at, updated_at,
                        endpoint, prompt, prompt_version, estimated_credits,
                        estimated_usd, actual_usd, cost_basis, status,
-                       policy_result, error, correlation_id)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                       policy_result, error, correlation_id,
+                       spend_state, flat_cost_eur, output_path, run_id)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
+                            'reserved',?,?,?)
                     ON CONFLICT(request_id) DO UPDATE SET
                       updated_at=excluded.updated_at,
                       project_id=COALESCE(creator_video_jobs.project_id,
@@ -996,6 +1001,9 @@ class CreatorPanel(QWidget):
                     context.get("estimated_credits", 0.0),
                     context.get("estimated_usd", 0.0), actual_usd, cost_basis,
                     job.status, policy_result, job.error, job.correlation_id,
+                    context.get("estimated_eur", 0.0),
+                    context.get("output_path", ""),
+                    context.get("run_id", ""),
                 ))
                 conn.commit()
         except Exception as exc:
@@ -1014,6 +1022,7 @@ class CreatorPanel(QWidget):
         self._link_project_media(context.get("project_id"), path, "creator_video")
         if token:
             self.host.record_request(token, f"teaser: {Path(path).name}")
+        self._settle_teaser_job(context.get("job_id", ""), "billed")
         attached = False
         if context.get("content_id"):
             try:
@@ -1049,24 +1058,208 @@ class CreatorPanel(QWidget):
         if attached:
             self.refresh_calendar()
 
+    def _settle_teaser_job(self, job_id: str, spend_state: str) -> None:
+        """Close the delivery row's money state; billed rows also settle
+        actual cost from the preflight estimate."""
+        if not job_id:
+            return
+        try:
+            with get_connection() as conn:
+                if spend_state == "billed":
+                    conn.execute(
+                        """UPDATE creator_video_jobs
+                              SET spend_state = 'billed',
+                                  actual_usd = COALESCE(actual_usd,
+                                                        estimated_usd),
+                                  cost_basis = CASE WHEN cost_basis = ''
+                                       THEN 'provider preflight estimate; render completed'
+                                       ELSE cost_basis END,
+                                  updated_at = ?
+                            WHERE request_id = ?""",
+                        (datetime.now().isoformat(timespec="seconds"), job_id))
+                else:
+                    conn.execute(
+                        """UPDATE creator_video_jobs
+                              SET spend_state = ?, updated_at = ?
+                            WHERE request_id = ?""",
+                        (spend_state,
+                         datetime.now().isoformat(timespec="seconds"), job_id))
+                conn.commit()
+        except Exception as exc:
+            self.host._note_failure("creator: settle teaser job", exc)
+
     def _video_error(self, error: str):
         context = self._video_context
         token = context.get("request_token") if context else None
+        # Same honesty rule as the Video workspace: a local poll deadline
+        # is not a provider verdict — the render may still finish and be
+        # charged, so the row stays 'reserved' for the next launch.
+        timed_out = (not (context or {}).get("provider_completed")
+                     and getattr(self.host.creator_video_worker,
+                                 "timed_out", False))
         if token:
             if context.get("provider_completed"):
                 # A completed render is charged even if the local download
                 # later fails; keep spend accounting honest.
                 self.host.record_request(
                     token, f"render completed; local error: {error}")
+                self._settle_teaser_job(context.get("job_id", ""), "billed")
+            elif timed_out:
+                self.host.abandon_request(token, reason="timeout")
             else:
                 self.host.abandon_request(token)
+                self._settle_teaser_job(context.get("job_id", ""), "released")
         self._video_reset(f"[Error] {error}")
+        if timed_out:
+            self.creator_video_status.setText(
+                "Higgsfield may still finish this render — the next launch "
+                "checks and saves the result.")
 
     def _video_reset(self, status: str):
         self.creator_video_btn.setEnabled(True)
         self.creator_video_cancel_btn.setEnabled(False)
         self.creator_video_cancel_btn.hide()
         self.creator_video_status.setText(status)
+
+    # ── startup reconciliation of teasers that outlived the process ─────
+    def resume_pending_teasers(self) -> None:
+        """Finish Higgsfield teaser renders a previous process left open.
+
+        Only rows this feature wrote are considered: spend_state '' marks a
+        pre-feature delivery record with no settlement contract, and those
+        are never reconciled. Same honesty rules as the Video workspace —
+        the money was approved before the restart, so nothing re-asks; a
+        local deadline or local exception keeps the row reserved for the
+        next launch.
+        """
+        if self._resume_started:
+            # One pass per process: a second would double-reserve and
+            # double-bill.
+            return
+        self._resume_started = True
+        try:
+            with get_connection() as conn:
+                rows = [dict(row) for row in conn.execute(
+                    """SELECT * FROM creator_video_jobs
+                        WHERE spend_state = 'reserved'
+                        ORDER BY created_at""").fetchall()]
+        except Exception as exc:
+            self.host._note_failure("creator: read pending teasers", exc)
+            return
+        for row in rows:
+            self._spawn_teaser_resume(row)
+
+    def _spawn_teaser_resume(self, row: dict) -> None:
+        # The resume worker is the Video workspace's: rebuild-poll-download
+        # is provider logic, not workspace logic, and agents may depend on
+        # sibling agents (the social publishers already lean on video).
+        from agents.video.workers import VideoResumeWorker
+
+        client = HiggsfieldClient()
+        if not client.configured:
+            # The render may still be live at the provider; without keys
+            # there is no way to look, so the row stays reserved.
+            self.host._note_failure(
+                "creator: resume teaser", RuntimeError(
+                    f"teaser job {row['request_id']} from a previous "
+                    "session is waiting, but the Higgsfield keys are not "
+                    "configured"))
+            return
+        if not row.get("output_path"):
+            # Defensive: a reserved row always carries its target path.
+            self.host._note_failure(
+                "creator: resume teaser", RuntimeError(
+                    f"teaser job {row['request_id']} has no output path"))
+            return
+        token = self.host.restore_request(
+            "creator", "higgsfield", row.get("endpoint") or "higgsfield",
+            row.get("prompt", ""), label="promo teaser (resumed)",
+            flat_cost_eur=row.get("flat_cost_eur") or 0.0,
+            project=row.get("project_id"), run_id=row.get("run_id", ""))
+        worker = VideoResumeWorker(
+            client, "higgsfield", job_id=row["request_id"],
+            model=row.get("endpoint", ""), seconds=0, aspect_ratio="",
+            status_url="", output_path=row["output_path"])
+        self.host.creator_resume_workers.append(worker)
+        worker.job_signal.connect(
+            lambda job, r=row["request_id"]:
+            self._resume_teaser_update(r, job))
+        worker.done_signal.connect(
+            lambda path, r=row, t=token, w=worker:
+            self._resume_teaser_done(r, t, w, path))
+        worker.error_signal.connect(
+            lambda err, r=row, t=token, w=worker:
+            self._resume_teaser_error(r, t, w, err))
+        worker.start()
+        if not self._video_context:
+            self.creator_video_status.setText(
+                "Resuming a teaser render from the previous session…")
+
+    def _resume_teaser_update(self, request_id: str, job) -> None:
+        try:
+            with get_connection() as conn:
+                conn.execute(
+                    """UPDATE creator_video_jobs
+                          SET status = CASE WHEN ? != '' THEN ? ELSE status END,
+                              error = ?,
+                              policy_result = CASE WHEN ? = 'nsfw'
+                                   THEN 'provider-rejected'
+                                   ELSE policy_result END,
+                              updated_at = ?
+                        WHERE request_id = ?""",
+                    (job.status or "", job.status or "", job.error or "",
+                     job.status or "",
+                     datetime.now().isoformat(timespec="seconds"),
+                     request_id))
+                conn.commit()
+        except Exception as exc:
+            self.host._note_failure("creator: track resumed teaser", exc)
+
+    def _resume_teaser_done(self, row: dict, token, worker, path: str) -> None:
+        self._store_media(row["account_id"], path, source="higgsfield",
+                          job_id=row["request_id"],
+                          caption="Higgsfield teaser")
+        self._link_project_media(row.get("project_id"), path, "creator_video")
+        self.host.record_request(
+            token, f"teaser (resumed): {Path(path).name}")
+        try:
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE creator_video_jobs SET local_path = ? "
+                    "WHERE request_id = ?", (path, row["request_id"]))
+                if row.get("content_id"):
+                    conn.execute(
+                        "UPDATE creator_content SET media_path = ? "
+                        "WHERE id = ?", (path, row["content_id"]))
+                conn.commit()
+        except Exception as exc:
+            self.host._note_failure("creator: attach resumed teaser", exc)
+        self._settle_teaser_job(row["request_id"], "billed")
+        if not self._video_context:
+            self.creator_video_status.setText(
+                f"Resumed teaser saved: {Path(path).name}")
+        self.refresh_media()
+        if row.get("content_id"):
+            self.refresh_calendar()
+
+    def _resume_teaser_error(self, row: dict, token, worker,
+                             error: str) -> None:
+        if worker.provider_completed:
+            # Charged and rendered; only the local save failed.
+            self.host.record_request(
+                token, f"resumed render completed; local error: {error}")
+            self._settle_teaser_job(row["request_id"], "billed")
+        elif worker.timed_out or worker.retryable:
+            # Not a provider verdict — the row stays reserved and the next
+            # launch resumes again; only this session's reservation ends.
+            self.host.abandon_request(
+                token, reason="timeout" if worker.timed_out else "error")
+        else:
+            self.host.abandon_request(token)
+            self._settle_teaser_job(row["request_id"], "released")
+        if not self._video_context:
+            self.creator_video_status.setText(
+                f"[Resume] {error}")
 
     # ── earnings ────────────────────────────────────────────────────────
     def import_earnings(self):

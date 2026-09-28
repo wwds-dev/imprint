@@ -439,6 +439,14 @@ CREATE TABLE IF NOT EXISTS creator_video_jobs (
     local_path       TEXT NOT NULL DEFAULT '',
     error            TEXT NOT NULL DEFAULT '',
     correlation_id   TEXT NOT NULL DEFAULT '',
+    -- Settlement fields (2026-09-28, mirroring video_jobs): '' means a
+    -- pre-feature row that is never reconciled; new rows are 'reserved'
+    -- until the guard settles them 'billed' or 'released'. The startup
+    -- reconciliation resumes every 'reserved' row.
+    spend_state      TEXT NOT NULL DEFAULT '',
+    flat_cost_eur    REAL NOT NULL DEFAULT 0.0,
+    output_path      TEXT NOT NULL DEFAULT '',
+    run_id           TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (account_id) REFERENCES creator_accounts(id),
     FOREIGN KEY (content_id) REFERENCES creator_content(id)
 );
@@ -602,6 +610,12 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
     column in SCHEMA never reaches one. Each entry is applied only when absent.
     """
     wanted = {
+        "creator_video_jobs": [
+            ("spend_state", "TEXT NOT NULL DEFAULT ''"),
+            ("flat_cost_eur", "REAL NOT NULL DEFAULT 0.0"),
+            ("output_path", "TEXT NOT NULL DEFAULT ''"),
+            ("run_id", "TEXT NOT NULL DEFAULT ''"),
+        ],
         "projects": [
             ("kind", "TEXT NOT NULL DEFAULT ''"),
             ("work_title", "TEXT NOT NULL DEFAULT ''"),

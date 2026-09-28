@@ -301,7 +301,7 @@ class GodAI(QWidget):
         # Reconcile provider renders that outlived the previous process —
         # real money may be in flight. One event-loop turn later so the
         # first paint is not blocked by job bookkeeping.
-        QTimer.singleShot(0, self.video_panel.resume_pending_jobs)
+        QTimer.singleShot(0, self._resume_provider_jobs)
 
     def _polish_tab_widgets(self):
         """Disable text elision and enable scroll buttons on every QTabWidget
@@ -3029,6 +3029,12 @@ class GodAI(QWidget):
         self._pending_by_agent.setdefault(agent, []).append(token)
         return token
 
+    def _resume_provider_jobs(self) -> None:
+        """Startup reconciliation: each panel that persists provider jobs
+        finishes what a previous process left in flight."""
+        self.video_panel.resume_pending_jobs()
+        self.creator_panel.resume_pending_teasers()
+
     def _reserved_in_flight_eur(self) -> float:
         """Estimates of every authorized-but-unresolved request."""
         return sum(float(ctx.get("estimated_cost") or 0.0)
@@ -4022,10 +4028,11 @@ class GodAI(QWidget):
                     if hasattr(worker, "cancel"):
                         worker.cancel()
                     worker.wait(2000)
-            for worker in getattr(self, "video_resume_workers", ()):
-                if worker is not None and worker.isRunning():
-                    worker.cancel()
-                    worker.wait(2000)
+            for attr in ("video_resume_workers", "creator_resume_workers"):
+                for worker in getattr(self, attr, ()):
+                    if worker is not None and worker.isRunning():
+                        worker.cancel()
+                        worker.wait(2000)
         except Exception as exc:
             self._note_failure("shutdown: stop background work", exc)
         event.accept()
