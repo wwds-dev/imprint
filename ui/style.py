@@ -144,14 +144,15 @@ GLOBAL_STYLESHEET = f"""
             border: 1px solid {ACCENT_LINE};
         }}
 
-        QSpinBox, QDoubleSpinBox, QDateEdit, QTimeEdit {{
+        QSpinBox, QDoubleSpinBox, QDateTimeEdit, QDateEdit, QTimeEdit {{
             background-color: {SUNKEN};
             color: {TEXT};
             border: 1px solid {BORDER};
             border-radius: {RADIUS_SM};
             padding: 7px 10px;
         }}
-        QSpinBox:focus, QDoubleSpinBox:focus, QDateEdit:focus,
+        QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus,
+        QDateEdit:focus,
         QTimeEdit:focus {{ border: 1px solid {ACCENT_LINE}; }}
 
         QLineEdit {{
@@ -726,7 +727,7 @@ GLOBAL_STYLESHEET = f"""
            than the QLineEdit beside it drops its whole field below the row. */
         QLineEdit, QPushButton {{ min-height: 28px; max-height: 28px; }}
         QComboBox {{ min-height: 30px; max-height: 30px; }}
-        QSpinBox, QDoubleSpinBox, QDateEdit,
+        QSpinBox, QDoubleSpinBox, QDateTimeEdit, QDateEdit,
         QTimeEdit {{ min-height: 28px; max-height: 28px; }}
 
         /* ── Shell chrome ──────────────────────────────────────────── */

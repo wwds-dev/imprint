@@ -12,18 +12,20 @@ drafting flow and the Higgsfield teaser (whose token rides in its own
 job context), so nothing here resolves a request by agent name.
 """
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QDateTime, Qt
 from PySide6.QtWidgets import (
-    QComboBox, QDialog, QFileDialog, QGridLayout, QGroupBox, QHBoxLayout,
+    QCheckBox, QComboBox, QDateTimeEdit, QDialog, QDialogButtonBox,
+    QFileDialog, QGridLayout, QGroupBox, QHBoxLayout,
     QHeaderView, QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton,
     QSizePolicy, QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit,
     QVBoxLayout, QWidget,
 )
 
 from agents.creator import ConsentError, PROMO_CHANNELS
+from agents.creator import calendar as content_calendar
 from agents.creator.earnings_csv import ingest_creator_csv
 from agents.creator.insights import (
     account_summary, agency_overview, asset_outcomes, hook_results,
@@ -64,6 +66,10 @@ class CreatorPanel(QWidget):
         "creator_video_btn", "creator_video_cancel_btn", "creator_stop_btn",
         "creator_status_label", "creator_video_status", "creator_tabs",
         "creator_output", "creator_calendar_scope", "creator_calendar_table",
+        "creator_calendar_prev_btn", "creator_calendar_today_btn",
+        "creator_calendar_next_btn", "creator_calendar_week_label",
+        "creator_calendar_undated_table", "creator_calendar_reschedule_btn",
+        "creator_calendar_export_btn",
         "creator_earnings_view",
         "creator_revenue_btn", "creator_import_btn", "creator_voice_tab",
         "creator_media_scope", "creator_media_table", "creator_add_media_btn",
@@ -81,7 +87,8 @@ class CreatorPanel(QWidget):
         self._draft_token = None
         self._draft_origin = None  # (project_id, account_id) captured at approval
         self._last_generation_cost_eur = 0.0
-        self._calendar_ids: list = []
+        self._calendar_week_start: date = (
+            date.today() - timedelta(days=date.today().weekday()))
         self._video_context: dict = {}
         self.setObjectName("CreatorPanel")
         outer = QVBoxLayout(self)
@@ -264,13 +271,82 @@ class CreatorPanel(QWidget):
         calendar_page = QWidget()
         calendar_layout = QVBoxLayout(calendar_page)
         calendar_layout.setContentsMargins(MD, MD, MD, MD)
-        calendar_layout.addWidget(self.creator_calendar_scope, 0, Qt.AlignRight)
-        self.creator_calendar_table = QTableWidget(0, 5)
-        self.creator_calendar_table.setHorizontalHeaderLabels(
-            ["When", "Kind", "Title", "$", "Status"])
-        self.creator_calendar_table.horizontalHeader().setSectionResizeMode(
-            2, QHeaderView.Stretch)
-        calendar_layout.addWidget(self.creator_calendar_table, 1)
+        calendar_layout.setSpacing(SM)
+
+        nav = QHBoxLayout()
+        nav.setSpacing(SM)
+        self.creator_calendar_prev_btn = quiet("‹")
+        self.creator_calendar_prev_btn.setToolTip("Previous week")
+        self.creator_calendar_prev_btn.clicked.connect(
+            lambda: self._shift_week(-1))
+        self.creator_calendar_today_btn = quiet("This week")
+        self.creator_calendar_today_btn.clicked.connect(
+            lambda: self._shift_week(0))
+        self.creator_calendar_next_btn = quiet("›")
+        self.creator_calendar_next_btn.setToolTip("Next week")
+        self.creator_calendar_next_btn.clicked.connect(
+            lambda: self._shift_week(1))
+        self.creator_calendar_week_label = QLabel("")
+        self.creator_calendar_week_label.setObjectName("SectionLabel")
+        for widget in (self.creator_calendar_prev_btn,
+                       self.creator_calendar_today_btn,
+                       self.creator_calendar_next_btn,
+                       self.creator_calendar_week_label):
+            nav.addWidget(widget)
+        nav.addStretch()
+        self.creator_calendar_reschedule_btn = quiet("Reschedule…")
+        self.creator_calendar_reschedule_btn.setToolTip(
+            "Pick a new date and time for the selected item — undated "
+            "items get their first real date here.")
+        self.creator_calendar_reschedule_btn.clicked.connect(
+            self.reschedule_selected)
+        self.creator_calendar_export_btn = quiet("Export…")
+        self.creator_calendar_export_btn.setToolTip(
+            "Save the plan as an .ics calendar (dated items) or CSV "
+            "(everything).")
+        self.creator_calendar_export_btn.clicked.connect(self.export_calendar)
+        nav.addWidget(self.creator_calendar_reschedule_btn)
+        nav.addWidget(self.creator_calendar_export_btn)
+        nav.addWidget(self.creator_calendar_scope)
+        calendar_layout.addLayout(nav)
+
+        # One column per weekday; each cell is one planned item carrying
+        # its content id as item data — the social panel's UserRole idiom
+        # replaces the old row-order ids list.
+        self.creator_calendar_table = QTableWidget(0, 7)
+        self.creator_calendar_table.setEditTriggers(
+            QTableWidget.NoEditTriggers)
+        self.creator_calendar_table.setSelectionMode(
+            QTableWidget.SingleSelection)
+        self.creator_calendar_table.verticalHeader().setVisible(False)
+        header = self.creator_calendar_table.horizontalHeader()
+        for column in range(7):
+            header.setSectionResizeMode(column, QHeaderView.Stretch)
+        self.creator_calendar_table.doubleClicked.connect(
+            lambda *_: self.reschedule_selected())
+        self.creator_calendar_table.itemSelectionChanged.connect(
+            lambda: self._calendar_selection_changed(
+                self.creator_calendar_table))
+        calendar_layout.addWidget(self.creator_calendar_table, 3)
+
+        # Legacy free-text entries cannot be placed on a grid without
+        # guessing; they stay visible here until they get a real date.
+        self.creator_calendar_undated_table = QTableWidget(0, 3)
+        self.creator_calendar_undated_table.setHorizontalHeaderLabels(
+            ["When (as written)", "Kind", "Title"])
+        self.creator_calendar_undated_table.setEditTriggers(
+            QTableWidget.NoEditTriggers)
+        self.creator_calendar_undated_table.setSelectionMode(
+            QTableWidget.SingleSelection)
+        self.creator_calendar_undated_table.verticalHeader().setVisible(False)
+        self.creator_calendar_undated_table.horizontalHeader(
+            ).setSectionResizeMode(2, QHeaderView.Stretch)
+        self.creator_calendar_undated_table.doubleClicked.connect(
+            lambda *_: self.reschedule_selected())
+        self.creator_calendar_undated_table.itemSelectionChanged.connect(
+            lambda: self._calendar_selection_changed(
+                self.creator_calendar_undated_table))
+        calendar_layout.addWidget(self.creator_calendar_undated_table, 1)
         self.creator_tabs.addTab(calendar_page, "Calendar")
 
         self.creator_earnings_view = CreatorEarningsView()
@@ -758,10 +834,8 @@ class CreatorPanel(QWidget):
         # A Project may have been deleted while a long draft was running.
         if project_id and not self.host.registry.get_project(project_id):
             project_id = None
-        when, ok = QInputDialog.getText(
-            self, "Add to Calendar",
-            "When should this go out? (free text — you post it yourself)")
-        if not ok:
+        when = self._ask_schedule_datetime("Add to Calendar")
+        if when is None:
             return
         try:
             price = float(self.creator_price_input.text().strip() or 0)
@@ -778,7 +852,7 @@ class CreatorPanel(QWidget):
                 """, (account["id"],
                       project_id,
                       datetime.now().isoformat(timespec="seconds"),
-                      when.strip(),
+                      when,
                       self.creator_kind_box.currentText(),
                       body.splitlines()[0][:80] if body else "",
                       body, price,
@@ -793,47 +867,235 @@ class CreatorPanel(QWidget):
         self.refresh_calendar()
         self.creator_tabs.setCurrentIndex(1)
 
-    def refresh_calendar(self):
+    def _calendar_rows(self, *, full_detail: bool = False):
+        """The scoped plan rows, or None when nothing should show."""
         account = self.current_account()
-        self.creator_calendar_table.setRowCount(0)
         if not account:
-            self._calendar_ids = []
-            return
+            return None
         project = self.host._active_project()
         scope = self.creator_calendar_scope
         scope.setItemText(1, f"Project: {project['name']}" if project else
                           "Select a Project")
         project_only = scope.currentData() == "project"
         if project_only and not project:
-            self._calendar_ids = []
-            return
+            return None
+        columns = ("c.id, c.scheduled_for, c.kind, c.title, c.price_usd, "
+                   "c.status, c.revenue_usd, c.channel, c.campaign, "
+                   + ("c.body, " if full_detail else "")
+                   + "p.name AS project_name")
         try:
             with get_connection() as conn:
-                rows = conn.execute(
-                    "SELECT c.id, c.scheduled_for, c.kind, c.title, "
-                    "c.price_usd, c.status, c.revenue_usd, p.name AS project_name "
+                return [dict(row) for row in conn.execute(
+                    f"SELECT {columns} "
                     "FROM creator_content c LEFT JOIN projects p "
                     "ON p.id = c.project_id WHERE c.account_id = ? "
                     + ("AND c.project_id = ? " if project_only else "")
-                    + "ORDER BY c.id DESC",
+                    + "ORDER BY c.scheduled_for = '' ASC, c.scheduled_for "
+                    "ASC, c.id ASC",
                     (account["id"], project["id"]) if project_only else
-                    (account["id"],)).fetchall()
+                    (account["id"],)).fetchall()]
         except Exception as exc:
             self.host._note_failure("creator: load calendar", exc)
+            return None
+
+    @staticmethod
+    def _calendar_cell(row, when) -> QTableWidgetItem:
+        time_part = when.strftime("%H:%M") if when else "—"
+        item = QTableWidgetItem(
+            f"{time_part}  {row['kind']}: {row['title'] or '(untitled)'}")
+        item.setData(Qt.UserRole, row["id"])
+        details = [f"Project: {row['project_name'] or 'Unfiled'}",
+                   f"Status: {row['status']}"]
+        if row["price_usd"]:
+            details.append(f"Price: ${row['price_usd']:.2f}")
+        if row["revenue_usd"]:
+            details.append(f"Revenue: ${row['revenue_usd']:,.2f}")
+        details.append(f"Scheduled: {row['scheduled_for'] or '(undated)'}")
+        item.setToolTip("\n".join(details))
+        return item
+
+    def refresh_calendar(self):
+        grid = self.creator_calendar_table
+        undated_table = self.creator_calendar_undated_table
+        start = self._calendar_week_start
+        self.creator_calendar_week_label.setText(
+            content_calendar.week_label(start))
+        grid.setRowCount(0)
+        grid.setHorizontalHeaderLabels(content_calendar.day_headers(start))
+        undated_table.setRowCount(0)
+        rows = self._calendar_rows()
+        if rows is None:
+            undated_table.setVisible(False)
             return
-        # Row order maps to content ids so revenue can attach to a selection.
-        self._calendar_ids = [row["id"] for row in rows]
+        end = start + timedelta(days=7)
+        by_day: dict[int, list] = {i: [] for i in range(7)}
+        undated = []
         for row in rows:
-            r = self.creator_calendar_table.rowCount()
-            self.creator_calendar_table.insertRow(r)
-            for col, value in enumerate([
-                    row["scheduled_for"], row["kind"], row["title"],
-                    f"{row['price_usd']:.2f}" if row["price_usd"] else "",
-                    f"{row['status']}"
-                    + (f"  (${row['revenue_usd']:,.2f})" if row["revenue_usd"] else "")]):
-                self.creator_calendar_table.setItem(r, col, QTableWidgetItem(str(value)))
-            self.creator_calendar_table.item(r, 2).setToolTip(
-                f"Project: {row['project_name'] or 'Unfiled'}")
+            parsed = content_calendar.parse_scheduled(row["scheduled_for"])
+            if parsed is None:
+                undated.append(row)
+                continue
+            when, _has_time = parsed
+            if start <= when.date() < end:
+                by_day[(when.date() - start).days].append((when, row))
+        depth = max((len(items) for items in by_day.values()), default=0)
+        grid.setRowCount(depth)
+        for day, items in by_day.items():
+            for slot, (when, row) in enumerate(sorted(
+                    items, key=lambda pair: (pair[0], pair[1]["id"]))):
+                grid.setItem(slot, day, self._calendar_cell(row, when))
+        for row in undated:
+            r = undated_table.rowCount()
+            undated_table.insertRow(r)
+            first = QTableWidgetItem(row["scheduled_for"] or "(no date)")
+            first.setData(Qt.UserRole, row["id"])
+            undated_table.setItem(r, 0, first)
+            undated_table.setItem(r, 1, QTableWidgetItem(row["kind"]))
+            undated_table.setItem(
+                r, 2, QTableWidgetItem(row["title"] or "(untitled)"))
+        undated_table.setVisible(bool(undated))
+
+    def _shift_week(self, weeks: int) -> None:
+        if weeks == 0:
+            self._calendar_week_start = (
+                date.today() - timedelta(days=date.today().weekday()))
+        else:
+            self._calendar_week_start += timedelta(weeks=weeks)
+        self.refresh_calendar()
+
+    def _calendar_selection_changed(self, source) -> None:
+        """Selections in the grid and the undated lane are exclusive."""
+        other = (self.creator_calendar_undated_table
+                 if source is self.creator_calendar_table
+                 else self.creator_calendar_table)
+        if source.selectedItems() and other.selectedItems():
+            other.blockSignals(True)
+            other.clearSelection()
+            other.blockSignals(False)
+
+    def selected_content_id(self):
+        """The content id behind the current calendar selection, if any."""
+        for table in (self.creator_calendar_table,
+                      self.creator_calendar_undated_table):
+            for item in table.selectedItems():
+                content_id = item.data(Qt.UserRole)
+                if content_id is None and item.column() != 0:
+                    content_id = (table.item(item.row(), 0) or item).data(
+                        Qt.UserRole)
+                if content_id is not None:
+                    return content_id
+        return None
+
+    def _ask_schedule_datetime(self, title: str, *, initial: str = ""):
+        """ISO minute-precision text, '' for deliberately undated, or None.
+
+        A panel method so tests can stub the dialog the way they stub
+        QInputDialog today.
+        """
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        layout = QVBoxLayout(dialog)
+        prompt = QLabel("When should this go out? Nothing posts itself — "
+                        "this is your own plan.")
+        prompt.setWordWrap(True)
+        layout.addWidget(prompt)
+        picker = QDateTimeEdit()
+        picker.setCalendarPopup(True)
+        picker.setDisplayFormat("yyyy-MM-dd HH:mm")
+        parsed = content_calendar.parse_scheduled(initial)
+        if parsed:
+            picker.setDateTime(QDateTime(parsed[0]))
+        else:
+            upcoming = datetime.now().replace(
+                minute=0, second=0, microsecond=0) + timedelta(hours=1)
+            picker.setDateTime(QDateTime(upcoming))
+        layout.addWidget(field("Date and time", picker))
+        undated = QCheckBox("No date yet — keep it in the Undated list")
+        layout.addWidget(undated)
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.Accepted:
+            return None
+        if undated.isChecked():
+            return ""
+        return picker.dateTime().toString("yyyy-MM-ddTHH:mm")
+
+    def reschedule_selected(self) -> None:
+        content_id = self.selected_content_id()
+        if content_id is None:
+            QMessageBox.warning(
+                self, "Nothing Selected",
+                "Select a calendar item first — undated items count too.")
+            return
+        try:
+            with get_connection() as conn:
+                row = conn.execute(
+                    "SELECT scheduled_for, title FROM creator_content "
+                    "WHERE id = ?", (content_id,)).fetchone()
+        except Exception as exc:
+            self.host._note_failure("creator: read schedule", exc)
+            return
+        if row is None:
+            return
+        when = self._ask_schedule_datetime(
+            f"Reschedule — {row['title'] or 'untitled'}",
+            initial=row["scheduled_for"])
+        if when is None:
+            return
+        try:
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE creator_content SET scheduled_for = ? "
+                    "WHERE id = ?", (when, content_id))
+                conn.commit()
+        except Exception as exc:
+            self.host._note_failure("creator: reschedule", exc,
+                                    self.creator_status_label)
+            return
+        parsed = content_calendar.parse_scheduled(when)
+        if parsed:
+            self._calendar_week_start = (
+                parsed[0].date()
+                - timedelta(days=parsed[0].date().weekday()))
+        self.refresh_calendar()
+
+    def export_calendar(self) -> None:
+        rows = self._calendar_rows(full_detail=True)
+        if not rows:
+            QMessageBox.warning(
+                self, "Nothing to Export",
+                "The calendar is empty for this scope.")
+            return
+        path, chosen_filter = QFileDialog.getSaveFileName(
+            self, "Export Calendar",
+            str(user_data_base() / "creator_calendar.ics"),
+            "Calendar (*.ics);;CSV (*.csv)")
+        if not path:
+            return
+        destination = Path(path)
+        if not destination.suffix:
+            destination = destination.with_suffix(
+                ".csv" if "CSV" in chosen_filter else ".ics")
+        try:
+            if destination.suffix.lower() == ".csv":
+                written = content_calendar.export_csv(rows, destination)
+                note = f"[Done] Exported {written} items to {destination.name}"
+            else:
+                written, skipped = content_calendar.export_ics(
+                    rows, destination)
+                note = (f"[Done] Exported {written} dated items to "
+                        f"{destination.name}")
+                if skipped:
+                    note += (f" — {skipped} undated item(s) skipped; "
+                             "use CSV for those.")
+        except Exception as exc:
+            self.host._note_failure("creator: export calendar", exc,
+                                    self.creator_status_label)
+            return
+        self.creator_status_label.setText(note)
 
     # ── promo video ─────────────────────────────────────────────────────
     def generate_video(self):
@@ -880,10 +1142,7 @@ class CreatorPanel(QWidget):
         stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
         output_path = output_dir / f"teaser-{stamp}.mp4"
 
-        row = self.creator_calendar_table.currentRow()
-        content_id = None
-        if 0 <= row < len(self._calendar_ids):
-            content_id = self._calendar_ids[row]
+        content_id = self.selected_content_id()
 
         self._video_context = {
             "account_id": account["id"],
@@ -1504,16 +1763,16 @@ class CreatorPanel(QWidget):
     # ── revenue attribution ─────────────────────────────────────────────
     def record_outcome(self):
         """Attach a source-labelled observation to the selected calendar item."""
-        row = self.creator_calendar_table.currentRow()
-        ids = self._calendar_ids
-        if row < 0 or row >= len(ids):
+        content_id = self.selected_content_id()
+        if content_id is None:
             QMessageBox.information(
                 self, "Select an item",
                 "Select an asset on Calendar first, then return to Earnings.")
             return
         with get_connection() as conn:
             item = conn.execute(
-                "SELECT * FROM creator_content WHERE id=?", (ids[row],)).fetchone()
+                "SELECT * FROM creator_content WHERE id=?",
+                (content_id,)).fetchone()
         if item is None:
             QMessageBox.warning(self, "Missing item",
                                 "The selected asset no longer exists.")
@@ -1522,7 +1781,7 @@ class CreatorPanel(QWidget):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         try:
-            record_outcome(ids[row], **dialog.values())
+            record_outcome(content_id, **dialog.values())
         except ValueError as exc:
             QMessageBox.warning(self, "Outcome not saved", str(exc))
             return
@@ -1532,19 +1791,18 @@ class CreatorPanel(QWidget):
 
     def record_revenue(self):
         """Attach what a calendar item earned, closing the loop to the drafter."""
-        row = self.creator_calendar_table.currentRow()
-        ids = self._calendar_ids
-        if row < 0 or row >= len(ids):
+        content_id = self.selected_content_id()
+        if content_id is None:
             QMessageBox.information(
                 self, "Select an Item",
-                "Pick a row on the Calendar tab first — revenue attaches to "
-                "one piece of content.")
+                "Pick an item on the Calendar tab first — revenue attaches "
+                "to one piece of content.")
             return
         amount, ok = QInputDialog.getDouble(
             self, "Record Revenue", "What did it earn (USD)?", 0, 0, 1e6, 2)
         if not ok:
             return
-        record_revenue(ids[row], amount)
+        record_revenue(content_id, amount)
         self.refresh_calendar()
         self.refresh_earnings()
 
