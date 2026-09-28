@@ -231,9 +231,12 @@ class QwenClientWrapper:
             aspect_ratio=job.aspect_ratio)
 
     def wait_video(self, job: WanVideoJob, *, timeout: int = 900,
-                   interval: float = 15.0, on_progress=None) -> WanVideoJob:
+                   interval: float = 15.0, on_progress=None,
+                   should_cancel=None) -> WanVideoJob:
         deadline = time.time() + timeout
         while time.time() < deadline:
+            if should_cancel and should_cancel():
+                return job
             if job.done:
                 return job
             job = self.poll_video(job)
@@ -241,7 +244,13 @@ class QwenClientWrapper:
                 on_progress(job)
             if job.done:
                 return job
-            time.sleep(max(0.1, float(interval)))
+            # Sleep in short slices so a cancel (the shutdown sweep gives
+            # workers two seconds) is honoured promptly.
+            wake = time.time() + max(0.1, float(interval))
+            while time.time() < wake:
+                if should_cancel and should_cancel():
+                    return job
+                time.sleep(min(0.5, max(0.05, wake - time.time())))
         job.status = "failed"
         job.error = f"Timed out after {timeout}s"
         return job

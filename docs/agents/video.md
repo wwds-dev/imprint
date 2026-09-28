@@ -94,6 +94,13 @@ Pipeline cancellation is cooperative, through the reporter. Higgsfield uses its 
 | `ui/workers.py → VideoGenerationWorker` | Runs supported direct jobs off the UI thread and preserves completed output. |
 | `agents/video/jobs.py` | Durable `video_jobs` rows: written before the create POST, updated per provider transition, settled `billed`/`released` with the guard. |
 | `agents/video/workers.py → VideoResumeWorker` | Startup reconciliation: re-polls a job that outlived the process, downloads and bills the paid result. |
+
+Reconciliation honesty rules: a local poll deadline or local exception (network,
+key) never counts as a provider verdict — the row stays pending for the next
+launch and only that session's budget reservation is released. Known limit: a
+Wan task id that ages out of DashScope's task store comes back `UNKNOWN`, which
+the client maps to `failed` — if the render actually finished, the charge shows
+on the provider console but cannot be confirmed here.
 | `vidforge/vidforge/pipeline.py` | `produce()` — the eight stages. |
 | `vidforge/vidforge/progress.py` | `Reporter`, `STAGES`, `overall_fraction`, `Cancelled`. |
 | `main.py` compatibility entries | Delegate older umbrella call sites to `VideoPanel`; no Video implementation remains there. |

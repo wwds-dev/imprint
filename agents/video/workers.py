@@ -37,16 +37,27 @@ class VideoResumeWorker(QThread):
         self.status_url = status_url
         self.output_path = Path(output_path)
         self.timeout = timeout
-        # Read by the completion handlers: a local poll deadline is not a
-        # provider verdict, so a timed-out row stays pending for the next
-        # launch instead of being marked failed.
+        # Read by the completion handlers: neither a local poll deadline
+        # nor a local exception (network down, bad key) is a provider
+        # verdict, so such rows stay pending for the next launch instead
+        # of being marked failed.
         self.timed_out = False
+        self.retryable = False
         self.provider_completed = False
+        self._cancelled = False
+
+    def cancel(self):
+        """Shutdown-only: stop watching. The row stays pending on disk, so
+        the next launch resumes; nothing is emitted for a closing window."""
+        self._cancelled = True
 
     def _rebuild_job(self):
         if self.provider == "higgsfield":
             from services.higgsfield_client import VideoJob
-            return VideoJob(job_id=self.job_id, status_url=self.status_url)
+            # From the id alone: the client's /requests/{id}/status fallback
+            # is base-URL-proof, while a stored absolute status_url from an
+            # old HIGGSFIELD_BASE_URL would be refused by its host check.
+            return VideoJob(job_id=self.job_id)
         if self.provider == "qwen":
             from services.qwen_client import WanVideoJob
             return WanVideoJob(
@@ -71,10 +82,14 @@ class VideoResumeWorker(QThread):
 
             if self.provider == "higgsfield":
                 job = self.client.wait(
-                    job, timeout=self.timeout, on_progress=progress)
+                    job, timeout=self.timeout, on_progress=progress,
+                    should_cancel=lambda: self._cancelled)
             else:
                 job = self.client.wait_video(
-                    job, timeout=self.timeout, on_progress=progress)
+                    job, timeout=self.timeout, on_progress=progress,
+                    should_cancel=lambda: self._cancelled)
+            if self._cancelled:
+                return
             if job.status != "completed":
                 self.timed_out = (job.error or "").startswith("Timed out after")
                 if not self.timed_out:
@@ -86,6 +101,10 @@ class VideoResumeWorker(QThread):
                 return
             self.job_signal.emit(job)
             self.provider_completed = True
+            if self._cancelled:
+                # Too late to download cleanly on shutdown; the row is
+                # still 'reserved', so the next launch finishes the job.
+                return
 
             self.status_signal.emit(
                 f"[Resume] Downloading {self.provider} video…")
@@ -108,4 +127,8 @@ class VideoResumeWorker(QThread):
                 self.output_path.write_bytes(self.client.download_video(job))
             self.done_signal.emit(str(self.output_path))
         except Exception as exc:
+            # A local failure (DNS, TLS, HTTP hiccup, bad key) says nothing
+            # about the render. Unless the provider already completed, the
+            # handlers keep the row pending and retry on the next launch.
+            self.retryable = not self.provider_completed
             self.error_signal.emit(str(exc))

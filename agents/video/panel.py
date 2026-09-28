@@ -50,6 +50,7 @@ class VideoPanel(QWidget):
         self.host = host
         self._request_token = None
         self._render_project_id = None
+        self._resume_started = False
         self._external_context: dict = {}
         self._active_kind = ""
         self._available = video_studio.available()
@@ -630,11 +631,14 @@ class VideoPanel(QWidget):
         from agents.video import jobs
 
         try:
+            # None (not '') for absent fields: update_job skips them, so a
+            # malformed poll can never blank the id that makes the row
+            # resumable.
             jobs.update_job(
-                row_id, job_id=getattr(job, "job_id", "") or "",
-                status=getattr(job, "status", "") or "",
-                error=getattr(job, "error", "") or "",
-                status_url=getattr(job, "status_url", "") or "")
+                row_id, job_id=getattr(job, "job_id", None) or None,
+                status=getattr(job, "status", None) or None,
+                error=getattr(job, "error", None) or None,
+                status_url=getattr(job, "status_url", None) or None)
         except Exception as exc:
             self.host._note_failure("video: persist job state", exc)
 
@@ -717,20 +721,44 @@ class VideoPanel(QWidget):
                 "[Warning] Video saved, but its Project link could not be stored.")
 
     def _on_error(self, error: str):
+        external = self._active_kind in {
+            "higgsfield", "gemini-video", "qwen-video"}
         provider_completed = (
-            self._active_kind in {
-                "higgsfield", "gemini-video", "qwen-video"}
+            external
             and self._external_context.get("provider_completed", False)
         )
+        # A local poll deadline is not a provider verdict: the render may
+        # still finish and be charged. Same rule as the resume path.
+        timed_out = (external and not provider_completed and
+                     getattr(self.host.video_worker, "timed_out", False))
         token, self._request_token = self._request_token, None
         self._render_project_id = None
         if token and provider_completed:
             self.host.record_request(
                 token, "provider completed render; local save/index failed")
+        elif token and timed_out:
+            # Release only this session's reservation; the durable row
+            # stays 'reserved', so the next launch re-reserves and resumes.
+            self.host.abandon_request(token, reason="timeout")
         elif token:
             # A failed or cancelled render releases the whole-video reserve.
             self.host.abandon_request(token)
-        self._close_job_row(billed=provider_completed, error=error)
+        if timed_out:
+            row_id, self._external_context["job_row_id"] = (
+                self._external_context.get("job_row_id"), None)
+            if row_id:
+                from agents.video import jobs
+                try:
+                    jobs.update_job(row_id, status="running", error=error)
+                except Exception as exc:
+                    self.host._note_failure(
+                        "video: keep timed-out job pending", exc)
+            self.video_log.append(
+                "[Resume] Imprint stopped watching locally, but the "
+                "provider may still finish — the next launch checks and "
+                "saves the result.")
+        else:
+            self._close_job_row(billed=provider_completed, error=error)
         self.video_log.append(error)
         self._reset(f"[Error] {error}")
 
@@ -744,8 +772,11 @@ class VideoPanel(QWidget):
         worker that downloads and bills the result exactly like a live
         render.
         """
-        if not self._available:
+        if self._resume_started:
+            # Double-resume would double-reserve and double-bill; one pass
+            # per process, whoever calls.
             return
+        self._resume_started = True
         from agents.video import jobs
 
         try:
@@ -753,6 +784,25 @@ class VideoPanel(QWidget):
             rows = jobs.pending_rows()
         except Exception as exc:
             self.host._note_failure("video: read pending jobs", exc)
+            return
+        if not self._available:
+            # No vidforge means no library or workers, but rows must not
+            # strand silently: name them where failures are recorded and
+            # leave them pending for a build that can finish them.
+            for row in lost:
+                self.host._note_failure(
+                    "video: lost submission", RuntimeError(
+                        f"a {row['provider']} render ({row['slug']}) was "
+                        "still submitting when the app last closed and has "
+                        "no job id; nothing was billed here — check the "
+                        "provider dashboard"))
+            for row in rows:
+                self.host._note_failure(
+                    "video: pending provider job", RuntimeError(
+                        f"a {row['provider']} render ({row['slug']}, job "
+                        f"{row['job_id']}) from a previous session is "
+                        "waiting, but Video mode is unavailable in this "
+                        "build"))
             return
         for row in lost:
             self.video_log.append(
@@ -847,12 +897,14 @@ class VideoPanel(QWidget):
                     "failed")
                 jobs.mark_terminal(row["id"], spend_state="billed",
                                    fallback_status="completed", error=error)
-            elif worker.timed_out:
-                # Not a provider verdict — the render may still finish.
-                # Release only this session's reservation; the row stays
-                # pending and the next launch resumes again.
-                self.host.abandon_request(token, reason="timeout")
-                jobs.update_job(row["id"], status="running", error=error)
+            elif worker.timed_out or worker.retryable:
+                # Neither a deadline nor a local exception is a provider
+                # verdict — the render may still finish. Release only this
+                # session's reservation; the row stays 'reserved' and the
+                # next launch resumes again.
+                self.host.abandon_request(
+                    token, reason="timeout" if worker.timed_out else "error")
+                jobs.update_job(row["id"], error=error)
             else:
                 self.host.abandon_request(token)
                 jobs.mark_terminal(row["id"], spend_state="released",

@@ -4024,6 +4024,7 @@ class GodAI(QWidget):
                     worker.wait(2000)
             for worker in getattr(self, "video_resume_workers", ()):
                 if worker is not None and worker.isRunning():
+                    worker.cancel()
                     worker.wait(2000)
         except Exception as exc:
             self._note_failure("shutdown: stop background work", exc)

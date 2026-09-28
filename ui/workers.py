@@ -258,6 +258,16 @@ class VideoGenerationWorker(QThread):
         self.seconds = seconds
         self.aspect_ratio = aspect_ratio
         self.timeout = timeout
+        # A local poll deadline is not a provider verdict; the panel keeps
+        # the durable job row pending when this is set.
+        self.timed_out = False
+        self._cancelled = False
+
+    def cancel(self):
+        """Shutdown-only: the panel's Stop deliberately refuses mid-render
+        for these providers. The durable row stays pending, so the next
+        launch resumes watching; nothing is emitted for a closing window."""
+        self._cancelled = True
 
     def run(self):
         try:
@@ -274,12 +284,20 @@ class VideoGenerationWorker(QThread):
                     f"{self.provider} rendering… ({current.status})")
 
             job = self.client.wait_video(
-                job, timeout=self.timeout, on_progress=progress)
-            self.job_signal.emit(job)
+                job, timeout=self.timeout, on_progress=progress,
+                should_cancel=lambda: self._cancelled)
+            if self._cancelled:
+                return
             if job.status != "completed":
+                self.timed_out = (job.error or "").startswith("Timed out after")
+                if not self.timed_out:
+                    # A provider verdict is worth persisting; a local
+                    # deadline is not — the render may still finish.
+                    self.job_signal.emit(job)
                 self.error_signal.emit(
                     job.error or f"{self.provider} render {job.status}")
                 return
+            self.job_signal.emit(job)
 
             self.status_signal.emit(f"Downloading {self.provider} video…")
             self.output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -317,6 +335,9 @@ class HiggsfieldWorker(QThread):
         self.seed = seed
         self.timeout = timeout
         self.prepared_request = prepared_request
+        # A local poll deadline is not a provider verdict; the panel keeps
+        # the durable job row pending when this is set.
+        self.timed_out = False
         self._cancel_requested = False
 
     def cancel(self):
@@ -340,10 +361,15 @@ class HiggsfieldWorker(QThread):
             job = self.client.wait(job, timeout=self.timeout,
                                    on_progress=progress,
                                    should_cancel=lambda: self._cancel_requested)
-            self.job_signal.emit(job)
             if job.status != "completed" or not job.video_url:
+                self.timed_out = (job.error or "").startswith("Timed out after")
+                if not self.timed_out:
+                    # A provider verdict is worth persisting; a local
+                    # deadline is not — the render may still finish.
+                    self.job_signal.emit(job)
                 self.error_signal.emit(job.error or f"Render {job.status}")
                 return
+            self.job_signal.emit(job)
 
             self.status_signal.emit("Downloading…")
             self.output_path.parent.mkdir(parents=True, exist_ok=True)

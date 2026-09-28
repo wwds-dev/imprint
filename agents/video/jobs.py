@@ -52,13 +52,22 @@ def record_submission(*, provider: str, model: str, topic: str, slug: str,
 
 def update_job(row_id: int, *, job_id=None, status=None, error=None,
                status_url=None) -> None:
-    """Persist a provider transition (any subset of fields)."""
+    """Persist a provider transition (any subset of fields).
+
+    job_id, status and status_url are identity/lifecycle fields: a falsy
+    value means "no information", never "erase" — one malformed poll must
+    not blank the id that makes the row resumable. error accepts '' so a
+    recovered poll can clear a stale message.
+    """
     sets, params = ["updated_at = ?"], [_now()]
     for column, value in (("job_id", job_id), ("status", status),
-                          ("error", error), ("status_url", status_url)):
-        if value is not None:
+                          ("status_url", status_url)):
+        if value:
             sets.append(f"{column} = ?")
             params.append(value)
+    if error is not None:
+        sets.append("error = ?")
+        params.append(error)
     params.append(row_id)
     with get_connection() as conn:
         conn.execute(
@@ -85,12 +94,20 @@ def mark_terminal(row_id: int, *, spend_state: str,
 
 
 def pending_rows() -> list[dict]:
-    """Acknowledged jobs a previous process never finished, oldest first."""
+    """Acknowledged jobs whose money was never settled, oldest first.
+
+    Keyed on spend_state, not status: the provider's 'completed' verdict is
+    persisted from job_signal BEFORE the download and billing run, so a
+    process that dies mid-download leaves a terminal-status row that still
+    needs settling. Every settled row is 'billed' or 'released'
+    (mark_terminal and sweep_lost guarantee it), so 'reserved' selects
+    exactly what a dead process left open.
+    """
     with get_connection() as conn:
         rows = conn.execute(
-            f"""SELECT * FROM video_jobs
-                 WHERE job_id != '' AND status NOT IN ({_TERMINAL_SQL})
-                 ORDER BY id""").fetchall()
+            """SELECT * FROM video_jobs
+                WHERE job_id != '' AND spend_state = 'reserved'
+                ORDER BY id""").fetchall()
     return [dict(row) for row in rows]
 
 
