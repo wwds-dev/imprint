@@ -2,9 +2,7 @@
 
 
 ![Screenshot](docs/screenshot.png)
-**Version:** `v2.xxx` — shown in the header bar next to the wordmark, and
-explained in [§18.1 Versioning](#181-versioning). The number is not edited by
-hand; it is derived, so the badge you see is the build you are running.  
+**Version:** `v2.xxx` in the header bar, derived rather than typed — see [§18.1 Versioning](#181-versioning).  
 **Stack:** Python 3.11+ · PySide6 · SQLite · Ollama · Anthropic · OpenAI · DeepSeek · Gemini
 
 Forked from `sentinel_ai` and stripped down to the creative/publishing agents —
