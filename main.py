@@ -3213,6 +3213,11 @@ class GodAI(QWidget):
             if verdict is not None and verdict["level"] == "too_big":
                 raise RuntimeError(verdict["message"])
 
+            # Prefer the stream: the local model is the slowest responder
+            # in the app, and it was the one provider still waiting for the
+            # whole generation before showing a word.
+            if hasattr(self.ollama, "stream_chat"):
+                return self.ollama.stream_chat(model=model, messages=messages)
             if hasattr(self.ollama, "chat"):
                 return self.ollama.chat(model=model, messages=messages)
             if hasattr(self.ollama, "generate"):

@@ -3,6 +3,8 @@ import platform
 
 import requests
 
+from services.stream_usage import UsageStream
+
 # Meta's Muse Glimmer — 30B open-weights agentic model (Apache 2.0), released
 # 2026-08-10 and tuned for tool use, long-running tasks and failure recovery.
 # Ollama is one of its launch runtimes, so it needs no provider client of its
@@ -228,29 +230,42 @@ class OllamaClient:
             "keep_alive": keep_alive,
         }
 
-        try:
-            with requests.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                stream=True,
-                timeout=(self.CONNECT_TIMEOUT, self.READ_TIMEOUT),
-            ) as response:
-                response.raise_for_status()
+        def _gen(out):
+            try:
+                with requests.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    stream=True,
+                    timeout=(self.CONNECT_TIMEOUT, self.READ_TIMEOUT),
+                ) as response:
+                    response.raise_for_status()
 
-                for line in response.iter_lines():
-                    if not line:
-                        continue
+                    for line in response.iter_lines():
+                        if not line:
+                            continue
 
-                    data = json.loads(line.decode("utf-8"))
+                        data = json.loads(line.decode("utf-8"))
 
-                    if "message" in data and "content" in data["message"]:
-                        yield data["message"]["content"]
+                        if "message" in data and "content" in data["message"]:
+                            yield data["message"]["content"]
 
-                    if data.get("done"):
-                        break
+                        if data.get("done"):
+                            # The daemon's final frame carries the real
+                            # token counts. A local run costs €0 either
+                            # way, but the usage table's stats should be
+                            # exact — same contract as the cloud streams.
+                            out.usage = {
+                                "input_tokens": int(
+                                    data.get("prompt_eval_count", 0) or 0),
+                                "output_tokens": int(
+                                    data.get("eval_count", 0) or 0),
+                            }
+                            break
 
-        except requests.RequestException as e:
-            raise RuntimeError(f"Ollama streaming request failed: {e}")
+            except requests.RequestException as e:
+                raise RuntimeError(f"Ollama streaming request failed: {e}")
 
-        except json.JSONDecodeError as e:
-            raise RuntimeError(f"Ollama streaming JSON parse failed: {e}")
+            except json.JSONDecodeError as e:
+                raise RuntimeError(f"Ollama streaming JSON parse failed: {e}")
+
+        return UsageStream(_gen)
