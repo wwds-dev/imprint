@@ -61,6 +61,11 @@ class ChatWorker(QThread):
 
                 for token in result:
                     if self._cancel_requested:
+                        # Close the abandoned stream so the provider
+                        # connection drops now — a cancelled local
+                        # generation otherwise keeps the daemon busy
+                        # until a cyclic-GC pass finalizes the cycle.
+                        getattr(result, "close", lambda: None)()
                         self.error_signal.emit("Request cancelled by user.")
                         return
 

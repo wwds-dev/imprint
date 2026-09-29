@@ -139,3 +139,101 @@ def test_cancelled_stream_is_not_billed_or_finished(app):
     assert tokens == ["first"]
     assert errors == ["Request cancelled by user."]
     assert finished == [] and usages == []
+
+
+# ── regressions from the compact review (2026-09-30) ────────────────────────
+
+def test_ollama_error_frame_fails_the_stream(monkeypatch):
+    """Once the 200 stream is committed, the daemon reports failure as an
+    error frame — skipping it saved a truncated reply as a success."""
+    from services import ollama_client
+
+    frames = [
+        {"message": {"content": "partial"}},
+        {"error": "runner crashed: out of memory"},
+    ]
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        @staticmethod
+        def iter_lines():
+            for frame in frames:
+                yield json.dumps(frame).encode("utf-8")
+
+    monkeypatch.setattr(ollama_client.requests, "post",
+                        lambda *a, **k: FakeResponse())
+    client = ollama_client.OllamaClient()
+    stream = client.stream_chat("local", [{"role": "user", "content": "hi"}])
+    with pytest.raises(RuntimeError, match="out of memory"):
+        list(stream)
+
+
+def test_error_frame_reaches_error_signal_not_finished(app, monkeypatch):
+    from services import ollama_client
+    from ui.workers import ChatWorker
+
+    frames = [
+        {"message": {"content": "partial"}},
+        {"error": "runner crashed"},
+    ]
+
+    class FakeResponse:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def raise_for_status(self):
+            pass
+
+        @staticmethod
+        def iter_lines():
+            for frame in frames:
+                yield json.dumps(frame).encode("utf-8")
+
+    monkeypatch.setattr(ollama_client.requests, "post",
+                        lambda *a, **k: FakeResponse())
+    client = ollama_client.OllamaClient()
+    worker = ChatWorker(
+        lambda *a: client.stream_chat("local",
+                                      [{"role": "user", "content": "hi"}]),
+        "ollama", "local", [{"role": "user", "content": "hi"}], "hi")
+    errors, finished = [], []
+    worker.error_signal.connect(errors.append)
+    worker.finished_signal.connect(finished.append)
+    worker.run()
+    assert finished == []
+    assert errors and "runner crashed" in errors[0]
+
+
+def test_cancel_closes_the_abandoned_stream(app):
+    """The stream and its generator form a reference cycle: without an
+    explicit close the daemon connection stays open until cyclic GC."""
+    from ui.workers import ChatWorker
+
+    closed = []
+
+    def make_stream(*_args):
+        def _gen(out):
+            try:
+                yield "first"
+                yield "never"
+            finally:
+                closed.append(True)
+        return UsageStream(_gen)
+
+    worker = ChatWorker(make_stream, "ollama", "local",
+                        [{"role": "user", "content": "hi"}], "hi")
+    worker.token_signal.connect(lambda _t: worker.cancel())
+    worker.error_signal.connect(lambda _e: None)
+    worker.run()
+    assert closed == [True]

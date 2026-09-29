@@ -246,6 +246,14 @@ class OllamaClient:
 
                         data = json.loads(line.decode("utf-8"))
 
+                        # Once the 200 stream is committed the daemon can
+                        # only report failure as an error frame (the same
+                        # convention pull_model handles). Skipping it made
+                        # a truncated reply finish as a saved success.
+                        if "error" in data:
+                            raise RuntimeError(
+                                f"Ollama streaming failed: {data['error']}")
+
                         if "message" in data and "content" in data["message"]:
                             yield data["message"]["content"]
 

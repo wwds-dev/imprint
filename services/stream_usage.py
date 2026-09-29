@@ -26,6 +26,17 @@ class UsageStream:
     def __iter__(self):
         return self._gen
 
+    def close(self) -> None:
+        """Abandon the stream: GeneratorExit unwinds the generator's
+        with-block so the provider connection drops immediately.
+
+        The generator frame and this object form a reference cycle, so an
+        abandoned stream otherwise stays open until a cyclic-GC pass — and
+        a cancelled LOCAL generation keeps the ollama daemon burning the
+        user's own machine on a response nobody will see.
+        """
+        self._gen.close()
+
 
 def cached_input_tokens(usage) -> int:
     """Input tokens the provider served from its prompt cache, or 0.
