@@ -501,7 +501,9 @@ class _FakeProcess:
 
 class TestAudiobookBillingDecision:
     """Billing keys off converter.main()'s exit protocol (0 only when every
-    book completed), not the celebration banner it prints to stdout."""
+    book completed) AND the audiobook file existing — never the celebration
+    banner printed to stdout, and since 2026-09-29 never a clean exit that
+    produced no file."""
 
     def _finish(self, win, monkeypatch, code, text=""):
         from PySide6.QtCore import QProcess
@@ -512,11 +514,15 @@ class TestAudiobookBillingDecision:
         win.output_box.setPlainText(text)
         win.handle_audiobook_finished()
 
-    def test_exit_zero_records_the_conversion(self, win, monkeypatch):
+    def test_exit_zero_records_the_conversion(self, win, monkeypatch,
+                                              tmp_path):
         token = win.authorize_request(
             "audiobook", "openai", "gpt-4o-mini-tts", "book",
             label="audiobook", flat_cost_eur=0.5)
         win._audiobook_request_token = token
+        produced = tmp_path / "book.mp3"
+        produced.write_bytes(b"mp3")
+        win.audiobook_panel._conversion_output = produced
         self._finish(win, monkeypatch, 0)
         assert win.usage_tracker.logged[-1]["agent"] == "audiobook"
         assert win._pending_requests == {}

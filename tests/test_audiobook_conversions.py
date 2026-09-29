@@ -179,3 +179,140 @@ def test_startup_scan_runs_once_per_process(window, monkeypatch):
     panel.resume_pending_conversions()
     panel.resume_pending_conversions()
     assert len(calls) == 1
+
+
+# ── regressions from the adversarial review (2026-09-29) ────────────────────
+
+def test_incompatible_manifest_wipes_stale_chunks(tmp_path):
+    """Old-settings chunk files must not masquerade as done chunks."""
+    from services.narrator import converter
+
+    temp_dir = tmp_path / "tmp"
+    temp_dir.mkdir()
+    (temp_dir / "chunk_0.mp3").write_bytes(b"old-voice-audio")
+    (temp_dir / "chunk_1.mp3").write_bytes(b"old-voice-audio")
+    manifest_path = tmp_path / "manifest.json"
+    source = tmp_path / "book.epub"
+    source.write_text("x")
+    old = converter.build_manifest("book", source, ["one", "two"])
+    converter.json_dump(manifest_path, old)
+
+    # Same book, different chunking (three chunks now): incompatible.
+    rebuilt = converter.load_or_create_manifest(
+        manifest_path, "book", source, ["a", "b", "c"], temp_dir=temp_dir)
+    assert rebuilt["total_chunks"] == 3
+    assert list(temp_dir.glob("chunk_*.mp3")) == []
+    # Sync now honestly reports nothing done.
+    synced = converter.sync_manifest_with_files(rebuilt, temp_dir)
+    assert all(e["status"] == "pending" for e in synced["chunks"])
+
+
+def test_open_job_fresh_start_resets_counts_but_keeps_billed():
+    row = _open()
+    conversions.update_progress(row["id"], 40, 100)
+    conversions.settle(row["id"], status="interrupted", billed_add=4.0)
+    fresh = _open(voice="verse", chunk_tokens=700, reset_progress=True)
+    assert fresh["id"] == row["id"]
+    assert (fresh["chunks_done"], fresh["chunks_total"],
+            fresh["run_baseline"]) == (0, 0, 0)
+    assert fresh["billed_eur"] == pytest.approx(4.0)   # history survives
+    assert conversions.remaining_fraction(fresh) == 1.0
+
+
+def test_interrupted_settle_survives_a_billing_failure(window, monkeypatch):
+    """Settle-first: a log_request failure (or crash in the window) must
+    not leave a 'running' row whose spend the startup scan logs again."""
+    panel = window.audiobook_panel
+    row = _open()
+    conversions.update_progress(row["id"], 25, 100)
+    token = window.restore_request(
+        "audiobook", "openai", "gpt-4o-mini-tts", "novel.epub",
+        label="audiobook", flat_cost_eur=10.0)
+    panel._request_token = token
+    panel._conversion_job_id = row["id"]
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("billing exploded")
+    monkeypatch.setattr(window.usage_tracker, "log_request", boom)
+
+    panel._close_request(success=False)
+    settled = conversions.get_job(row["id"])
+    assert settled["status"] == "interrupted"
+    assert settled["billed_eur"] == pytest.approx(2.5)
+    # The scan finds nothing 'running' — no second bill is possible.
+    assert conversions.dead_runs() == []
+
+
+def test_success_settles_even_when_the_row_read_fails(window, monkeypatch):
+    panel = window.audiobook_panel
+    row = _open()
+    conversions.update_progress(row["id"], 100, 100)
+    token = window.restore_request(
+        "audiobook", "openai", "gpt-4o-mini-tts", "novel.epub",
+        label="audiobook", flat_cost_eur=1.0)
+    panel._request_token = token
+    panel._conversion_job_id = row["id"]
+    monkeypatch.setattr(
+        conversions, "get_job",
+        lambda *_: (_ for _ in ()).throw(RuntimeError("read failed")))
+    panel._close_request(success=True)
+    with get_connection() as conn:
+        stored = conn.execute(
+            "SELECT status, billed_eur FROM audiobook_conversions "
+            "WHERE id = ?", (row["id"],)).fetchone()
+    assert stored["status"] == "completed"
+    assert stored["billed_eur"] == pytest.approx(1.0)
+
+
+def test_clean_exit_without_output_is_not_success(window, tmp_path,
+                                                 monkeypatch):
+    monkeypatch.setattr(window.audiobook_panel, "refresh_books",
+                        lambda: None)
+    """Exit code 0 with no audiobook file bills only the run's chapters."""
+    panel = window.audiobook_panel
+    row = _open()
+    conversions.update_progress(row["id"], 10, 100)
+    token = window.restore_request(
+        "audiobook", "openai", "gpt-4o-mini-tts", "novel.epub",
+        label="audiobook", flat_cost_eur=10.0)
+    panel._request_token = token
+    panel._conversion_job_id = row["id"]
+    panel._conversion_output = tmp_path / "missing.mp3"   # never written
+    panel._conversion_source = tmp_path / "novel.epub"
+    panel.process = None
+    window.audiobook_process = None
+    window.output_box.setPlainText("")
+
+    before = window.usage_tracker.get_agent_today_total("audiobook")
+    panel.handle_finished()
+
+    after = window.usage_tracker.get_agent_today_total("audiobook")
+    assert after == pytest.approx(before + 1.0)   # 10/100 chapters only
+    settled = conversions.get_job(row["id"])
+    assert settled["status"] == "interrupted"
+    assert "missing" in panel.audiobook_status_label.text()
+
+
+def test_startup_scan_names_every_dead_book(window):
+    panel = window.audiobook_panel
+    first = _open()
+    conversions.update_progress(first["id"], 3, 12)
+    second = _open(source_path="/books/other.epub",
+                   output_path="/out/other.mp3")
+    conversions.update_progress(second["id"], 7, 9)
+
+    panel._resume_scan_done = False
+    panel.resume_pending_conversions()
+    status = panel.audiobook_status_label.text()
+    assert "2 conversions" in status
+    assert "novel.epub (3/12 cached)" in status
+    assert "other.epub (7/9 cached)" in status
+
+
+def test_refresh_books_keeps_non_default_settings(window):
+    panel = window.audiobook_panel
+    panel.audiobook_voice_box.setCurrentText("verse")
+    panel.audiobook_chunk_input.setText("777")
+    panel.refresh_books()
+    assert panel.audiobook_voice_box.currentText() == "verse"
+    assert panel.audiobook_chunk_input.text() == "777"

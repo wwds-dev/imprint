@@ -45,24 +45,39 @@ def remaining_fraction(row) -> float:
 
 
 def open_job(*, source_path: str, output_path: str, voice: str,
-             chunk_tokens: int, estimate_eur: float, project=None) -> dict:
+             chunk_tokens: int, estimate_eur: float, project=None,
+             reset_progress: bool = False) -> dict:
     """Reuse the book's unfinished row (keeping billed_eur) or create one.
 
     run_baseline records where this run starts, so its own spend can be
     measured as (chunks_done - run_baseline) even after a crash.
+    reset_progress=True is the fresh-start path (settings changed, cache
+    invalid): the chunk counts restart at zero — billed_eur is history
+    and always survives.
     """
     now = _now()
     existing = find_open(source_path, output_path)
     with get_connection() as conn:
         if existing:
-            conn.execute(
-                """UPDATE audiobook_conversions
-                      SET voice = ?, chunk_tokens = ?, estimate_eur = ?,
-                          project = ?, status = 'running', error = '',
-                          run_baseline = chunks_done, updated_at = ?
-                    WHERE id = ?""",
-                (voice, int(chunk_tokens), float(estimate_eur), project,
-                 now, existing["id"]))
+            if reset_progress:
+                conn.execute(
+                    """UPDATE audiobook_conversions
+                          SET voice = ?, chunk_tokens = ?, estimate_eur = ?,
+                              project = ?, status = 'running', error = '',
+                              chunks_done = 0, chunks_total = 0,
+                              run_baseline = 0, updated_at = ?
+                        WHERE id = ?""",
+                    (voice, int(chunk_tokens), float(estimate_eur), project,
+                     now, existing["id"]))
+            else:
+                conn.execute(
+                    """UPDATE audiobook_conversions
+                          SET voice = ?, chunk_tokens = ?, estimate_eur = ?,
+                              project = ?, status = 'running', error = '',
+                              run_baseline = chunks_done, updated_at = ?
+                        WHERE id = ?""",
+                    (voice, int(chunk_tokens), float(estimate_eur), project,
+                     now, existing["id"]))
             row = conn.execute(
                 "SELECT * FROM audiobook_conversions WHERE id = ?",
                 (existing["id"],)).fetchone()
