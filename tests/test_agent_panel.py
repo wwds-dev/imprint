@@ -12,6 +12,12 @@ behaviour and the differences that had to survive:
   - failures are reported through the host rather than swallowed, which the
     music panel used not to do.
 
+Since the async-refresh change, load_models seeds the box synchronously from
+the host's session cache or the client's KNOWN_MODELS (imprintModelsLive
+False), and the live list arrives from one shared ModelListWorker per
+provider. A host without `model_list_workers` (like the bare FakeHost here)
+never spawns threads — the seeded list is the whole answer.
+
 Run with:  pytest tests/test_agent_panel.py -v
 """
 
@@ -34,16 +40,36 @@ def app():
 
 
 class FakeClient:
-    def __init__(self, models):
-        self._models = models
+    def __init__(self, models, live=None):
+        # KNOWN_MODELS is the synchronous seed; list_models the live answer.
+        self.KNOWN_MODELS = list(models)
+        self._live = list(live) if live is not None else list(models)
 
     def list_models(self):
-        return list(self._models)
+        return list(self._live)
 
 
 class ExplodingClient:
+    """No KNOWN_MODELS and a failing live call — the worst provider."""
+
     def list_models(self):
         raise RuntimeError("provider unreachable")
+
+
+class AsyncHostMixin:
+    """The three attributes GodAI adds for the shared-worker refresh."""
+
+    def _arm_async(self):
+        self.model_list_workers = {}
+        self.model_list_cache = {}
+        self.listed = []
+
+    def _on_models_listed(self, provider, models, error):
+        self.listed.append((provider, models, error))
+        if models:
+            self.model_list_cache[provider] = list(models)
+        elif error:
+            self._note_failure(f"models: {provider}", RuntimeError(error))
 
 
 class FakeHost:
@@ -138,15 +164,30 @@ def test_every_listed_provider_can_load(app):
         assert panel.model_box.count() > 0, f"{provider} loaded nothing"
 
 
-def test_a_failing_provider_is_reported_not_swallowed(app):
+def _async_host(**clients):
+    class AsyncFakeHost(AsyncHostMixin, FakeHost):
+        pass
+    host = AsyncFakeHost(**clients)
+    host._arm_async()
+    return host
+
+
+def _run_worker_synchronously(monkeypatch):
+    from ui.workers import ModelListWorker
+    monkeypatch.setattr(ModelListWorker, "start", ModelListWorker.run)
+
+
+def test_a_failing_provider_is_reported_not_swallowed(app, monkeypatch):
     """The music panel used to do `except Exception: models = []`, leaving an
-    empty dropdown and no explanation."""
-    host = FakeHost(openai=ExplodingClient())
+    empty dropdown and no explanation. The report now comes from the shared
+    worker through the host's _on_models_listed."""
+    _run_worker_synchronously(monkeypatch)
+    host = _async_host(openai=ExplodingClient())
     panel = AgentPanel(host, "music", default_provider="openai")
     panel.load_models()
     assert host.failures, "failure was swallowed"
     context, exc = host.failures[-1]
-    assert context == "music: load models"
+    assert context == "models: openai"
     assert isinstance(exc, RuntimeError)
 
 
@@ -156,3 +197,123 @@ def test_a_failing_provider_leaves_the_box_empty_rather_than_stale(app):
     panel.load_models()
     panel.provider_box.setCurrentText("anthropic")
     assert panel.model_box.count() == 0
+
+
+# ── the async half: seeding, the shared worker, the live swap ───────────────
+
+def test_seeded_box_is_marked_not_live(app):
+    panel = AgentPanel(FakeHost(), "author", default_provider="openai")
+    panel.load_models()
+    assert panel.model_box.property("imprintModelsLive") is False
+
+
+def test_bare_fakehost_never_spawns_a_worker(app, monkeypatch):
+    started = []
+    from ui.workers import ModelListWorker
+    monkeypatch.setattr(ModelListWorker, "start",
+                        lambda self: started.append(self))
+    panel = AgentPanel(FakeHost(), "author", default_provider="openai")
+    panel.load_models()
+    assert started == []
+
+
+def test_live_list_replaces_the_seed_and_preserves_selection(
+        app, monkeypatch):
+    _run_worker_synchronously(monkeypatch)
+    host = _async_host(anthropic=FakeClient(
+        ["claude-sonnet-4-6", "claude-haiku-4-5"],
+        live=["claude-haiku-4-5-20251001", "claude-sonnet-4-6-20260112"]))
+    refreshed = []
+    panel = AgentPanel(host, "author", default_provider="anthropic")
+    panel.models_refreshed.connect(refreshed.append)
+    panel.load_models()
+    # Seed selected the bare name; the worker already ran synchronously and
+    # swapped in the dated live ids.
+    assert panel.model_box.property("imprintModelsLive") is True
+    items = [panel.model_box.itemText(i)
+             for i in range(panel.model_box.count())]
+    assert items == ["claude-haiku-4-5-20251001", "claude-sonnet-4-6-20260112"]
+    assert refreshed == ["author"]
+    assert host.model_list_cache["anthropic"] == items
+
+
+def test_selection_survives_the_swap_via_the_host_reconciler(
+        app, monkeypatch):
+    _run_worker_synchronously(monkeypatch)
+    host = _async_host(anthropic=FakeClient(
+        ["claude-sonnet-4-6"], live=["claude-sonnet-4-6-20260112"]))
+    # GodAI reconciles bare seeded names against dated live ids.
+    host._find_model_index = staticmethod(
+        lambda combo, wanted: next(
+            (i for i in range(combo.count())
+             if combo.itemText(i).startswith(wanted)), -1))
+    panel = AgentPanel(host, "author", default_provider="anthropic")
+    panel.load_models()
+    assert panel.model == "claude-sonnet-4-6-20260112"
+
+
+def test_cached_provider_seeds_live_and_skips_the_worker(app, monkeypatch):
+    started = []
+    from ui.workers import ModelListWorker
+    monkeypatch.setattr(ModelListWorker, "start",
+                        lambda self: started.append(self))
+    host = _async_host(openai=FakeClient(["gpt-4o-mini"]))
+    host.model_list_cache["openai"] = ["gpt-live-1", "gpt-live-2"]
+    panel = AgentPanel(host, "author", default_provider="openai")
+    panel.load_models()
+    assert [panel.model_box.itemText(i)
+            for i in range(panel.model_box.count())] ==         ["gpt-live-1", "gpt-live-2"]
+    assert panel.model_box.property("imprintModelsLive") is True
+    assert started == []
+
+
+def test_missing_key_skips_the_fetch(app, monkeypatch):
+    started = []
+    from ui.workers import ModelListWorker
+    monkeypatch.setattr(ModelListWorker, "start",
+                        lambda self: started.append(self))
+    client = FakeClient(["gpt-4o-mini"])
+    client.key_available = lambda: False
+    host = _async_host(openai=client)
+    panel = AgentPanel(host, "author", default_provider="openai")
+    panel.load_models()
+    assert started == []
+    assert panel.model_box.count() == 1   # the seed is the whole answer
+
+
+def test_stale_result_for_another_provider_is_ignored(app, monkeypatch):
+    from ui.workers import ModelListWorker
+    monkeypatch.setattr(ModelListWorker, "start", lambda self: None)
+    host = _async_host()
+    panel = AgentPanel(host, "author", default_provider="openai")
+    panel.load_models()
+    before = [panel.model_box.itemText(i)
+              for i in range(panel.model_box.count())]
+    panel._apply_live("anthropic", ["claude-x"], "")
+    assert [panel.model_box.itemText(i)
+            for i in range(panel.model_box.count())] == before
+
+
+def test_two_panels_share_one_provider_worker(app, monkeypatch):
+    created = []
+    from ui import workers
+
+    class RecordingWorker(workers.ModelListWorker):
+        def __init__(self, client, provider):
+            super().__init__(client, provider)
+            created.append(self)
+
+        def start(self):   # keep it un-run so isRunning stays false-y
+            pass
+
+    monkeypatch.setattr(workers, "ModelListWorker", RecordingWorker)
+    host = _async_host()
+    first = AgentPanel(host, "author", default_provider="openai")
+    second = AgentPanel(host, "music", default_provider="openai")
+    first.load_models()
+    # The first worker is registered but never ran (start is a no-op), so
+    # isRunning() is False; a genuinely finished worker also re-fetches —
+    # the CACHE, not the worker map, is what suppresses repeat fetches.
+    host.model_list_cache.clear()
+    second.load_models()
+    assert len(created) == 2

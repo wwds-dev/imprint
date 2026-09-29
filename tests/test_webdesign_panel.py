@@ -13,6 +13,10 @@ def app():
 
 
 class FakeClient:
+    # Real clients carry KNOWN_MODELS as the synchronous seed; without it
+    # the model box starts empty and generate() blocks on a modal warning.
+    KNOWN_MODELS = ["test-model"]
+
     def list_models(self):
         return ["test-model"]
 

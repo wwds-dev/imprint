@@ -110,6 +110,31 @@ class ChatWorker(QThread):
 # nowhere since the security verticals were stripped.
 
 
+class ModelListWorker(QThread):
+    """Fetch a provider's live model list off the GUI thread.
+
+    list_models() can block for two REQUEST_TIMEOUT_SECONDS windows on a
+    configured cloud provider — the exact freeze AgentPanel.load_models
+    used to cause on startup and every provider switch. One worker per
+    provider is shared by every panel; the host caches the result for
+    the session.
+    """
+
+    models_signal = Signal(str, list, str)   # provider, models, error
+
+    def __init__(self, client, provider: str):
+        super().__init__()
+        self.client = client
+        self.provider = provider
+
+    def run(self):
+        try:
+            models = list(self.client.list_models() or [])
+            self.models_signal.emit(self.provider, models, "")
+        except Exception as exc:
+            self.models_signal.emit(self.provider, [], str(exc))
+
+
 class ModelPullWorker(QThread):
     """Downloads an Ollama model off the UI thread.
 

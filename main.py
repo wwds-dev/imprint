@@ -221,6 +221,13 @@ class GodAI(QWidget):
         self._pending_requests: dict[str, dict] = {}
         self._pending_by_agent: dict[str, list[str]] = {}
 
+        # Async model discovery (AgentPanel.load_models): one shared worker
+        # per provider, and a session-lifetime cache of live answers so the
+        # startup recommendation pass stops refetching what a panel already
+        # fetched. Must exist before build_ui constructs the panels.
+        self.model_list_workers: dict = {}
+        self.model_list_cache: dict = {}
+
         self.author_worker: Optional[ChatWorker] = None
         self._author_export_done: bool = False
         self.author_pub_worker: Optional[ChatWorker] = None
@@ -1210,6 +1217,15 @@ class GodAI(QWidget):
                         lambda _t, k=agent_key: self.refresh_recommendation_marks(k)
                     )
 
+        # A live model list replacing the seeded one clears the painted
+        # item marks; repaint them when each panel reports the swap.
+        for marks_key in AGENT_SETUP_WIDGETS:
+            panel_base = self._find_control(f"{marks_key}_panel_base")
+            if panel_base is not None and hasattr(panel_base,
+                                                  "models_refreshed"):
+                panel_base.models_refreshed.connect(
+                    lambda _agent, k=marks_key:
+                    self.refresh_recommendation_marks(k))
         self.refresh_video_recommendations()
         self._refresh_fiverr_image_recommendation()
         for name in ("video_format_box", "video_aspect_box", "video_length_box",
@@ -3036,6 +3052,14 @@ class GodAI(QWidget):
         self.creator_panel.resume_pending_teasers()
         self.audiobook_panel.resume_pending_conversions()
 
+    def _on_models_listed(self, provider: str, models: list,
+                          error: str) -> None:
+        """Session cache for live model lists; one failure note per fetch."""
+        if models:
+            self.model_list_cache[provider] = list(models)
+        elif error:
+            self._note_failure(f"models: {provider}", RuntimeError(error))
+
     def _reserved_in_flight_eur(self) -> float:
         """Estimates of every authorized-but-unresolved request."""
         return sum(float(ctx.get("estimated_cost") or 0.0)
@@ -4034,6 +4058,9 @@ class GodAI(QWidget):
                     if worker is not None and worker.isRunning():
                         worker.cancel()
                         worker.wait(2000)
+            for worker in getattr(self, "model_list_workers", {}).values():
+                if worker is not None and worker.isRunning():
+                    worker.wait(2000)
         except Exception as exc:
             self._note_failure("shutdown: stop background work", exc)
         event.accept()
