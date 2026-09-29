@@ -81,25 +81,37 @@ class GeminiClientWrapper:
         Falls back to KNOWN_MODELS with no key or on any API error so the model
         dropdowns are never left empty.
         """
-        if not self.client:
-            return self.KNOWN_MODELS
         try:
-            def supports_generate(m) -> bool:
-                # The SDK has used both attribute names across versions, and
-                # either can come back as None.
-                actions = (getattr(m, "supported_actions", None)
-                           or getattr(m, "supported_generation_methods", None)
-                           or [])
-                return "generateContent" in actions
-
-            models = sorted(
-                m.name.replace("models/", "")
-                for m in self.client.models.list()
-                if supports_generate(m)
-            )
-            return models if models else self.KNOWN_MODELS
+            return self.list_models_live()
         except Exception:
             return self.KNOWN_MODELS
+
+    def list_models_live(self) -> list[str]:
+        """Live ids, or an exception — no silent fallback.
+
+        The async model refresh must be able to tell a live answer from a
+        failure: swallowing the error here made the worker cache
+        KNOWN_MODELS as this session's live list, never retried. A no-key
+        client still returns KNOWN_MODELS (that IS the correct answer),
+        and so does an empty listing.
+        """
+        if not self.client:
+            return self.KNOWN_MODELS
+
+        def supports_generate(m) -> bool:
+            # The SDK has used both attribute names across versions, and
+            # either can come back as None.
+            actions = (getattr(m, "supported_actions", None)
+                       or getattr(m, "supported_generation_methods", None)
+                       or [])
+            return "generateContent" in actions
+
+        models = sorted(
+            m.name.replace("models/", "")
+            for m in self.client.models.list()
+            if supports_generate(m)
+        )
+        return models if models else self.KNOWN_MODELS
 
     def chat(self, messages, model="gemini-2.5-flash"):
         if not self.client:

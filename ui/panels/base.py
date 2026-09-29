@@ -113,7 +113,13 @@ class AgentPanel(QObject):
             # there is nothing to fetch.
             return
         worker = workers.get(provider)
-        fresh = worker is None or not worker.isRunning()
+        # The worker MAP records "fetched this session", not the thread's
+        # liveness: the cache write arrives by queued signal, so keying on
+        # isRunning() let a second panel respawn the fetch in the window
+        # between a worker finishing and its result landing. A failed fetch
+        # is popped from the map by the host, which is what re-enables the
+        # retry on the next load_models.
+        fresh = worker is None
         if fresh:
             from ui.workers import ModelListWorker
             worker = ModelListWorker(client, provider)
@@ -121,9 +127,18 @@ class AgentPanel(QObject):
             if host_hook is not None:
                 worker.models_signal.connect(host_hook)
             workers[provider] = worker
-        # Subscribe BEFORE start(): a worker can emit in the first
-        # microseconds, and a signal with no connection yet is simply lost.
+        # One live connection per panel: revisiting a provider whose fetch
+        # is still in flight must not double-connect (Qt connections are
+        # not unique, and each duplicate re-runs the whole swap). Subscribe
+        # BEFORE start(): a worker can emit in the first microseconds, and
+        # a signal with no connection yet is simply lost.
         if self._live_worker is not worker:
+            if self._live_worker is not None:
+                try:
+                    self._live_worker.models_signal.disconnect(
+                        self._apply_live)
+                except (RuntimeError, TypeError):
+                    pass   # already gone with its thread
             worker.models_signal.connect(self._apply_live)
             self._live_worker = worker
         if fresh:

@@ -92,17 +92,24 @@ class OllamaClient:
             }
         return out
 
+    @staticmethod
+    def size_from_details(details: dict, model: str) -> int | None:
+        """model_size_bytes against an already-fetched details map, so a
+        caller marking a whole dropdown reads the daemon once, not per
+        item."""
+        for candidate in (model, f"{model}:latest",
+                          model.removesuffix(":latest")):
+            if candidate in details:
+                return details[candidate]["size_bytes"]
+        return None
+
     def model_size_bytes(self, model: str) -> int | None:
         """On-disk size of an installed model, or None if it is not installed.
 
         For a not-yet-pulled model the size is unknown to the daemon — callers
         fall back to a published figure (see MUSE_GLIMMER_VARIANTS).
         """
-        details = self.model_details()
-        for candidate in (model, f"{model}:latest", model.removesuffix(":latest")):
-            if candidate in details:
-                return details[candidate]["size_bytes"]
-        return None
+        return self.size_from_details(self.model_details(), model)
 
     def loaded_models(self) -> list[dict]:
         """Models currently resident in memory, from /api/ps. [] if unknown."""

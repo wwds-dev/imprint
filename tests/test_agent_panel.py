@@ -69,6 +69,8 @@ class AsyncHostMixin:
         if models:
             self.model_list_cache[provider] = list(models)
         elif error:
+            # Mirrors GodAI: a failed fetch re-arms the retry.
+            self.model_list_workers.pop(provider, None)
             self._note_failure(f"models: {provider}", RuntimeError(error))
 
 
@@ -294,7 +296,10 @@ def test_stale_result_for_another_provider_is_ignored(app, monkeypatch):
             for i in range(panel.model_box.count())] == before
 
 
-def test_two_panels_share_one_provider_worker(app, monkeypatch):
+def test_one_fetch_per_provider_per_session(app, monkeypatch):
+    """The worker MAP records "fetched this session": the cache write
+    arrives by queued signal, so keying on isRunning() let a second panel
+    respawn the fetch in the finished-but-not-yet-cached window."""
     created = []
     from ui import workers
 
@@ -303,7 +308,7 @@ def test_two_panels_share_one_provider_worker(app, monkeypatch):
             super().__init__(client, provider)
             created.append(self)
 
-        def start(self):   # keep it un-run so isRunning stays false-y
+        def start(self):   # never runs: simulates any pre-result moment
             pass
 
     monkeypatch.setattr(workers, "ModelListWorker", RecordingWorker)
@@ -311,9 +316,53 @@ def test_two_panels_share_one_provider_worker(app, monkeypatch):
     first = AgentPanel(host, "author", default_provider="openai")
     second = AgentPanel(host, "music", default_provider="openai")
     first.load_models()
-    # The first worker is registered but never ran (start is a no-op), so
-    # isRunning() is False; a genuinely finished worker also re-fetches —
-    # the CACHE, not the worker map, is what suppresses repeat fetches.
-    host.model_list_cache.clear()
-    second.load_models()
-    assert len(created) == 2
+    second.load_models()   # cache still empty — must NOT respawn
+    assert len(created) == 1
+
+
+def test_failed_fetch_is_not_cached_and_rearms_the_retry(app, monkeypatch):
+    """A network failure must stay distinguishable from a live answer:
+    caching KNOWN_MODELS as live froze the box stale for the session."""
+    _run_worker_synchronously(monkeypatch)
+
+    class LiveAwareClient(FakeClient):
+        def __init__(self):
+            super().__init__(["known-a"], live=["live-a"])
+            self.calls = 0
+
+        def list_models_live(self):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError("network down")
+            return list(self._live)
+
+    client = LiveAwareClient()
+    host = _async_host(openai=client)
+    panel = AgentPanel(host, "author", default_provider="openai")
+    panel.load_models()
+    # First fetch failed: nothing cached, box keeps the seed, not live.
+    assert "openai" not in host.model_list_cache
+    assert panel.model_box.property("imprintModelsLive") is False
+    assert host.failures and host.failures[-1][0] == "models: openai"
+    # The map was re-armed, so the next load retries and self-heals.
+    panel.load_models()
+    assert host.model_list_cache["openai"] == ["live-a"]
+    assert panel.model_box.property("imprintModelsLive") is True
+
+
+def test_revisiting_an_inflight_provider_does_not_double_connect(
+        app, monkeypatch):
+    """One live connection per panel: every duplicate re-runs the whole
+    swap (reproduced as models_refreshed firing twice per emission)."""
+    from ui.workers import ModelListWorker
+    monkeypatch.setattr(ModelListWorker, "start", lambda self: None)
+    host = _async_host()
+    panel = AgentPanel(host, "author", default_provider="openai")
+    panel.load_models()               # connect to W_openai (in flight)
+    panel.provider_box.setCurrentText("anthropic")   # connect W_anthropic
+    panel.provider_box.setCurrentText("openai")      # revisit mid-flight
+    refreshed = []
+    panel.models_refreshed.connect(refreshed.append)
+    worker = host.model_list_workers["openai"]
+    worker.models_signal.emit("openai", ["gpt-live"], "")
+    assert refreshed == ["author"]    # exactly one swap per emission

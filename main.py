@@ -530,7 +530,8 @@ class GodAI(QWidget):
     # every last byte of physical RAM.
     MEMORY_HEADROOM_GB = 3.0
 
-    def assess_local_model(self, model: str) -> dict | None:
+    def assess_local_model(self, model: str, *,
+                           details: dict | None = None) -> dict | None:
         """Weigh a local model against this machine's memory.
 
         Returns None when the check does not apply (not a known local model, or
@@ -540,7 +541,10 @@ class GodAI(QWidget):
         """
         import psutil
 
-        size_bytes = self.ollama.model_size_bytes(model)
+        if details is not None:
+            size_bytes = self.ollama.size_from_details(details, model)
+        else:
+            size_bytes = self.ollama.model_size_bytes(model)
         if size_bytes is None:
             # Not pulled yet — fall back to the published download size for the
             # builds we ship a figure for, so the dropdown can grey them out.
@@ -741,11 +745,17 @@ class GodAI(QWidget):
         if combo is None:
             return
 
+        # One daemon read for the whole pass, not one per item.
+        try:
+            details = self.ollama.model_details()
+        except Exception:
+            details = {}
         for i in range(combo.count()):
             # Never overwrite the red recommendation marking.
             if combo.itemData(i, Qt.ForegroundRole) is not None:
                 continue
-            verdict = self.assess_local_model(combo.itemText(i))
+            verdict = self.assess_local_model(combo.itemText(i),
+                                              details=details)
             if verdict is None:
                 continue
             if verdict["level"] == "too_big":
@@ -1047,7 +1057,12 @@ class GodAI(QWidget):
                 confidence=model_result.confidence, badge=model_result.badge,
             )
             model_box.setToolTip(tooltip)
-            self.mark_oversized_models(model_box)
+            # The size check reads the local daemon; it only means anything
+            # for local models, and running it per cloud repaint was N+1
+            # HTTP GETs on the GUI thread.
+            if provider_box is not None and \
+                    provider_box.currentText() == "ollama":
+                self.mark_oversized_models(model_box)
 
     def _on_recommended_provider_changed(self, agent_key: str) -> None:
         """Select the best model inside a newly chosen provider, then annotate."""
@@ -3054,10 +3069,16 @@ class GodAI(QWidget):
 
     def _on_models_listed(self, provider: str, models: list,
                           error: str) -> None:
-        """Session cache for live model lists; one failure note per fetch."""
+        """Session cache for live model lists; one failure note per fetch.
+
+        A failed fetch is popped from the worker map so the next
+        load_models for that provider retries — the pre-async code
+        self-healed on every provider switch, and this keeps that.
+        """
         if models:
             self.model_list_cache[provider] = list(models)
         elif error:
+            self.model_list_workers.pop(provider, None)
             self._note_failure(f"models: {provider}", RuntimeError(error))
 
     def _reserved_in_flight_eur(self) -> float:

@@ -41,26 +41,34 @@ class OpenAIClientWrapper:
     def key_available():
         return bool(os.getenv("OPENAI_API_KEY"))
 
-    def list_models(self) -> list[str]:
-        """Chat-capable model ids, newest listing from the API when reachable.
+    def list_models_live(self) -> list[str]:
+        """Live ids, or an exception — no silent fallback.
 
-        Falls back to KNOWN_MODELS with no key or on any API error so the model
-        dropdowns are never left empty.
+        The async model refresh must be able to tell a live answer from a
+        failure: swallowing the error here made the worker cache
+        KNOWN_MODELS as this session's live list, never retried. A no-key
+        client still returns KNOWN_MODELS (that IS the correct answer),
+        and so does an empty listing.
         """
         if not self.client:
             return self.KNOWN_MODELS
+        result = self.client.models.list()
+        excluded = (
+            "image", "realtime", "audio", "transcribe", "tts", "sora",
+            "video", "embedding", "moderation",
+        )
+        models = sorted(
+            m.id for m in result.data
+            if any(x in m.id.lower() for x in ("gpt", "o1", "o3", "o4"))
+            and not any(x in m.id.lower() for x in excluded)
+        )
+        return models if models else self.KNOWN_MODELS
+
+    def list_models(self) -> list[str]:
+        """Chat-capable model ids; KNOWN_MODELS on any API error so the
+        synchronous dropdown paths are never left empty."""
         try:
-            result = self.client.models.list()
-            excluded = (
-                "image", "realtime", "audio", "transcribe", "tts", "sora",
-                "video", "embedding", "moderation",
-            )
-            models = sorted(
-                m.id for m in result.data
-                if any(x in m.id.lower() for x in ("gpt", "o1", "o3", "o4"))
-                and not any(x in m.id.lower() for x in excluded)
-            )
-            return models if models else self.KNOWN_MODELS
+            return self.list_models_live()
         except Exception:
             return self.KNOWN_MODELS
 

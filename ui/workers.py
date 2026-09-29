@@ -129,7 +129,12 @@ class ModelListWorker(QThread):
 
     def run(self):
         try:
-            models = list(self.client.list_models() or [])
+            # The raising variant where a client offers one: the worker must
+            # be able to tell a live answer from a swallowed failure, or the
+            # host caches KNOWN_MODELS as live for the whole session.
+            fetch = getattr(self.client, "list_models_live", None) \
+                or self.client.list_models
+            models = list(fetch() or [])
             self.models_signal.emit(self.provider, models, "")
         except Exception as exc:
             self.models_signal.emit(self.provider, [], str(exc))

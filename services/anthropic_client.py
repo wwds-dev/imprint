@@ -37,14 +37,25 @@ class AnthropicClientWrapper:
         return bool(os.environ.get("ANTHROPIC_API_KEY", ""))
 
     def list_models(self) -> list[str]:
-        if not self.client:
-            return self.KNOWN_MODELS
         try:
-            result = self.client.models.list()
-            models = sorted(m.id for m in result.data)
-            return models if models else self.KNOWN_MODELS
+            return self.list_models_live()
         except Exception:
             return self.KNOWN_MODELS
+
+    def list_models_live(self) -> list[str]:
+        """Live ids, or an exception — no silent fallback.
+
+        The async model refresh must be able to tell a live answer from a
+        failure: swallowing the error here made the worker cache
+        KNOWN_MODELS as this session's live list, never retried. A no-key
+        client still returns KNOWN_MODELS (that IS the correct answer),
+        and so does an empty listing.
+        """
+        if not self.client:
+            return self.KNOWN_MODELS
+        result = self.client.models.list()
+        models = sorted(m.id for m in result.data)
+        return models if models else self.KNOWN_MODELS
 
     # test_connection() was removed here and in the Qwen wrapper: nothing
     # called either (the API-keys status card reads key_available() only),
