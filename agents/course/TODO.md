@@ -1,9 +1,9 @@
-# Course Generator — TODO
+# Primer — TODO
 
 > **Legend** — priority `P0` critical · `P1` high · `P2` normal · `P3` low
 > categories `security` `bug` `feature` `performance` `design` `docs` `testing` `infra` `research`
 > owner `@me` (needs you — accounts, keys, money, judgement) · `@ai` (Claude can do this)
-> agent `agent:<key>` (optional; only meaningful in a parent project's shared TODO.md — not needed here, this file already belongs to Course Generator alone)
+> agent `agent:<key>` (optional; only meaningful in a parent project's shared TODO.md — not needed here, this file already belongs to Primer alone)
 
 ---
 

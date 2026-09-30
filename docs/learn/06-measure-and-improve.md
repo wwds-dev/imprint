@@ -37,9 +37,9 @@ science](03-profit.md#the-five-equations).
 |---|---|---|
 | AI request spend | Right rail → Cost History | Reconcile important differences with the provider. |
 | Book sales | Publisher → PublishDrive / Ingest KDP CSV | Current only after refresh/import; attribution may be limited. |
-| Creator receipts | Brand Creator → Earnings → Import CSV / Record Revenue | Imported net receipts are not profit when costs are unknown. |
-| Social production/status | Social Media Campaign Manager → Draft / Schedule | Posted status does not prove impressions, clicks, or sales. |
-| Client order record | Brand & Logo Designer → Orders | Add fees, revisions, refunds, and time from the real platform. |
+| Creator receipts | Muse → Earnings → Import CSV / Record Revenue | Imported net receipts are not profit when costs are unknown. |
+| Social production/status | Herald → Draft / Schedule | Posted status does not prove impressions, clicks, or sales. |
+| Client order record | Stamp → Orders | Add fees, revisions, refunds, and time from the real platform. |
 | Output inventory | Video Library, Audiobook Listen, project files | An output existing is not distribution or revenue. |
 
 If the platform provides no supported API, export its report and retain the

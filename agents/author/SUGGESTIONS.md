@@ -1,4 +1,4 @@
-# Book Author — Suggestions
+# Quill — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 

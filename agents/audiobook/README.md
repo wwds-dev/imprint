@@ -1,4 +1,4 @@
-# Audiobook Producer agent (`agents.audiobook`)
+# Booth agent (`agents.audiobook`)
 
 Owns ebook discovery, narration configuration, conversion progress, listening,
 resume state and audiobook output management. Imprint imports its connector and

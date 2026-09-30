@@ -1,4 +1,4 @@
-"""Durable record of audiobook conversions for the Audiobook Producer.
+"""Durable record of audiobook conversions for the Booth.
 
 The narrator converter already resumes chunk-by-chunk from its on-disk
 manifest; this row is the app-level memory of it: which book was in

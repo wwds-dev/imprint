@@ -1,4 +1,4 @@
-"""Public interface for the Course Generator agent."""
+"""Public interface for the Primer agent."""
 
 from .agent import CourseAgent
 

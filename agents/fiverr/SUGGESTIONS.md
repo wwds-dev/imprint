@@ -1,4 +1,4 @@
-# Brand & Logo Designer — Suggestions
+# Stamp — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 

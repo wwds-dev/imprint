@@ -1,4 +1,4 @@
-"""The Brand Creator calendar: week view, rescheduling, and export.
+"""The Muse calendar: week view, rescheduling, and export.
 
 Qt-free contract (agents/creator/calendar.py): tolerant ISO parsing that
 never guesses at legacy prose, week arithmetic, RFC-5545 ICS export with

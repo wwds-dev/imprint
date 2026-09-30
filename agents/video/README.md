@@ -1,4 +1,4 @@
-# Video & Ad Generator
+# Reel
 
 Owns Imprint's video workflow: idea and script, visual-provider selection,
 narration, direct generation, assembly, job status and output library.

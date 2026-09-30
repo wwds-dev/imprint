@@ -1,4 +1,4 @@
-"""Publishing Manager workspace and its guarded flows.
+"""Press workspace and its guarded flows.
 
 Phase 4 extraction: the Overview (metrics, Ask, publishing todos), Quote
 Finder, Quote Graphics, Shorts and Calendar tabs and every handler moved

@@ -1,4 +1,4 @@
-"""Public interface for the Publishing Manager agent."""
+"""Public interface for the Press agent."""
 
 from .agent import ManuscriptAgent
 

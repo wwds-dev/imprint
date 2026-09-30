@@ -1,4 +1,4 @@
-"""Week-calendar logic for the Brand Creator's content plan.
+"""Week-calendar logic for the Muse's content plan.
 
 Qt-free on purpose: parsing, week arithmetic and the two export formats
 are plain functions a test can call without a window.
@@ -103,7 +103,7 @@ def export_ics(rows: list[dict], path) -> tuple[int, int]:
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//Imprint//Brand Creator Calendar//EN",
+        "PRODID:-//Imprint//Muse Calendar//EN",
         "CALSCALE:GREGORIAN",
     ]
     written = skipped = 0

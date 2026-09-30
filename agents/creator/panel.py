@@ -1,4 +1,4 @@
-"""Brand Creator workspace and its guarded drafting/teaser lifecycles.
+"""Muse workspace and its guarded drafting/teaser lifecycles.
 
 Phase 4 extraction: the profile form, compose controls and the six tabs
 (Draft, Calendar, Earnings, Voice, Media, Agency) and every

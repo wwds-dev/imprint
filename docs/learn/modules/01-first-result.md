@@ -12,7 +12,7 @@
 
 ## Walkthrough
 
-1. Open **Author → Book Author** and create a project named `Learning test`.
+1. Open **Author → Quill** and create a project named `Learning test`.
 2. Set **Title**, **Author**, and **Type**. Open **Book Profile**, add a concrete
    hook and target reader, then press **Save Profile**.
 3. Inspect the provider and model menus. The provider badge identifies the best

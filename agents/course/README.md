@@ -1,4 +1,4 @@
-# Course Generator agent
+# Primer agent
 
 Owns the CLI pipeline that turns a topic into an outline, lessons, slides,
 narration, optional avatar video and a packaged course.  Its public API is

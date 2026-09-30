@@ -1,4 +1,4 @@
-"""Background workers owned by the Video & Ad Generator workspace.
+"""Background workers owned by the Reel workspace.
 
 The submit-and-wait workers live in ui/workers.py; this module holds the
 resume side: finishing a provider job that outlived the process.

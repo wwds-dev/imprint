@@ -2,6 +2,7 @@ import json
 import sqlite3
 from pathlib import Path
 
+from agents.catalog import AGENT_SPECS
 from services.runtime_paths import resource_base, user_data_base
 
 # Writable base: project root in dev, ~/Library/Application Support/Imprint when frozen.
@@ -789,21 +790,20 @@ def _purge_split_agents(conn: sqlite3.Connection) -> None:
 
 
 def _sync_agent_labels(conn: sqlite3.Connection) -> None:
-    """Ensure built-in agents' DB labels match the current brand names shown in the GUI."""
-    rename_map = {
-        "chat":        "Studio Assistant",
-        "fiverr":      "Brand & Logo Designer",
-        "author":      "Book Author",
-        "manuscript":  "Publishing Manager",
-        "music":       "Music Artist Generator",
-        "webdesign":   "Web Developer",
-        "audiobook":   "Audiobook Producer",
-        "creator":     "Brand Creator",
-        "video":       "Video & Ad Generator",
-        "social":      "Social Media Campaign Manager",
-    }
-    for name, label in rename_map.items():
-        conn.execute("UPDATE agents SET label = ? WHERE name = ?", (label, name))
+    """Bring built-in agents' DB labels up to the catalog's current labels.
+
+    Read from ``agents.catalog`` rather than a map kept here: labels have been
+    renamed twice now, and a hand-copied table is one launch away from telling
+    a user's database something the GUI no longer says. This runs on every
+    ``init_db()``, so an existing install re-labels itself on the next launch
+    rather than needing a migration. Agents with no workspace (the CLI-only
+    and internal ones) have no row to update.
+    """
+    for spec in AGENT_SPECS:
+        if spec.workspace is None:
+            continue
+        conn.execute("UPDATE agents SET label = ? WHERE name = ?",
+                     (spec.label, spec.key))
     conn.commit()
 
 
@@ -928,7 +928,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
     agents = [
         {
             "name": "chat",
-            "label": "Studio Assistant",
+            "label": "Chat",
             "description": "General-purpose conversation with saved project history and budgeted provider routing.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -939,7 +939,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "author",
-            "label": "Book Author",
+            "label": "Quill",
             "description": "Long-form creative writing agent for fiction drafting, outlining, character development, and storytelling.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -950,7 +950,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "webdesign",
-            "label": "Web Developer",
+            "label": "Sitebuilder",
             "description": "HTML/CSS/JS generation, layout advice, and front-end design guidance.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -961,7 +961,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "music",
-            "label": "Music Artist Generator",
+            "label": "Label",
             "description": "Music analysis, mood-based recommendations, genre exploration, artist deep-dives, and discovery.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -972,7 +972,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "fiverr",
-            "label": "Brand & Logo Designer",
+            "label": "Stamp",
             "description": "Fiverr freelancer agent — generates logo concepts via current OpenAI GPT Image models, writes professional delivery messages, and creates Fiverr gig descriptions.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -983,7 +983,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "audiobook",
-            "label": "Audiobook Producer",
+            "label": "Booth",
             "description": "Turn PDF, EPUB, TXT and MOBI books into MP3 audiobooks with OpenAI text-to-speech, and play them back with resume.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -994,7 +994,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "social",
-            "label": "Social Media Campaign Manager",
+            "label": "Herald",
             "description": "Public-funnel promotion for anything the studio made — per-platform drafting, a posting schedule, and direct posting where the platform's API allows it.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -1005,7 +1005,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "video",
-            "label": "Video & Ad Generator",
+            "label": "Reel",
             "description": "Topic to finished video — script, narration, captions, generated visuals, Ken Burns motion, music and thumbnail. Runs the vidforge pipeline in-process. Long-form for YouTube or a vertical clip for social.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -1016,7 +1016,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "creator",
-            "label": "Brand Creator",
+            "label": "Muse",
             "description": "Shared content production for every venture — concepts, captions, campaigns, posting plans, promotional assets, calendars, and performance feedback.",
             # higgsfield is the video renderer, not a chat provider, but it is a paid
             # backend the guard authorises against and so has to be permitted here.

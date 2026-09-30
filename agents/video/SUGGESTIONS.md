@@ -1,4 +1,4 @@
-# Video & Ad Generator — Suggestions
+# Reel — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 

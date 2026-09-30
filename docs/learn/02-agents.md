@@ -32,7 +32,7 @@ The status pill reports **Ready**, **Running**, **Blocked**, or a diagnostic
 state. The right rail separates four questions: is the system healthy, where
 will this route, which keys exist, and how much has been spent?
 
-## Author → Book Author (`author`)
+## Author → Quill (`author`)
 
 ![Draft workspace](img/workspace-draft.png)
 
@@ -76,7 +76,7 @@ claims, quotations, and metadata as proposals that require verification.
 **Maximum-leverage pattern:** lock the profile → approve the outline → draft
 scene by scene → edit → generate packaging from the approved manuscript.
 
-## Author → Publishing Manager (`manuscript`)
+## Author → Press (`manuscript`)
 
 ![Publisher agent](img/agent-manuscript.png)
 
@@ -95,7 +95,7 @@ Use **Graphic** or **Short** on a calendar row to create that row's asset. Expor
 the calendar CSV as a manual publishing queue. Imported reports are observations;
 model answers are interpretations.
 
-## Audio + Music → Audiobook Producer (`audiobook`)
+## Audio + Music → Booth (`audiobook`)
 
 ### Convert tab
 
@@ -121,7 +121,7 @@ and speed control operate the selected file. **Start Over** deliberately clears
 its saved position; **Show in Finder** reveals the file. Position is stored by
 path every few seconds and completed books restart next time.
 
-## Audio + Music → Music Artist Generator (`music`)
+## Audio + Music → Label (`music`)
 
 ![Music planning](img/agent-music.png)
 
@@ -140,7 +140,7 @@ Music is a release-planning agent, not an audio generator.
 Items marked **AI OUTPUT — COPY-PASTE READY** are drafts. Items marked **HUMAN
 ACTION REQUIRED** are real accounts, registrations, rights checks, or uploads.
 
-## Video + Ads → Video & Ad Generator (`video`)
+## Video + Ads → Reel (`video`)
 
 ![Video generator](img/agent-video.png)
 
@@ -180,7 +180,7 @@ OpenAI's Sora API is scheduled to end on 24 September 2026. Imprint removed
 the Sora adapter ahead of the cutoff; use Gemini, Qwen or Higgsfield for a
 direct clip.
 
-## Social → Social Media Campaign Manager (`social`)
+## Social → Herald (`social`)
 
 ![Social workspace](img/agent-social.png)
 
@@ -202,7 +202,7 @@ manual completion, and Post Now is available only for configured integrations.
 On **Accounts**, readiness explains why a platform can post or is draft-only.
 Nothing publishes unattended.
 
-## Web → Web Developer (`webdesign`)
+## Web → Sitebuilder (`webdesign`)
 
 ![Site Builder](img/agent-webdesign.png)
 
@@ -220,7 +220,7 @@ Always test the exported page at narrow and wide widths, with keyboard focus,
 and with real copy. Generated code is a starting implementation, not a deploy
 approval.
 
-## Brand Design → Brand & Logo Designer (`fiverr`)
+## Brand Design → Stamp (`fiverr`)
 
 ![Client Gigs](img/agent-fiverr.png)
 
@@ -239,7 +239,7 @@ approval.
 Do not present raw generations as finished identity work. Check legibility,
 trademark conflicts, originality, formats, and the buyer's actual brief.
 
-## Brand Creator → Brand Creator (`creator`)
+## Brand Content → Muse (`creator`)
 
 ![Creator workspace](img/agent-creator.png)
 

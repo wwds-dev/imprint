@@ -1,4 +1,4 @@
-"""Background worker threads owned by the Publishing Manager workspace.
+"""Background worker threads owned by the Press workspace.
 
 Moved here from ui/workers.py with the shorts pipeline: the host still
 holds each instance as ``host.shorts_worker`` so the umbrella shutdown

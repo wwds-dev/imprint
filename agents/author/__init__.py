@@ -1,4 +1,4 @@
-"""Public interface for the Book Author agent."""
+"""Public interface for the Quill agent."""
 
 from .agent import AuthorAgent
 

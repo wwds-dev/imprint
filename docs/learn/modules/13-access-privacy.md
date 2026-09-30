@@ -18,7 +18,7 @@
 | Route is eligible | Credential, permission, capability, availability, and budget checks passed. |
 
 The **API KEYS** rail reports detected readiness. It is not the secret editor.
-The generic Studio Assistant exposes local/hybrid/cloud execution policy and
+The generic Chat exposes local/hybrid/cloud execution policy and
 provider permission controls; dedicated agent selectors expose only their real
 implemented routes and recommendations.
 

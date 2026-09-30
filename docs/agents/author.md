@@ -2,7 +2,7 @@
 
 `key: author` · class: `agents/author/agent.py → AuthorAgent` · panel: `build_author_panel()` · handlers: `author_write()`, `author_continue()`, `author_pub_generate()`, `author_mkt_generate()`
 
-> Hands off where this agent's Publish/Market modes stop short (real sales data, quote content, launch checklist): see the **Publishing Manager**, `key: manuscript` — [manuscript.md](manuscript.md).
+> Hands off where this agent's Publish/Market modes stop short (real sales data, quote content, launch checklist): see the **Press**, `key: manuscript` — [manuscript.md](manuscript.md).
 
 ## What it does
 A three-mode writing workspace for novelists and non-fiction authors alike:
@@ -40,7 +40,7 @@ Export (`AuthorPanel.export_book()`) hands the raw Draft text to `agents/author/
 
 With a named Project selected, **Save Draft** and each successful export also
 record a durable Project link to the chosen file. Deleting the Project removes
-that link but never deletes the external file. Publishing Manager can copy the
+that link but never deletes the external file. Press can copy the
 current working draft into Quote Finder via **Use Project Draft**; check and
 approve the text yourself before treating it as publication-ready.
 

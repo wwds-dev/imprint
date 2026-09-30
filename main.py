@@ -84,7 +84,9 @@ from agents.author import AuthorPanel
 from agents.creator import (
     CreatorAgent, ConsentError, PROMO_CHANNELS,
 )
-from agents.catalog import AGENT_SPECS, workspace_map
+from agents.catalog import (
+    AGENT_SPECS, AGENTS_BY_KEY, workspace_description, workspace_map,
+)
 from agents.recommendation_profiles import profile_for
 from services.recommendations import RecommendationContext, RecommendationEngine
 from services.recommendations.catalog import (
@@ -115,6 +117,10 @@ CUSTOM_PANELS = tuple(spec.key for spec in AGENT_SPECS if spec.panel)
 WORKSPACE_LABELS = {
     spec.key: spec.label for spec in AGENT_SPECS if spec.workspace is not None
 }
+
+# Height of the workspace-description strip, taken out of HEADER_HEIGHT so the
+# header band as a whole does not grow and steal room from the panels.
+WORKSPACE_STRIP_HEIGHT = 20
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 AGENTS_FILE = CONFIG_DIR / "agents.json"
@@ -1282,6 +1288,7 @@ class GodAI(QWidget):
         body.addWidget(right_widget)
 
         outer_layout.addWidget(header)
+        outer_layout.addWidget(self.build_workspace_description())
         outer_layout.addLayout(body, 1)
 
         # Apply the stylesheet before installing the custom combo delegate.
@@ -1293,6 +1300,26 @@ class GodAI(QWidget):
         # the fields off down the right-hand edge.
         let_combos_shrink(self)
 
+    def build_workspace_description(self) -> QWidget:
+        """One line under the tab bar saying what the open workspace is for.
+
+        The header itself is a fixed-height single row that ui/header_fit.py
+        measures, so this is its own strip beneath it rather than a second
+        line inside it. It exists because agent labels are codenames now:
+        "Brand Content" holding "Muse" tells a new user nothing on its own.
+        """
+        strip = QFrame()
+        strip.setObjectName("WorkspaceDescriptionStrip")
+        strip.setFixedHeight(WORKSPACE_STRIP_HEIGHT)
+        layout = QHBoxLayout(strip)
+        layout.setContentsMargins(LG, 0, LG, 3)
+        layout.setSpacing(0)
+        self.workspace_description_label = QLabel("")
+        self.workspace_description_label.setObjectName("WorkspaceDescription")
+        layout.addWidget(self.workspace_description_label)
+        layout.addStretch()
+        return strip
+
     def build_header_bar(self) -> QWidget:
         """Brand, mode tabs, status and utilities on one line.
 
@@ -1303,7 +1330,9 @@ class GodAI(QWidget):
         """
         header = QFrame()
         header.setObjectName("AppHeader")
-        header.setFixedHeight(HEADER_HEIGHT)
+        # The description strip below shares this band's height rather than
+        # adding to it — see build_workspace_description.
+        header.setFixedHeight(HEADER_HEIGHT - WORKSPACE_STRIP_HEIGHT)
         row = QHBoxLayout(header)
         row.setContentsMargins(LG, 0, LG, 0)
         row.setSpacing(0)
@@ -1810,7 +1839,7 @@ class GodAI(QWidget):
         self.audiobook_panel.reveal_selected()
 
     def build_author_panel(self):
-        """Compose the Book Author workspace owned by its agent package."""
+        """Compose the Quill panel owned by its agent package."""
         self.author_panel = AuthorPanel(self)
 
     # ── Music Agent Panel ─────────────────────────────────────────────────────
@@ -1840,7 +1869,7 @@ class GodAI(QWidget):
 
     # ── Social ───────────────────────────────────────────────────────────────
     def build_social_panel(self):
-        """Compose the Social workspace owned by its agent package."""
+        """Compose the Herald panel owned by its agent package."""
         self.social_panel = SocialPanel(self)
 
     # ── Social handlers ──────────────────────────────────────────────────────
@@ -1870,7 +1899,7 @@ class GodAI(QWidget):
 
     # ── Video (vidforge) ─────────────────────────────────────────────────────
     def build_video_panel(self):
-        """Compose the Video workspace owned by its agent package."""
+        """Compose the Reel panel owned by its agent package."""
         self.video_panel = VideoPanel(self)
 
     # ── Video handlers ───────────────────────────────────────────────────────
@@ -1897,7 +1926,7 @@ class GodAI(QWidget):
 
     # ── Creator (shared content production) ──────────────────────────────────
     def build_creator_panel(self):
-        """Compose the Brand Creator workspace owned by its agent package."""
+        """Compose the Muse panel owned by its agent package."""
         self.creator_panel = CreatorPanel(self)
 
     # ── Creator handlers ─────────────────────────────────────────────────────
@@ -2006,7 +2035,7 @@ class GodAI(QWidget):
     # Compatibility delegates: the workspace and its lifecycle live in
     # agents/author/panel.py; these keep existing umbrella bindings, the
     # global Stop chain and the layout tests' entry points stable. The
-    # next-step advisor below stays on the host because Publishing Manager
+    # next-step advisor below stays on the host because Press
     # shares its banner and its todo store.
     def author_load_models(self):
         self.author_panel.load_models()
@@ -2042,7 +2071,7 @@ class GodAI(QWidget):
 
         panel = getattr(self, "author_panel", None)
         if panel is None:
-            # Advisor asked before the Book Author workspace exists.
+            # Advisor asked before the Quill workspace exists.
             return ("Start here — fill in Title, Author and Type in the Project Bar, then open "
                     "Book Profile and click Save Profile. Everything downstream reuses it.")
         profile = panel.get_book_profile()
@@ -2117,7 +2146,7 @@ class GodAI(QWidget):
 
     # ── Manuscript panel builder ──────────────────────────────────────────────
     def build_manuscript_panel(self):
-        """Compose the Publishing Manager workspace owned by its package."""
+        """Compose the Press panel owned by its package."""
         self.manuscript_panel = ManuscriptPanel(self)
 
     # ── Manuscript handlers ───────────────────────────────────────────────────
@@ -2563,6 +2592,10 @@ class GodAI(QWidget):
         self._syncing_workspace_tabs = True
         self.workspace_tabs.setCurrentIndex(target_index)
         self._syncing_workspace_tabs = False
+
+        if hasattr(self, "workspace_description_label"):
+            self.workspace_description_label.setText(
+                workspace_description(workspace_name))
 
         agents_in_workspace = WORKSPACES[workspace_name]
         for name, button in self.workspace_tool_buttons.items():
@@ -3973,11 +4006,11 @@ class GodAI(QWidget):
         """
 
         # Build dialog
-        agent_titles = {
-            "chat": "CHAT", "fiverr": "ATELIER", "creator": "CREATOR",
-            "author": "MANUSCRIPT", "manuscript": "PUBLISHER",
-            "music": "MAESTRO", "webdesign": "SITE BUILDER", "audiobook": "NARRATOR", }
-        title = agent_titles.get(agent_name, agent_name.upper())
+        # From the catalog, never a second copy: the map that used to live here
+        # had drifted into titling `author` "MANUSCRIPT" while the `manuscript`
+        # agent was "PUBLISHER", and it listed no video, social or course.
+        spec = AGENTS_BY_KEY.get(agent_name)
+        title = (spec.label if spec else agent_name.title()).upper()
 
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Docs — {title}")

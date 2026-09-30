@@ -1,4 +1,4 @@
-# Publishing Manager agent (`agents.manuscript`)
+# Press agent (`agents.manuscript`)
 
 Owns finished-manuscript preparation: metadata, export, KDP/PublishDrive data,
 quote discovery, launch planning and sales interpretation.  Its public API is
@@ -76,7 +76,7 @@ Run focused coverage with `pytest tests/test_book_pipeline.py`.
   adds up) — and a `provider_affinity` table ranking OpenAI (.94) above
   Anthropic (.92), DeepSeek (.90), Gemini (.88), Qwen (.84) and Kimi (.83).
 
-- **`panel.py`** — owns the complete Publishing Manager workspace: Overview
+- **`panel.py`** — owns the complete Press workspace: Overview
   (metrics, Ask, publishing todos, Connections status), Quote Finder, Quote
   Graphics, Shorts and Calendar tabs, moved here from `main.py` in the Phase 4
   extraction. Request tokens live on this panel — "manuscript" is shared by

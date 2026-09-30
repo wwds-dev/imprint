@@ -1,11 +1,11 @@
-"""Book Author workspace and its guarded write/publish/market lifecycles.
+"""Quill workspace and its guarded write/publish/market lifecycles.
 
 Phase 4 extraction: the project bar, book profile, the Write page
 (compose deck, manuscript tabs, document bar) and the Publish & Market
 pages with every handler moved here from main.py. The host supplies
 shared budget authorization, usage records, the chat-worker factory and
 the cross-panel next-step advisor (`_refresh_next_step_tip` stays on the
-umbrella — Publishing Manager shares its banner); the three workers stay
+umbrella — Press shares its banner); the three workers stay
 host attributes so the global Stop chain and shutdown sweep keep seeing
 them.
 

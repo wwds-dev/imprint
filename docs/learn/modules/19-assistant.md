@@ -1,4 +1,4 @@
-# Studio Assistant
+# Chat
 
 > **Outcome:** get one bounded answer, check it against your own acceptance
 > criteria, and keep or discard the conversation deliberately.

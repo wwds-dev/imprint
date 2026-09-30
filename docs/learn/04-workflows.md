@@ -23,9 +23,9 @@ the background.
 ### Run
 
 1. Record the brief before generating anything.
-2. For a logo, open **Brand Design → Brand & Logo Designer**, set the business,
+2. For a logo, open **Brand Design → Stamp**, set the business,
    industry, style, colours, notes, and a small concept count. For a page, open
-   **Web → Web Developer** and state content, interactions, responsive behaviour,
+   **Web → Sitebuilder** and state content, interactions, responsive behaviour,
    and checks.
 3. Estimate and authorise the request.
 4. Generate a first pass. Reject unusable work before polishing it.
@@ -63,7 +63,7 @@ test.
 ### Run
 
 1. Create one project. Complete and save the **Book Profile**.
-2. In **Author → Book Author → Outline**, generate structure. Edit until every section
+2. In **Author → Quill → Outline**, generate structure. Edit until every section
    earns its place; structural repair is cheapest here.
 3. Draft one scene or section at a time. Maintain Characters and World Notes for
    fiction; maintain claims and source notes outside the prose for non-fiction.
@@ -79,7 +79,7 @@ test.
 9. Publish through the platform's own controls. Imprint does not submit the book.
 10. After the observation window, import KDP/PublishDrive actuals and record
     source-specific campaign results.
-11. Only if the text and economics justify it, use **Audio + Music → Audiobook Producer**:
+11. Only if the text and economics justify it, use **Audio + Music → Booth**:
     convert a sample, approve voice/pronunciation, estimate the full book, then
     run the conversion.
 
@@ -150,7 +150,7 @@ disclosed synthetic persona.
 
 ### Run
 
-1. In **Brand Creator**, select or create the correct profile. Managed profiles
+1. In **Muse**, select or create the correct profile. Managed profiles
    require authorisation; personas require disclosure. Add representative Voice
    samples.
 2. Write the brief: one proposition, one audience segment, one price, and the
@@ -179,7 +179,7 @@ retention or collected receipts does not earn automation.
 
 **Trigger:** a finished, rights-cleared recording has a release date.
 
-1. In **Audio + Music → Music Artist Generator**, enter the artist, genre, release type, distributor,
+1. In **Audio + Music → Label**, enter the artist, genre, release type, distributor,
    audience, and an accurate description of the recording.
 2. Generate the five-part plan. Save it as a working checklist.
 3. Review profile copy, cover specification, identifiers, distributor choice,

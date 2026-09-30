@@ -1,4 +1,4 @@
-"""Public interface for the internal Studio Assistant."""
+"""Public interface for the internal Chat."""
 
 from .agent import ChatAgent
 

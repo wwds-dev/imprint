@@ -1,4 +1,4 @@
-# Brand Creator
+# Muse
 
 Owns shared content production for Imprint ventures: voice profiles, concepts,
 captions, campaigns, promotional assets, calendars, account consent and
@@ -79,7 +79,7 @@ Calendar and Media default to all work under the selected account; each has a
   Anthropic (.98) and OpenAI (.96) above Gemini (.91), Qwen (.85), Kimi (.83)
   and DeepSeek (.78) for this task type.
 
-- **`panel.py`** — owns the complete Brand Creator workspace: the profile
+- **`panel.py`** — owns the complete Muse workspace: the profile
   form, consent-aware compose controls, and all six tabs (Draft, Calendar,
   Earnings, Voice, Media, Agency) with every handler, moved here
   from `main.py` in the Phase 4 extraction. Request tokens live on the

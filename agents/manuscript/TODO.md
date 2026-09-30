@@ -1,4 +1,4 @@
-# Publishing Manager — TODO
+# Press — TODO
 
 > **Legend** — priority `P0` critical · `P1` high · `P2` normal · `P3` low
 > categories `security` `bug` `feature` `performance` `design` `docs` `testing` `infra` `research`

@@ -1,4 +1,4 @@
-# Studio Assistant
+# Chat
 
 General-purpose conversation is available in Imprint's **Assistant** workspace.
 It uses the shared `normal_panel`, not a duplicate agent panel. Its public API

@@ -1,4 +1,4 @@
-# Social Media Campaign Manager — Suggestions
+# Herald — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 

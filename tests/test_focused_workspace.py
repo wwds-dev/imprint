@@ -37,7 +37,7 @@ def test_every_workspace_agent_has_a_panel():
     import main
 
     listed = {agent for agents in main.WORKSPACES.values() for agent in agents}
-    # Studio Assistant deliberately uses the shared normal_panel.
+    # Chat deliberately uses the shared normal_panel.
     missing = sorted(a for a in listed if a not in main.CUSTOM_PANELS
                      and a != "chat")
     assert not missing, f"workspace agents with no panel: {missing}"
@@ -49,7 +49,7 @@ def test_every_workspace_agent_has_a_panel():
 def test_creator_is_its_own_workspace():
     import main
 
-    assert main.WORKSPACES["Brand Creator"] == ("creator",)
+    assert main.WORKSPACES["Brand Content"] == ("creator",)
 
 
 def test_registry_exposes_only_focused_agents():

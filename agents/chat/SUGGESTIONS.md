@@ -1,4 +1,4 @@
-# Studio Assistant — Suggestions
+# Chat — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 

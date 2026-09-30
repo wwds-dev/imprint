@@ -734,11 +734,23 @@ GLOBAL_STYLESHEET = f"""
         /* Header and rails are one surface lifted off the page, separated by a
            hairline rather than a gap. Three floating panes with gutters between
            them read as three apps; one surface with divisions reads as one. */
+        /* No bottom hairline here: WorkspaceDescriptionStrip sits directly
+           below it on the same surface and carries the band's single line.
+           Both drawing one put two hairlines through the middle of the band. */
         QFrame#AppHeader {{
+            background-color: {SURFACE};
+            border: none;
+        }}
+        /* The workspace description sits on its own strip under the header,
+           because AppHeader is a fixed-height single row that header_fit
+           measures. It continues the header's surface and carries the
+           hairline, so the two read as one band rather than two bars. */
+        QFrame#WorkspaceDescriptionStrip {{
             background-color: {SURFACE};
             border: none;
             border-bottom: 1px solid {BORDER};
         }}
+        QLabel#WorkspaceDescription {{ color: {TEXT_MUTE}; font-size: 11px; }}
         QFrame#RailLeft {{
             background-color: {SURFACE};
             border: none;

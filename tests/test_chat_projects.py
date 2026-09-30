@@ -298,7 +298,7 @@ def test_switching_projects_restores_each_manuscript(app, tmp_path, monkeypatch)
         assert export_path.is_file()
         assert list_for_project("book-a", kinds=("export_epub",))[0]["path"] == \
             str(export_path)
-        # The Publishing Manager reads the same project's newest editor text,
+        # The Press reads the same project's newest editor text,
         # including a change made before the autosave timer has elapsed.
         author.author_draft_box.setPlainText("The latest chapter")
         window.manuscript_panel.use_project_draft()

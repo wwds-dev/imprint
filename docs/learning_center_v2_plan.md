@@ -53,7 +53,7 @@ The highest-impact problems are:
 4. The fixed navigation, header, tables, and full-window screenshots make the
    minimum-size experience crowded and create competing scroll areas.
 5. The content describes controls that are hidden or have changed. In
-   particular, it teaches the old Studio Assistant `Use Recommended` flow
+   particular, it teaches the old Chat `Use Recommended` flow
    instead of the visible `BEST FIT` / `BEST AVAILABLE` provider and model
    recommendations. Settings/key guidance has also drifted.
 6. Important Creator, Publish, Social, Video, and Audiobook states are

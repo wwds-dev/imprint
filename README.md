@@ -34,7 +34,7 @@ hasn't been done.
    - [Site Builder Agent](#75-site-builder-agent)
    - [Narrator Agent](#76-narrator-agent)
    - [Publisher Agent](#77-publisher-agent)
-   - [Course Generator (CLI)](#78-course-generator-cli)
+   - [Primer (CLI)](#78-course-generator-cli)
    - [Video Agent](#79-video-agent)
    - [Social Agent](#710-social-agent)
    - [Creator Agent](#711-creator-agent)
@@ -87,7 +87,7 @@ local (Ollama) and cloud (Anthropic, OpenAI, DeepSeek, Gemini). It provides:
 - Real-time cost estimation and post-request cost logging.
 - A run log that records the full lifecycle of every AI request.
 - A **Narrator** agent that converts ebooks to MP3 using OpenAI TTS, with progress tracking and quota-failure detection.
-- A standalone, GUI-less **Course Generator** (`run_course.py`) that turns a topic into a packaged mini-course — slides, narration, and an avatar-presented video (see §5.8).
+- A standalone, GUI-less **Primer** (`run_course.py`) that turns a topic into a packaged mini-course — slides, narration, and an avatar-presented video (see §5.8).
 - A full Settings panel for configuring pricing, budgets, agents, and tools without touching any file.
 
 The application is entirely self-contained: no server, no web interface, no external database. All data is stored in a local SQLite database (`data/imprint.db`).
@@ -125,9 +125,9 @@ tests run every panel down to that size.
 
 ## 3. Header Bar — Modes and Chrome
 
-**Mode tabs** — `Author` · `Audio + Music` · `Video + Ads` · `Social` · `Web` · `Brand Design` · `Brand Creator` · `Assistant`. Each opens the
+**Mode tabs** — `Author` · `Audio + Music` · `Video + Ads` · `Social` · `Web` · `Brand Design` · `Brand Content` · `Assistant`. Each opens the
 last tool used in that workspace. Where a workspace holds two related tools
-(Author → Book Author / Publishing Manager, Audio + Music → Audiobook Producer / Music Artist Generator) a second tab row appears
+(Author → Quill / Press, Audio + Music → Booth / Label) a second tab row appears
 above the page title.
 
 They are underline tabs, not filled pills: they are navigation, and a pill here
@@ -157,10 +157,10 @@ pause, on project switch, and on app close. The title and byline in Write and
 the Project manager refer to the same record. Audiobook, Video and Creator
 now link supported outputs and content to this Project ID. Saving a Write
 draft or exporting an EPUB, DOCX or PDF also records a project link to that
-file. Publishing Manager's **Use Project Draft** loads the selected project's
+file. Press's **Use Project Draft** loads the selected project's
 current Write text into Quote Finder on request and uses its byline as
 attribution. This is a handoff, not an approval step; the source draft remains
-editable. In Publishing Manager, **Approve Write Draft…** captures an immutable
+editable. In Press, **Approve Write Draft…** captures an immutable
 numbered version after confirmation. Select it and click **Use Approved
 Version** to load the exact approved text and byline; later Write edits do not
 change it. **Export Approved…** creates a new EPUB, DOCX or PDF from that
@@ -173,7 +173,7 @@ recording the note. This is a self-reported record, not an upload or retailer
 verification. Project Overview shows approval, export and submission counts
 and indicates when Write has changed since approval.
 See `docs/projects_roadmap.md` for the remaining cross-workspace work.
-Audiobook Producer's **Use Project Book** selects a linked Write TXT/EPUB/PDF
+Booth's **Use Project Book** selects a linked Write TXT/EPUB/PDF
 without moving it into the global input folder; a successful conversion links
 the MP3 to the Project that was active at Start. Listen defaults to all
 audiobooks and can filter to the current Project.
@@ -419,7 +419,7 @@ The output box is also used by the Audiobook agent to display conversion logs an
 
 ## 7. Agents
 
-Imprint ships with 7 first-party GUI agents, each defined by its own Python class in `agents/` and a tailored system prompt, plus one CLI-only Course Generator with no left-panel entry at all (§5.8). The left-panel navigator groups the GUI agents into three collapsible categories — General, Creative, Gigs; clicking an agent button either loads the standard Chat panel or swaps the centre area for a fully custom GUI built for that workflow. Most agents support all of Ollama (local), Anthropic, OpenAI, DeepSeek, and Gemini — Narrator is the exception, since it only ever calls OpenAI TTS (§5.6) — and most expose a Help button that opens this documentation at the relevant section. Anthropic Claude (Sonnet or Opus) typically gives the most structured output for the writing/publishing agents; Ollama works offline at no cost; the other cloud providers are interchangeable and chosen by taste, latency, or budget.
+Imprint ships with 7 first-party GUI agents, each defined by its own Python class in `agents/` and a tailored system prompt, plus one CLI-only Primer with no left-panel entry at all (§5.8). The left-panel navigator groups the GUI agents into three collapsible categories — General, Creative, Gigs; clicking an agent button either loads the standard Chat panel or swaps the centre area for a fully custom GUI built for that workflow. Most agents support all of Ollama (local), Anthropic, OpenAI, DeepSeek, and Gemini — Narrator is the exception, since it only ever calls OpenAI TTS (§5.6) — and most expose a Help button that opens this documentation at the relevant section. Anthropic Claude (Sonnet or Opus) typically gives the most structured output for the writing/publishing agents; Ollama works offline at no cost; the other cloud providers are interchangeable and chosen by taste, latency, or budget.
 
 ### 7.1 Chat Agent
 
@@ -497,7 +497,7 @@ Chat uses the **standard `normal_panel`** described in Chapter 4 (no custom GUI)
 
 ### 7.2 Atelier Agent
 
-**Left-panel button:** Brand & Logo Designer  (category: **Gigs**)
+**Left-panel button:** Stamp  (category: **Gigs**)
 
 A logo-design freelancer assistant. The Fiverr agent generates **GPT Image logo concepts**, a polished **delivery message** for the client, and a complete **Fiverr gig description** — all from a single client brief form. Image generation runs through OpenAI's current Images API; the text deliverables can use any provider.
 
@@ -615,7 +615,7 @@ Live status appears as a line under the action row.
 
 ### 7.3 Manuscript Agent
 
-**Left-panel button:** Book Author  (category: **Creative**)
+**Left-panel button:** Quill  (category: **Creative**)
 
 A full creative writing suite for novelists, screenwriters, short-story writers, and bloggers. The panel has **three distinct modes** accessed via a toggle at the top: a manuscript workspace for drafting, and a Publish & Market system for producing everything needed to take a finished book to market — from query letters and synopses to Amazon copy and Instagram posts.
 
@@ -880,7 +880,7 @@ Platform format rules enforced by the Market system prompt:
 
 ### 7.4 Maestro Agent
 
-**Left-panel button:** Music Artist Generator  (category: **Creative**)
+**Left-panel button:** Label  (category: **Creative**)
 
 A Spotify Artist Setup specialist that produces a complete, copy-paste-ready release-and-monetisation plan for independent artists. The agent's system prompt forces every response to mark **[AI OUTPUT — COPY-PASTE READY]** vs **[HUMAN ACTION REQUIRED]** so you always know which bits to paste and which require manual steps in Spotify for Artists, DistroKid, etc.
 
@@ -996,7 +996,7 @@ full step-by-step.
 
 ### 7.5 Site Builder Agent
 
-**Left-panel button:** Web Developer  (category: **Creative**)
+**Left-panel button:** Sitebuilder  (category: **Creative**)
 
 A front-end design and prototyping agent. Given a brief, Site Builder produces HTML / CSS / JS for landing pages, portfolios, dashboards, forms, blogs, or single components. The result is shown in three read-only review tabs and can be copied or saved as an `.html` file. Check external assets and framework dependencies before treating it as self-contained.
 
@@ -1104,7 +1104,7 @@ The panel shows the extracted HTML and any inline `<style>` / `<script>` blocks 
 
 ### 7.6 Narrator Agent
 
-**Left-panel button:** Audiobook Producer  (category: **Creative**)
+**Left-panel button:** Booth  (category: **Creative**)
 
 A separate workflow that converts ebook files into MP3 audiobooks using OpenAI's Text-to-Speech API. The Audiobook agent is unusual in two ways: (1) it does not stream LLM output — it runs a **conversion worker** as a subprocess, and (2) it has no system-prompt-style "agent class" beyond a thin **AudiobookConnector** that parses configuration input. Its Convert and Listen workspace lives in `agents/audiobook/panel.py`; the shared conversion engine is `services/narrator/converter.py`.
 
@@ -1262,7 +1262,7 @@ so the next play starts over instead of resuming and stopping immediately.
 
 ### 7.7 Publisher Agent
 
-**Left-panel button:** Publishing Manager  (category: **Creative**)
+**Left-panel button:** Press  (category: **Creative**)
 
 Picks up where the Manuscript (writing studio) agent stops: real sales data, launch-content generation, and a publishing checklist. Five tabs: **Overview**, **Quote Finder**, **Quote Graphics**, **Shorts**, **Calendar**.
 
@@ -1425,7 +1425,7 @@ Picks up where the Manuscript (writing studio) agent stops: real sales data, lau
 
 ---
 
-### 7.8 Course Generator (CLI)
+### 7.8 Primer (CLI)
 
 **No left-panel button — this one runs from the terminal, not the GUI.**
 
@@ -1464,7 +1464,7 @@ gitignored — open `index.html` in a browser to review the generated course.
 
 ### 7.9 Video Agent
 
-**Mode tab:** Video & Ad Generator
+**Mode tab:** Reel
 
 Topic to finished video: script, narration, aligned captions, generated
 visuals, Ken Burns motion, music, loudness normalisation and a thumbnail.
@@ -1521,7 +1521,7 @@ Project. Switching Projects updates that view without relabelling old clips.
 
 ### 7.10 Social Agent
 
-**Mode tab:** Social Media Campaign Manager
+**Mode tab:** Herald
 
 The public funnel for everything else in the studio. A **campaign** is one
 subject — a book, a release, a product, a gig — and its goal; posts are written
@@ -2257,7 +2257,7 @@ imprint/
     └── shorts/                    # Generated vertical MP4s
 ```
 
-> `output/` (including `output/courses/` from the Course Generator, §5.8) is
+> `output/` (including `output/courses/` from the Primer, §5.8) is
 > gitignored. Anything you want to keep — exported books, launch copy,
 > generated courses — should be saved outside it.
 
@@ -2809,9 +2809,9 @@ Recurring revenue compounds — once published, content keeps earning. These age
 
 ---
 
-#### Course Generator (Teachable / Gumroad / Udemy)
+#### Primer (Teachable / Gumroad / Udemy)
 
-**Agent:** 5.8 Course Generator (CLI, `run_course.py` — no left-panel button)
+**Agent:** 5.8 Primer (CLI, `run_course.py` — no left-panel button)
 
 **Income paths:**
 

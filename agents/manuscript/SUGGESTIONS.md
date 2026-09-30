@@ -1,4 +1,4 @@
-# Publishing Manager — Suggestions
+# Press — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 

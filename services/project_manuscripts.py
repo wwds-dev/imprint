@@ -1,4 +1,4 @@
-"""Immutable approved manuscript snapshots for Publishing Manager.
+"""Immutable approved manuscript snapshots for Press.
 
 The Write workspace remains editable. Approval captures its text, title and
 byline together; later edits cannot mutate a version used for publication.

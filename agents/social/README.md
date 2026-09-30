@@ -1,4 +1,4 @@
-# Social Media Campaign Manager
+# Herald
 
 Owns the public distribution funnel for work made elsewhere in Imprint:
 campaign context, platform-native drafts, variants, cadence schedules, clip

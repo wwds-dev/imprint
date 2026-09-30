@@ -1,6 +1,6 @@
 # Songs & Albums — Suno-assisted creation
 
-Open Audio + Music → Music Artist Generator → Songs & Albums. Enter a title, track count and creative
+Open Audio + Music → Label → Songs & Albums. Enter a title, track count and creative
 brief. Choose the text provider/model above, then draft songs and Suno prompts.
 This request uses Imprint's existing permission, budget and usage controls.
 

@@ -765,7 +765,7 @@ def test_workspace_names_are_never_elided(app, window):
     assert [window.workspace_tabs.tabText(i)
             for i in range(window.workspace_tabs.count())] == [
         "Author", "Audio + Music", "Video + Ads", "Social", "Web",
-        "Brand Design", "Brand Creator", "Assistant",
+        "Brand Design", "Brand Content", "Assistant",
     ]
 
 
@@ -811,7 +811,7 @@ def test_studio_assistant_workspace_opens_the_existing_chat_panel(app, window):
     app.processEvents()
     assert window.workspace_tabs.tabText(window.workspace_tabs.currentIndex()) == "Assistant"
     assert window.normal_panel.isVisible()
-    assert window.agent_title_label.text() == "Studio Assistant"
+    assert window.agent_title_label.text() == "Chat"
 
 
 def test_audiobook_selection_refreshes_the_cost_estimate(app, window):

@@ -1,4 +1,4 @@
-# Course Generator — Suggestions
+# Primer — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 

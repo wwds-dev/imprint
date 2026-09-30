@@ -26,78 +26,98 @@ class AgentSpec:
 
 AGENT_SPECS = (
     AgentSpec(
-        "author", "Book Author", "Author",
+        "author", "Quill", "Author",
         "Plan, draft and revise long-form fiction and non-fiction.",
         "agents.author",
         recommendation_profile="agents.author.recommendations",
     ),
     AgentSpec(
-        "manuscript", "Publishing Manager", "Author",
+        "manuscript", "Press", "Author",
         "Prepare, export, distribute and measure finished books.",
         "agents.manuscript",
         recommendation_profile="agents.manuscript.recommendations",
     ),
     AgentSpec(
-        "audiobook", "Audiobook Producer", "Audio + Music",
+        "audiobook", "Booth", "Audio + Music",
         "Convert books into resumable, production-ready audiobooks.",
         "agents.audiobook",
         recommendation_profile="agents.audiobook.recommendations",
     ),
     AgentSpec(
-        "music", "Music Artist Generator", "Audio + Music",
+        "music", "Label", "Audio + Music",
         "Develop songs and albums, artist identities, releases, promotion and income plans.",
         "agents.music",
         recommendation_profile="agents.music.recommendations",
     ),
     AgentSpec(
-        "video", "Video & Ad Generator", "Video + Ads",
+        "video", "Reel", "Video + Ads",
         "Script, generate, narrate and assemble long-form or vertical video.",
         "agents.video",
         recommendation_profile="agents.video.recommendations",
     ),
     AgentSpec(
-        "social", "Social Media Campaign Manager", "Social",
+        "social", "Herald", "Social",
         "Draft, schedule and publish platform-native campaign content.",
         "agents.social",
         recommendation_profile="agents.social.recommendations",
     ),
     AgentSpec(
-        "webdesign", "Web Developer", "Web",
+        "webdesign", "Sitebuilder", "Web",
         "Create responsive HTML, CSS and JavaScript experiences.",
         "agents.webdesign",
         recommendation_profile="agents.webdesign.recommendations",
     ),
     AgentSpec(
-        "fiverr", "Brand & Logo Designer", "Brand Design",
+        "fiverr", "Stamp", "Brand Design",
         "Create client-ready concepts, listings and delivery messages.",
         "agents.fiverr",
         recommendation_profile="agents.fiverr.recommendations",
     ),
     AgentSpec(
-        "creator", "Brand Creator", "Brand Creator",
+        "creator", "Muse", "Brand Content",
         "Create reusable campaigns, captions and promotional assets.",
         "agents.creator",
         recommendation_profile="agents.creator.recommendations",
     ),
     AgentSpec(
-        "course", "Course Generator", None,
+        "course", "Primer", None,
         "Produce packaged courses from the command line.",
         "agents.course", panel=False,
     ),
     AgentSpec(
-        "chat", "Studio Assistant", "Assistant",
+        "chat", "Chat", "Assistant",
         "General-purpose chat and tool-assisted conversation.",
         "agents.chat", panel=False,
         recommendation_profile="agents.chat.recommendations",
     ),
     AgentSpec(
-        "router", "Router", None,
+        "router", "Intent Router", None,
         "Internal intent classification for the umbrella runtime.",
         "agents.router", panel=False,
     ),
 )
 
 AGENTS_BY_KEY = MappingProxyType({spec.key: spec for spec in AGENT_SPECS})
+
+# One line per workspace, shown under the header tab bar. Agent labels are
+# codenames now ("Quill", "Booth", "Muse"), so a workspace name alone no
+# longer tells a new user what lives inside it. Keyed by workspace name
+# because a workspace is a grouping, not an agent, and has no spec of its own.
+WORKSPACE_DESCRIPTIONS = MappingProxyType({
+    "Author": "Write a book, then prepare, publish and track it.",
+    "Audio + Music": "Narrate books into audiobooks, and develop and release music.",
+    "Video + Ads": "Script, narrate and assemble long-form video and vertical ads.",
+    "Social": "Write, schedule and publish platform-native posts.",
+    "Web": "Build responsive pages in HTML, CSS and JavaScript.",
+    "Brand Design": "Create client-ready brand concepts, logos and delivery copy.",
+    "Brand Content": "Draft campaign content, plan it on a calendar, and render promos.",
+    "Assistant": "General-purpose chat for anything without a dedicated tool.",
+})
+
+
+def workspace_description(workspace: str) -> str:
+    """Return the line shown under a workspace tab, or "" if none is set."""
+    return WORKSPACE_DESCRIPTIONS.get(workspace, "")
 
 
 def workspace_map() -> dict[str, tuple[str, ...]]:

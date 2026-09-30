@@ -22,7 +22,7 @@ variant. Nothing here is new machinery:
 | Per-scope provider/model defaults | `save_provider_model_preference()` |
 | Registry-style config UI | the Settings dialog already edits `agents`/`tools` |
 | Shared guard for agent requests | `authorize_request()` / `record_request()` |
-| Studio Assistant request path | `send_prompt()` / `handle_chat_finished()` |
+| Chat request path | `send_prompt()` / `handle_chat_finished()` |
 
 Both request paths capture the project at authorization; a later project switch
 does not relabel an in-flight request. `ChatWorker` receives a snapshot of
@@ -172,7 +172,7 @@ database links, never the external files.
 - [x] A running Write request blocks a project switch, because its eventual
       response would otherwise land in the next project's editor.
 - [x] Saving a Write draft and exporting EPUB/DOCX/PDF records durable file
-      links under the named Project. Publishing Manager's explicit **Use
+      links under the named Project. Press's explicit **Use
       Project Draft** action loads the latest Write editor text (or linked
       saved draft) into Quote Finder and sets attribution from the byline.
       It does not silently replace Quote Finder text or approve the draft.
@@ -201,7 +201,7 @@ database links, never the external files.
       Project view while retaining the original all-items view by default.
       Switching Projects refreshes these views; standalone Video builds and
       unfiled account work remain available in All.
-- [x] Publishing Manager can explicitly approve the current Project's Write
+- [x] Press can explicitly approve the current Project's Write
       text as an immutable numbered manuscript version, then choose and load
       an approved version into Quote Finder. Working drafts remain separately
       loadable and clearly marked unapproved. Project Overview shows the

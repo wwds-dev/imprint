@@ -1,4 +1,4 @@
-# Music Artist Generator
+# Label
 
 Owns artist positioning, release setup, distribution planning, Spotify strategy
 and income-roadmap generation.  Its public API is `agents.music.MusicAgent`.

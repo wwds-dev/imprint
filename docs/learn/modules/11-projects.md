@@ -35,13 +35,13 @@ you intended to measure.
    draft count, linked outputs and scheduled Creator content in one place.
    A missing-file label means the link remains but the external file moved or
    was removed; Refresh checks its current location again.
-5. In Book Author, the selected project restores its own book profile, draft,
+5. In Quill, the selected project restores its own book profile, draft,
    outline, character and world notes. Edits save after a short pause, on
    project switch, and on app close. **Save Profile** also confirms the shared
    title and byline. **Save Draft** writes a separate text or Markdown file;
    Save Draft and EPUB/DOCX/PDF exports record links to those files under the
    named Project.
-6. In Publishing Manager → **Quote Finder**, click **Use Project Draft** to
+6. In Press → **Quote Finder**, click **Use Project Draft** to
    copy that Project's current Write draft into the quote source and set the
    byline as attribution. This is working text, not approval. After editorial
    review, click **Approve Write Draft…** and confirm the title, byline and
@@ -59,7 +59,7 @@ you intended to measure.
    Ledger…** and record the retailer, actual submission date, and confirmation
    reference or evidence file. The ledger labels the entry **Self-reported**:
    Imprint neither uploads to nor checks a retailer on your behalf.
-7. In Audiobook Producer → **Convert**, click **Use Project Book** to add a
+7. In Booth → **Convert**, click **Use Project Book** to add a
    supported saved draft or EPUB/PDF from the selected Project. This does not
    change your normal input/output folders. Successful conversion links the
    finished MP3 back to the Project that was selected when you pressed Start;
