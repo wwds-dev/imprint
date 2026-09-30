@@ -84,6 +84,36 @@ class TestRouterAgent:
     def test_defaults_to_chat(self):
         assert self.agent.classify("What is the capital of France?") == "chat"
 
+    # ── the decision is explicit about confidence and fallback ──────────
+    def test_addressed_decision_is_certain(self):
+        decision = self.agent.route("open Quill")
+        assert (decision.key, decision.confidence) == ("author", "addressed")
+        assert "Quill" in decision.reason
+
+    def test_intent_decision_names_the_matched_keyword(self):
+        decision = self.agent.route("Narrate this ebook as an audiobook")
+        assert (decision.key, decision.confidence) == ("audiobook", "intent")
+        assert "narrate" in decision.reason or "audiobook" in decision.reason
+        assert not decision.ambiguous
+
+    def test_ambiguous_intent_is_visible_not_silent(self):
+        decision = self.agent.route(
+            "Make a YouTube video for the music release")
+        assert decision.confidence == "intent"
+        assert decision.ambiguous
+        assert "also matched" in decision.reason
+        keys = {key for key, _kw in decision.matches}
+        assert {"video", "music"} <= keys
+
+    def test_fallback_says_so_instead_of_pretending(self):
+        decision = self.agent.route("What is the capital of France?")
+        assert (decision.key, decision.confidence) == ("chat", "fallback")
+        assert "no intent" in decision.reason
+
+    def test_classify_stays_the_decisions_key(self):
+        text = "Build a responsive landing page in HTML"
+        assert self.agent.classify(text) == self.agent.route(text).key
+
     def test_case_insensitive_routing(self):
         assert self.agent.classify("MAKE A SPOTIFY MUSIC RELEASE PLAN") == "music"
 

@@ -2762,11 +2762,18 @@ class GodAI(QWidget):
         # at the user — RouterAgent existed, was tested, and was never called
         # by the app.
         from agents.router import RouterAgent
-        routed = RouterAgent().classify(raw_text)
-        if routed != self.agent_box.currentText():
-            self.select_agent(routed)
+        decision = RouterAgent().route(raw_text)
+        if decision.key != self.agent_box.currentText():
+            self.select_agent(decision.key)
         backend, model = self.resolve_backend_model()
-        self._set_route_result(routed, backend, model)
+        self._set_route_result(decision.key, backend, model)
+        # The card shows WHERE; the tooltip says WHY and HOW SURE — an
+        # ambiguous or fallback route should read as one, not as a verdict.
+        note = f"{decision.confidence}: {decision.reason}"
+        for name in ("routing_status_card", "route_result_label"):
+            widget = getattr(self, name, None)
+            if widget is not None:
+                widget.setToolTip(note)
 
     def resolve_backend_model(self):
         provider = self.provider_box.currentText()
