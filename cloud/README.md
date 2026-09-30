@@ -1,9 +1,9 @@
 # Reading Compass cloud companion
 
-Current account setup and blockers are tracked in
-[DEPLOYMENT_STATUS.md](DEPLOYMENT_STATUS.md). The dedicated Google Cloud
-project is `imprint-audiobooks`; the existing Netlify site is
-`reading-compass-private`.
+Current account setup and blockers are tracked outside this repository, in
+`~/Documents/lab/_Admin/imprint-audiobooks-deployment-status.md`. That note
+holds the Google account, project number, billing account and site IDs, and
+this repository is public, so it is deliberately not kept here.
 
 This is the hosted web version of Imprint's audiobook agent. It serves a
 mobile-friendly Convert and Listen app at `/cloud/app`; the Reading Compass
