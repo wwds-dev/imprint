@@ -359,21 +359,6 @@ CREATE TABLE IF NOT EXISTS social_publish_jobs (
     FOREIGN KEY (post_id) REFERENCES social_posts(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS creator_earnings (
-    id             INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id     INTEGER NOT NULL,
-    ingested_at    TEXT NOT NULL,
-    source_file    TEXT NOT NULL DEFAULT '',
-    period_from    TEXT NOT NULL DEFAULT '',
-    period_to      TEXT NOT NULL DEFAULT '',
-    gross_usd      REAL NOT NULL DEFAULT 0.0,
-    net_usd        REAL NOT NULL DEFAULT 0.0,
-    subscribers    INTEGER NOT NULL DEFAULT 0,
-    raw_json       TEXT NOT NULL DEFAULT '{}',
-    UNIQUE (account_id, source_file),
-    FOREIGN KEY (account_id) REFERENCES creator_accounts(id)
-);
-
 -- One voice per account. The single biggest lever on draft quality: without
 -- samples of how this creator actually writes, every draft starts from nothing
 -- and reads like it.
@@ -627,6 +612,7 @@ def init_db() -> None:
     _seed_default_agents(conn)
     _purge_split_agents(conn)
     _sync_agent_labels(conn)
+    _drop_empty_creator_earnings(conn)
     conn.close()
 
 
@@ -786,6 +772,28 @@ def _purge_split_agents(conn: sqlite3.Connection) -> None:
         "INSERT OR REPLACE INTO settings (key, value) "
         "VALUES ('split_agents_purged', '1')"
     )
+    conn.commit()
+
+
+def _drop_empty_creator_earnings(conn: sqlite3.Connection) -> None:
+    """Remove the statement-import table left behind by the Muse cut.
+
+    Nothing has written or read it since earnings moved to Backstage on
+    2026-09-30, so it is schema with no owner. It is dropped only when empty:
+    a database that still holds imported statements keeps them, and says so,
+    because deleting a user's records is the user's decision and not a
+    migration's.
+    """
+    try:
+        rows = conn.execute("SELECT COUNT(*) FROM creator_earnings").fetchone()[0]
+    except sqlite3.OperationalError:
+        return  # already gone, or never created
+    if rows:
+        print(f"[DB] creator_earnings still holds {rows} imported row(s); "
+              "leaving it in place. Earnings moved to Backstage — export them "
+              "there if you want them, then drop the table by hand.")
+        return
+    conn.execute("DROP TABLE creator_earnings")
     conn.commit()
 
 
