@@ -97,6 +97,22 @@ Calendar and Media default to all work under the selected account; each has a
   video render) stay host attributes so the umbrella's global shutdown sweep
   keeps seeing them.
 
+- **`calendar.py`** — Qt-free week-calendar logic for the Calendar tab,
+  imported into `panel.py` as `content_calendar`. `parse_scheduled(text)`
+  tolerantly reads every ISO shape the app has ever written and returns
+  `(when, has_time)`; anything else (legacy free text typed into the old
+  input box) returns `None` so those items surface in the Undated lane
+  instead of being guessed at. `week_start`/`week_label`/`day_headers` do
+  the week arithmetic with hard-coded English day/month names, since Qt
+  resets `strftime`'s locale to the OS's and the calendar header shouldn't
+  change language with it. `export_ics(rows, path)` writes RFC 5545
+  VEVENTs — line-folded, UTC `DTSTAMP`, a date-only item gets
+  `DTSTART;VALUE=DATE` instead of an invented time — and returns
+  `(written, skipped)`, since an undated row can't become an event without
+  inventing one. `export_csv(rows, path)` writes every row, dated or not,
+  defusing any cell whose first character would trigger spreadsheet
+  formula execution.
+
 - **`profile.py`** — voice profiles and persona bibles, kept out of `agent.py`
   so the prompt builder stays about prompts and this stays about storage.
   `load_voice`/`save_voice`/`voice_block(account_id)` hold an account's own

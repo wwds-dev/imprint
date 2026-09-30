@@ -1491,7 +1491,13 @@ script and narration providers can still cost money.
 **Stop** cancels the pipeline at the next stage boundary; Higgsfield uses its
 provider cancellation endpoint. Gemini and Wan jobs have no safe cancel
 route in these integrations, so Imprint keeps watching and saves the paid
-result once it has been submitted.
+result once it has been submitted. If Imprint itself closes while a direct
+job is still outstanding, it is not lost: every accepted job is written to
+a durable ledger (`agents/video/jobs.py`) before the create call, and the
+next launch resumes polling, downloads and bills it exactly once. Only a
+submission that never received a provider job id — the app closed between
+the paid request and the provider's reply — is marked lost and needs
+checking on the provider's own dashboard.
 
 The **Library** tab reads vidforge's own history, so a render started in the
 standalone app appears here and vice versa. Frozen, both share
@@ -1596,6 +1602,24 @@ Persona accounts additionally carry a **character bible** (appearance,
 backstory, personality, boundaries) and a locked generation seed, so a
 synthetic account stays one character rather than becoming a new one each
 session.
+
+#### Calendar
+
+`agents/creator/calendar.py` is the Qt-free logic behind the Calendar tab's
+week view: `parse_scheduled()` tolerantly reads every ISO shape the app has
+ever written, and anything it can't read (legacy free text typed before the
+app had a real date picker) surfaces in an **Undated** lane instead of being
+guessed at; week arithmetic and headers are locale-independent (hard-coded
+English names, since Qt resets the process locale to the OS's); and two
+export formats — an RFC 5545 `.ics` (line-folded, UTC `DTSTAMP`, a date-only
+item keeps its date instead of an invented time) and a `.csv` that keeps
+every row, dated or not, with any formula-triggering cell defused. The panel
+shows a 7-day grid with week navigation; a date/time dialog schedules or
+reschedules an item (button or double-click) and jumps the view to the
+target week. The grid and the Undated lane share one selection — clicking
+an empty grid cell clears an Undated selection too, so a teaser, outcome or
+revenue action can never attach to an item the user believes they
+deselected.
 
 #### Higgsfield promo video
 

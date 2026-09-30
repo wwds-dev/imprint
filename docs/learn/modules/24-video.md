@@ -37,7 +37,12 @@
 4. Watch the log to identify whether this is an assembled narrated pipeline or
    a direct asynchronous provider job.
 5. If stopping, press once and read the result. Keep monitoring accepted jobs
-   that cannot be cancelled so the paid file is not lost.
+   that cannot be cancelled so the paid file is not lost. Closing Imprint
+   does not lose an accepted job: reopening it re-polls, downloads and
+   bills it exactly once on the next launch. A submission that never got a
+   provider job id (the app closed between the paid request and the
+   provider's reply) is marked lost instead and needs checking on the
+   provider's own dashboard.
 6. Open Library, play the actual file, reveal it in Finder, and verify duration,
    dimensions, audio, captions, visuals, claims, pacing, and CTA.
 

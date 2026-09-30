@@ -23,8 +23,17 @@ Run focused coverage with `pytest tests/test_media_generation.py tests/test_vidf
 - `panel.py` — owns the Render/Library workspace, provider/model constraints,
   preflight estimates, exact request tokens, pipeline and direct-provider
   lifecycles, safe cancellation semantics, progress, errors and the shared
-  vidforge output library. Host-control aliases were retired 2026-09-21: the
-  panel no longer mirrors its widgets onto the umbrella (`HOST_CONTROLS`
+  vidforge output library. It also owns `resume_pending_jobs()`/
+  `_spawn_resume()`: run once per launch (a `_resume_started` guard blocks
+  a second pass, which would double-reserve and double-bill), it restores
+  each pending job's budget reservation via `host.restore_request()`
+  (never re-asks — the spend was already approved pre-restart), watches
+  it with `VideoResumeWorker`, and always settles the ledger row before
+  billing so a crash in that window undercounts once instead of
+  double-billing; when vidforge itself is unavailable, pending/lost rows
+  are still surfaced as failures instead of being silently stranded.
+  Host-control aliases were retired 2026-09-21: the panel no longer
+  mirrors its widgets onto the umbrella (`HOST_CONTROLS`
   stays only as the published contract of what it owns); the umbrella now
   retains only thin compatibility delegates plus the worker attributes its
   global shutdown sweep watches, with shared consumers resolving controls
@@ -36,7 +45,9 @@ Run focused coverage with `pytest tests/test_media_generation.py tests/test_vidf
   each provider transition; `mark_terminal()` closes a row while keeping
   whatever terminal status the provider already stamped; `pending_rows()`
   lists acknowledged-but-unfinished jobs for `VideoPanel.resume_pending_jobs()`
-  to pick back up after a restart; `sweep_lost()` marks never-acknowledged
+  to pick back up after a restart — keyed on `spend_state = 'reserved'`,
+  not on provider status, since a completed-but-undownloaded job still
+  needs settling; `sweep_lost()` marks never-acknowledged
   submissions `lost` and releases their budget reservation instead of
   silently billing or dropping them. Qt-free on purpose so tests and CLI
   tools can use it.
@@ -49,7 +60,13 @@ Run focused coverage with `pytest tests/test_media_generation.py tests/test_vidf
   downloads, so resuming can never double-spend. A local poll timeout is
   tracked separately from a provider-reported terminal status, so a
   timed-out row stays pending for the next launch instead of being marked
-  failed.
+  failed; the same goes for a local exception mid-poll (network/DNS/bad
+  key), which sets `retryable` rather than being treated as a provider
+  verdict, unless the provider had already reported completion first.
+  `cancel()` is shutdown-only — it stops the worker watching, never
+  cancels the render at the provider (`cancel_at_provider=False` for
+  Higgsfield), so a closing window can't destroy a paid job; the row
+  stays `reserved` and resumes again on the next launch.
 - `studio.py` — the adapter to `vidforge`, a **separate git repository**
   nested at `imprint/vidforge/` and imported rather than vendored, so the
   standalone `vidforge.app` and Imprint's Video mode share one checkout, one
