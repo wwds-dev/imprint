@@ -32,8 +32,9 @@ dist/
 build/
 *.iconset
 
-# Nested companion project (its own git repo, moved in under the sentinel family)
-/vidforge/
+# vidforge is ordinary Imprint source now (absorbed 2026-09-30). It keeps its
+# own nested .gitignore for the render library, logs and secrets it writes,
+# because that directory is also the pipeline's data directory in a checkout.
 
 # Generated at install/build time by scripts/stamp_version.py — regenerated
 # every time, so committing it would just churn between sessions.

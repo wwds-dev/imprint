@@ -1,25 +1,27 @@
 """The bridge to vidforge — Imprint's video pipeline.
 
-`vidforge` is a **separate git repository** nested at `imprint/vidforge/`, and
-this module imports it rather than vendoring a copy. That is deliberate. The
-workspace already has one vendored-copy pair (`lab_hub/tools/convert` against
-`toolbox/convert_epub`) and they have silently drifted apart in four files; a
-second copy of a 20-module video pipeline would drift faster and matter more.
-So: one checkout, one pipeline, two front doors — `vidforge.app` standalone and
-Imprint's Video mode.
+`vidforge` is Imprint source, at `imprint/vidforge/`. It was a separate git
+repository with its own `vidforge.app` until 2026-09-30; absorbing it ended
+the two-front-doors arrangement, in which both apps wrote one config, one
+output library and one history with nothing arbitrating between them, and in
+which a clone of `imprint` alone had no pipeline at all.
 
-## What that costs, and how it is handled
+## Why it is still its own directory
 
-*A clone of `imprint` alone has no `vidforge`.* Every entry point here answers
-`available()` first, and the Video panel renders an explanation instead of a
-dead form when it is missing. Nothing raises at import time.
+That directory is also the pipeline's **data** directory in a checkout:
+`config.py` resolves `PROJECT_ROOT` to it, and `config.yaml`, `topics.txt`,
+`assets/` and the whole render library live there. Moving the package would
+have moved the render library with it, so the layout stayed and the standalone
+app went. It keeps its own nested `.gitignore` for the parts it writes.
 
-*Frozen builds share a data directory.* vidforge decides its own paths from
-`sys.frozen`: inside Imprint.app that resolves `BUNDLE_ROOT` to Imprint's
-bundle (so `Imprint.spec` ships vidforge's `config.yaml`, `topics.txt` and
-`assets/`) and `PROJECT_ROOT` to `~/Library/Application Support/vidforge` —
-the same directory the standalone app uses. That is the intended outcome: one
-config, one output library, one history, whichever front door you came in by.
+The package still needs `imprint/vidforge/` on `sys.path` to be importable as
+`vidforge`, which `_load()` does — appended, never inserted, for the reason
+given there.
+
+*Frozen builds.* vidforge decides its own paths from `sys.frozen`: inside
+Imprint.app that resolves `BUNDLE_ROOT` to Imprint's bundle (so `Imprint.spec`
+ships `config.yaml`, `topics.txt` and `assets/`) and `PROJECT_ROOT` to
+`~/Library/Application Support/vidforge`.
 
 ## Long-form and clips are the same pipeline
 
@@ -39,7 +41,7 @@ from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-# Where the nested repo lives when running from a checkout. In a frozen build
+# Where the pipeline lives when running from a checkout. In a frozen build
 # the package is bundled, so it is already importable and this is unused.
 VIDFORGE_ROOT = PROJECT_ROOT / "vidforge"
 
@@ -74,14 +76,13 @@ def _load() -> bool:
         return False
 
     try:
-        # Appended, never inserted. That directory is a whole application: it
-        # holds vidforge's own `main.py` and `app.py` alongside the `vidforge`
-        # package, so putting it first shadows Imprint's `main` for anything
-        # imported afterwards. The app survived it because `main` is already in
-        # sys.modules by then, but the test suite does not — collecting a
-        # module that touches this and then importing `main` got vidforge's.
-        # Appending keeps Imprint's own root ahead while still exposing the
-        # package.
+        # Appended, never inserted. That directory used to hold vidforge's own
+        # `main.py` and `app.py` alongside the package, and putting it first
+        # shadowed Imprint's `main` for anything imported afterwards — the app
+        # survived it because `main` was already in sys.modules by then, but
+        # the test suite did not. Those files are gone as of 2026-09-30, so the
+        # collision cannot recur; appending stays because Imprint's own root
+        # belongs ahead of a subdirectory regardless.
         if VIDFORGE_ROOT.is_dir() and str(VIDFORGE_ROOT) not in sys.path:
             sys.path.append(str(VIDFORGE_ROOT))
         from vidforge import config as config_mod      # type: ignore
@@ -105,11 +106,11 @@ def unavailable_reason() -> str:
         return ""
     if not VIDFORGE_ROOT.is_dir():
         return (
-            "The vidforge repository is not present.\n\n"
-            "Video mode runs the vidforge pipeline directly rather than "
-            "keeping a second copy of it, so it needs that checkout at:\n"
+            "The video pipeline is missing from this install.\n\n"
+            "It ships as part of Imprint and belongs at:\n"
             f"    {VIDFORGE_ROOT}\n\n"
-            "Clone it there and restart Imprint."
+            "Reinstall Imprint, or restore that directory from the "
+            "repository, and restart."
         )
     return (
         "vidforge is present but could not be imported:\n\n"

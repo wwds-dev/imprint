@@ -1,25 +1,37 @@
 # VIDEO & AD GENERATOR — topic to finished video
 
-`key: video` · pipeline: `vidforge` (nested repo) · direct providers: OpenAI / Gemini / Qwen-Wan / Higgsfield · bridge: `agents/video/studio.py` · panel: `build_video_panel()`
+`key: video` · pipeline: `vidforge` (Imprint source, `imprint/vidforge/`) · direct providers: OpenAI / Gemini / Qwen-Wan / Higgsfield · bridge: `agents/video/studio.py` · panel: `build_video_panel()`
 
 ## What it does
 Turns a topic into a complete narrated, illustrated video: script, text-to-speech narration, word-aligned captions, generated visuals, Ken Burns motion, background music, loudness normalisation, and a thumbnail. Long-form for YouTube, or a vertical clip for social.
 
-## Where the code lives — and why it is not here
-The pipeline is `vidforge`, a **separate git repository nested at `imprint/vidforge/`**. Imprint imports it rather than keeping a copy.
+## Where the code lives
+The pipeline is `vidforge`, at `imprint/vidforge/`. It is ordinary Imprint
+source: until 30 September 2026 it was a separate git repository with its own
+`vidforge.app`, and this tab was the second of two front doors onto it.
 
-That is a deliberate trade. The workspace already has one vendored-copy pair — `lab_hub/tools/convert` against `toolbox/convert_epub` — and they have silently drifted apart in four files. A second copy of a twenty-module video pipeline would drift faster and matter more. One checkout, one pipeline, two front doors: `vidforge.app` standalone, and this tab.
+That arrangement cost more than it paid. Both apps resolved to one config, one
+output library and one history with nothing arbitrating between them, and
+because the directory was gitignored here, a clone of `imprint` alone had no
+pipeline at all — which is why every entry point in `agents/video/studio.py`
+still answers `available()` first and the panel explains itself instead of
+rendering a dead form. That guard now covers a broken install rather than a
+missing checkout. The standalone app, its build script and its launchd
+scheduler were removed; the history is archived as a git bundle at
+`~/Documents/lab/archive/vidforge_standalone_2026-09-30/`.
 
-The cost of that choice is that a clone of `imprint` alone has no `vidforge`. Every entry point in `agents/video/studio.py` answers `available()` first and the panel renders an explanation instead of a dead form, so the failure is legible rather than a crash.
-
-Frozen, the two apps share `~/Library/Application Support/vidforge/` — one config, one output library, one history, whichever front door you came in by.
+It keeps its own directory because that directory is also the pipeline's data
+directory in a checkout: `config.yaml`, `topics.txt`, `assets/` and the render
+library live there, and `config.py` resolves `PROJECT_ROOT` to it. Moving the
+package would have moved the render library with it. Frozen, `PROJECT_ROOT` is
+`~/Library/Application Support/vidforge/` as before.
 
 When you render inside Imprint with a named Project selected, a successful
 local clip is linked to the Project active when the request was approved. A
 direct provider job that finishes after an app restart retains its original
-Project association. The Library still shows the shared vidforge history, so
-it is not yet a Project-filtered asset view; clips made in standalone vidforge
-have no Imprint Project link.
+Project association. The Library still shows the whole vidforge history, so
+it is not yet a Project-filtered asset view; clips rendered before the app was
+absorbed have no Imprint Project link.
 
 ## Inputs (panel controls)
 | Control | Purpose |

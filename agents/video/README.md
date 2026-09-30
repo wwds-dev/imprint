@@ -67,16 +67,18 @@ Run focused coverage with `pytest tests/test_media_generation.py tests/test_vidf
   cancels the render at the provider (`cancel_at_provider=False` for
   Higgsfield), so a closing window can't destroy a paid job; the row
   stays `reserved` and resumes again on the next launch.
-- `studio.py` — the adapter to `vidforge`, a **separate git repository**
-  nested at `imprint/vidforge/` and imported rather than vendored, so the
-  standalone `vidforge.app` and Imprint's Video mode share one checkout, one
-  config and one output history — "two front doors" onto one pipeline —
-  instead of drifting apart the way the workspace's one existing
-  vendored-copy pair (`lab_hub/tools/convert` vs `toolbox/convert_epub`)
-  already has. Key surface:
+- `studio.py` — the adapter to `vidforge`, which lives at
+  `imprint/vidforge/` and is ordinary Imprint source. It was a separate git
+  repository with its own `vidforge.app` until 2026-09-30; absorbing it
+  removed the second front door onto one config, one output library and one
+  history, and the gitignore line that left a fresh clone of `imprint`
+  without a pipeline. The directory stays because it is also the pipeline's
+  data directory in a checkout — `config.py` resolves `PROJECT_ROOT` to it —
+  so moving the package would have moved the render library too. Key
+  surface:
   - `available()` / `unavailable_reason()` — `_load()` lazily imports
     vidforge's `config`, `pipeline` and `progress` modules and records any
-    failure instead of raising at import time, so a checkout without
+    failure instead of raising at import time, so an install missing
     `vidforge/` (or one missing PyYAML, or the YouTube-upload extras
     `google-api-python-client` / `google-auth-oauthlib`) gets an explanatory
     message in the panel rather than a crash on startup.

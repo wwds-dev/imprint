@@ -32,16 +32,18 @@ for pkg in ("google.genai", "tiktoken", "anthropic", "openai", "certifi",
     binaries += b
     hiddenimports += h
 
-# vidforge is a nested sibling repository, not a vendored copy — see
-# agents/video/studio.py. The package ships as source so the same checkout
-# drives both this bundle and the standalone vidforge.app.
+# vidforge is Imprint source (absorbed 2026-09-30), kept in its own directory
+# because that directory is also the pipeline's data directory in a checkout —
+# see agents/video/studio.py. The package ships as source; the `if` stays
+# because a build from an incomplete tree should fail loudly at run time with
+# the panel's explanation rather than silently at package time.
 _VIDFORGE = Path("vidforge")
 if (_VIDFORGE / "vidforge").is_dir():
     datas += [(str(_VIDFORGE / "vidforge"), "vidforge")]
     # config.yaml and topics.txt are seeded into ~/Library/Application Support/
-    # vidforge on first run, and its assets/ holds the music and fonts the
-    # pipeline composites in. Frozen, vidforge resolves BUNDLE_ROOT to this
-    # bundle's root, so they have to sit at the top level.
+    # vidforge on first run, and assets/ holds the music and fonts the pipeline
+    # composites in. Frozen, vidforge resolves BUNDLE_ROOT to this bundle's
+    # root, so they have to sit at the top level.
     for _name in ("config.yaml", "topics.txt"):
         if (_VIDFORGE / _name).is_file():
             datas += [(str(_VIDFORGE / _name), ".")]

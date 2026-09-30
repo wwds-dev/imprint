@@ -68,7 +68,7 @@ you intended to measure.
 8. In Video, a successful pipeline or direct-provider render links the saved
    clip to the Project selected when its paid request was approved. A job
    recovered after restart keeps that original Project. The Video Library is
-   shared with standalone vidforge. Choose **Current Project** in Library to
+   the whole vidforge render history. Choose **Current Project** in Library to
    see linked Imprint clips, or **All videos** to include standalone renders.
 9. In Creator, choose both a named Project and the right content profile before
    drafting. Scheduling keeps the Project and profile captured at approval;

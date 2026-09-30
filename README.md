@@ -178,7 +178,7 @@ the MP3 to the Project that was active at Start. Listen defaults to all
 audiobooks and can filter to the current Project.
 Video links a finished local clip to the Project captured when its render was
 approved, including provider jobs recovered after restart. Its vidforge
-Library still includes standalone vidforge renders by default; choose the
+Library still includes renders made before the absorption by default; choose the
 current-Project view to show only linked Imprint clips.
 Muse links scheduled content, teaser jobs and media to a Project while its
 profiles, voice and character records remain account-owned. Calendar and Media
@@ -1447,11 +1447,12 @@ rather than as a separate agent.
 Topic to finished video: script, narration, aligned captions, generated
 visuals, Ken Burns motion, music, loudness normalisation and a thumbnail.
 
-This is the **vidforge** pipeline running in-process. vidforge is a separate git
-repository nested at `imprint/vidforge/` and Imprint imports it rather than
-keeping a copy — one checkout, one pipeline, two front doors. `docs/agents/video.md`
-covers the trade and what it costs (a clone of `imprint` alone has no Video tab,
-which the panel explains rather than crashing on).
+This is the **vidforge** pipeline running in-process. vidforge was a separate
+git repository with its own desktop app until 30 September 2026, when it was
+absorbed into Imprint as ordinary source at `imprint/vidforge/` and the
+standalone app was removed. `docs/agents/video.md` covers why it keeps its own
+directory (it is also the pipeline's data directory) and what the panel does
+when the pipeline is missing from an install.
 
 Choose a **Visual provider** and **Visual model** as well as the format. OpenAI
 offers the current GPT Image models for scene-by-scene assembly. Gemini adds Omni 1.1 Flash and the
