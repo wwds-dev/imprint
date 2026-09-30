@@ -87,6 +87,58 @@ class TestRouterAgent:
     def test_case_insensitive_routing(self):
         assert self.agent.classify("MAKE A SPOTIFY MUSIC RELEASE PLAN") == "music"
 
+    # ── Addressing an agent by its codename ──────────────────────────────────
+    # Added 2026-09-30 with the rename: "open Booth" routed to Chat, because
+    # the router only ever knew intent words, never the agents' own names.
+
+    @pytest.mark.parametrize("text,expected", [
+        ("open Booth", "audiobook"),
+        ("use Quill", "author"),
+        ("switch to Muse", "creator"),
+        ("go to Herald", "social"),
+        ("take me to Press", "manuscript"),
+        ("open the Reel", "video"),
+        ("USE SITEBUILDER", "webdesign"),
+    ])
+    def test_addressing_an_agent_by_name(self, text, expected):
+        assert self.agent.classify(text) == expected
+
+    @pytest.mark.parametrize("text,expected", [
+        ("Muse", "creator"),
+        ("Booth", "audiobook"),
+        ("Stamp.", "fiverr"),
+    ])
+    def test_the_bare_name_is_enough(self, text, expected):
+        assert self.agent.classify(text) == expected
+
+    @pytest.mark.parametrize("text", [
+        "press release for the launch",
+        "a white label deal",
+        "stamp the document and send it",
+        "we need a primer on solvency",
+    ])
+    def test_an_ordinary_word_is_not_an_address(self, text):
+        """Half the codenames are ordinary English. Matching a bare token would
+        send "press release" to Press, which is the reason addressing needs an
+        opening verb rather than a word match."""
+        assert self.agent.classify(text) == "chat"
+
+    def test_codenames_come_from_the_catalog(self):
+        """So a rename cannot leave the router answering to a name that no
+        longer exists — the failure this whole change exists to fix."""
+        from agents.catalog import AGENT_SPECS
+
+        for spec in AGENT_SPECS:
+            if spec.workspace is None:
+                continue
+            assert self.agent.classify(f"open {spec.label}") == spec.key
+
+    def test_addressing_beats_intent_when_they_disagree(self):
+        """Naming a tool is the more explicit act."""
+        assert self.agent.classify("open Quill") == "author"
+        assert self.agent.classify(
+            "open Quill and write a social post") == "author"
+
 
 # 3. ChatAgent
 # Scenario: pass a multi-line, conversational prompt

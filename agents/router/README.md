@@ -24,4 +24,21 @@ execute provider calls or bypass the shared request guard.
   whenever two routes' keyword lists could both match the same input. If no
   route matches, it falls back to the literal key `"chat"` (not itself an
   entry in `ROUTES`). There is no scoring, no ML model and no external call
-  — it is a pure, dependency-free substring matcher.
+  — it is a pure substring matcher.
+
+  Before that table runs, `classify()` checks whether the text **addresses**
+  an agent by name. The 2026-09-30 rename gave the agents codenames, and
+  "open Booth" routed to Chat because the router only ever knew intent words.
+  The names are read from `agents.catalog.AGENT_SPECS`, not copied here, so a
+  relabel cannot leave the router answering to a name that no longer exists —
+  a test asserts `classify(f"open {spec.label}") == spec.key` for every agent
+  with a workspace.
+
+  Addressing is narrow on purpose. Half the codenames are ordinary English, so
+  a bare token match would send "press release" to `manuscript`, "white label"
+  to `music` and "stamp the document" to `fiverr`. A codename therefore routes
+  only after an opening verb (`open`, `use`, `switch to`, `go to`,
+  `take me to`) or when the whole message is the name. Addressing wins over
+  the keyword table when both match: naming a tool is the more explicit act.
+  This is the one part of the router that is anchored rather than substring —
+  `agent.py` uses `re.fullmatch`/`\b` for it.

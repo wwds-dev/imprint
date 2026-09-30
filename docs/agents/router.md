@@ -8,6 +8,27 @@ Reads a line of text and returns the key of the agent that should handle it. Whe
 It is infrastructure rather than a creative workspace, which is why there is no tab for it. You will only notice it working — or getting something wrong.
 
 ## How it decides
+Two ways in: **address** first, then **intent**.
+
+### Address — naming the agent
+Since the 2026-09-30 rename the agents have codenames, and "open Booth" used to
+route to Chat because the router only knew intent words. It now recognises an
+agent by its own name, read from `agents/catalog.py` so it cannot drift from the
+labels the UI shows.
+
+Addressing is deliberately narrow, because half the codenames are ordinary
+English. A bare word match would send "press release" to Press, "white label" to
+Label and "stamp the document" to Stamp. So a codename routes only when the text
+*addresses* it:
+
+- an opening verb — `open`, `use`, `switch to`, `go to`, `take me to` — as in
+  "open Booth" or "use the Reel";
+- or the whole message being the name, as in "Muse" or "Stamp.".
+
+Anything less is treated as the word, not the tool. Addressing beats intent when
+they disagree: naming a tool is the more explicit act.
+
+### Intent — describing the work
 A plain substring match, in order. `ROUTES` is a fixed tuple of `(agent_key, keywords)` pairs covering nine modes — video, social, audiobook, music, webdesign, fiverr, creator, manuscript, author — each with a handful of lowercase trigger phrases:
 
 | Agent | Triggers include |
@@ -23,7 +44,7 @@ There is **no scoring, no model and no network call.** It is a pure, dependency-
 ## What that means in practice
 **Order decides ties.** "Write a chapter for my novel and make a video about it" matches both `author` and `video`; whichever route sits earlier in `ROUTES` wins. There is no notion of the better match.
 
-**Substrings match inside words.** A keyword is tested with `in`, not on word boundaries, so a phrase embedded in a longer word still counts.
+**Substrings match inside words.** A keyword is tested with `in`, not on word boundaries, so a phrase embedded in a longer word still counts. This is why "a reel of film" routes to `video`: `reel` has been a video trigger since before the rename, and in that case the answer is defensible. Addressing does not work this way — it is anchored.
 
 **It never runs anything.** Routing returns a key. It does not call a provider, does not spend money, and must never bypass the shared request guard — the agent it selects does that work under the usual budget checks.
 
@@ -34,5 +55,5 @@ Pick the workspace yourself from the mode tabs. Auto Route is a convenience, not
 | Location | Role |
 |---|---|
 | `agents/router/__init__.py` | Public surface — re-exports `ROUTES` and `RouterAgent`. |
-| `agents/router/agent.py` | The whole implementation: the route table and `classify()`. |
+| `agents/router/agent.py` | The whole implementation: the route table, the codename addressing, and `classify()`. |
 | `agents/catalog.py` | The agent keys routing is allowed to return. |
