@@ -941,14 +941,54 @@ class VideoPanel(QWidget):
         self._visual_model_changed()
 
     def stop(self):
+        """One contract for every direct provider: Stop always works.
+
+        Stopping never risks the paid result — the durable job row stays
+        'reserved', so the next launch resumes watching and bills once on
+        completion. Where the provider can cancel a not-yet-started job
+        (Higgsfield queued, Wan pending) it is asked; where it cannot
+        (Gemini, or a render already in progress) Stop simply stops
+        WATCHING, and says so.
+        """
         if self._active_kind in {"gemini-video", "qwen-video"}:
-            provider = {
-                "gemini-video": "Gemini", "qwen-video": "Wan",
-            }[self._active_kind]
-            self.video_status_label.setText(
-                f"{provider} has no safe cancel operation here. Imprint will "
-                "keep watching and "
-                "save the paid result.")
+            worker = self.host.video_worker
+            if worker is not None and hasattr(worker, "cancel"):
+                worker.cancel()   # exits silently; the row stays reserved
+            context = self._external_context
+            provider_cancelled = False
+            if (self._active_kind == "qwen-video" and context.get("job_id")
+                    and hasattr(self.host.qwen, "cancel_video")):
+                from services.qwen_client import WanVideoJob
+                provider_cancelled = self.host.qwen.cancel_video(
+                    WanVideoJob(job_id=context["job_id"], status="queued",
+                                model=context.get("model", ""),
+                                seconds=context.get("seconds", 0),
+                                aspect_ratio=context.get("aspect", "")))
+            token, self._request_token = self._request_token, None
+            if token:
+                self.host.abandon_request(token, reason="stopped")
+            row_id, context["job_row_id"] = context.get("job_row_id"), None
+            from agents.video import jobs
+            try:
+                if provider_cancelled and row_id:
+                    # Confirmed dead before rendering: nothing to resume,
+                    # nothing was charged.
+                    jobs.mark_terminal(row_id, spend_state="released",
+                                       fallback_status="cancelled")
+                elif row_id:
+                    jobs.update_job(row_id, error="stopped watching")
+            except Exception as exc:
+                self.host._note_failure("video: close stopped job", exc)
+            if provider_cancelled:
+                self._reset("Cancelled at the provider before rendering "
+                            "started — nothing was charged.")
+            else:
+                provider = {"gemini-video": "Gemini",
+                            "qwen-video": "Wan"}[self._active_kind]
+                self._reset(
+                    f"Stopped watching. The {provider} render continues at "
+                    "the provider; the next launch checks and saves the "
+                    "paid result.")
             return
         if self.host.video_worker is not None:
             if self._active_kind == "higgsfield-estimate":
