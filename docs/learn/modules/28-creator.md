@@ -1,105 +1,103 @@
-# Creator
+# Muse
 
-> **Outcome:** create one authorised campaign asset, keep identity/consent and
-> public actions human-controlled, and connect the asset to an owned result.
+> **Outcome:** create one campaign asset, keep public actions human-controlled,
+> and land it on a plan you can act from.
 
-![Creator workspace](../img/agent-creator.png)
+![Muse workspace](../img/agent-creator.png)
 
 ## Prerequisites
 
-- An `own`, `managed`, or accurately disclosed `persona` profile.
-- Recorded authorisation for managed work; disclosure for synthetic personas.
-- A dated platform-policy record with source before any wholly synthetic persona
-  is used. Unknown is not permission.
-- One bounded campaign hypothesis, account, segment, and measurement window.
+- A content profile: a handle or project name and the platform or venture it
+  is for.
+- One bounded campaign idea, with an audience and an intended action.
+- Rights to any likeness, voice or media you reference.
+
+> Earnings, statement imports, account consent records, platform-policy review
+> and the agency view moved to **Backstage** on 30 September 2026. Muse is the
+> production surface; Backstage is where the money and the account
+> authorisation records live. Nothing here reports revenue any more.
 
 ## Profile and compose controls
 
 | Control | Meaning |
 |---|---|
-| Profile / Handle / Platform | Durable account/project identity and destination context |
-| Ownership | `own`, `managed`, or `persona`; changes required safeguards |
-| Authorised by | Required evidence for managed accounts, including who and when |
-| Disclosure | How a synthetic persona is truthfully disclosed |
-| Save Profile / Remove profile | Persist or remove profile state; preserve required records first |
-| Review platform policy | Record whether synthetic personas are permitted, whether the depicted owner must be verified, AI disclosure, publishing route, source and review date |
-| Kind | post, caption, campaign, posting_plan, promo_assets, hooks, bio, ppv, welcome, promo |
-| Campaign / Channel | Label every asset for later comparison, even outside a promo kind |
-| Price / Audience | Conditional experiment fields; not all appear for every kind |
+| Profile / Handle / Platform | Durable account or project identity and destination context |
+| Save Profile / Remove profile | Persist or remove profile state |
+| Kind | post, caption, campaign, posting_plan, promo_assets, hooks, bio, promo |
+| Campaign | Label every asset for later comparison |
+| Channel | Appears for `promo` only — the off-platform funnel the post is written for |
 | Brief / Provider / Model / Draft | Bounded content request and local Best Fit route |
 | Add to Calendar | Saves reviewed output as a prepared schedule item |
 | Generate/Cancel Teaser | Paid Higgsfield SFW promotional render and provider-dependent cancellation |
 | Stop | Stops active text generation locally where possible |
 
-## Six output tabs
+## Four output tabs
 
-![Creator earnings and owned-report tools](../img/agent-creator-earnings.png)
+![The Muse plan calendar](../img/agent-creator-calendar.png)
 
 | Tab | How to use it |
 |---|---|
 | Draft | Editable output. Nothing is sent automatically; review then post manually. |
-| Calendar | When, kind, title, price, status. Prepared state is not published state. |
-| Earnings | Import Earnings CSV or Record outcome for a selected Calendar asset. The dashboard compares price, asset, channel and tested hook; receipts are not profit. |
-| Voice | Manage authorised voice/character settings and test samples before use. |
+| Calendar | A seven-day grid with an Undated lane, rescheduling, and `.ics` / CSV export. Prepared state is not published state. |
+| Voice | Manage voice and character settings, and test samples before use. |
 | Media | Add Media with kind, source, caption, and rights/provenance. |
-| Agency | Compare accounts/types/authorisation/net receipts/subscribers/draft counts cautiously. |
 
 ## Worked run
 
-1. Select/create a profile and ownership type. Complete the conditional
-   authorisation or disclosure fields and save.
-   For a persona, review the destination's current written policy first;
-   unverified rules block generation rather than granting permission.
-2. Choose one Kind, segment/channel, price if applicable, and a brief with
-   audience, offer, proof boundary, CTA, and prohibited claims.
-3. Draft once. Review voice, facts, disclosure, consent, platform fit, and CTA.
-4. Add the approved item to Calendar; do not imply it was posted.
-5. Add only authorised media/voice references with source/provenance.
-6. For a teaser, confirm SFW content, estimate, provider policy, likeness rights,
-   and cancellation boundary before submission.
-7. Once an asset is actually posted, select it on Calendar, then use **Record
-   outcome** on Earnings. Confirm publication and enter the post link, reach,
-   clicks, subscriptions, PPV purchases, attributed revenue, all-in cost in
-   USD, source, and window. Import statements separately. Do not add statement
-   receipts to attributed revenue: they may describe the same transactions.
+1. Select or create a profile and save it.
+2. Choose one Kind and a brief with audience, offer, proof boundary, CTA, and
+   prohibited claims. For a `promo`, pick the channel it is written for.
+3. Draft once. Review voice, facts, platform fit, and CTA.
+4. Add the approved item to Calendar; do not imply it was posted. Use
+   Reschedule to give an undated item its first real date.
+5. Add only media and voice references you hold rights to, with provenance.
+6. For a teaser, confirm SFW content, estimate, provider policy, likeness
+   rights, and the cancellation boundary before submission.
+7. Export the week as `.ics` or CSV if you work the plan somewhere else.
 
-## How to read the output and analytics
+## Characters
 
-Draft/calendar/media counts are production observations. Imported net receipts
-are `OBSERVED` only for their source/window, not profit or LTV. Revenue per
-posted asset is not conversion without exposure and purchase denominators.
-Subscriber totals from another date cannot be used as cohort retention.
-The asset ROI column is `(attributed revenue − entered all-in USD cost) ÷ cost`
-only when cost is known. Imprint's generation cost is recorded in EUR and is
-not silently converted into that USD number; include it after a documented
-conversion, along with production, fees, promotion, and human time.
+An account may carry a written character — appearance, backstory, personality,
+boundaries, a locked generation seed and reference images. It exists so
+successive drafts and teaser renders are the same character rather than a new
+one each time. It is a consistency tool, not a claim that the character is a
+real person, and Muse will not write copy asserting that it is.
+
+## How to read the output
+
+Draft, calendar and media counts are production observations, not results.
+A calendar item's status describes what Imprint knows: `draft` means prepared
+here, never that anything was posted. Verification is manual and belongs to
+you — confirm publication on the platform itself before treating an item as
+live, and read receipts and revenue in Backstage, which holds the statements
+and their source and window.
 
 ## Acceptance checklist
 
-- [ ] Ownership, authorisation/disclosure, and consent pass verification.
-- [ ] No impersonation, unauthorised likeness/voice, private material, or false claim.
-- [ ] Public interaction/posting and money movement remain human-controlled.
-- [ ] Calendar/status describes reality; imported actuals preserve source/window/currency.
-- [ ] The content links to one measurable intended or paid action.
+- [ ] No impersonation, unauthorised likeness or voice, private material, or false claim.
+- [ ] Public interaction and posting remain human-controlled.
+- [ ] Calendar status describes reality: prepared is not posted.
+- [ ] The content links to one measurable intended action.
 
 ## Cost, cancellation, and gates
 
-Include text/media/video, retries, production, moderation, messaging, promotion,
-fees, refunds, and human time. Cancel Teaser can fail after provider acceptance;
-preserve and save a paid result rather than submitting duplicates.
+Include text and media generation, retries, production, moderation, promotion,
+and human time. Cancel Teaser can fail after provider acceptance; preserve and
+save a paid result rather than submitting duplicates. Imprint records its own
+generation cost in EUR against the calendar item.
 
 ## Common failures
 
-**Managed/persona fields disappear:** verify Ownership; conditional fields are
-intentional.  
-**Earnings look high:** match the period/currency and subtract all relevant
-costs; do not infer LTV.  
-**No posting button:** Creator intentionally produces drafts; a human publishes.
+**Channel disappeared:** it applies to the `promo` kind only; conditional
+fields give up their cell rather than leaving a hole.  
+**No posting button:** Muse intentionally produces drafts; a human publishes.  
+**Looking for Earnings:** it is in Backstage now, along with statement imports
+and the agency view.
 
 ## Done when
 
-The asset and profile pass the safeguards, the prepared/public state is honest,
-and an owned outcome can later be joined without invented attribution.
+The asset passes the safeguards, the prepared state is honest, and the plan
+says what you will actually do.
 
 ## Next action
 

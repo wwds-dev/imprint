@@ -79,8 +79,8 @@ SHOTS: list[tuple[str, str, object]] = [
     ("agent-social-accounts.png", "social",
      lambda w: _show_tab(w.social_panel.social_tabs, "Accounts")),
     ("agent-creator.png", "creator", None),
-    ("agent-creator-earnings.png", "creator",
-     lambda w: _show_tab(w.creator_panel.creator_tabs, "Earnings")),
+    ("agent-creator-calendar.png", "creator",
+     lambda w: _show_tab(w.creator_panel.creator_tabs, "Calendar")),
     ("agent-audiobook-listen.png", "audiobook",
      lambda w: _show_tab(w.audiobook_panel.audiobook_tabs, "Listen")),
 ]

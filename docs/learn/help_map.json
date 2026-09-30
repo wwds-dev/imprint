@@ -11,7 +11,6 @@
   "input_box": "assistant#worked-run",
   "send_btn": "assistant#worked-run",
   "stop_chat_btn": "assistant#cost-cancellation-and-gates",
-
   "author_title_input": "draft#control-atlas",
   "author_name_input": "draft#control-atlas",
   "author_content_type_box": "draft#control-atlas",
@@ -30,7 +29,6 @@
   "author_save_btn": "draft#verification",
   "author_export_btn": "draft#acceptance-checklist",
   "author_export_format_box": "draft#control-atlas",
-
   "manuscript_refresh_btn": "publish#worked-run",
   "manuscript_ingest_btn": "publish#worked-run",
   "manuscript_tabs": "publish#control-atlas",
@@ -44,7 +42,6 @@
   "shorts_generate_btn": "publish#cost-cancellation-and-gates",
   "calendar_generate_btn": "publish#worked-run",
   "calendar_export_btn": "publish#acceptance-checklist",
-
   "audiobook_tabs": "audiobooks#control-atlas",
   "audiobook_refresh_btn": "audiobooks#worked-run",
   "audiobook_voice_box": "audiobooks#worked-run",
@@ -54,7 +51,6 @@
   "audiobook_play_btn": "audiobooks#verification",
   "audiobook_restart_btn": "audiobooks#control-atlas",
   "audiobook_reveal_btn": "audiobooks#verification",
-
   "music_provider_box": "best-fit#the-two-recommendations",
   "music_model_box": "best-fit#the-two-recommendations",
   "music_analyse_btn": "music#step-9-optional-plan-the-release",
@@ -62,7 +58,6 @@
   "music_clear_btn": "music#control-atlas",
   "music_stop_btn": "music#cost-cancellation-and-gates",
   "music_tabs": "music#control-atlas",
-
   "video_tabs": "video#control-atlas",
   "video_topic_input": "video#worked-run",
   "video_format_box": "video#control-atlas",
@@ -77,7 +72,6 @@
   "video_play_btn": "video#verification",
   "video_reveal_btn": "video#verification",
   "video_refresh_btn": "video#control-atlas",
-
   "social_campaign_box": "social#control-atlas",
   "social_new_campaign_btn": "social#worked-run",
   "social_save_campaign_btn": "social#worked-run",
@@ -93,7 +87,6 @@
   "social_metrics_btn": "social#worked-run",
   "social_analytics_table": "social#how-to-read-the-output",
   "social_post_btn": "social#cost-cancellation-and-gates",
-
   "webdesign_provider_box": "best-fit#the-two-recommendations",
   "webdesign_model_box": "best-fit#the-two-recommendations",
   "webdesign_generate_btn": "site-builder#step-5-generate",
@@ -102,7 +95,6 @@
   "webdesign_clear_btn": "site-builder#control-atlas",
   "webdesign_stop_btn": "site-builder#cost-cancellation-and-gates",
   "webdesign_tabs": "site-builder#control-atlas",
-
   "fiverr_provider_box": "best-fit#the-two-recommendations",
   "fiverr_model_box": "best-fit#the-two-recommendations",
   "fiverr_image_model_box": "client-gigs#control-atlas",
@@ -111,20 +103,13 @@
   "fiverr_gig_btn": "client-gigs#worked-run",
   "fiverr_stop_btn": "client-gigs#cost-cancellation-and-gates",
   "fiverr_tabs": "client-gigs#control-atlas",
-
   "creator_account_box": "creator#profile-and-compose-controls",
-  "creator_policy_btn": "creator#profile-and-compose-controls",
   "creator_handle_input": "creator#profile-and-compose-controls",
   "creator_platform_box": "creator#profile-and-compose-controls",
-  "creator_type_box": "creator#profile-and-compose-controls",
-  "creator_consent_input": "creator#prerequisites",
-  "creator_disclosure_input": "creator#prerequisites",
   "creator_save_account_btn": "creator#worked-run",
   "creator_delete_account_btn": "creator#profile-and-compose-controls",
   "creator_kind_box": "creator#profile-and-compose-controls",
   "creator_campaign_input": "creator#profile-and-compose-controls",
-  "creator_price_input": "creator#profile-and-compose-controls",
-  "creator_segment_box": "creator#profile-and-compose-controls",
   "creator_channel_box": "creator#profile-and-compose-controls",
   "creator_brief_input": "creator#worked-run",
   "creator_provider_box": "best-fit#the-two-recommendations",
@@ -134,8 +119,6 @@
   "creator_video_btn": "creator#cost-cancellation-and-gates",
   "creator_video_cancel_btn": "creator#cost-cancellation-and-gates",
   "creator_stop_btn": "creator#cost-cancellation-and-gates",
-  "creator_tabs": "creator#six-output-tabs",
-  "creator_revenue_btn": "creator#how-to-read-the-output-and-analytics",
-  "creator_import_btn": "creator#how-to-read-the-output-and-analytics",
-  "creator_add_media_btn": "creator#six-output-tabs"
+  "creator_tabs": "creator#four-output-tabs",
+  "creator_add_media_btn": "creator#four-output-tabs"
 }

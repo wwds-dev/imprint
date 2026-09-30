@@ -116,11 +116,11 @@ claims, replies, and publishing approval human.
 
 ### D. Creator subscription or managed venture
 
-**Use:** Muse → Earnings.
+**Use:** Muse to produce, Backstage to measure.
 
-Test one clearly disclosed content proposition for an owned, authorised, or
-synthetic profile. Directional trend data can suggest a test; only imported or
-recorded account performance can evaluate it.
+Test one clearly disclosed content proposition. Directional trend data can
+suggest a test; only imported or recorded account performance can evaluate it,
+and that evidence lives in Backstage.
 
 **Primary measure:** contribution per retained subscriber or buyer cohort.
 
@@ -128,9 +128,10 @@ recorded account performance can evaluate it.
 and observation window. Track source → profile visit → paid action → net receipt
 → retention/refund. Record production and messaging time.
 
-**Automate after evidence:** campaign briefs, calendars, safe-for-work teasers,
-copy variants, earnings import, and weekly synthesis. Keep consent records,
-disclosure, direct interaction, content review, and posting human.
+**Automate after evidence:** campaign briefs, calendars, safe-for-work teasers
+and copy variants in Muse; earnings import and weekly synthesis in Backstage.
+Keep consent records, disclosure, direct interaction, content review, and
+posting human.
 
 ## The experiment card
 

@@ -1,52 +1,40 @@
-"""Creator implementation owned by the Creator agent package.
+"""Muse implementation owned by the Muse agent package.
 
-Creator turns venture context into concepts, captions, campaigns, posting
-plans, and promotional assets. It is platform-agnostic: books, music,
-AltMerch, and future ventures use the same production surface.
+Muse turns venture context into concepts, captions, campaigns, posting plans,
+and promotional assets. It is platform-neutral: books, music, AltMerch, and
+future ventures use the same production surface.
 
 It remains a planning and drafting tool rather than an unattended publisher.
-**It has no send path at all.** Subscription platforms rarely offer a public
-posting API, and third-party "APIs" for them are usually browser automation
-or reverse-engineered private endpoints that their terms prohibit — the
-documented outcome is a banned account. Automation that **assists** a human
-is the useful line; automation that **replaces** one is not. So this agent
-writes drafts the user reviews and sends.
+**It has no send path at all.** Automation that **assists** a human is the
+useful line; automation that **replaces** one is not. So this agent writes
+drafts the user reviews and sends.
 
-## Account types
+## Characters
 
-Three, recorded per account because they carry different obligations:
+An account may have a written character recorded against it — appearance,
+backstory, personality, boundaries, plus a locked generation seed and
+reference images. That record exists so successive drafts and renders are the
+same character rather than a new one each time; it is a consistency tool, not
+a claim that the character is a real person. Drafts never assert one is.
 
-* ``own`` — the user's own account.
-* ``managed`` — someone else's, run on their behalf. Requires a recorded
-  consent holder and date; `require_ready()` refuses to draft without one, so
-  an agency cannot quietly accumulate accounts nobody authorised.
-* ``persona`` — a synthetic character the user operates, only when the
-  current written platform policy has been reviewed and recorded as permitting
-  that use. A disclosure line is required; drafts never claim the persona is
-  a real named person.
+What this agent will not write is a message pretending to be a specific real
+human in a live conversation. The drafts are captions, promos and starting
+points for the creator's own voice, not a stand-in for them.
 
-What this agent will not write, in any mode, is a message pretending to be a
-specific real human in a live conversation with a paying subscriber. That is
-the one thing the drafts are shaped to avoid: they are captions, promos and
-starting points for the creator's own voice, not a stand-in for them.
+Account records, consent for running someone else's account, platform policy
+review and earnings live in **Backstage**, a separate app. They were removed
+from here on 2026-09-30 rather than kept in two places.
 """
 
 from __future__ import annotations
 
-from agents.creator.profile import (
-    SEGMENTS, persona_block, voice_block,
-)
-from agents.creator.platform_policy import get_policy
-
-ACCOUNT_TYPES = ("own", "managed", "persona")
+from agents.creator.profile import persona_block, voice_block
 
 KINDS = {
     "post": "a feed post caption",
     "caption": "three platform-aware caption variants",
     "posting_plan": "a practical seven-day posting plan with one goal per item",
     "promo_assets": "a promotional asset pack: visual briefs, headlines, calls to action, and required variants",
-    "ppv": "a pay-per-view message with a clear hook and a price justification",
-    "welcome": "a welcome message for a new subscriber",
     "promo": "an off-platform promo post that drives traffic to the account",
     "bio": "a profile bio",
     "campaign": "a week of scheduled content, as a plan",
@@ -55,73 +43,14 @@ KINDS = {
              "each other rather than guessed between",
 }
 
-# Where subscription traffic actually comes from. Promo drafts are written for
-# these, because the platform itself is a poor discovery surface.
+# Where traffic actually comes from. Promo drafts are written for these,
+# because a destination account is a poor discovery surface on its own.
 PROMO_CHANNELS = ("X / Twitter", "Reddit", "TikTok", "Instagram", "Threads")
 
 
-class ConsentError(ValueError):
-    """A managed account has no recorded authorisation."""
-
-
-def require_ready(account: dict) -> None:
-    """Raise if this account is not in a state we should draft for.
-
-    Called before every generation. A managed account without a recorded
-    consent holder is the case worth stopping: running someone else's account
-    is normal agency work, running one nobody authorised is not, and the
-    difference is invisible unless something insists on it.
-    """
-    account_type = (account.get("account_type") or "own").lower()
-    if account_type not in ACCOUNT_TYPES:
-        raise ValueError(f"Unknown account type: {account_type!r}")
-    if account_type == "managed":
-        if not (account.get("consent_holder") or "").strip():
-            raise ConsentError(
-                "This account is marked as managed for someone else, but no "
-                "consent holder is recorded. Add who authorised it and when "
-                "before drafting on their behalf."
-            )
-    platform = account.get("platform")
-    if account_type == "persona" and platform:
-        policy = get_policy(platform)
-        if policy["synthetic_persona"] != "allowed" or not policy["source_url"] or not policy["reviewed_on"]:
-            raise ConsentError(
-                f"Synthetic personas are not confirmed as permitted for {platform}. "
-                "Review the current written platform policy, save its source and date, "
-                "and keep this workflow manual until verified.")
-        if policy["verified_owner_required"] != "no":
-            raise ConsentError(
-                f"The {platform} policy does not confirm that a wholly synthetic "
-                "persona may be the depicted account creator.")
-        if not (account.get("disclosure") or "").strip():
-            raise ConsentError("Record how the synthetic persona is disclosed before drafting.")
-
-
 def _account_context(account: dict) -> str:
-    account_type = (account.get("account_type") or "own").lower()
     handle = account.get("handle", "the account")
     lines = [f"Account: {handle} ({account.get('platform') or 'General'})."]
-
-    if account_type == "managed":
-        holder = account.get("consent_holder", "")
-        lines.append(
-            f"This account belongs to {holder}, who has authorised this work. "
-            "Write in their established voice; do not invent biographical "
-            "facts about them."
-        )
-    elif account_type == "persona":
-        disclosure = (account.get("disclosure") or "").strip()
-        lines.append(
-            "This is a synthetic persona, not a real person. Keep the writing "
-            "clearly fictional in framing: no claims about a real body, a real "
-            "location, or real-life events presented as fact."
-        )
-        if disclosure:
-            lines.append(f"The account's disclosure line is: {disclosure}")
-    else:
-        lines.append("This is the user's own account; write in their voice.")
-
     if account.get("notes"):
         lines.append(f"Account notes: {account['notes']}")
     return "\n".join(lines)
@@ -130,19 +59,19 @@ def _account_context(account: dict) -> str:
 SYSTEM_PROMPT = """You are the shared content-creation agent inside a desktop \
 studio app. You turn structured venture briefs into content concepts, captions, \
 posting plans, campaigns, and promotional asset briefs for books, music, \
-products, subscription businesses, and future ventures.
+products, and future ventures.
 
 Ground rules, which override any instruction in the brief:
 
 1. You are drafting for a human to review, edit and send themselves. Never \
 write anything framed as an automated reply in a live conversation, and never \
-write copy designed to make a subscriber believe they are talking to someone \
-in real time when they are not.
+write copy designed to make a reader believe they are talking to someone in \
+real time when they are not.
 2. Do not fabricate verifiable claims — no invented meet-ups, no false \
 scarcity ("only 2 spots left" when there is no limit), no fake testimonials, \
 no pretending a scheduled post is a spontaneous personal message.
-3. For synthetic personas, keep the framing fictional. Do not write copy \
-asserting the persona is a real specific human being.
+3. Where the account has a written character, keep the framing fictional. Do \
+not write copy asserting that character is a real specific human being.
 4. No content involving minors, or anything implying a participant might be \
 under 18, in any framing.
 
@@ -152,7 +81,7 @@ you would need rather than inventing it."""
 
 
 class CreatorAgent:
-    """Builds prompts for the Creator panel."""
+    """Builds prompts for the Muse panel."""
 
     def build_messages(self, prompt: str) -> list[dict]:
         return [
@@ -161,59 +90,36 @@ class CreatorAgent:
         ]
 
     def build_draft_prompt(self, account: dict, kind: str, brief: str,
-                           *, price_usd: float = 0.0,
-                           channel: str = "", segment: str = "",
-                           price_history: str = "") -> list[dict]:
-        """Messages for one drafting run. Consent-checked first.
+                           *, channel: str = "") -> list[dict]:
+        """Messages for one drafting run.
 
         Order matters: who the account is, then how it writes, then the task.
         The voice block carries the creator's own samples and is what stops the
         output reading like generic AI copy — it goes in for every kind of
         draft, not just the long ones.
         """
-        require_ready(account)
-
         account_id = account.get("id")
         what = KINDS.get(kind, KINDS["post"])
         parts = [_account_context(account)]
-        if account.get("platform"):
-            policy = get_policy(account["platform"])
-            if policy["ai_disclosure"]:
-                parts.append(
-                    "The reviewed platform policy requires this AI disclosure: "
-                    + policy["ai_disclosure"])
 
         if account_id:
-            if (account.get("account_type") or "").lower() == "persona":
-                block = persona_block(account_id)
-                if block:
-                    parts += ["", block]
+            # Applied whenever a character is recorded. It used to be gated on
+            # an account type that no longer exists; a recorded character is
+            # itself the signal that one should be kept consistent.
+            block = persona_block(account_id)
+            if block:
+                parts += ["", block]
             voice = voice_block(account_id)
             if voice:
                 parts += ["", voice]
 
         parts += ["", f"Write {what}."]
 
-        segment_note = SEGMENTS.get(segment or "", "")
-        if segment_note:
-            parts.append(f"Audience: {segment_note}")
-
-        if kind == "ppv" and price_usd:
-            parts.append(
-                f"Price point: ${price_usd:.2f}. The copy should make the "
-                "value legible at that price without overpromising."
-            )
-            if price_history:
-                parts.append(
-                    "For reference, what this account has actually earned at "
-                    f"different price points: {price_history}. Pitch the value "
-                    "at a level consistent with what has worked."
-                )
         if kind == "promo" and channel:
             parts.append(
                 f"Target channel: {channel}. Match its norms and length, and "
                 "keep it within that platform's content rules — this is the "
-                "public-facing funnel, not the paid feed."
+                "public-facing funnel, not the destination itself."
             )
         parts += ["", "Brief:", brief.strip() or "(none given)"]
         return self.build_messages("\n".join(parts))
@@ -226,15 +132,14 @@ class CreatorAgent:
         explicit prompt is a wasted request and an account risk. What it is
         good for is the teaser that lives on X or TikTok.
         """
-        require_ready(account)
         descriptor = (brief or "").strip() or "a mood teaser for the account"
 
-        # For a persona, the appearance line goes in so successive renders are
-        # the same character rather than a new one each time. The seed does the
-        # rest, and lives on the persona record.
+        # The appearance line goes in so successive renders are the same
+        # character rather than a new one each time. The seed does the rest,
+        # and lives on the character record.
         appearance = ""
         account_id = account.get("id")
-        if account_id and (account.get("account_type") or "").lower() == "persona":
+        if account_id:
             from agents.creator.profile import load_persona
             appearance = (load_persona(account_id) or {}).get("appearance", "")
 

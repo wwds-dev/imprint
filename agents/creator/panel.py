@@ -1,7 +1,7 @@
 """Muse workspace and its guarded drafting/teaser lifecycles.
 
-Phase 4 extraction: the profile form, compose controls and the six tabs
-(Draft, Calendar, Earnings, Voice, Media, Agency) and every
+Phase 4 extraction: the profile form, compose controls and the four tabs
+(Draft, Calendar, Voice, Media) and every
 handler moved here from main.py. The host supplies shared budget
 authorization, usage records, the chat-worker factory, `_note_failure`
 and the Higgsfield permission checkbox; the workers stay host attributes
@@ -19,19 +19,13 @@ from PySide6.QtCore import QDateTime, Qt
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDateTimeEdit, QDialog, QDialogButtonBox,
     QFileDialog, QGridLayout, QGroupBox, QHBoxLayout,
-    QHeaderView, QInputDialog, QLabel, QLineEdit, QMessageBox, QPushButton,
+    QHeaderView, QLabel, QLineEdit, QMessageBox, QPushButton,
     QSizePolicy, QTableWidget, QTableWidgetItem, QTabWidget, QTextEdit,
     QVBoxLayout, QWidget,
 )
 
-from agents.creator import ConsentError, PROMO_CHANNELS
+from agents.creator import PROMO_CHANNELS
 from agents.creator import calendar as content_calendar
-from agents.creator.earnings_csv import ingest_creator_csv
-from agents.creator.insights import (
-    account_summary, agency_overview, asset_outcomes, hook_results,
-    price_history, price_points, record_outcome, record_revenue, top_content,
-)
-from agents.creator.platform_policy import get_policy, save_policy
 from agents.creator.profile import (
     load_persona, load_voice, reference_images, save_persona, save_voice,
 )
@@ -40,26 +34,19 @@ from services.higgsfield_client import (
     ContentPolicyError, HiggsfieldClient, check_prompt,
 )
 from services.runtime_paths import user_data_base
-from ui.creator_earnings import CreatorEarningsView
-from ui.creator_outcome_dialog import CreatorOutcomeDialog
-from ui.creator_policy_dialog import CreatorPolicyDialog
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
 from ui.panels.base import AgentPanel
 from ui.widgets import scrollable
 
 
 class CreatorPanel(QWidget):
-    """Profiles, consent-aware drafting, and the evidence tabs around them."""
+    """Content profiles, drafting, the plan calendar and the media around them."""
 
     HOST_CONTROLS = (
         "creator_account_box", "creator_handle_input", "creator_platform_box",
-        "creator_type_box", "creator_consent_input", "creator_disclosure_input",
-        "creator_consent_field", "creator_disclosure_field",
         "creator_save_account_btn", "creator_delete_account_btn",
-        "creator_policy_status", "creator_policy_btn", "creator_kind_box",
-        "creator_price_input", "creator_segment_box", "creator_channel_box",
-        "creator_campaign_input", "creator_price_field",
-        "creator_segment_field", "creator_channel_field",
+        "creator_kind_box", "creator_channel_box",
+        "creator_campaign_input", "creator_channel_field",
         "creator_campaign_field", "creator_compose_grid", "creator_kind_field",
         "creator_brief_input", "creator_panel_base", "creator_provider_box",
         "creator_model_box", "creator_generate_btn", "creator_schedule_btn",
@@ -69,11 +56,8 @@ class CreatorPanel(QWidget):
         "creator_calendar_prev_btn", "creator_calendar_today_btn",
         "creator_calendar_next_btn", "creator_calendar_week_label",
         "creator_calendar_undated_table", "creator_calendar_reschedule_btn",
-        "creator_calendar_export_btn",
-        "creator_earnings_view",
-        "creator_revenue_btn", "creator_import_btn", "creator_voice_tab",
+        "creator_calendar_export_btn", "creator_voice_tab",
         "creator_media_scope", "creator_media_table", "creator_add_media_btn",
-        "creator_agency_table",
         "creator_voice_samples", "creator_voice_tone", "creator_voice_emoji",
         "creator_voice_length", "creator_voice_banned",
         "creator_persona_group", "creator_persona_appearance",
@@ -111,29 +95,12 @@ class CreatorPanel(QWidget):
             "AltMerch", "Instagram", "TikTok", "X / Twitter", "Reddit",
             "YouTube", "Other",
         ], "General")
-        self.creator_platform_box.currentTextChanged.connect(
-            self._update_policy_status)
-        self.creator_type_box = combo(["own", "managed", "persona"])
-        self.creator_type_box.currentTextChanged.connect(self._type_changed)
-        self.creator_consent_input = line_edit("Who authorised this, and when")
-        self.creator_disclosure_input = line_edit(
-            "How the account discloses it is a synthetic persona")
-
-        # The whole field hides, not just its input: hiding a control while
-        # leaving its label behind is what produced orphaned "Authorised by:"
-        # captions above nothing.
-        self.creator_consent_field = field("Authorised by", self.creator_consent_input)
-        self.creator_disclosure_field = field("Disclosure", self.creator_disclosure_input)
-
         account = QGridLayout()
         account.setHorizontalSpacing(MD)
         account.setVerticalSpacing(MD)
         account.addWidget(field("Profile", self.creator_account_box), 0, 0, Qt.AlignTop)
         account.addWidget(field("Handle / project", self.creator_handle_input), 0, 1, Qt.AlignTop)
         account.addWidget(field("Platform / venture", self.creator_platform_box), 0, 2, Qt.AlignTop)
-        account.addWidget(field("Ownership", self.creator_type_box), 1, 0, Qt.AlignTop)
-        account.addWidget(self.creator_consent_field, 1, 1, Qt.AlignTop)
-        account.addWidget(self.creator_disclosure_field, 1, 2, Qt.AlignTop)
         for column in range(3):
             account.setColumnStretch(column, 1)
         layout.addLayout(account)
@@ -150,41 +117,25 @@ class CreatorPanel(QWidget):
         account_actions.addStretch()
         layout.addLayout(account_actions)
 
-        policy_row = QHBoxLayout()
-        self.creator_policy_status = QLabel("")
-        self.creator_policy_status.setObjectName("EstimateLine")
-        self.creator_policy_status.setWordWrap(True)
-        policy_row.addWidget(self.creator_policy_status, 1)
-        self.creator_policy_btn = quiet("Review platform policy")
-        self.creator_policy_btn.clicked.connect(self.review_policy)
-        policy_row.addWidget(self.creator_policy_btn)
-        layout.addLayout(policy_row)
-        self._update_policy_status(self.creator_platform_box.currentText())
-
         # ── Compose ─────────────────────────────────────────────────────
         layout.addWidget(section("Compose"))
 
         self.creator_kind_box = combo(
             ["post", "caption", "campaign", "posting_plan", "promo_assets",
-             "hooks", "bio", "ppv", "welcome", "promo"])
+             "hooks", "bio", "promo"])
         self.creator_kind_box.currentTextChanged.connect(self._kind_changed)
-        self.creator_price_input = line_edit("12.00")
-        self.creator_segment_box = combo(
-            ["(any)", "new", "loyal", "lapsed", "big_spender"])
         self.creator_channel_box = combo(list(PROMO_CHANNELS))
         for _extra_channel in ("Website", "Email", "Other"):
             self.creator_channel_box.addItem(_extra_channel)
         self.creator_campaign_input = line_edit("Campaign or test name")
 
-        self.creator_price_field = field("Price (USD)", self.creator_price_input)
-        self.creator_segment_field = field("Audience", self.creator_segment_box)
         self.creator_channel_field = field("Channel", self.creator_channel_box)
         self.creator_campaign_field = field("Campaign", self.creator_campaign_input)
 
-        # Three of these four fields only apply to some kinds of post, so the
-        # grid is re-packed when the kind changes. Simply hiding a cell leaves
-        # a hole in the row — which is the same "nothing lines up" complaint,
-        # produced by an empty cell instead of a misplaced one.
+        # The grid is re-packed when the kind changes rather than hiding a
+        # cell in place: hiding one leaves a hole in the row — the same
+        # "nothing lines up" complaint, produced by an empty cell instead of
+        # a misplaced one.
         self.creator_compose_grid = QGridLayout()
         self.creator_compose_grid.setHorizontalSpacing(MD)
         self.creator_compose_grid.setVerticalSpacing(MD)
@@ -349,19 +300,6 @@ class CreatorPanel(QWidget):
         calendar_layout.addWidget(self.creator_calendar_undated_table, 1)
         self.creator_tabs.addTab(calendar_page, "Calendar")
 
-        self.creator_earnings_view = CreatorEarningsView()
-        self.creator_revenue_btn = QPushButton("Record outcome")
-        self.creator_revenue_btn.setToolTip(
-            "Select an asset in Calendar first, then record its observed results and costs.")
-        self.creator_revenue_btn.clicked.connect(self.record_outcome)
-        self.creator_import_btn = QPushButton("Import Earnings CSV")
-        self.creator_import_btn.clicked.connect(self.import_earnings)
-        self.creator_tabs.addTab(
-            self._tab_with_actions(
-                self.creator_earnings_view,
-                [self.creator_import_btn, self.creator_revenue_btn]),
-            "Earnings")
-
         self.creator_voice_tab = self._build_voice_tab()
         self.creator_tabs.addTab(self.creator_voice_tab, "Voice")
 
@@ -383,13 +321,6 @@ class CreatorPanel(QWidget):
             media_body, [self.creator_add_media_btn])
         self.creator_tabs.addTab(self.creator_media_tab, "Media")
 
-        self.creator_agency_table = QTableWidget(0, 6)
-        self.creator_agency_table.setHorizontalHeaderLabels(
-            ["Account", "Type", "Authorised by", "Net $", "Subs", "Drafts"])
-        self.creator_agency_table.horizontalHeader().setSectionResizeMode(
-            0, QHeaderView.Stretch)
-        self.creator_tabs.addTab(self.creator_agency_table, "Agency")
-
         layout.addWidget(self.creator_tabs, 1)
 
         # Aliases retired 2026-09-21: shared wiring resolves controls
@@ -402,7 +333,6 @@ class CreatorPanel(QWidget):
         host.creator_video_estimate_worker = None
         host.creator_video_worker = None
         self.hide()
-        self._type_changed(self.creator_type_box.currentText())
         self._kind_changed(self.creator_kind_box.currentText())
         self.refresh_accounts()
 
@@ -512,45 +442,14 @@ class CreatorPanel(QWidget):
     def load_models(self) -> None:
         self.creator_panel_base.load_models()
 
-    def _type_changed(self, account_type: str):
-        """Consent fields matter for managed accounts; disclosure for personas."""
-        is_managed = account_type == "managed"
-        is_persona = account_type == "persona"
-        self.creator_consent_field.setVisible(is_managed)
-        self.creator_disclosure_field.setVisible(is_persona)
-
-    def _update_policy_status(self, platform: str):
-        if not hasattr(self, "creator_policy_status"):
-            return
-        policy = get_policy(platform)
-        review = policy["reviewed_on"] or "not reviewed"
-        self.creator_policy_status.setText(
-            f"{platform} policy · {review} · synthetic personas: "
-            f"{policy['synthetic_persona']} · publishing: "
-            f"{policy['publishing_method'].replace('_', ' ')}")
-
-    def review_policy(self):
-        platform = self.creator_platform_box.currentText()
-        dialog = CreatorPolicyDialog(platform, get_policy(platform), self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        try:
-            save_policy(platform, **dialog.values())
-        except ValueError as exc:
-            QMessageBox.warning(self, "Policy not saved", str(exc))
-            return
-        self._update_policy_status(platform)
-
     def _kind_changed(self, kind: str):
         # Which fields apply, in the order they should appear. Kind is always
         # shown; the other three depend on it.
         wanted = [
             (self.creator_kind_field, True),
             (self.creator_campaign_field, True),
-            (self.creator_channel_field, True),
-            (self.creator_price_field, kind == "ppv"),
-            # Audience only shapes a message aimed at someone.
-            (self.creator_segment_field, kind in ("welcome", "ppv", "post", "caption")),
+            # Channel is the off-platform funnel, so it only applies to promo.
+            (self.creator_channel_field, kind == "promo"),
         ]
         self._reflow_compose(wanted)
 
@@ -578,12 +477,11 @@ class CreatorPanel(QWidget):
         try:
             with get_connection() as conn:
                 rows = conn.execute(
-                    "SELECT id, handle, platform, account_type FROM creator_accounts "
+                    "SELECT id, handle, platform FROM creator_accounts "
                     "ORDER BY handle").fetchall()
             for row in rows:
                 self.creator_account_box.addItem(
-                    f"{row['handle']}  ({row['platform']} · {row['account_type']})",
-                    row["id"])
+                    f"{row['handle']}  ({row['platform']})", row["id"])
         except Exception as exc:
             self.host._note_failure("creator: load accounts", exc)
         self.creator_account_box.blockSignals(False)
@@ -599,14 +497,9 @@ class CreatorPanel(QWidget):
         platform_index = self.creator_platform_box.findText(
             platform, Qt.MatchFixedString)
         self.creator_platform_box.setCurrentIndex(max(0, platform_index))
-        self.creator_type_box.setCurrentText(account.get("account_type", "own"))
-        self.creator_consent_input.setText(account.get("consent_holder", ""))
-        self.creator_disclosure_input.setText(account.get("disclosure", ""))
         self.refresh_calendar()
-        self.refresh_earnings()
         self.load_voice_tab()
         self.refresh_media()
-        self.refresh_agency()
 
     def current_account(self) -> dict | None:
         account_id = self.creator_account_box.currentData()
@@ -628,32 +521,16 @@ class CreatorPanel(QWidget):
             QMessageBox.warning(
                 self, "No Profile", "Enter a handle or project name first.")
             return
-        account_type = self.creator_type_box.currentText()
         platform = self.creator_platform_box.currentText().strip() or "General"
-        stored_platform = platform
-        consent = self.creator_consent_input.text().strip()
-        if account_type == "managed" and not consent:
-            QMessageBox.warning(
-                self, "Authorisation Required",
-                "This account is marked as managed for someone else. Record "
-                "who authorised it before saving — the drafting tools refuse "
-                "to run for a managed account without it.")
-            return
         try:
             with get_connection() as conn:
                 conn.execute("""
                     INSERT INTO creator_accounts
-                      (handle, platform, account_type, consent_holder,
-                       consent_date, disclosure, created_at)
-                    VALUES (?,?,?,?,?,?,?)
+                      (handle, platform, created_at)
+                    VALUES (?,?,?)
                     ON CONFLICT(handle) DO UPDATE SET
-                      platform=excluded.platform,
-                      account_type=excluded.account_type,
-                      consent_holder=excluded.consent_holder,
-                      disclosure=excluded.disclosure
-                """, (handle, stored_platform, account_type, consent,
-                      datetime.now().isoformat(timespec="seconds") if consent else "",
-                      self.creator_disclosure_input.text().strip(),
+                      platform=excluded.platform
+                """, (handle, platform,
                       datetime.now().isoformat(timespec="seconds")))
                 conn.commit()
         except Exception as exc:
@@ -704,8 +581,7 @@ class CreatorPanel(QWidget):
                     (account["id"],))
                 for table in (
                         "creator_video_jobs", "creator_media", "creator_voice",
-                        "creator_persona",
-                        "creator_content", "creator_earnings"):
+                        "creator_persona", "creator_content"):
                     conn.execute(f"DELETE FROM {table} WHERE account_id = ?",
                                  (account["id"],))
                 conn.execute("DELETE FROM creator_accounts WHERE id = ?",
@@ -728,20 +604,9 @@ class CreatorPanel(QWidget):
         kind = self.creator_kind_box.currentText()
         brief = self.creator_brief_input.toPlainText().strip()
         try:
-            price = float(self.creator_price_input.text().strip() or 0)
-        except ValueError:
-            price = 0.0
-
-        try:
-            segment = self.creator_segment_box.currentText()
             messages = agent.build_draft_prompt(
-                account, kind, brief, price_usd=price,
-                channel=self.creator_channel_box.currentText(),
-                segment="" if segment == "(any)" else segment,
-                price_history=price_history(account["id"]))
-        except ConsentError as exc:
-            QMessageBox.warning(self, "Authorisation Required", str(exc))
-            return
+                account, kind, brief,
+                channel=self.creator_channel_box.currentText())
         except ValueError as exc:
             QMessageBox.warning(self, "Cannot Draft", str(exc))
             return
@@ -838,24 +703,24 @@ class CreatorPanel(QWidget):
         if when is None:
             return
         try:
-            price = float(self.creator_price_input.text().strip() or 0)
-        except ValueError:
-            price = 0.0
-        try:
             with get_connection() as conn:
+                # price_usd and revenue_usd still exist on the table and are
+                # deliberately not written: dropping the columns would be a
+                # migration on a live database, and the money side of this
+                # work moved to Backstage.
                 conn.execute("""
                     INSERT INTO creator_content
                       (account_id, project_id, created_at, scheduled_for, kind, title,
-                       body, price_usd, status, campaign, channel,
+                       body, status, campaign, channel,
                        generation_cost_eur)
-                    VALUES (?,?,?,?,?,?,?,?,'draft',?,?,?)
+                    VALUES (?,?,?,?,?,?,?,'draft',?,?,?)
                 """, (account["id"],
                       project_id,
                       datetime.now().isoformat(timespec="seconds"),
                       when,
                       self.creator_kind_box.currentText(),
                       body.splitlines()[0][:80] if body else "",
-                      body, price,
+                      body,
                       self.creator_campaign_input.text().strip(),
                       self.creator_channel_box.currentText(),
                       float(self._last_generation_cost_eur)))
@@ -883,8 +748,8 @@ class CreatorPanel(QWidget):
         project_only = scope.currentData() == "project"
         if project_only and not project:
             return None
-        columns = ("c.id, c.scheduled_for, c.kind, c.title, c.price_usd, "
-                   "c.status, c.revenue_usd, c.channel, c.campaign, "
+        columns = ("c.id, c.scheduled_for, c.kind, c.title, "
+                   "c.status, c.channel, c.campaign, "
                    + ("c.body, " if full_detail else "")
                    + "p.name AS project_name")
         try:
@@ -912,10 +777,6 @@ class CreatorPanel(QWidget):
         item.setData(Qt.UserRole, row["id"])
         details = [f"Project: {row['project_name'] or 'Unfiled'}",
                    f"Status: {row['status']}"]
-        if row["price_usd"]:
-            details.append(f"Price: ${row['price_usd']:.2f}")
-        if row["revenue_usd"]:
-            details.append(f"Revenue: ${row['revenue_usd']:,.2f}")
         details.append(f"Scheduled: {row['scheduled_for'] or '(undated)'}")
         item.setToolTip("\n".join(details))
         return item
@@ -1134,12 +995,8 @@ class CreatorPanel(QWidget):
             QMessageBox.warning(self, "No Account", "Add an account first.")
             return
         agent = self.host.agent_instances["creator"]
-        try:
-            prompt = agent.build_video_prompt(
-                account, self.creator_brief_input.toPlainText().strip())
-        except ConsentError as exc:
-            QMessageBox.warning(self, "Authorisation Required", str(exc))
-            return
+        prompt = agent.build_video_prompt(
+            account, self.creator_brief_input.toPlainText().strip())
 
         client = HiggsfieldClient()
         if not client.configured:
@@ -1589,60 +1446,7 @@ class CreatorPanel(QWidget):
             self.creator_video_status.setText(
                 f"[Resume] {error}")
 
-    # ── earnings ────────────────────────────────────────────────────────
-    def import_earnings(self):
-        """Import an earnings CSV exported from the platform.
-
-        The same shape as the KDP importer, and for the same reason: no API, so
-        the numbers only exist here once the statement is exported and read in.
-        """
-        account = self.current_account()
-        if not account:
-            QMessageBox.warning(self, "No Account", "Add an account first.")
-            return
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Import Earnings CSV", "", "CSV files (*.csv)")
-        if not path:
-            return
-        try:
-            summary = ingest_creator_csv(account["id"], Path(path))
-        except Exception as exc:
-            self.host._note_failure("creator: import earnings", exc,
-                                    self.creator_status_label)
-            return
-        self.creator_status_label.setText(
-            f"Imported {summary['rows']} rows from {Path(path).name}.")
-        self.refresh_earnings()
-        self.creator_tabs.setCurrentIndex(2)
-
-    def refresh_earnings(self):
-        account = self.current_account()
-        if not account:
-            return
-        try:
-            with get_connection() as conn:
-                rows = conn.execute(
-                    "SELECT source_file, period_from, period_to, gross_usd, "
-                    "net_usd, subscribers FROM creator_earnings "
-                    "WHERE account_id = ? ORDER BY id DESC",
-                    (account["id"],)).fetchall()
-        except Exception as exc:
-            self.host._note_failure("creator: load earnings", exc)
-            return
-        summary = account_summary(account["id"])
-        # A user can record post revenue without importing a statement. Only
-        # show the empty state when neither kind of evidence exists.
-        if not rows and not summary["posted"]:
-            self.creator_earnings_view.show_empty()
-            return
-        points = price_points(account["id"])
-        best = top_content(account["id"])
-        self.creator_earnings_view.set_data(
-            summary, points, best, [dict(row) for row in rows],
-            outcomes=asset_outcomes(account["id"]),
-            hooks=hook_results(account["id"]))
-
-    # ── voice and persona ───────────────────────────────────────────────
+    # ── voice and character ─────────────────────────────────────────────
     def save_voice(self):
         account = self.current_account()
         if not account:
@@ -1789,64 +1593,3 @@ class CreatorPanel(QWidget):
                 self.creator_media_table.setItem(r, col, QTableWidgetItem(str(value)))
 
     # ── revenue attribution ─────────────────────────────────────────────
-    def record_outcome(self):
-        """Attach a source-labelled observation to the selected calendar item."""
-        content_id = self.selected_content_id()
-        if content_id is None:
-            QMessageBox.information(
-                self, "Select an item",
-                "Select an asset on Calendar first, then return to Earnings.")
-            return
-        with get_connection() as conn:
-            item = conn.execute(
-                "SELECT * FROM creator_content WHERE id=?",
-                (content_id,)).fetchone()
-        if item is None:
-            QMessageBox.warning(self, "Missing item",
-                                "The selected asset no longer exists.")
-            return
-        dialog = CreatorOutcomeDialog(dict(item), self)
-        if dialog.exec() != QDialog.DialogCode.Accepted:
-            return
-        try:
-            record_outcome(content_id, **dialog.values())
-        except ValueError as exc:
-            QMessageBox.warning(self, "Outcome not saved", str(exc))
-            return
-        self.refresh_calendar()
-        self.refresh_earnings()
-        self.creator_tabs.setCurrentIndex(2)
-
-    def record_revenue(self):
-        """Attach what a calendar item earned, closing the loop to the drafter."""
-        content_id = self.selected_content_id()
-        if content_id is None:
-            QMessageBox.information(
-                self, "Select an Item",
-                "Pick an item on the Calendar tab first — revenue attaches "
-                "to one piece of content.")
-            return
-        amount, ok = QInputDialog.getDouble(
-            self, "Record Revenue", "What did it earn (USD)?", 0, 0, 1e6, 2)
-        if not ok:
-            return
-        record_revenue(content_id, amount)
-        self.refresh_calendar()
-        self.refresh_earnings()
-
-    # ── agency ──────────────────────────────────────────────────────────
-    def refresh_agency(self):
-        self.creator_agency_table.setRowCount(0)
-        try:
-            rows = agency_overview()
-        except Exception as exc:
-            self.host._note_failure("creator: agency overview", exc)
-            return
-        for row in rows:
-            r = self.creator_agency_table.rowCount()
-            self.creator_agency_table.insertRow(r)
-            for col, value in enumerate([
-                    row["handle"], row["account_type"],
-                    row["consent_holder"] or "—",
-                    f"{row['net']:,.2f}", row["subscribers"], row["drafts"]]):
-                self.creator_agency_table.setItem(r, col, QTableWidgetItem(str(value)))

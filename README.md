@@ -181,8 +181,8 @@ Video links a finished local clip to the Project captured when its render was
 approved, including provider jobs recovered after restart. Its vidforge
 Library still includes standalone vidforge renders by default; choose the
 current-Project view to show only linked Imprint clips.
-Creator links scheduled content, teaser jobs and media to a Project while its
-profiles, consent and earnings remain account-owned. Calendar and Media
+Muse links scheduled content, teaser jobs and media to a Project while its
+profiles, voice and character records remain account-owned. Calendar and Media
 default to account-wide views, with a current-Project filter for each;
 deleting a Project unfiles Creator work rather than deleting the profile or
 its records.
@@ -1592,15 +1592,21 @@ human is the useful line; automation that *replaces* one is not. So the agent
 drafts, and the user posts.
 
 It will not write a message posing as a specific real person in a live
-conversation with a paying subscriber.
+conversation.
 
-#### Account types
+#### What moved to Backstage
 
-| Type | Meaning | Enforced requirement |
-|---|---|---|
-| `own` | The user's own account | — |
-| `managed` | Someone else's, run on their behalf | A recorded consent holder. `require_ready()` refuses to draft without one, on the drafting path rather than in the dialog — a rule enforced only by a UI prompt is not enforced. |
-| `persona` | A synthetic character the user operates | A disclosure line; drafts stay fictional in framing and never assert the persona is a real named human. |
+On 30 September 2026 the account-type and consent model, the platform-policy
+record, statement import, per-asset revenue and outcomes, fan segments, the
+`ppv` and `welcome` kinds, pricing fields and the agency view were removed from
+Muse. **Backstage** — a separate app in the same workspace, sharing no code and
+no data — already owned all of it. Muse keeps drafting, the plan calendar,
+voice, media, teasers and the written-character record.
+
+The `creator_*` tables stay in the database untouched, and `creator_content`
+keeps its `price_usd` and `revenue_usd` columns; nothing writes or reads them
+now. The pre-cut files are archived under
+`~/Documents/lab/archive/imprint_creator_pre_cut_2026-09-30/`.
 
 #### Voice and character
 
@@ -1610,9 +1616,9 @@ words — and injects it into every prompt. The samples are what the model
 imitates; without them every draft starts from nothing, which is exactly why
 generic AI copy reads the way it does.
 
-Persona accounts additionally carry a **character bible** (appearance,
+An account may additionally carry a **character bible** (appearance,
 backstory, personality, boundaries) and a locked generation seed, so a
-synthetic account stays one character rather than becoming a new one each
+written character stays one character rather than becoming a new one each
 session.
 
 #### Calendar
@@ -1654,18 +1660,6 @@ budget caps. Every remote state is retained in `creator_video_jobs`; completed
 files keep their job ID, and selecting a Calendar row before generation attaches
 the result to that item. Queued requests can be canceled; processing requests
 are watched through completion so their paid output is not lost.
-
-#### Earnings and attribution
-
-`agents/creator/earnings_csv.py` imports statements exported from the platform — the
-same pattern as the KDP importer, because there is no API — keyed on
-`(account, filename)` so a re-import updates rather than double-counts.
-
-`agents/creator/insights.py` turns that into a feedback loop:
-`price_history()` feeds back into the PPV drafter so the price argument is
-written against what has actually earned. Thin evidence is labelled as such;
-three sends at $15 is an anecdote, and presenting it as a finding would be
-worse than staying quiet.
 
 ## 8. Tools
 

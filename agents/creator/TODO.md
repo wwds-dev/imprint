@@ -7,6 +7,15 @@
 
 ---
 
+## Cut on 2026-09-30
+
+The OnlyFans-specific and Backstage-duplicated half of this agent was removed:
+account types and the consent gate, platform-policy review, statement import,
+per-asset revenue and outcomes, fan segments, the `ppv` and `welcome` kinds,
+pricing fields, and the Earnings and Agency tabs. Backstage owns that work.
+Completed entries below that describe those features are kept as the record of
+what was built; they are no longer a description of this package.
+
 ## v1 — current
 
 - [x] `P1` Move the Creator panel and handlers from `main.py` into this package. Done 2026-09-21: `panel.py` owns the profile form, consent-aware compose controls, all six tabs (Draft, Calendar, Earnings, Voice, Media, Agency) and every handler, with the drafting token on the panel and the Higgsfield teaser token in its job context — nothing resolves by the shared "creator" name (the teaser's old `or "creator"` record fallback is gone). The umbrella keeps thin delegates for tests, and the worker attributes its shutdown sweep watches; the teaser output dir moved off BASE_DIR onto the writable base.

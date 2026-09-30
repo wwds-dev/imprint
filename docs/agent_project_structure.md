@@ -80,7 +80,7 @@ permissions and ranking policy. See `docs/recommendation_system.md`.
    storage, providers, budgets and request guards shared. **Done 2026-09-21:
    book export (author); calendar, LLM parsing, PublishDrive, KDP CSV, quote
    graphics, shorts + their widgets/worker (manuscript); platforms, publishing,
-   store (social); earnings CSV, profile, insights, platform policy (creator);
+   store (social); profile and plan calendar (creator);
    library + player (audiobook); the course pipeline (course). `services/`
    retains only cross-agent modules.**
 4. Move focused tests into each agent project while retaining umbrella contract

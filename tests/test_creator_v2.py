@@ -1,11 +1,13 @@
 """
-Imprint — Creator agent, second arc
-===================================
-Type: Unit + panel tests for voice, persona, insights, media and records.
+Imprint — Muse agent, second arc
+================================
+Type: Unit + panel tests for voice, character, media and records.
 
 Covers the three things v1 left thin — an unused media column, a Higgsfield
-submit with no polling behind it, and untested panel handlers — plus the
-feedback loop from posted content back into the next draft.
+submit with no polling behind it, and untested panel handlers.
+
+The earnings, pricing, segment and agency tests were removed on 2026-09-30
+with the code they covered; Backstage owns that work now.
 """
 
 import os
@@ -27,9 +29,7 @@ def db(tmp_path, monkeypatch):
     database.init_db()
 
     import agents.creator.profile as profile
-    import agents.creator.insights as insights
     monkeypatch.setattr(profile, "get_connection", database.get_connection)
-    monkeypatch.setattr(insights, "get_connection", database.get_connection)
 
     conn = database.get_connection()
     conn.execute(
@@ -89,21 +89,23 @@ def test_voice_reaches_the_draft_prompt(db):
     assert "a line only this creator would write" in messages[-1]["content"]
 
 
-# ── Persona ──────────────────────────────────────────────────────────────────
-def test_persona_block_reaches_persona_accounts_only(db):
+# ── Character ────────────────────────────────────────────────────────────────
+def test_character_reaches_any_account_that_has_one(db):
+    """It used to be gated on an account type that no longer exists. A
+    recorded character is itself the signal that one should be kept
+    consistent; an account without a record gets nothing extra."""
     from agents.creator import CreatorAgent
     from agents.creator.profile import save_persona
     _, account_id = db
     save_persona(account_id, appearance="silver hair", backstory="from Lisbon")
 
-    persona = CreatorAgent().build_draft_prompt(
-        {"id": account_id, "handle": "@a", "account_type": "persona"},
-        "post", "x")
-    assert "silver hair" in persona[-1]["content"]
+    with_record = CreatorAgent().build_draft_prompt(
+        {"id": account_id, "handle": "@a"}, "post", "x")
+    assert "silver hair" in with_record[-1]["content"]
 
-    own = CreatorAgent().build_draft_prompt(
-        {"id": account_id, "handle": "@a", "account_type": "own"}, "post", "x")
-    assert "silver hair" not in own[-1]["content"]
+    without = CreatorAgent().build_draft_prompt(
+        {"id": account_id + 999, "handle": "@b"}, "post", "x")
+    assert "silver hair" not in without[-1]["content"]
 
 
 def test_persona_seed_is_kept_for_consistent_renders(db):
@@ -120,152 +122,8 @@ def test_persona_appearance_is_reused_in_video_prompts(db):
     _, account_id = db
     save_persona(account_id, appearance="silver hair, green coat")
     prompt = CreatorAgent().build_video_prompt(
-        {"id": account_id, "handle": "@a", "account_type": "persona"}, "rooftop")
+        {"id": account_id, "handle": "@a"}, "rooftop")
     assert "silver hair" in prompt
-
-
-# ── Segments ─────────────────────────────────────────────────────────────────
-@pytest.mark.parametrize("segment", ["new", "loyal", "lapsed", "big_spender"])
-def test_each_segment_changes_the_prompt(db, segment):
-    from agents.creator import CreatorAgent
-    _, account_id = db
-    messages = CreatorAgent().build_draft_prompt(
-        {"id": account_id, "handle": "@a", "account_type": "own"},
-        "welcome", "x", segment=segment)
-    assert "Audience:" in messages[-1]["content"]
-
-
-def test_no_segment_adds_nothing(db):
-    from agents.creator import CreatorAgent
-    _, account_id = db
-    messages = CreatorAgent().build_draft_prompt(
-        {"id": account_id, "handle": "@a", "account_type": "own"},
-        "welcome", "x", segment="")
-    assert "Audience:" not in messages[-1]["content"]
-
-
-# ── Insights ─────────────────────────────────────────────────────────────────
-def _post(database, account_id, price, revenue, kind="ppv"):
-    conn = database.get_connection()
-    conn.execute(
-        "INSERT INTO creator_content (account_id, created_at, kind, price_usd,"
-        " status, revenue_usd) VALUES (?,?,?,?,'posted',?)",
-        (account_id, datetime.now().isoformat(), kind, price, revenue))
-    conn.commit()
-
-
-def test_price_history_is_empty_without_data(db):
-    from agents.creator.insights import price_history
-    _, account_id = db
-    assert price_history(account_id) == ""
-
-
-def test_price_history_reports_the_average_per_price(db):
-    from agents.creator.insights import price_history
-    database, account_id = db
-    _post(database, account_id, 10.0, 40.0)
-    _post(database, account_id, 10.0, 60.0)
-    history = price_history(account_id)
-    assert "$10.00" in history and "50.00" in history
-
-
-def test_thin_evidence_is_labelled(db):
-    """Three sales at $15 is an anecdote, and presenting it as a finding is
-    worse than not presenting it."""
-    from agents.creator.insights import price_history
-    database, account_id = db
-    _post(database, account_id, 15.0, 20.0)
-    assert "few sends" in price_history(account_id)
-
-
-def test_asset_outcome_keeps_currency_and_evidence_separate(db):
-    from agents.creator.insights import asset_outcomes, record_outcome
-    database, account_id = db
-    conn = database.get_connection()
-    cur = conn.execute(
-        "INSERT INTO creator_content (account_id, created_at, title, status, "
-        "generation_cost_eur) VALUES (?,?,?,'draft',?)",
-        (account_id, datetime.now().isoformat(), "Test post", 0.12))
-    conn.commit()
-    content_id = cur.lastrowid
-    values = dict(campaign="Launch", channel="Instagram", permalink="https://example.test/p",
-                  reach=500, clicks=25, subscriptions=3, ppv_purchases=1,
-                  revenue_usd=30.0, attributable_cost_usd=10.0,
-                  source="platform export", window="2026-09-01 to 2026-09-07")
-    record_outcome(content_id, **values)
-    row = asset_outcomes(account_id)[0]
-    assert row["status"] == "posted"
-    assert (row["campaign"], row["channel"], row["clicks"]) == (
-        "Launch", "Instagram", 25)
-    assert row["generation_cost_eur"] == 0.12
-    assert row["attributable_cost_usd"] == 10.0
-    assert row["metric_source"] == "platform export"
-    with pytest.raises(ValueError, match="source"):
-        record_outcome(content_id, **{**values, "source": ""})
-
-
-def test_price_history_reaches_the_ppv_prompt(db):
-    from agents.creator import CreatorAgent
-    from agents.creator.insights import price_history
-    database, account_id = db
-    _post(database, account_id, 12.0, 90.0)
-    messages = CreatorAgent().build_draft_prompt(
-        {"id": account_id, "handle": "@a", "account_type": "own"},
-        "ppv", "x", price_usd=12.0, price_history=price_history(account_id))
-    assert "actually earned" in messages[-1]["content"]
-
-
-def test_recording_revenue_marks_it_posted(db):
-    from agents.creator.insights import record_revenue
-    database, account_id = db
-    conn = database.get_connection()
-    conn.execute(
-        "INSERT INTO creator_content (account_id, created_at, kind, status) "
-        "VALUES (?,?,'post','draft')", (account_id, datetime.now().isoformat()))
-    conn.commit()
-    content_id = conn.execute("SELECT id FROM creator_content").fetchone()[0]
-
-    record_revenue(content_id, 42.5)
-    row = database.get_connection().execute(
-        "SELECT status, revenue_usd FROM creator_content WHERE id = ?",
-        (content_id,)).fetchone()
-    assert row["status"] == "posted"
-    assert row["revenue_usd"] == pytest.approx(42.5)
-
-
-def test_account_summary_handles_no_subscribers(db):
-    """Division by zero is the obvious way this breaks on a new account."""
-    from agents.creator.insights import account_summary
-    _, account_id = db
-    assert account_summary(account_id)["per_subscriber"] == 0.0
-
-
-def test_agency_overview_lists_every_account(db):
-    from agents.creator.insights import agency_overview
-    database, _ = db
-    conn = database.get_connection()
-    conn.execute(
-        "INSERT INTO creator_accounts (handle, account_type, consent_holder, "
-        "created_at) VALUES ('@b','managed','Jane', ?)",
-        (datetime.now().isoformat(),))
-    conn.commit()
-    handles = {row["handle"] for row in agency_overview()}
-    assert handles == {"@a", "@b"}
-
-
-@pytest.mark.parametrize("rate,expected_manager", [(0, 0.0), (20, 200.0), (100, 1000.0)])
-def test_commission_split(rate, expected_manager):
-    from agents.creator.insights import commission
-    split = commission(1000.0, rate)
-    assert split["manager"] == pytest.approx(expected_manager)
-    assert split["manager"] + split["creator"] == pytest.approx(1000.0)
-
-
-def test_commission_rate_is_clamped():
-    """A typo in a percentage field should not invent money."""
-    from agents.creator.insights import commission
-    assert commission(1000.0, 500)["manager"] == pytest.approx(1000.0)
-    assert commission(1000.0, -50)["manager"] == pytest.approx(0.0)
 
 
 # ── Panel handlers (the gap v1 left) ─────────────────────────────────────────
@@ -294,10 +152,12 @@ def window(app):
 def test_creator_panel_has_every_tab(window):
     titles = [window.creator_panel.creator_tabs.tabText(i)
               for i in range(window.creator_panel.creator_tabs.count())]
-    for expected in ("Draft", "Calendar", "Earnings", "Voice", "Media",
-                     "Agency"):
+    for expected in ("Draft", "Calendar", "Voice", "Media"):
         assert any(expected in t for t in titles), f"missing {expected} tab"
-    assert "Trends" not in titles
+    # Earnings and Agency moved to Backstage on 2026-09-30. A tab left behind
+    # would read as the feature still being here.
+    for gone in ("Earnings", "Agency", "Trends"):
+        assert not any(gone in t for t in titles), f"{gone} tab is back"
 
 
 def test_higgsfield_has_an_explicit_api_permission(window):
@@ -321,32 +181,11 @@ def test_video_job_schema_preserves_cost_and_lifecycle(db):
     } <= columns
 
 
-def test_consent_fields_appear_only_for_managed_accounts(window):
-    window._creator_type_changed("own")
-    assert not window.creator_panel.creator_consent_input.isVisible()
-    window._creator_type_changed("managed")
-    assert window.creator_panel.creator_consent_input.isVisibleTo(window.creator_panel)
-
-
-def test_persona_fields_appear_only_for_personas(window):
-    window._creator_type_changed("persona")
-    assert window.creator_panel.creator_disclosure_input.isVisibleTo(window.creator_panel)
-    window._creator_type_changed("own")
-    assert not window.creator_panel.creator_disclosure_input.isVisible()
-
-
-def test_price_shows_only_for_ppv(window):
-    window._creator_kind_changed("post")
-    assert not window.creator_panel.creator_price_input.isVisible()
-    window._creator_kind_changed("ppv")
-    assert window.creator_panel.creator_price_input.isVisibleTo(window.creator_panel)
-
-
-def test_segment_shows_only_where_it_means_something(window):
-    window._creator_kind_changed("welcome")
-    assert window.creator_panel.creator_segment_box.isVisibleTo(window.creator_panel)
+def test_channel_shows_only_for_off_platform_promo(window):
     window._creator_kind_changed("bio")
-    assert not window.creator_panel.creator_segment_box.isVisible()
+    assert not window.creator_panel.creator_channel_box.isVisible()
+    window._creator_kind_changed("promo")
+    assert window.creator_panel.creator_channel_box.isVisibleTo(window.creator_panel)
 
 
 def test_drafting_without_an_account_does_not_crash(window):
@@ -471,16 +310,13 @@ def test_worker_passes_the_seed_through(app, tmp_path):
     assert seen.get("seed") == 4821
 
 
-def test_deleting_project_unfiles_creator_work_but_keeps_account_and_consent(db):
+def test_deleting_project_unfiles_creator_work_but_keeps_the_account(db):
     from services.registry import Registry
 
     database, account_id = db
     registry = Registry()
     registry.upsert_project("creator-work", "Creator campaign")
     with database.get_connection() as conn:
-        conn.execute(
-            "UPDATE creator_accounts SET account_type='managed', "
-            "consent_holder='Authorised client' WHERE id=?", (account_id,))
         conn.execute(
             "INSERT INTO creator_content "
             "(account_id, project_id, created_at, body) VALUES (?,?,?,?)",
@@ -498,11 +334,11 @@ def test_deleting_project_unfiles_creator_work_but_keeps_account_and_consent(db)
             "SELECT project_id FROM creator_video_jobs WHERE request_id=?",
             ("creator-job",)).fetchone()
         account = conn.execute(
-            "SELECT consent_holder FROM creator_accounts WHERE id=?",
+            "SELECT handle FROM creator_accounts WHERE id=?",
             (account_id,)).fetchone()
     assert (content["project_id"], content["body"]) == (None, "A draft")
     assert job["project_id"] is None
-    assert account["consent_holder"] == "Authorised client"
+    assert account["handle"] == "@a"
 
 
 def test_existing_creator_tables_gain_optional_project_columns(tmp_path, monkeypatch):

@@ -137,38 +137,38 @@ reach.
 
 ## Playbook D · Creator campaign to measured cohort
 
-**Trigger:** one content/offer experiment is worth testing for a subscription
-profile.
+**Trigger:** one content/offer experiment is worth testing for an account or
+venture.
 
-**Best for:** an owned account, an authorised managed account, or a clearly
-disclosed synthetic persona.
+**Best for:** an account you own or are authorised to run.
 
 ### Inputs
 
-- Account ownership, authorisation or disclosure, records location, audience
-  segment, content format, price hypothesis, and window.
+- Account identity, rights to any likeness or media, content format, the
+  proposition being tested, and the window.
 
 ### Run
 
-1. In **Muse**, select or create the correct profile. Managed profiles
-   require authorisation; personas require disclosure. Add representative Voice
-   samples.
-2. Write the brief: one proposition, one audience segment, one price, and the
-   window you will judge it over.
-3. Choose one Kind and audience segment. Draft, edit, and Add to Calendar.
+1. In **Muse**, select or create the correct profile and add representative
+   Voice samples.
+2. Write the brief: one proposition, one audience, and the window you will
+   judge it over.
+3. Choose one Kind. Draft, edit, and Add to Calendar.
 4. If a safe-for-work external teaser is justified, request **Generate Teaser**,
    inspect the exact Higgsfield quote, and review the completed result. It is
    promo material, not explicit content.
 5. Publish and interact manually under current platform rules.
-6. Import the platform statement or Record Revenue. Attribute only what the
-   available data supports; keep “unknown” where source cannot be determined.
-7. Review net receipts, retained buyers/subscribers, refunds, production cost,
-   acquisition source, and human time for this cohort.
+6. Record the result in **Backstage**: import the statement there, and attribute
+   only what the available data supports, keeping “unknown” where the source
+   cannot be determined.
+7. Review net receipts, retained buyers, refunds, production cost, acquisition
+   source, and human time for this cohort.
 
 ### Human gates
 
-Consent/identity/age/rights → platform-policy check → content approval → price
-approval → posting and interaction → revenue attribution.
+Identity, age and rights → content approval → posting and interaction →
+revenue attribution. Account authorisation and platform-policy review are
+Backstage's gates, recorded there before this playbook starts.
 
 ### Metric
 

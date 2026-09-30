@@ -81,9 +81,7 @@ from agents.video import VideoPanel
 from agents.manuscript import ManuscriptPanel, ShortsWorker
 from agents.creator import CreatorPanel
 from agents.author import AuthorPanel
-from agents.creator import (
-    CreatorAgent, ConsentError, PROMO_CHANNELS,
-)
+from agents.creator import CreatorAgent
 from agents.catalog import (
     AGENT_SPECS, AGENTS_BY_KEY, workspace_description, workspace_map,
 )
@@ -1942,9 +1940,6 @@ class GodAI(QWidget):
     def creator_current_account(self):
         return self.creator_panel.current_account()
 
-    def _creator_type_changed(self, account_type: str):
-        self.creator_panel._type_changed(account_type)
-
     def _creator_kind_changed(self, kind: str):
         self.creator_panel._kind_changed(kind)
 
@@ -1962,9 +1957,6 @@ class GodAI(QWidget):
 
     def creator_refresh_calendar(self):
         self.creator_panel.refresh_calendar()
-
-    def creator_refresh_earnings(self):
-        self.creator_panel.refresh_earnings()
 
     def creator_refresh_media(self):
         self.creator_panel.refresh_media()

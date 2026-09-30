@@ -243,29 +243,25 @@ trademark conflicts, originality, formats, and the buyer's actual brief.
 
 ![Creator workspace](img/agent-creator.png)
 
-Creator is shared production for books, music, ventures, social personas, and
-subscription accounts. It deliberately drafts; it does not impersonate a human
-or publish unattended.
+Muse is shared production for books, music and ventures. It deliberately
+drafts; it does not impersonate a human or publish unattended.
 
 | Control | Meaning |
 |---|---|
 | **Profile / Handle / Platform** | Saved identity and destination. |
-| **Ownership** | `own`, `managed`, or `persona`; changes required safeguards. |
-| **Authorised by** | Required evidence for managed profiles. |
-| **Disclosure** | Required public framing for a synthetic persona. |
-| **Kind** | Post, caption, campaign, posting plan, promo assets, hooks, bio, PPV, welcome, or promo. |
-| **Price** | PPV only; shapes the proposed value without predicting sales. |
-| **Audience** | Segment for targeted messages. |
-| **Promo channel** | Destination for off-platform promo. |
+| **Kind** | Post, caption, campaign, posting plan, promo assets, hooks, bio, or promo. |
+| **Campaign** | A label that lets assets be compared later. |
+| **Promo channel** | Destination for off-platform promo; shown for the promo kind only. |
 | **Brief** | The concrete event, offer, asset, or message to create. |
 | **Draft / Add to Calendar** | Generate editable copy, then schedule the approved version. |
 | **Generate Teaser** | Requests a safe-for-work Higgsfield promo after an exact quote. |
 
-Tabs hold Draft, Calendar, Earnings, Voice, Media, Agency, and Records. Add five
-representative writing samples in **Voice** before evaluating output quality.
-Import statements or Record Revenue in **Earnings**; Add Media in **Media**;
-store verification and releases in **Records**. These records support review
-but do not replace legal or platform obligations.
+Tabs hold Draft, Calendar, Voice and Media. Add five representative writing
+samples in **Voice** before evaluating output quality; Add Media in **Media**.
+
+Earnings, statement imports, account consent records, platform-policy review
+and the agency view moved to **Backstage** on 30 September 2026. Muse is the
+production surface; Backstage holds the money and the authorisation records.
 
 ---
 

@@ -16,7 +16,7 @@
 | Productised client service | Fast buyer feedback and a tightly scoped deliverable | Economic contribution per accepted order and human hour | Client Gigs or Site Builder |
 | Owned catalogue | A demonstrated reader/listener need and reusable IP | Contribution by release cohort and attributed source | Draft → Publish |
 | Content-to-offer funnel | One existing offer with a trackable next action | Paid/intended actions per qualified visit | Herald → Reel → Sitebuilder |
-| Authorised creator venture | An owned, managed, or accurately disclosed profile | Contribution and retention by buyer/subscriber cohort | Muse → Earnings |
+| Authorised creator venture | An account you own or are authorised to run | Contribution and retention by buyer/subscriber cohort | Muse to produce, Backstage to measure |
 
 ## Choose with evidence, not excitement
 

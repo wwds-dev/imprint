@@ -1,14 +1,9 @@
-"""Public interface for the Creator agent."""
+"""Public interface for the Muse agent."""
 
-from .agent import (
-    ACCOUNT_TYPES, KINDS, PROMO_CHANNELS, ConsentError, CreatorAgent,
-    require_ready,
-)
+from .agent import KINDS, PROMO_CHANNELS, CreatorAgent
 
-__all__ = [
-    "ACCOUNT_TYPES", "KINDS", "PROMO_CHANNELS", "ConsentError",
-    "CreatorAgent", "require_ready", "CreatorPanel",
-]
+__all__ = ["KINDS", "PROMO_CHANNELS", "CreatorAgent", "CreatorPanel"]
+
 
 def __getattr__(name):
     # Lazy panel import keeps this package Qt-free at import time for
@@ -17,4 +12,3 @@ def __getattr__(name):
         from .panel import CreatorPanel
         return CreatorPanel
     raise AttributeError(name)
-

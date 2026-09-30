@@ -621,13 +621,11 @@ def test_model_best_fit_recomputes_inside_each_selected_provider(app, window):
 
 # ── Conditional fields ───────────────────────────────────────────────────────
 CREATOR_KINDS = [
-    ("post", 4),       # kind + campaign + channel + audience
-    ("ppv", 5),        # kind + campaign + channel + price + audience
+    ("post", 2),       # kind + campaign
     ("promo", 3),      # kind + campaign + channel
-    ("bio", 3),        # kind + campaign + channel
-    ("campaign", 3),
-    ("hooks", 3),
-    ("welcome", 4),    # kind + campaign + channel + audience
+    ("bio", 2),
+    ("campaign", 2),
+    ("hooks", 2),
 ]
 
 
@@ -635,11 +633,11 @@ CREATOR_KINDS = [
 def test_creator_compose_grid_has_no_empty_cells(app, window, kind, expected):
     """Fields that do not apply give up their cell instead of leaving a hole.
 
-    Price and audience only apply to some kinds of post. Hiding
-    a widget inside a QGridLayout leaves its cell reserved and empty, so
-    switching to "post" left a gap where Price had been and pushed Audience
-    into the third column on its own — the same "nothing lines up" complaint,
-    produced by an empty cell rather than a misplaced one.
+Channel is the off-platform funnel and only applies to a promo.
+    Hiding a widget inside a QGridLayout leaves its cell reserved and empty,
+    so switching away from "promo" left a gap where Channel had been — the
+    same "nothing lines up" complaint, produced by an empty cell rather than
+    a misplaced one.
 
     Also guards the subtler bug this replaced: the first implementation asked
     the widgets whether they were hidden, and a widget that has never been

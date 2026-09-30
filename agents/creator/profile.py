@@ -9,10 +9,11 @@ creator's own posts plus their tone, emoji habits and typical length, writes
 something recognisably theirs. Samples do most of the work — the rules mainly
 stop it drifting.
 
-**Persona** applies to synthetic accounts. A disclosure line records what the
-account *is*; the bible is what keeps it consistent between sessions, including
-a locked seed and reference images so the visuals stay on-model rather than
-being a different character every render.
+**Character** is the consistency lever. The bible is what keeps a written
+character the same between sessions, including a locked seed and reference
+images so the visuals stay on-model rather than being a different character
+every render. It is stored for any account that has one; there is no account
+type gating it.
 """
 
 from __future__ import annotations
@@ -24,22 +25,6 @@ from services.database import get_connection
 # How many samples are worth sending. Beyond a handful the marginal value drops
 # and the prompt just gets expensive.
 MAX_SAMPLES = 6
-
-# Who a message is aimed at. A welcome, a re-engagement and a thank-you to a
-# two-year subscriber are three different messages; the drafter treated them as
-# one until these existed.
-SEGMENTS = {
-    "": "",
-    "new": "A brand-new subscriber. They do not know the tone yet — set it, and "
-           "make the first impression concrete rather than effusive.",
-    "loyal": "A long-standing subscriber. Acknowledge the history without "
-             "being saccharine; they have heard the standard lines already.",
-    "lapsed": "Someone who has drifted or cancelled. Give a specific reason to "
-              "come back — what is new — not guilt and not desperation.",
-    "big_spender": "A high-value subscriber. Warm and unhurried; do not upsell "
-                   "in the same breath as thanking them.",
-}
-
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")

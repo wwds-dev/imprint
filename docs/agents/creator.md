@@ -1,4 +1,4 @@
-# BRAND CREATOR — shared identity and content production
+# MUSE — shared identity and content production
 
 `key: creator` · class: `agents/creator/agent.py → CreatorAgent` · panel: `build_creator_panel()` · handler: `creator_generate()`
 
@@ -18,31 +18,35 @@ you review and publish manually rather than claiming an unverified rule allows
 automation.
 
 It also will not write a message posing as a specific real person in a live
-conversation with a paying subscriber. The drafts are captions, promos and
-starting points in your voice — not a stand-in for you.
+conversation. The drafts are captions, promos and starting points in your
+voice — not a stand-in for you.
 
-## Account types
-Recorded per account, because the three carry different obligations.
+## What moved to Backstage
+On 30 September 2026 the account-type and consent model, the platform-policy
+record, statement import, per-asset revenue and outcomes, fan segments, the
+`ppv` and `welcome` kinds, pricing fields and the agency view were removed from
+here. **Backstage** (`active/backstage`) already owned all of it, and keeping
+two implementations of the same records is how they drift apart.
 
-| Type | Meaning | Requirement |
-|---|---|---|
-| `own` | Your own account | — |
-| `managed` | Someone else's, run on their behalf | An **authorisation record** — who approved it and when. Drafting is refused without it. |
-| `persona` | A synthetic character you operate | A **disclosure line** and a dated, source-backed platform policy expressly allowing it. Unknown blocks generation. |
+Muse keeps what Backstage does not have: drafting, the plan calendar, voice
+profiles, the media library, teaser rendering, and the written-character record
+behind them. The two apps share no code and no data, and a test enforces it.
 
-The managed-account check lives on the drafting path (`require_ready()`), not
-just in the dialog — a rule enforced only by a UI prompt is not enforced.
+## Characters
+An account may carry a written character — appearance, backstory, personality,
+boundaries, a locked generation seed, and reference images. It exists so
+successive drafts and renders stay the same character rather than becoming a
+new one each time, and it applies to any account that has one; there is no
+account type gating it. It is a consistency record, not a claim that the
+character is a real person.
 
 ## Inputs (panel controls)
 | Control | Purpose |
 |---|---|
 | Profile / Handle or project / Platform or venture | What is being created for and where it will be used. |
-| Authorised by | Managed accounts only. Who consented. |
-| Disclosure | Personas only. How the account discloses itself. |
-| Review platform policy | Dated source, synthetic-permission state, verified-owner rule, AI disclosure, and publishing route. A saved `official_api` note does not enable posting. |
-| Draft | post · caption · campaign · posting plan · promo assets · hooks · bio · PPV · welcome · promo. |
-| Price (USD) | PPV only — shapes the value argument in the copy. |
-| Campaign / Channel | Attach an asset to a test and destination for later comparison. |
+| Draft | post · caption · campaign · posting plan · promo assets · hooks · bio · promo. |
+| Campaign | Attach an asset to a test for later comparison. |
+| Channel | The `promo` kind only — the off-platform funnel the post is written for. |
 | Brief | What it is about. Concrete briefs give non-generic drafts. |
 | Provider / Model | Routed through the normal budget guard. |
 
@@ -55,29 +59,27 @@ to its new week, and it is also how legacy free-text entries — kept visible in
 the Undated lane rather than guessed at — get their first real date.
 **Export…** writes the plan as an `.ics` calendar (dated items, importable
 into any calendar app for posting reminders) or CSV (everything, raw text
-preserved). **Earnings** joins imported statements to manually recorded asset
-outcomes without adding overlapping receipts. Voice, Media and Agency
-remain separate tabs.
+preserved). Voice and Media remain separate tabs.
 
 With a named Project selected, a generated draft carries that Project and its
 content profile into Calendar when you schedule it. If you switch to another
 profile before scheduling, Imprint refuses the cross-account save rather than
 silently filing someone else's copy there. Teaser jobs and finished or imported
 media can also be linked to the Project active at approval or import. The
-profile, consent and earnings records remain account-owned: deleting a Project
-unfiles its content and teaser jobs but does not delete those records or media
-files. Calendar and Media currently show everything for the selected account,
+profile and its voice, character and media records remain account-owned:
+deleting a Project unfiles its content and teaser jobs but does not delete
+those records or media files. Calendar and Media currently show everything for the selected account,
 not just the active Project; hover a Calendar title to see its Project.
 
 ## Higgsfield promo video
 `Generate Teaser` sends a safe-for-work prompt to the Higgsfield API for a
-promo clip aimed at the off-platform funnels where subscription traffic
-actually originates.
+promo clip aimed at the off-platform funnels where traffic actually
+originates.
 
 Imprint uses Higgsfield's current request contract: a key ID + secret pair,
 model-specific endpoints, presigned reference-image uploads, and the returned
 status/cancel URLs. Add `HF_API_KEY_ID` and `HF_API_KEY_SECRET` to the private
-`.env`, then enable **Higgsfield** in the API permissions row. The Creator panel
+`.env`, then enable **Higgsfield** in the API permissions row. The Muse panel
 asks the official estimate endpoint for the exact request, shows that quote in
 the normal budget approval, and only then submits the paid render.
 
@@ -102,33 +104,16 @@ than requests for it.
 
 Its role here is the safe-for-work promotional teaser.
 
-## Earnings
-`📥 Import Earnings CSV` reads a statement exported from the platform — the
-same pattern as the KDP importer, for the same reason: no API, so the numbers
-only exist here once you export and import them. Keyed on
-`(account, filename)`, so re-importing the same export updates rather than
-double-counting.
-
-Column names differ per platform and change over time, so the parser matches
-header substrings and stores the raw rows alongside the totals.
-
-Select a Calendar asset, then use **Record outcome** to enter its real post
-link, source/window, reach, clicks, subscriptions, PPV purchases, attributed
-revenue, and all-in cost in USD. The drafting request's model cost is saved in
-EUR; the dashboard never adds it to USD without a user-provided conversion.
-ROI is shown only for an entered cost and is a descriptive return on that
-cost, not proof of causation or profit. The chosen hook and campaign/channel
-remain visible for like-for-like comparisons.
-
 ## Under the hood — files & functions
 | Location | Role |
 |---|---|
-| `agents/creator/agent.py` | `CreatorAgent`, `require_ready()`, prompt construction. |
+| `agents/creator/agent.py` | `CreatorAgent` and prompt construction. |
+| `agents/creator/profile.py` | Voice profiles and the written-character record. |
+| `agents/creator/calendar.py` | Qt-free week arithmetic and `.ics` / CSV export. |
 | `services/higgsfield_client.py` | Official video API lifecycle, upload, estimate, cancellation and content-policy guard. |
-| `agents/creator/earnings_csv.py` | Earnings statement parsing and ingest. |
-| `main.py: build_creator_panel()` | Account section, compose section, six tabs. |
-| `main.py: creator_generate()/creator_schedule()/creator_import_earnings()` | Lifecycle. |
-| `creator_accounts` / `creator_content` / `creator_earnings` | Tables. |
+| `agents/creator/panel.py` | Account section, compose section, four tabs. |
+| `main.py: creator_generate()/creator_schedule()` | Lifecycle. |
+| `creator_accounts` / `creator_content` / `creator_persona` | Tables. |
 
 ## Notes
 - Nothing here touches the platform. Removing an account removes it from
