@@ -9,7 +9,7 @@
 
 ## Cut on 2026-09-30
 
-The OnlyFans-specific and Backstage-duplicated half of this agent was removed:
+The platform-specific and Backstage-duplicated half of this agent was removed:
 account types and the consent gate, platform-policy review, statement import,
 per-asset revenue and outcomes, fan segments, the `ppv` and `welcome` kinds,
 pricing fields, and the Earnings and Agency tabs. Backstage owns that work.

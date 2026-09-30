@@ -81,7 +81,7 @@ permissions and ranking policy. See `docs/recommendation_system.md`.
    book export (author); calendar, LLM parsing, PublishDrive, KDP CSV, quote
    graphics, shorts + their widgets/worker (manuscript); platforms, publishing,
    store (social); profile and plan calendar (creator);
-   library + player (audiobook); the course pipeline (course). `services/`
+   library + player (audiobook). `services/`
    retains only cross-agent modules.**
 4. Move focused tests into each agent project while retaining umbrella contract
    tests.

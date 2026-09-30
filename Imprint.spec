@@ -85,8 +85,6 @@ a = Analysis(
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Not imported by main.py; pulls broken providers.avatar/voice imports.
-        "agents.course.agent",
         # Dev-only weight.
         "pytest", "pip", "setuptools",
     ],

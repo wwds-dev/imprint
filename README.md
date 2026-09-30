@@ -34,7 +34,7 @@ hasn't been done.
    - [Site Builder Agent](#75-site-builder-agent)
    - [Narrator Agent](#76-narrator-agent)
    - [Publisher Agent](#77-publisher-agent)
-   - [Primer (CLI)](#78-course-generator-cli)
+   - [Primer (CLI) — archived](#78-primer-cli--archived)
    - [Video Agent](#79-video-agent)
    - [Social Agent](#710-social-agent)
    - [Creator Agent](#711-creator-agent)
@@ -87,7 +87,6 @@ local (Ollama) and cloud (Anthropic, OpenAI, DeepSeek, Gemini). It provides:
 - Real-time cost estimation and post-request cost logging.
 - A run log that records the full lifecycle of every AI request.
 - A **Narrator** agent that converts ebooks to MP3 using OpenAI TTS, with progress tracking and quota-failure detection.
-- A standalone, GUI-less **Primer** (`run_course.py`) that turns a topic into a packaged mini-course — slides, narration, and an avatar-presented video (see §5.8).
 - A full Settings panel for configuring pricing, budgets, agents, and tools without touching any file.
 
 The application is entirely self-contained: no server, no web interface, no external database. All data is stored in a local SQLite database (`data/imprint.db`).
@@ -419,7 +418,7 @@ The output box is also used by the Audiobook agent to display conversion logs an
 
 ## 7. Agents
 
-Imprint ships with 7 first-party GUI agents, each defined by its own Python class in `agents/` and a tailored system prompt, plus one CLI-only Primer with no left-panel entry at all (§5.8). The left-panel navigator groups the GUI agents into three collapsible categories — General, Creative, Gigs; clicking an agent button either loads the standard Chat panel or swaps the centre area for a fully custom GUI built for that workflow. Most agents support all of Ollama (local), Anthropic, OpenAI, DeepSeek, and Gemini — Narrator is the exception, since it only ever calls OpenAI TTS (§5.6) — and most expose a Help button that opens this documentation at the relevant section. Anthropic Claude (Sonnet or Opus) typically gives the most structured output for the writing/publishing agents; Ollama works offline at no cost; the other cloud providers are interchangeable and chosen by taste, latency, or budget.
+Imprint ships with 7 first-party GUI agents, each defined by its own Python class in `agents/` and a tailored system prompt. The left-panel navigator groups the GUI agents into three collapsible categories — General, Creative, Gigs; clicking an agent button either loads the standard Chat panel or swaps the centre area for a fully custom GUI built for that workflow. Most agents support all of Ollama (local), Anthropic, OpenAI, DeepSeek, and Gemini — Narrator is the exception, since it only ever calls OpenAI TTS (§5.6) — and most expose a Help button that opens this documentation at the relevant section. Anthropic Claude (Sonnet or Opus) typically gives the most structured output for the writing/publishing agents; Ollama works offline at no cost; the other cloud providers are interchangeable and chosen by taste, latency, or budget.
 
 ### 7.1 Chat Agent
 
@@ -1425,40 +1424,19 @@ Picks up where the Manuscript (writing studio) agent stops: real sales data, lau
 
 ---
 
-### 7.8 Primer (CLI)
+### 7.8 Primer (CLI) — archived
 
-**No left-panel button — this one runs from the terminal, not the GUI.**
+Removed 30 September 2026. The CLI-only course generator had no panel, no
+registry entry and no sidebar button, and `Imprint.spec` excluded it from the
+packaged app because importing it pulls `providers.avatar` and
+`providers.voice` — so it was documented here as if it worked while never
+shipping. Its slide half also duplicated vidforge, which already builds
+PowerPoint course decks from a topic or outline.
 
-`run_course.py` drives `agents/course/agent.py` to generate a full mini-course
-(modules → lessons → slides → narrated, avatar-presented video → a packaged
-`index.html`) from a single topic string. It has no left-panel entry, no
-`agent_box` row, and isn't wired into `main.py` at all — it is a standalone
-pipeline, invoked directly:
-
-```bash
-python run_course.py --topic "Python for Beginners" --modules 2 --lessons 2
-python run_course.py --topic "Data Science" --avatar heygen --voice elevenlabs
-```
-
-**Pipeline (`agents/course/`):**
-
-| Stage | Module | What it does |
-|-------|--------|---------------|
-| Content | `content_generator.py` | Anthropic-generated module/lesson outline and script text |
-| Slides | `slide_generator.py` | Renders lesson slide images |
-| Voice | `providers/voice/` | `mock` (free, no key) or `elevenlabs` narration audio |
-| Avatar | `providers/avatar/` | `mock`, `heygen`, or `synthesia` presenter video |
-| Assembly | `video_assembler.py` | Combines slides + narration + avatar into the final video per lesson |
-| Packaging | `packager.py` | Writes `output/courses/<course>/index.html` plus assets |
-
-**Requirements:** `ANTHROPIC_API_KEY` in `.env` always; `ELEVENLABS_API_KEY` only
-if `--voice elevenlabs`; a HeyGen or Synthesia key only if `--avatar` selects
-that provider. `--avatar mock --voice mock` (the defaults) runs the whole
-pipeline free, useful for testing the flow before spending on real voice/avatar
-generation.
-
-**Output:** written to `--output` (default `output/courses/`), which is
-gitignored — open `index.html` in a browser to review the generated course.
+The code is archived at
+`~/Documents/lab/archive/imprint_primer_2026-09-30/`, and the git history
+holds the rest. If courses come back, they belong on top of the video pipeline
+rather than as a separate agent.
 
 ---
 
@@ -2152,7 +2130,6 @@ Key-value store for application settings.
 imprint/
 ├── main.py                        # Entry point + main window (~7,100 lines — see
 │                                  #   docs/refactor_plan.md, TODO.md #2)
-├── run_course.py                  # CLI runner for the Course Agent (no GUI needed)
 ├── README.md                      # This documentation file
 ├── FORK_PLAN.md                   # Split rationale, carved out of sentinel_ai
 ├── TODO.md                        # Prioritised engineering backlog
@@ -2165,7 +2142,7 @@ imprint/
 │   ├── manuscript/                # plus its own README / TODO / SUGGESTIONS
 │   ├── audiobook/  music/  video/  social/
 │   ├── webdesign/  fiverr/  creator/
-│   └── course/  chat/  router/    # CLI/internal capabilities use the same shape
+│   └── chat/  router/            # Internal capabilities use the same shape
 │
 │   # osint_agent.py, osint_heavy_agent.py, wifi_agent.py, bug_bounty_agent.py,
 │   # nfl_bet_agent.py, nfl_stats_parser.py, manager_agent.py, coding_agent.py,
@@ -2251,7 +2228,7 @@ imprint/
     └── shorts/                    # Generated vertical MP4s
 ```
 
-> `output/` (including `output/courses/` from the Primer, §5.8) is
+> `output/` is
 > gitignored. Anything you want to keep — exported books, launch copy,
 > generated courses — should be saved outside it.
 
@@ -2803,11 +2780,12 @@ Recurring revenue compounds — once published, content keeps earning. These age
 
 ---
 
-#### Primer (Teachable / Gumroad / Udemy)
+#### Courses (Teachable / Gumroad / Udemy) — no agent
 
-**Agent:** 5.8 Primer (CLI, `run_course.py` — no left-panel button)
-
-**Income paths:**
+The Primer that produced packaged courses was archived on 30 September 2026
+(§7.8), so Imprint no longer builds one for you. The selling paths below are
+unchanged if you produce the course another way — vidforge already renders
+PowerPoint course decks from a topic or outline, and Reel narrates video.
 
 1. **Sell the finished course** on Gumroad (0% listing fee, ~10% + payment
    processing per sale) or Teachable (free tier caps transaction volume; paid
@@ -2818,22 +2796,10 @@ Recurring revenue compounds — once published, content keeps earning. These age
 3. **Bundle with a book or Fiverr package** — e.g. a self-published manuscript
    (§5.3) plus a companion course, sold together.
 
-**Workflow:**
-
-1. Run `python run_course.py --topic "..." --avatar heygen --voice elevenlabs`
-   for a real production run (mock avatar/voice for a free test pass first).
-2. Review the generated `output/courses/<course>/index.html` in a browser.
-3. Upload the video files to the chosen platform; use the generated lesson
-   scripts as the course description / curriculum copy.
-
 **Realistic earnings:** highly platform- and topic-dependent; a first course
 with no existing audience is typically **$0–$200 in month 1**. Course income
 is closer to service/self-publishing income (needs marketing/distribution)
 than to true passive royalties.
-
-**External costs:** ElevenLabs (paid tiers if used beyond the free quota),
-HeyGen/Synthesia per-minute avatar-video credits (skip both with
-`--avatar mock --voice mock` at zero cost, at the expense of quality).
 
 ---
 

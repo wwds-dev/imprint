@@ -12,8 +12,9 @@ under **Detail** — this checklist is the summary view.
 which closes the last two gaps against the original plan. Every paid path in
 the GUI goes through the request guard, including the ones billed per unit
 rather than per token — the 2026-09-20 re-analysis found and closed the last
-in-app exception (ElevenLabs shorts); the Primer CLI remains the one
-paid workflow outside it (tracked in agents/course/TODO.md). 745 tests pass in
+in-app exception (ElevenLabs shorts). The Primer CLI was the one paid
+workflow outside it; it was archived on 2026-09-30, so every paid path now
+goes through the guard. 745 tests pass in
 an isolated database (2026-09-22; isolation enforced by conftest rather
 than per-fixture convention). The installed macOS app is a live launcher into
 this source tree; restarting it loads changes.

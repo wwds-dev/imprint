@@ -80,11 +80,6 @@ AGENT_SPECS = (
         recommendation_profile="agents.creator.recommendations",
     ),
     AgentSpec(
-        "course", "Primer", None,
-        "Produce packaged courses from the command line.",
-        "agents.course", panel=False,
-    ),
-    AgentSpec(
         "chat", "Chat", "Assistant",
         "General-purpose chat and tool-assisted conversation.",
         "agents.chat", panel=False,
