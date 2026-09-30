@@ -3057,6 +3057,9 @@ class GodAI(QWidget):
             **self._project_budget_fields(),
         )
         if not validation.allowed:
+            if self._offer_local_fallback(agent, provider, validation.reason,
+                                          flat_cost_eur):
+                return False   # switched; the user re-sends on the free model
             QMessageBox.warning(self, "Request Blocked", validation.reason)
             return False
 
@@ -3112,6 +3115,51 @@ class GodAI(QWidget):
         elif error:
             self.model_list_workers.pop(provider, None)
             self._note_failure(f"models: {provider}", RuntimeError(error))
+
+    def _offer_local_fallback(self, agent: str, provider: str,
+                              reason: str, flat_cost_eur) -> bool:
+        """On a budget refusal, offer the free local model; True if switched.
+
+        Only for token-priced text work (a video render or TTS book has no
+        local equivalent), only when the refusing reason is a budget cap
+        (a permissions refusal must stay a refusal), only when this agent's
+        panel actually offers ollama, and never when ollama itself was the
+        refused provider. The switch flips the agent's provider box and
+        picks a local model — authorization still returns False, so the
+        user re-sends deliberately on the free model rather than the guard
+        silently re-routing a paid request.
+        """
+        if provider == "ollama" or flat_cost_eur is not None:
+            return False
+        if "budget" not in reason.lower():
+            return False
+        widgets = AGENT_SETUP_WIDGETS.get(agent)
+        if not widgets:
+            return False
+        provider_box = self._find_control(widgets[0])
+        model_box = self._find_control(widgets[1])
+        if provider_box is None or model_box is None:
+            return False
+        if provider_box.findText("ollama") < 0:
+            return False
+        local_models = (self.model_list_cache.get("ollama")
+                        or list(OllamaClient.KNOWN_MODELS))
+        if not local_models:
+            return False
+        choice = QMessageBox.question(
+            self, "Budget cap reached",
+            f"{reason}\n\nSwitch this agent to the local model instead? "
+            "It runs on this machine and costs nothing. Press Send again "
+            "after the switch.")
+        if choice != QMessageBox.Yes:
+            return False
+        provider_box.setCurrentText("ollama")
+        index = self._find_model_index(model_box, local_models[0])
+        if index >= 0:
+            model_box.setCurrentIndex(index)
+        self._set_route_result(agent, "ollama",
+                               model_box.currentText())
+        return True
 
     def _reserved_in_flight_eur(self) -> float:
         """Estimates of every authorized-but-unresolved request."""

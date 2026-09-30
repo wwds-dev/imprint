@@ -57,7 +57,7 @@ consequences of what just landed rather than new ideas.
 
 | # | Suggestion | Category | Effort | Status |
 |---|---|---|---|---|
-| 8 | Local model provider (Ollama) as a zero-cost fallback when the budget cap is hit | feature | L | IDEA |
+| 8 | Local model provider (Ollama) as a zero-cost fallback when the budget cap is hit. Shipped 2026-09-30 as an offer at the refusal, never a silent re-route; see TODO.md. | feature | L | DONE |
 | 9 | Retry-with-backoff wrapper shared by every provider client, instead of per-client handling | infra | M | IDEA |
 | 10 | Export a run (prompt + response + usage + cost) as a single markdown file for archiving | feature | S | IDEA |
 

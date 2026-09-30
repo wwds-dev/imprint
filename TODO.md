@@ -143,7 +143,7 @@ was independently re-verified against the code before filing.
 
 ## v3 — later
 
-- [ ] `P2` `feature` `@ai` Local model provider (Ollama) as a zero-cost fallback when the budget cap is hit
+- [x] `P2` `feature` `@ai` **Local model provider (Ollama) as a zero-cost fallback when the budget cap is hit.** Done 2026-09-30: when the guard refuses a request over a budget cap, it offers to switch that agent to the free local model. Saying yes flips the agent's provider and model boxes and the request still does not go out, so the user re-sends on purpose. No offer for per-unit work such as a video render or a narrated book, for a refusal that is not about budget, for an agent whose panel has no ollama, or when ollama itself was refused. `TestLocalFallbackOffer` in `tests/test_request_guard.py` covers all four.
 - [ ] `P3` `infra` `@ai` One shared retry-with-backoff wrapper across providers, replacing per-client handling
 - [ ] `P3` `feature` `@ai` Export a run — prompt, response, usage, cost — as a single markdown file
 
