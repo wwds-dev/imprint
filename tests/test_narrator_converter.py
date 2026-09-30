@@ -123,8 +123,9 @@ def test_an_unchanged_run_still_resumes(tmp_path):
 
 
 def test_the_refuse_policy_stops_instead_of_clearing(tmp_path, monkeypatch):
-    """Audiobook Studio runs the same converter with ON_SETTINGS_CHANGE set to
-    refuse: a CLI operator is present, so it asks rather than deciding."""
+    """The refuse policy is for a CLI-only copy with an operator present: it
+    asks rather than deciding. No shipped copy uses it since the standalone
+    Audiobook Studio was merged into Imprint, but the branch stays covered."""
     monkeypatch.setattr(converter, "ON_SETTINGS_CHANGE",
                         converter.REFUSE_ON_CHANGE)
     manifest_path = tmp_path / "manifest.json"

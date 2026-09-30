@@ -156,6 +156,7 @@ was independently re-verified against the code before filing.
 - **Renamed to Imprint**, with migrations that carry the Application Support directory and the database file across the rename — the `.env` holding the API keys lives in that directory, so a rename without them looks exactly like the app losing everything.
 - **Creator agent** — subscription account planning and drafting, voice profiles, persona bibles, media library, Higgsfield promo video, revenue attribution, agency view. No posting path: drafts assist a person, they never replace one.
 - **Audiobook library and player** with resume, closing the gap where the app could produce an audiobook and then not play it.
+- **Audiobook Studio merged in** (2026-09-30). The standalone ebook-to-M4B app is retired and archived; Booth already did everything it did, so no code moved. The narrator converter is down from three copies to two (Imprint and Lab Hub), still guarded by `tests/test_converter_drift.py`.
 - **Right rail** cut from six always-open cards to two plus three collapsibles; `COST` and `BUDGET` were showing the same two numbers twice.
 - **Layout collapse fixed** — controls no longer draw on top of each other or clip off the right edge at any window size, pinned by `tests/test_panel_layout.py`.
 
