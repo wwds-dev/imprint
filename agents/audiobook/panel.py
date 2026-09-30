@@ -54,6 +54,7 @@ class AudiobookPanel(QWidget):
         "audiobook_output_path", "audiobook_output_mode",
         "audiobook_change_output_btn",
         "audiobook_voice_box", "audiobook_chunk_input",
+        "audiobook_format_box",
         "audiobook_start_btn", "audiobook_refresh_btn", "stop_btn",
         "audiobook_cost_label", "tool_progress", "audiobook_status_label",
         "audiobook_convert_scroll", "audiobook_library_refresh_btn",
@@ -162,6 +163,16 @@ class AudiobookPanel(QWidget):
         self.audiobook_chunk_input.setToolTip(
             "Approximate text sent per narration request. 1400 is a stable default; "
             "smaller chunks recover more easily if a request fails.")
+        # Format is a per-book choice, not a setting: an existing library of
+        # .mp3 books keeps playing either way, and the Listen tab already
+        # accepts both.
+        self.audiobook_format_box = QComboBox()
+        self.audiobook_format_box.addItem("MP3", "mp3")
+        self.audiobook_format_box.addItem("M4B (chapters)", "m4b")
+        self.audiobook_format_box.setToolTip(
+            "MP3 copies the narrated chunks losslessly and plays in anything. "
+            "M4B re-encodes to AAC and carries chapter marks, which audiobook "
+            "players navigate by — chapters come from the EPUB's own sections.")
         options = QGridLayout()
         options.setHorizontalSpacing(MD)
         options.setVerticalSpacing(MD)
@@ -169,6 +180,11 @@ class AudiobookPanel(QWidget):
                           0, 0, Qt.AlignTop)
         options.addWidget(field("Chunk size (tokens)", self.audiobook_chunk_input),
                           0, 1, Qt.AlignTop)
+        # Its own row, not a third column: at 1100x700 three controls across
+        # needed 563px in a 562px pane, and the narrow pane is the one where a
+        # clipped control is unreachable.
+        options.addWidget(field("Format", self.audiobook_format_box),
+                          1, 0, Qt.AlignTop)
         for column in range(3):
             options.setColumnStretch(column, 1)
         page.addLayout(options)
@@ -355,11 +371,12 @@ class AudiobookPanel(QWidget):
             "click Use Project Book again.")
 
     @staticmethod
-    def _converted_output(book_path: Path, output_folder: Path) -> Path:
+    def _converted_output(book_path: Path, output_folder: Path,
+                          audio_format: str = "mp3") -> Path:
         from services.narrator.converter import clean_name
 
         name = clean_name(book_path.name)
-        return output_folder / name / f"{name}.mp3"
+        return output_folder / name / f"{name}.{audio_format}"
 
     def open_input_folder(self):
         folder = self.audiobook_input_path.text().strip()
@@ -462,8 +479,9 @@ class AudiobookPanel(QWidget):
                 "before converting this book.")
             return
         voice = self.audiobook_voice_box.currentText().strip()
+        audio_format = self.audiobook_format_box.currentData()
         expected_output = self._converted_output(
-            Path(book_path), Path(output_path).expanduser())
+            Path(book_path), Path(output_path).expanduser(), audio_format)
         if expected_output.is_file():
             QMessageBox.information(
                 self, "Audiobook already exists",
@@ -551,7 +569,7 @@ class AudiobookPanel(QWidget):
             self.host._note_failure("audiobook: persist conversion", exc)
         config = {
             "input": book_path, "output": output_path, "voice": voice,
-            "chunk_tokens": chunk_tokens,
+            "chunk_tokens": chunk_tokens, "audio_format": audio_format,
         }
         self.host.output_box.setPlainText(
             f"[Starting]\nBook: {Path(book_path).name}\nOutput: {output_path}"
@@ -576,6 +594,7 @@ class AudiobookPanel(QWidget):
             "--input", config["input"], "--output", config["output"],
             "--voice", config["voice"], "--chunk-tokens",
             str(config["chunk_tokens"]),
+            "--format", config.get("audio_format", "mp3"),
         ]
         arguments = (["--narrator-worker"] + conv_args if is_frozen() else
                      ["-u", "-m", tool.get(
