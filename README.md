@@ -1235,6 +1235,18 @@ is a directory scan, and files get renamed, moved and re-converted, so an index
 would quietly point at the wrong book. It is saved on a five-second timer as
 well as on stop, because people close laptops rather than quitting cleanly.
 
+**Save locations:** On Convert, choose **On this Mac** or **Google Drive folder**
+for finished audio. The Drive choice suggests an existing synced
+`audiobooks - gdrive` folder when there is exactly one. On Listen, choose the
+same two options for playback progress and saved marks independently. Drive
+progress is stored as small JSON files under `Imprint Progress` in the chosen
+folder and is saved every 15 seconds plus on pause or stop. Switching modes
+copies books found in the output folder into the target store without
+overwriting progress already there. The selected folder must be available to
+Imprint; Google Drive for desktop syncs it when running.
+For setup and iPhone listening steps, see the
+[Mac and iPhone audiobook manual](docs/audiobooks-iphone-manual.md).
+
 Two bugs found by playing a real file, each of which silently defeated the
 whole feature:
 

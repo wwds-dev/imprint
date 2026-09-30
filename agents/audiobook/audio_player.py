@@ -29,8 +29,8 @@ from PySide6.QtWidgets import (
 )
 
 from agents.audiobook.audiobook_library import (
-    delete_mark, embedded_chapters, format_time, save_mark, saved_marks,
-    save_position,
+    delete_mark, embedded_chapters, format_time, progress_storage, save_mark,
+    saved_marks, save_position,
 )
 from ui.widgets import FlowLayout
 
@@ -46,6 +46,7 @@ class AudiobookPlayer(QWidget):
     """Transport, scrubber and speed for one audio file."""
 
     position_saved = Signal(int)          # ms, for the library to refresh
+    storage_error = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -166,6 +167,7 @@ class AudiobookPlayer(QWidget):
         self.sleep_box.setCurrentIndex(0)
         self._path = Path(path)
         self._title = title or self._path.stem
+        self.refresh_storage_interval()
         self._resume_ms = max(0, int(resume_ms))
         # Applied on the first duration change: seeking before the media has
         # loaded is silently dropped.
@@ -179,6 +181,11 @@ class AudiobookPlayer(QWidget):
     def play(self) -> None:
         if self._path:
             self._player.play()
+
+    def refresh_storage_interval(self) -> None:
+        """Use fewer writes for a synced folder; pause/stop still flushes."""
+        self._save_timer.setInterval(
+            15_000 if progress_storage()[0] == "drive" else SAVE_INTERVAL_MS)
 
     def pause(self) -> None:
         self._player.pause()
@@ -203,14 +210,21 @@ class AudiobookPlayer(QWidget):
             self, "Save listening mark", "Mark name:",
             text=f"Mark at {format_time(position)}")
         if accepted and title.strip():
-            save_mark(self._path, position, title)
+            try:
+                save_mark(self._path, position, title)
+            except (OSError, ValueError) as exc:
+                self.storage_error.emit(str(exc))
 
     def show_chapters(self) -> None:
         if not self._path:
             return
         menu = QMenu(self)
         embedded = embedded_chapters(self._path)
-        marks = saved_marks(self._path)
+        try:
+            marks = saved_marks(self._path)
+        except (OSError, ValueError) as exc:
+            self.storage_error.emit(str(exc))
+            return
         if embedded:
             menu.addSection("Embedded chapters")
             for chapter in embedded:
@@ -232,11 +246,18 @@ class AudiobookPlayer(QWidget):
                 action = remove_menu.addAction(mark.title)
                 action.triggered.connect(
                     lambda _checked=False, position=mark.position_ms:
-                    delete_mark(self._path, position))
+                    self._delete_mark(position))
         if not embedded and not marks:
             action = menu.addAction("No chapters in this file yet — use Add mark")
             action.setEnabled(False)
         menu.exec(self.chapters_btn.mapToGlobal(self.chapters_btn.rect().bottomLeft()))
+
+    def _delete_mark(self, position: int) -> None:
+        if self._path:
+            try:
+                delete_mark(self._path, position)
+            except (OSError, ValueError) as exc:
+                self.storage_error.emit(str(exc))
 
     def _on_sleep_changed(self, _index: int) -> None:
         self._sleep_timer.stop()
@@ -279,7 +300,11 @@ class AudiobookPlayer(QWidget):
         # action (mark_unfinished), so refusing to write 0 costs nothing.
         if position <= 0:
             return
-        save_position(self._path, position, duration, self._title)
+        try:
+            save_position(self._path, position, duration, self._title)
+        except (OSError, ValueError) as exc:
+            self.storage_error.emit(str(exc))
+            return
         self.position_saved.emit(position)
 
     # ── signals ─────────────────────────────────────────────────────────

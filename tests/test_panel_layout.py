@@ -204,6 +204,32 @@ def test_audiobook_library_actions_use_owned_panel(window, monkeypatch, tmp_path
     assert panel.audiobook_status_label.text() == "[Playing] Example Book"
 
 
+def test_audiobook_output_location_switches_between_local_and_drive(
+        window, monkeypatch, tmp_path):
+    from agents.audiobook import panel as panel_module
+
+    panel = window.audiobook_panel
+    drive = tmp_path / "audiobooks - gdrive"
+    drive.mkdir()
+    settings = {}
+    monkeypatch.setattr(panel_module, "get_setting",
+                        lambda key, default="": settings.get(key, default))
+    monkeypatch.setattr(panel_module, "save_setting",
+                        lambda key, value: settings.__setitem__(key, value))
+    monkeypatch.setattr(panel_module, "suggested_drive_audiobook_folder",
+                        lambda: drive)
+
+    panel.audiobook_output_mode.setCurrentIndex(
+        panel.audiobook_output_mode.findData("drive"))
+    assert panel.defaults()["output"] == str(drive)
+    assert panel.audiobook_output_path.text() == str(drive)
+
+    panel.audiobook_output_mode.setCurrentIndex(
+        panel.audiobook_output_mode.findData("local"))
+    assert panel.defaults()["output"] == \
+        panel.host.tool_runner.tools["audiobook"]["default_output"]
+
+
 def test_audiobook_library_can_filter_to_current_project(window, monkeypatch, tmp_path):
     from services import project_artifacts
 

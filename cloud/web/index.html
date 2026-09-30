@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#172c29">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Imprint Audiobooks</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">I</span><div><b>Imprint</b><small>Audiobook agent</small></div></div>
+    <a class="back" href="/">Reading Compass</a>
+  </header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">Your library, wherever you are</p><h1>Turn a book into something you can hear.</h1><p>Choose an ebook from Google Drive, convert it with Imprint Narrator, and continue listening from the same place on your phone or Mac.</p></div><div class="connection" id="connection">Checking Google Drive…</div></div>
+
+    <section class="connect card" id="connectPanel" hidden>
+      <h2>Connect Google Drive</h2>
+      <p>Imprint needs access to your ebooks and audiobook folder to convert while your Mac is off.</p>
+      <a class="button primary" id="connectButton" href="#">Connect Google Drive</a>
+    </section>
+
+    <div id="workspace" hidden>
+      <nav class="tabs" aria-label="Audiobook agent sections"><button class="tab active" type="button" data-tab="convert" aria-selected="true">Convert</button><button class="tab" type="button" data-tab="listen" aria-selected="false">Listen</button></nav>
+
+      <section id="convert" class="pane active" aria-labelledby="convertHeading">
+        <div class="section-heading"><div><p class="eyebrow">01 / Convert</p><h2 id="convertHeading">Choose an ebook</h2></div><button class="button subtle" id="refreshBooks" type="button">Refresh books</button></div>
+        <div class="card">
+          <label for="bookSearch">Search My Drive/ebooks</label>
+          <input id="bookSearch" type="search" autocomplete="off" placeholder="Title or filename">
+          <p class="helper" id="bookCount">Loading books…</p>
+          <div id="bookResults" class="book-results" role="listbox" aria-label="Ebooks"></div>
+          <p class="selected-book" id="selectedBook">No ebook selected</p>
+        </div>
+
+        <div class="card settings">
+          <h3>Narration settings</h3>
+          <div class="setting-grid"><div><label for="voice">Voice</label><select id="voice"><option value="alloy">Alloy</option><option value="verse">Verse</option><option value="marin">Marin</option><option value="coral">Coral</option><option value="sage">Sage</option></select></div><div><label for="chunkTokens">Chunk size (tokens)</label><input id="chunkTokens" type="number" min="300" max="1500" step="100" value="1400"></div></div>
+          <p class="helper">Converted audio is saved to My Drive/audiobooks - gdrive. For a copy on this device, download the MP3 from Listen.</p>
+          <div class="actions"><button id="estimateButton" type="button" class="button subtle" disabled>Estimate cost</button><button id="convertButton" type="button" class="button primary" disabled>Convert audiobook</button></div>
+          <p class="estimate" id="estimate" role="status">Select a book to see an estimate.</p>
+        </div>
+
+        <div class="section-heading"><div><p class="eyebrow">In progress</p><h2>Conversions</h2></div><button class="button subtle" id="refreshJobs" type="button">Refresh</button></div>
+        <div class="card" id="jobs"><p class="helper">No conversions yet.</p></div>
+      </section>
+
+      <section id="listen" class="pane" aria-labelledby="listenHeading">
+        <div class="section-heading"><div><p class="eyebrow">02 / Listen</p><h2 id="listenHeading">Your audiobooks</h2></div><button class="button subtle" id="refreshLibrary" type="button">Refresh</button></div>
+        <div class="card">
+          <label for="audioSearch">Search My Drive/audiobooks - gdrive</label>
+          <input id="audioSearch" type="search" placeholder="Find an audiobook">
+          <p class="helper" id="audioCount">Loading audiobooks…</p>
+          <div id="audioResults" class="audio-results"></div>
+        </div>
+
+        <div class="card player-card" id="playerCard">
+          <p class="eyebrow">Now playing</p><h3 id="nowPlaying">Choose an audiobook above</h3>
+          <audio id="player" controls preload="metadata" playsinline></audio>
+          <div class="transport"><button class="button subtle" id="back30" type="button" disabled>−30s</button><button class="button subtle" id="forward30" type="button" disabled>+30s</button><label class="compact" for="speed">Speed <select id="speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.25">1.25×</option><option value="1.5">1.5×</option><option value="1.75">1.75×</option><option value="2">2×</option></select></label><label class="compact" for="sleep">Sleep <select id="sleep"><option value="0">Off</option><option value="15">15 min</option><option value="30">30 min</option><option value="45">45 min</option><option value="60">60 min</option></select></label></div>
+          <div class="actions"><button class="button subtle" id="addMark" type="button" disabled>Add mark</button><a id="downloadAudio" class="button subtle" href="#" hidden>Download MP3</a></div>
+          <p class="helper" id="playerStatus" role="status">Play here to share your position with Imprint on the Mac. Pause before switching devices.</p>
+          <div id="marks" class="marks"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer>Imprint Narrator · Conversion uses paid OpenAI text-to-speech. Only convert books you are allowed to use.</footer>
+  <script src="app.js"></script>
+</body>
+</html>

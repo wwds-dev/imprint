@@ -129,6 +129,45 @@ def test_duration_is_not_erased_by_a_later_save(library, tmp_path):
     assert library.scan(tmp_path)[0].duration_ms == 120_000
 
 
+def test_drive_storage_preserves_progress_and_marks_when_switching(library, tmp_path):
+    audio = tmp_path / "library" / "book.mp3"
+    audio.parent.mkdir()
+    audio.write_bytes(b"audio")
+    drive = tmp_path / "audiobooks - gdrive"
+    drive.mkdir()
+
+    library.save_position(audio, 42_000, 120_000, "Book")
+    library.save_mark(audio, 40_000, "Good part")
+    library.configure_progress_storage("drive", drive, [audio])
+
+    records = list((drive / "Imprint Progress").glob("*.json"))
+    assert len(records) == 1
+    assert library.load_position(audio) == 42_000
+    assert library.saved_marks(audio)[0].title == "Good part"
+    copied_audio = tmp_path / "other_device" / "book.mp3"
+    copied_audio.parent.mkdir()
+    copied_audio.write_bytes(audio.read_bytes())
+    assert library.load_position(copied_audio) == 42_000
+
+    library.save_position(audio, 75_000, 120_000, "Book")
+    assert library.scan(audio.parent)[0].position_ms == 75_000
+    library.configure_progress_storage("local", None, [audio])
+    assert library.load_position(audio) == 75_000
+    assert library.saved_marks(audio)[0].title == "Good part"
+
+
+def test_drive_storage_refuses_missing_folder_without_losing_local_state(
+        library, tmp_path):
+    audio = tmp_path / "book.mp3"
+    audio.write_bytes(b"audio")
+    library.save_position(audio, 30_000, 100_000, "Book")
+
+    with pytest.raises(FileNotFoundError):
+        library.configure_progress_storage("drive", tmp_path / "missing", [audio])
+    assert library.progress_storage()[0] == "local"
+    assert library.load_position(audio) == 30_000
+
+
 @pytest.mark.parametrize("ms,expected", [
     (0, "0:00"), (5_000, "0:05"), (65_000, "1:05"),
     (3_600_000, "1:00:00"), (3_725_000, "1:02:05"),

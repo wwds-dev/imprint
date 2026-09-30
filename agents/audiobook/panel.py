@@ -15,8 +15,10 @@ from PySide6.QtWidgets import (
 
 from agents.audiobook import conversions
 from agents.audiobook.audiobook_library import (
-    format_time, load_position, mark_unfinished, scan,
+    configure_progress_storage, format_time, load_position, mark_unfinished,
+    progress_storage, scan,
 )
+from services.database import get_setting, save_setting
 from services.openai_client import OpenAIClientWrapper
 from services.runtime_paths import is_frozen
 from agents.audiobook.audio_player import AudiobookPlayer
@@ -24,6 +26,17 @@ from ui.forms import CONTROL_HEIGHT, LG, MD, SM, combo, field, line_edit, primar
 from ui.widgets import FlowLayout, scrollable
 
 SUPPORTED_EBOOKS = {".pdf", ".epub", ".txt", ".mobi"}
+OUTPUT_MODE_KEY = "audiobook_output_mode"
+LOCAL_OUTPUT_KEY = "audiobook_local_output_folder"
+DRIVE_OUTPUT_KEY = "audiobook_drive_output_folder"
+
+
+def suggested_drive_audiobook_folder() -> Path | None:
+    """Offer the user's existing synced audiobook folder when unambiguous."""
+    root = Path.home() / "Library" / "CloudStorage"
+    matches = [path for path in root.glob(
+        "GoogleDrive-*/My Drive/audiobooks - gdrive") if path.is_dir()]
+    return matches[0] if len(matches) == 1 else None
 
 
 class AudiobookPanel(QWidget):
@@ -38,12 +51,15 @@ class AudiobookPanel(QWidget):
         "audiobook_empty_state", "audiobook_source_stack",
         "audiobook_input_path", "audiobook_open_input_btn",
         "audiobook_project_book_btn",
-        "audiobook_output_path", "audiobook_change_output_btn",
+        "audiobook_output_path", "audiobook_output_mode",
+        "audiobook_change_output_btn",
         "audiobook_voice_box", "audiobook_chunk_input",
         "audiobook_start_btn", "audiobook_refresh_btn", "stop_btn",
         "audiobook_cost_label", "tool_progress", "audiobook_status_label",
         "audiobook_convert_scroll", "audiobook_library_refresh_btn",
-        "audiobook_library_scope", "audiobook_library_table", "audiobook_play_btn",
+        "audiobook_library_scope", "audiobook_library_table",
+        "audiobook_progress_mode", "audiobook_progress_folder",
+        "audiobook_progress_folder_btn", "audiobook_play_btn",
         "audiobook_restart_btn", "audiobook_reveal_btn", "audiobook_player",
     )
 
@@ -111,6 +127,15 @@ class AudiobookPanel(QWidget):
         self.audiobook_open_input_btn.clicked.connect(self.open_input_folder)
         self.audiobook_output_path = QLineEdit()
         self.audiobook_output_path.setReadOnly(True)
+        self.audiobook_output_mode = QComboBox()
+        self.audiobook_output_mode.addItem("On this Mac", "local")
+        self.audiobook_output_mode.addItem("Google Drive folder", "drive")
+        self.audiobook_output_mode.setAccessibleName("Converted audiobook location")
+        self.audiobook_output_mode.setCurrentIndex(
+            self.audiobook_output_mode.findData(
+                get_setting(OUTPUT_MODE_KEY, "local")))
+        self.audiobook_output_mode.currentIndexChanged.connect(
+            self.change_output_mode)
         self.audiobook_change_output_btn = QPushButton("Set output")
         self.audiobook_change_output_btn.setFixedWidth(116)
         self.audiobook_change_output_btn.clicked.connect(
@@ -121,14 +146,16 @@ class AudiobookPanel(QWidget):
         folders.addWidget(field("Input folder", self.audiobook_input_path),
                           0, 0, Qt.AlignTop)
         folders.addWidget(self.audiobook_open_input_btn, 0, 1, Qt.AlignBottom)
-        folders.addWidget(field("Output folder", self.audiobook_output_path),
+        folders.addWidget(field("Save converted audio", self.audiobook_output_mode),
                           1, 0, Qt.AlignTop)
-        folders.addWidget(self.audiobook_change_output_btn, 1, 1, Qt.AlignBottom)
+        folders.addWidget(field("Output folder", self.audiobook_output_path),
+                          2, 0, Qt.AlignTop)
+        folders.addWidget(self.audiobook_change_output_btn, 2, 1, Qt.AlignBottom)
         folders.setColumnStretch(0, 1)
         page.addLayout(folders)
 
         self.audiobook_voice_box = combo(
-            ["alloy", "verse", "aria", "coral", "sage"])
+            ["alloy", "verse", "marin", "coral", "sage"])
         self.audiobook_voice_box.setToolTip(
             "Narration voice. Open the menu to see Imprint's best-fit default.")
         self.audiobook_chunk_input = line_edit("1400", "1400")
@@ -201,9 +228,14 @@ class AudiobookPanel(QWidget):
 
     def defaults(self):
         tool = self.host.tool_runner.tools["audiobook"]
+        mode = get_setting(OUTPUT_MODE_KEY, "local")
+        if mode == "drive":
+            output = get_setting(DRIVE_OUTPUT_KEY, "")
+        else:
+            output = get_setting(LOCAL_OUTPUT_KEY, tool["default_output"])
         return {
             "input": tool["default_input"],
-            "output": tool["default_output"],
+            "output": output,
             "voice": tool.get("default_voice", "alloy"),
             "chunk_tokens": tool.get("default_chunk_tokens", 1400),
         }
@@ -233,9 +265,16 @@ class AudiobookPanel(QWidget):
     def refresh_books(self):
         defaults = self.defaults()
         input_folder = Path(defaults["input"]).expanduser()
-        output_folder = Path(defaults["output"]).expanduser()
+        output_folder = (Path(defaults["output"]).expanduser()
+                         if defaults["output"] else None)
         self.audiobook_input_path.setText(str(input_folder))
-        self.audiobook_output_path.setText(str(output_folder))
+        self.audiobook_output_path.setText(
+            str(output_folder) if output_folder else "")
+        self.audiobook_output_mode.blockSignals(True)
+        self.audiobook_output_mode.setCurrentIndex(
+            self.audiobook_output_mode.findData(
+                get_setting(OUTPUT_MODE_KEY, "local")))
+        self.audiobook_output_mode.blockSignals(False)
         # Only seed empty fields: this runs on every workspace switch and
         # after every finish, and an interrupted book's resume depends on
         # keeping the settings its cached chunks were made with.
@@ -329,9 +368,38 @@ class AudiobookPanel(QWidget):
 
     def change_output_folder(self):
         folder = QFileDialog.getExistingDirectory(
-            self, "Select Audiobook Output Folder")
+            self, "Select Audiobook Output Folder",
+            self.audiobook_output_path.text().strip())
         if folder:
             self.audiobook_output_path.setText(folder)
+            key = (DRIVE_OUTPUT_KEY if self.audiobook_output_mode.currentData()
+                   == "drive" else LOCAL_OUTPUT_KEY)
+            save_setting(key, folder)
+            self.refresh_library()
+
+    def change_output_mode(self):
+        mode = self.audiobook_output_mode.currentData()
+        if mode == "drive":
+            folder = (get_setting(DRIVE_OUTPUT_KEY, "") or
+                      str(suggested_drive_audiobook_folder() or ""))
+            if not folder or not Path(folder).is_dir():
+                folder = QFileDialog.getExistingDirectory(
+                    self, "Choose your synced Google Drive audiobook folder")
+            if not folder:
+                self.audiobook_output_mode.blockSignals(True)
+                self.audiobook_output_mode.setCurrentIndex(
+                    self.audiobook_output_mode.findData(
+                        get_setting(OUTPUT_MODE_KEY, "local")))
+                self.audiobook_output_mode.blockSignals(False)
+                return
+            save_setting(DRIVE_OUTPUT_KEY, folder)
+        else:
+            folder = get_setting(
+                LOCAL_OUTPUT_KEY,
+                self.host.tool_runner.tools["audiobook"]["default_output"])
+        save_setting(OUTPUT_MODE_KEY, mode)
+        self.audiobook_output_path.setText(folder)
+        self.refresh_library()
 
     def _text(self, path: Path) -> str:
         from services.narrator.converter import load_text
@@ -386,6 +454,13 @@ class AudiobookPanel(QWidget):
             return
         book_path = item.data(Qt.UserRole)
         output_path = self.audiobook_output_path.text().strip()
+        if not output_path or (self.audiobook_output_mode.currentData() == "drive"
+                               and not Path(output_path).is_dir()):
+            QMessageBox.warning(
+                self, "Output folder unavailable",
+                "Reconnect or choose your Google Drive audiobook folder "
+                "before converting this book.")
+            return
         voice = self.audiobook_voice_box.currentText().strip()
         expected_output = self._converted_output(
             Path(book_path), Path(output_path).expanduser())
@@ -831,6 +906,32 @@ class AudiobookPanel(QWidget):
         header.addWidget(self.audiobook_library_refresh_btn)
         layout.addLayout(header)
 
+        storage = QHBoxLayout()
+        storage.addWidget(QLabel("Save listening progress:"))
+        self.audiobook_progress_mode = QComboBox()
+        self.audiobook_progress_mode.addItem("On this Mac", "local")
+        self.audiobook_progress_mode.addItem("Google Drive folder", "drive")
+        self.audiobook_progress_mode.setAccessibleName("Listening progress storage")
+        mode, folder = progress_storage()
+        self.audiobook_progress_mode.setCurrentIndex(
+            self.audiobook_progress_mode.findData(mode))
+        self.audiobook_progress_mode.currentIndexChanged.connect(
+            self.change_progress_storage)
+        storage.addWidget(self.audiobook_progress_mode)
+        proposed_folder = folder or suggested_drive_audiobook_folder()
+        self.audiobook_progress_folder = QLineEdit(
+            str(proposed_folder) if proposed_folder else "")
+        self.audiobook_progress_folder.setReadOnly(True)
+        self.audiobook_progress_folder.setPlaceholderText(
+            "Choose your synced audiobooks - gdrive folder")
+        storage.addWidget(self.audiobook_progress_folder, 1)
+        self.audiobook_progress_folder_btn = QPushButton("Choose folder")
+        self.audiobook_progress_folder_btn.clicked.connect(
+            self.choose_progress_folder)
+        storage.addWidget(self.audiobook_progress_folder_btn)
+        layout.addLayout(storage)
+        self._update_progress_folder_controls()
+
         self.audiobook_library_table = QTableWidget(0, 4)
         self.audiobook_library_table.setHorizontalHeaderLabels(
             ["Title", "Progress", "Position", "Last played"])
@@ -868,20 +969,74 @@ class AudiobookPanel(QWidget):
         self.audiobook_player = AudiobookPlayer()
         self.audiobook_player.position_saved.connect(
             lambda *_: self._refresh_row())
+        self.audiobook_player.storage_error.connect(
+            lambda message: self.audiobook_status_label.setText(
+                f"[Progress not saved] {message}"))
         layout.addWidget(self.audiobook_player)
         return page
+
+    def _update_progress_folder_controls(self):
+        enabled = self.audiobook_progress_mode.currentData() == "drive"
+        self.audiobook_progress_folder.setVisible(enabled)
+        self.audiobook_progress_folder_btn.setVisible(enabled)
+
+    def change_progress_storage(self):
+        mode = self.audiobook_progress_mode.currentData()
+        folder_text = self.audiobook_progress_folder.text().strip()
+        folder = Path(folder_text) if mode == "drive" and folder_text else None
+        if mode == "drive" and (folder is None or not folder.is_dir()):
+            self.choose_progress_folder()
+            return
+        self._set_progress_storage(mode, folder)
+
+    def choose_progress_folder(self):
+        current = self.audiobook_progress_folder.text().strip()
+        folder = QFileDialog.getExistingDirectory(
+            self, "Choose your synced Google Drive audiobook folder", current)
+        if not folder:
+            mode, _ = progress_storage()
+            self.audiobook_progress_mode.blockSignals(True)
+            self.audiobook_progress_mode.setCurrentIndex(
+                self.audiobook_progress_mode.findData(mode))
+            self.audiobook_progress_mode.blockSignals(False)
+            self._update_progress_folder_controls()
+            return
+        self._set_progress_storage("drive", Path(folder))
+
+    def _set_progress_storage(self, mode, folder):
+        self.audiobook_player.save_now()
+        try:
+            configure_progress_storage(
+                mode, folder, [book.path for book in self._all_audiobook_library])
+        except (OSError, ValueError) as exc:
+            QMessageBox.warning(self, "Progress storage", str(exc))
+        actual_mode, actual_folder = progress_storage()
+        self.audiobook_progress_mode.blockSignals(True)
+        self.audiobook_progress_mode.setCurrentIndex(
+            self.audiobook_progress_mode.findData(actual_mode))
+        self.audiobook_progress_mode.blockSignals(False)
+        self.audiobook_progress_folder.setText(
+            str(actual_folder) if actual_folder else "")
+        self._update_progress_folder_controls()
+        self.audiobook_player.refresh_storage_interval()
+        self.refresh_library()
 
     def refresh_library(self):
         """Rescan the output folder on entry without touching conversion state."""
         from services.project_artifacts import list_for_project
 
         defaults = self.host.get_audiobook_defaults()
-        folder = Path(defaults["output"]).expanduser()
+        folder = (Path(defaults["output"]).expanduser()
+                  if defaults["output"] else None)
+        scan_error = None
         try:
-            self._all_audiobook_library = scan(folder)
+            self._all_audiobook_library = scan(folder) if folder else []
         except Exception as exc:
             self.host._note_failure("audiobook: scan library", exc)
             self._all_audiobook_library = []
+            scan_error = exc
+            self.audiobook_status_label.setText(
+                f"[Progress unavailable] {exc}")
 
         project = self.host._active_project()
         scope = self.audiobook_library_scope
@@ -916,14 +1071,15 @@ class AudiobookPanel(QWidget):
             table.setItem(row, 2, QTableWidgetItem(position))
             table.setItem(row, 3, QTableWidgetItem(book.last_played or "—"))
 
-        if not self._audiobook_library:
+        if not self._audiobook_library and scan_error is None:
             self.audiobook_status_label.setText(
                 (f"[Library] No audiobooks linked to {project['name']}. "
                  "Switch to All audiobooks to see other files."
                  if scope.currentData() == "project" and project else
                  "[Library] Select a Project to filter its audiobooks."
                  if scope.currentData() == "project" else
-                 f"[Library] No audio files in {folder}. Convert a book first."))
+                 f"[Library] No audio files in {folder or 'the output folder'}. "
+                 "Convert a book first."))
         self._selection_changed()
 
     def _selected_book(self):
@@ -974,6 +1130,7 @@ class AudiobookPanel(QWidget):
         book = self._selected_book()
         if not book:
             return
+        self.audiobook_player.stop()
         mark_unfinished(book.path)
         self.audiobook_player.load(book.path, title=book.title, resume_ms=0)
         self.audiobook_player.play()
