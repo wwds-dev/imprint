@@ -462,6 +462,29 @@ CREATE TABLE IF NOT EXISTS audiobook_conversions (
     updated_at    TEXT NOT NULL
 );
 
+-- One client order for the Client Gigs workspace: the brief, the brand
+-- kit, every event (a returning client's new round is a revision event on
+-- the same open order), and the produced artifacts. The panel's order log
+-- reads these rows, so it survives restarts.
+CREATE TABLE IF NOT EXISTS fiverr_orders (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    client           TEXT NOT NULL DEFAULT '',
+    industry         TEXT NOT NULL DEFAULT '',
+    style            TEXT NOT NULL DEFAULT '',
+    colors           TEXT NOT NULL DEFAULT '',
+    notes            TEXT NOT NULL DEFAULT '',
+    brand_fonts      TEXT NOT NULL DEFAULT '',
+    brand_voice      TEXT NOT NULL DEFAULT '',
+    brand_rules      TEXT NOT NULL DEFAULT '',
+    status           TEXT NOT NULL DEFAULT 'open',
+    history_json     TEXT NOT NULL DEFAULT '[]',
+    image_paths_json TEXT NOT NULL DEFAULT '[]',
+    delivery_text    TEXT NOT NULL DEFAULT '',
+    gig_text         TEXT NOT NULL DEFAULT '',
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL
+);
+
 -- One row per generated Music release plan: the inputs, the parsed
 -- sections, the owning Project — and the self-reported outcome, which the
 -- next plan's prompt learns from. No platform API is wired; outcome
@@ -533,6 +556,7 @@ CREATE INDEX IF NOT EXISTS idx_creator_video_jobs_account ON creator_video_jobs(
 CREATE INDEX IF NOT EXISTS idx_video_jobs_status       ON video_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_audiobook_conversions_status ON audiobook_conversions(status);
 CREATE INDEX IF NOT EXISTS idx_music_release_plans_artist ON music_release_plans(artist);
+CREATE INDEX IF NOT EXISTS idx_fiverr_orders_client      ON fiverr_orders(client);
 CREATE INDEX IF NOT EXISTS idx_social_publish_jobs_status
     ON social_publish_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_project_artifacts_project

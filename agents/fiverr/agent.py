@@ -43,6 +43,19 @@ class FiverrAgent:
     def __init__(self):
         self.name = "fiverr"
 
+    @staticmethod
+    def _brand_kit_lines(brief: dict) -> str:
+        """Brand-kit context, only when the client actually has one —
+        'Fonts: N/A' teaches the model nothing."""
+        lines = []
+        for label, key in (("Brand fonts", "brand_fonts"),
+                           ("Brand voice", "brand_voice"),
+                           ("Brand rules", "brand_rules")):
+            value = (brief.get(key) or "").strip()
+            if value:
+                lines.append(f"{label}: {value}")
+        return ("\n" + "\n".join(lines)) if lines else ""
+
     def build_messages(self, task: str, brief: dict) -> list[dict]:
         context = (
             f"Business name: {brief.get('business_name', 'N/A')}\n"
@@ -50,6 +63,7 @@ class FiverrAgent:
             f"Style: {brief.get('style', 'N/A')}\n"
             f"Colors: {brief.get('colors', 'N/A')}\n"
             f"Notes: {brief.get('notes', 'N/A')}"
+            + self._brand_kit_lines(brief)
         )
         return [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -63,6 +77,7 @@ class FiverrAgent:
             f"Style: {brief.get('style', 'N/A')}\n"
             f"Colors: {brief.get('colors', 'N/A')}\n"
             f"Notes: {brief.get('notes', 'N/A')}"
+            + self._brand_kit_lines(brief)
         )
         return [
             {"role": "system", "content": SYSTEM_PROMPT},

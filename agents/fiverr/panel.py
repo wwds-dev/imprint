@@ -41,6 +41,8 @@ class FiverrPanel(QWidget):
         "fiverr_status_label", "fiverr_tabs", "fiverr_preview_status",
         "fiverr_save_images_btn", "fiverr_logo_grid", "fiverr_logo_grid_layout",
         "fiverr_delivery_box", "fiverr_gig_box", "fiverr_order_table",
+        "fiverr_brand_fonts_input", "fiverr_brand_voice_input",
+        "fiverr_brand_rules_input",
         "fiverr_clear_btn",
     )
 
@@ -52,7 +54,7 @@ class FiverrPanel(QWidget):
         self._pending_count = 0
         self._pending_brief: dict = {}
         self._image_paths: list = []
-        self._order_row: int | None = None
+        self._order_id: int | None = None
         self.setObjectName("FiverrPanel")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -91,6 +93,22 @@ class FiverrPanel(QWidget):
         brief.addWidget(field("Primary colours", self.fiverr_colors_input), 1, 1,
                         Qt.AlignTop)
         brief.addWidget(field("Concepts", self.fiverr_count_spin), 1, 2, Qt.AlignTop)
+        # The brand kit: per-client preferences that outlive one order. A
+        # returning client's name auto-fills these from their last order.
+        self.fiverr_brand_fonts_input = line_edit(
+            "Brand fonts — e.g. Montserrat headings, Lato body")
+        self.fiverr_brand_voice_input = line_edit(
+            "Brand voice — e.g. dry, confident, no exclamation marks")
+        self.fiverr_brand_rules_input = line_edit(
+            "Brand rules — e.g. never crop the logomark, no gradients")
+        brief.addWidget(field("Brand fonts", self.fiverr_brand_fonts_input),
+                        2, 0, Qt.AlignTop)
+        brief.addWidget(field("Brand voice", self.fiverr_brand_voice_input),
+                        2, 1, Qt.AlignTop)
+        brief.addWidget(field("Brand rules", self.fiverr_brand_rules_input),
+                        2, 2, Qt.AlignTop)
+        self.fiverr_name_input.editingFinished.connect(
+            self._autofill_client_preferences)
         for column in range(3):
             brief.setColumnStretch(column, 1)
         layout.addLayout(brief)
@@ -218,7 +236,9 @@ class FiverrPanel(QWidget):
         orders_layout.setSpacing(MD)
         self.fiverr_order_table = QTableWidget(0, 3)
         self.fiverr_order_table.setHorizontalHeaderLabels(
-            ["Business", "Concepts", "Status"])
+            ["Client", "Updated", "Status"])
+        self.fiverr_order_table.itemSelectionChanged.connect(
+            self._order_selected)
         header = self.fiverr_order_table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.Stretch)
         header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
@@ -243,6 +263,7 @@ class FiverrPanel(QWidget):
         # through host._find_control(); HOST_CONTROLS stays as the
         # published contract of what this panel owns.
         host.fiverr_panel = self
+        self.refresh_orders()
         self.update_estimate()
         self.hide()
         self.fiverr_panel_base.load_models()
@@ -271,6 +292,9 @@ class FiverrPanel(QWidget):
             "style": self.fiverr_style_box.currentText(),
             "colors": self.fiverr_colors_input.text().strip(),
             "notes": self.fiverr_notes_input.toPlainText().strip(),
+            "brand_fonts": self.fiverr_brand_fonts_input.text().strip(),
+            "brand_voice": self.fiverr_brand_voice_input.text().strip(),
+            "brand_rules": self.fiverr_brand_rules_input.text().strip(),
         }
 
     def _reset_buttons(self) -> None:
@@ -383,13 +407,16 @@ class FiverrPanel(QWidget):
         worker.status_signal.connect(self.fiverr_status_label.setText)
         worker.start()
 
-        row = self.fiverr_order_table.rowCount()
-        self.fiverr_order_table.insertRow(row)
-        self.fiverr_order_table.setItem(
-            row, 0, QTableWidgetItem(brief.get("business_name", "")))
-        self.fiverr_order_table.setItem(row, 1, QTableWidgetItem(str(count)))
-        self.fiverr_order_table.setItem(row, 2, QTableWidgetItem("Generating"))
-        self._order_row = row
+        from agents.fiverr import orders
+        try:
+            order = orders.open_order(brief)
+            self._order_id = order["id"]
+            orders.record_event(self._order_id, "logos requested",
+                                f"{count} concept(s)")
+        except Exception as exc:
+            self._order_id = None
+            self.host._note_failure("fiverr: open order", exc)
+        self.refresh_orders()
 
     def _on_image_ready(self, path: str, index: int) -> None:
         lbl = QLabel()
@@ -418,9 +445,17 @@ class FiverrPanel(QWidget):
             self.host.record_request(token, f"{len(paths)} logo images")
         self._reset_buttons()
         self.fiverr_save_images_btn.setEnabled(True)
-        if self._order_row is not None:
-            self.fiverr_order_table.setItem(
-                self._order_row, 2, QTableWidgetItem("Done"))
+        if self._order_id is not None:
+            from agents.fiverr import orders
+            import json as _json
+            try:
+                orders.attach(self._order_id,
+                              image_paths_json=_json.dumps(list(paths)))
+                orders.record_event(self._order_id, "logos delivered",
+                                    f"{len(paths)} file(s)")
+            except Exception as exc:
+                self.host._note_failure("fiverr: attach logos", exc)
+            self.refresh_orders()
 
     def _on_image_error(self, error: str) -> None:
         # A failed render still consumed whatever it managed before failing,
@@ -432,9 +467,13 @@ class FiverrPanel(QWidget):
         self.fiverr_status_label.setText(f"Error: {error}")
         self.fiverr_preview_status.setText(f"[Error] {error}")
         self._reset_buttons()
-        if self._order_row is not None:
-            self.fiverr_order_table.setItem(
-                self._order_row, 2, QTableWidgetItem("Error"))
+        if self._order_id is not None:
+            from agents.fiverr import orders
+            try:
+                orders.record_event(self._order_id, "logo run failed", error)
+            except Exception as exc:
+                self.host._note_failure("fiverr: log order error", exc)
+            self.refresh_orders()
 
     def _on_text_error(self, error: str) -> None:
         # Shared by all three text flows (prompt, delivery, gig) — they are
@@ -484,6 +523,8 @@ class FiverrPanel(QWidget):
         token, self._prompt_token = self._prompt_token, None
         if token:
             self.host.record_request(token, _full)
+        self._attach_to_order(delivery_text=self.fiverr_delivery_box
+                              .toPlainText(), event="delivery written")
         self.fiverr_status_label.setText("Delivery message ready.")
         self._reset_buttons()
 
@@ -526,10 +567,115 @@ class FiverrPanel(QWidget):
         token, self._prompt_token = self._prompt_token, None
         if token:
             self.host.record_request(token, _full)
+        self._attach_to_order(gig_text=self.fiverr_gig_box.toPlainText(),
+                              event="gig listing written")
         self.fiverr_status_label.setText("Gig description ready.")
         self._reset_buttons()
 
     # ── stop / save / clear ─────────────────────────────────────────────
+    def _attach_to_order(self, *, event: str, **fields) -> None:
+        """Store an artifact on the current order; never block the flow.
+
+        A delivery or gig written with no prior logo run still deserves a
+        record, so the order is opened on demand from the current brief.
+        """
+        from agents.fiverr import orders
+
+        try:
+            if self._order_id is None:
+                self._order_id = orders.open_order(self._get_brief())["id"]
+            orders.attach(self._order_id, **fields)
+            orders.record_event(self._order_id, event)
+        except Exception as exc:
+            self.host._note_failure("fiverr: update order", exc)
+        self.refresh_orders()
+
+    def refresh_orders(self) -> None:
+        """The order log reads the durable rows — it survives restarts."""
+        from agents.fiverr import orders
+
+        table = self.fiverr_order_table
+        table.blockSignals(True)
+        table.setRowCount(0)
+        try:
+            rows = orders.list_orders()
+        except Exception as exc:
+            self.host._note_failure("fiverr: list orders", exc)
+            rows = []
+        for order in rows:
+            row = table.rowCount()
+            table.insertRow(row)
+            client_item = QTableWidgetItem(order["client"] or "(unnamed)")
+            client_item.setData(Qt.UserRole, order["id"])
+            table.setItem(row, 0, client_item)
+            table.setItem(row, 1, QTableWidgetItem(
+                (order["updated_at"] or "")[:16].replace("T", " ")))
+            table.setItem(row, 2, QTableWidgetItem(order["status"]))
+        table.blockSignals(False)
+
+    def _order_selected(self) -> None:
+        """Selecting an order reloads its whole record into the workspace."""
+        from agents.fiverr import orders
+        import json as _json
+
+        items = self.fiverr_order_table.selectedItems()
+        if not items:
+            return
+        order_id = self.fiverr_order_table.item(items[0].row(), 0).data(
+            Qt.UserRole)
+        order = orders.get_order(order_id) if order_id else None
+        if order is None:
+            return
+        self._order_id = order["id"]
+        self.fiverr_name_input.setText(order["client"])
+        self.fiverr_industry_input.setText(order["industry"])
+        self.fiverr_colors_input.setText(order["colors"])
+        self.fiverr_notes_input.setPlainText(order["notes"])
+        self.fiverr_brand_fonts_input.setText(order["brand_fonts"])
+        self.fiverr_brand_voice_input.setText(order["brand_voice"])
+        self.fiverr_brand_rules_input.setText(order["brand_rules"])
+        index = self.fiverr_style_box.findText(order["style"])
+        if index >= 0:
+            self.fiverr_style_box.setCurrentIndex(index)
+        if order["delivery_text"]:
+            self.fiverr_delivery_box.setPlainText(order["delivery_text"])
+        if order["gig_text"]:
+            self.fiverr_gig_box.setPlainText(order["gig_text"])
+        history = _json.loads(order["history_json"] or "[]")
+        last = history[-1] if history else None
+        self.fiverr_status_label.setText(
+            f"Order loaded — {len(history)} event(s)"
+            + (f", last: {last['kind']}" if last else "") + ".")
+
+    def _autofill_client_preferences(self) -> None:
+        """A returning client's name fills their stored preferences into
+        EMPTY fields only — typed-in changes always win."""
+        from agents.fiverr import orders
+
+        try:
+            order = orders.latest_for_client(self.fiverr_name_input.text())
+        except Exception as exc:
+            self.host._note_failure("fiverr: client lookup", exc)
+            return
+        if order is None:
+            return
+        fills = (
+            (self.fiverr_industry_input, order["industry"]),
+            (self.fiverr_colors_input, order["colors"]),
+            (self.fiverr_brand_fonts_input, order["brand_fonts"]),
+            (self.fiverr_brand_voice_input, order["brand_voice"]),
+            (self.fiverr_brand_rules_input, order["brand_rules"]),
+        )
+        filled = False
+        for widget, value in fills:
+            if value and not widget.text().strip():
+                widget.setText(value)
+                filled = True
+        if filled:
+            self.fiverr_status_label.setText(
+                f"Known client — brand kit loaded from "
+                f"{(order['updated_at'] or '')[:10]}.")
+
     def stop(self) -> None:
         image_worker = self.host.fiverr_image_worker
         if image_worker is not None and image_worker.isRunning():
