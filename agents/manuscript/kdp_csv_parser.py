@@ -103,12 +103,16 @@ def summarise_kdp_rows(rows: list[dict]) -> dict:
     total_royalties = 0.0
     by_marketplace: dict[str, dict] = {}
     kenp_pages = 0
+    skipped_rows = 0
 
     for row in rows:
         try:
             units = int(row.get("Units Sold", 0) or 0)
             royalty = float(row.get("Royalty", 0) or 0)
             marketplace = row.get("Marketplace", "Unknown")
+            # A report with no Currency column states nothing — presuming
+            # USD would re-arm the "$" label this tracking exists to earn.
+            currency = (row.get("Currency") or "").strip() or "unstated"
             pages = int(row.get("KENP Read", 0) or 0)
 
             total_units += units
@@ -116,18 +120,29 @@ def summarise_kdp_rows(rows: list[dict]) -> dict:
             kenp_pages += pages
 
             if marketplace not in by_marketplace:
-                by_marketplace[marketplace] = {"units": 0, "royalties": 0.0}
+                by_marketplace[marketplace] = {"units": 0, "royalties": 0.0,
+                                               "currencies": set()}
             by_marketplace[marketplace]["units"] += units
             by_marketplace[marketplace]["royalties"] += royalty
+            by_marketplace[marketplace]["currencies"].add(currency)
         except (ValueError, TypeError):
+            # A malformed money row (locale decimal comma, thousands
+            # separators) must leave a trace, or the totals under-report
+            # with nothing to say so.
+            skipped_rows += 1
             continue
 
     return {
         "total_units": total_units,
         "total_royalties_usd": round(total_royalties, 2),
         "kenp_pages_read": kenp_pages,
+        "skipped_rows": skipped_rows,
+        "currencies": sorted({c for v in by_marketplace.values()
+                              for c in v["currencies"]}),
         "by_marketplace": [
-            {"marketplace": k, **v} for k, v in by_marketplace.items()
+            {"marketplace": k, **v,
+             "currencies": sorted(v["currencies"])}
+            for k, v in by_marketplace.items()
         ],
     }
 
@@ -140,13 +155,18 @@ def marketplace_summary() -> dict:
     skipped rather than sinking the whole summary.
     """
     rows: list[dict] = []
+    skipped: list[str] = []
     if KDP_REPORTS_DIR.exists():
         for path in sorted(KDP_REPORTS_DIR.glob("*.csv")):
             try:
                 rows.extend(parse_kdp_csv(path))
             except Exception:
-                continue
-    return summarise_kdp_rows(rows)
+                # Skipping keeps one bad file from sinking the chart, but
+                # a silent skip under-reports royalties with no trace.
+                skipped.append(path.name)
+    summary = summarise_kdp_rows(rows)
+    summary["skipped_files"] = skipped
+    return summary
 
 
 def ingest_new_reports() -> list[str]:

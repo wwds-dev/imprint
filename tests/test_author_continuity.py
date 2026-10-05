@@ -122,3 +122,86 @@ def test_finished_draft_counts_unsourced_marks(window, author, monkeypatch):
     status = author.author_status_label.text()
     assert "2 claim(s) marked [UNSOURCED]" in status
     assert "verify or cut" in status
+
+
+# ── wave-two hardening: sources are project state, counts cover the draft ───
+
+def test_sources_travel_with_the_project_state(author):
+    author.author_content_type_box.setCurrentText("Non-Fiction")
+    author.author_sources_box.setPlainText("Smith (2024), The Atlas Problem")
+    state = author._capture_project_state()
+    assert state["sources"] == "Smith (2024), The Atlas Problem"
+    # Another project's empty state must not inherit the bibliography —
+    # Book A's sources in Book B's prompt is fabricated authority.
+    author._apply_project_state({})
+    assert author.author_sources_box.toPlainText() == ""
+    author._apply_project_state(state)
+    assert author.author_sources_box.toPlainText() == \
+        "Smith (2024), The Atlas Problem"
+
+
+def test_source_edits_schedule_a_project_save(author):
+    saved_id = author._project_id
+    author._project_id = 4242
+    try:
+        author._project_save_timer.stop()
+        author.author_sources_box.setPlainText("New citation")
+        assert author._project_save_timer.isActive(), \
+            "editing sources did not schedule a workspace save"
+    finally:
+        author._project_save_timer.stop()
+        author._project_id = saved_id
+
+
+def test_sources_survive_the_profile_round_trip(author):
+    from services.database import get_setting, save_setting
+    author.author_content_type_box.setCurrentText("Non-Fiction")
+    author.author_sources_box.setPlainText("Field interview, 2026-03-02")
+    saved_id = author._project_id
+    saved_profile = get_setting("author_book_profile", "")
+    author._project_id = None          # the profile path, not a project
+    try:
+        author.save_profile()
+        author.author_sources_box.clear()
+        author._load_profile()
+        assert "Field interview" in author.author_sources_box.toPlainText()
+    finally:
+        author._project_id = saved_id
+        # The shared settings row must not leak this Non-Fiction profile
+        # into every later test's window.
+        save_setting("author_book_profile", saved_profile)
+
+
+def test_unsourced_count_covers_the_whole_draft_not_just_the_chunk(
+        window, author, monkeypatch):
+    monkeypatch.setattr(window, "record_request", lambda *a, **k: None)
+    author.author_draft_box.setPlainText("Chapter one claim [UNSOURCED].")
+    author._write_token = "tok"
+    # A Continue streams its chunks into the draft box; the finish handler
+    # only gets the new text — which here carries no marks of its own.
+    author._is_continuing = True
+    try:
+        author._on_finished("A clean continuation with no new marks.")
+    finally:
+        author._is_continuing = False
+    status = author.author_status_label.text()
+    assert "1 claim(s) marked [UNSOURCED]" in status, \
+        "a clean Continue hid chapter one's unverified claim"
+    author.author_draft_box.clear()
+
+
+def test_unsourced_count_sees_marks_routed_to_other_tabs(
+        window, author, monkeypatch):
+    monkeypatch.setattr(window, "record_request", lambda *a, **k: None)
+    author.author_draft_box.clear()
+    saved_task = author.author_task_box.currentText()
+    author.author_task_box.setCurrentText("Generate Outline")
+    author._write_token = "tok"
+    try:
+        author._on_finished("1. The market doubled [UNSOURCED]\n2. More")
+    finally:
+        author.author_task_box.setCurrentText(saved_task)
+    assert "1 claim(s) marked [UNSOURCED]" in \
+        author.author_status_label.text(), \
+        "a mark routed to the Outline tab escaped the count"
+    author.author_outline_box.clear()

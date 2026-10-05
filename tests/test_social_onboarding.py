@@ -70,3 +70,25 @@ def test_accounts_tab_shows_scopes_and_steps(window):
     assert "scope: submit" in text          # reddit's grant, in plain words
     assert "To connect:" in text
     assert "PINTEREST_ACCESS_TOKEN" in text
+
+
+def test_reddit_token_requests_only_the_submit_scope(monkeypatch):
+    """The guide promises "submit, nothing else"; the password flow mints a
+    full-scope token unless the request says otherwise."""
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {"access_token": "tok"}
+
+    def fake_post(url, **kwargs):
+        captured["url"] = url
+        captured["data"] = kwargs.get("data") or {}
+        return FakeResponse()
+
+    import requests
+    monkeypatch.setattr(requests, "post", fake_post)
+    assert publishing.PUBLISHERS["reddit"]._token() == "tok"
+    assert captured["data"].get("scope") == "submit"

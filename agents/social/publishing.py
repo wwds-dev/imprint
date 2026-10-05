@@ -41,13 +41,14 @@ class PublishResult:
 
 
 class Publisher:
+    """One platform's posting mechanics."""
+
     #: What the stored credentials let THIS APP do, in the user's words —
     #: shown before anyone pastes a secret, because consent to "connect"
     #: is meaningless without knowing what connecting grants.
     scopes: tuple[str, ...] = ()
     #: The exact steps to obtain the credentials, numbered by the panel.
     setup_steps: tuple[str, ...] = ()
-    """One platform's posting mechanics."""
 
     key = ""
     #: Environment variables this publisher needs, in the order to set them.
@@ -112,6 +113,11 @@ class RedditPublisher(Publisher):
             auth=(os.getenv("REDDIT_CLIENT_ID", ""),
                   os.getenv("REDDIT_CLIENT_SECRET", "")),
             data={"grant_type": "password",
+                  # Request exactly the grant the connection guide
+                  # states: without this, Reddit's password flow mints
+                  # a full-scope token and "submit, nothing else" is a
+                  # false consent statement.
+                  "scope": "submit",
                   "username": os.getenv("REDDIT_USERNAME", ""),
                   "password": os.getenv("REDDIT_PASSWORD", "")},
             headers={"User-Agent": self.USER_AGENT},

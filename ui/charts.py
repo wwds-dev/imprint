@@ -52,9 +52,12 @@ class BarChart(QWidget):
     def set_data(self, labels: list[str], values: list[float], *,
                  series_name: str = "", second: list[float] | None = None,
                  second_name: str = "", value_format: str = "{:,.2f}") -> None:
-        assert len(labels) == len(values), "labels and values must align"
-        if second is not None:
-            assert len(second) == len(values), "second series must align"
+        # Explicit raises, not assert: panels call this from refresh
+        # paths, and python -O strips asserts.
+        if len(labels) != len(values):
+            raise ValueError("labels and values must have the same length")
+        if second is not None and len(second) != len(values):
+            raise ValueError("second series must align with values")
         self._labels = list(labels)
         self._series = [(series_name, list(values))]
         if second is not None:
@@ -68,6 +71,9 @@ class BarChart(QWidget):
     def clear(self) -> None:
         self._labels = []
         self._series = []
+        # Reset the grown height floor, or the empty sentence keeps a tall
+        # dataset's footprint and starves the widgets below it.
+        self.setMinimumHeight(_ROW_HEIGHT * 3)
         self.update()
 
     # ── painting ─────────────────────────────────────────────────────────
@@ -107,8 +113,15 @@ class BarChart(QWidget):
                 width = bar_span * (abs(value) / peak)
                 color = (_qcolor(ACCENT_LINE) if series_index == 0
                          else _SECOND_SERIES)
-                painter.setPen(Qt.NoPen)
-                painter.setBrush(color)
+                if value < 0:
+                    # A negative drawn as a filled positive-length bar
+                    # reads as a gain; outline-only keeps the magnitude
+                    # comparable while looking unmistakably different.
+                    painter.setPen(color)
+                    painter.setBrush(Qt.NoBrush)
+                else:
+                    painter.setPen(Qt.NoPen)
+                    painter.setBrush(color)
                 painter.drawRoundedRect(
                     QRectF(bar_left, bar_top, width, bar_height), 3, 3)
                 painter.setPen(_qcolor(TEXT_MUTE))

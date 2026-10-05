@@ -648,6 +648,7 @@ class AuthorPanel(QWidget):
         for widget in (
             self.author_draft_box, self.author_outline_box,
             self.author_characters_box, self.author_world_box,
+            self.author_sources_box,
         ):
             widget.textChanged.connect(self._schedule_project_save)
         for widget in (
@@ -773,6 +774,10 @@ class AuthorPanel(QWidget):
             "outline": self.author_outline_box.toPlainText(),
             "characters": self.author_characters_box.toPlainText(),
             "world": self.author_world_box.toPlainText(),
+            # The evidence rules disarm silently if the declared sources do
+            # not travel with the workspace — and Book A's bibliography must
+            # never leak into Book B's prompt.
+            "sources": self.author_sources_box.toPlainText(),
             "export_author": self.author_export_author_input.text(),
         }
 
@@ -805,6 +810,7 @@ class AuthorPanel(QWidget):
                 (self.author_outline_box, "outline"),
                 (self.author_characters_box, "characters"),
                 (self.author_world_box, "world"),
+                (self.author_sources_box, "sources"),
             ):
                 widget.setPlainText(state.get(key) or "")
             self.author_export_author_input.setText(
@@ -904,7 +910,9 @@ class AuthorPanel(QWidget):
         if self._project_id:
             self._persist_project_state()
         else:
-            save_setting("author_book_profile", json.dumps(self.get_book_profile()))
+            profile = self.get_book_profile()
+            profile["sources"] = self.author_sources_box.toPlainText()
+            save_setting("author_book_profile", json.dumps(profile))
         self.author_status_label.setText("[Saved] Book profile.")
         self.host._refresh_next_step_tip()
 
@@ -927,6 +935,7 @@ class AuthorPanel(QWidget):
             if idx >= 0:
                 self.author_genre_box.setCurrentIndex(idx)
         self.author_profile_hook_input.setText(profile.get("hook", ""))
+        self.author_sources_box.setPlainText(profile.get("sources", ""))
         self.author_profile_reader_input.setText(profile.get("target_reader", ""))
         self.author_profile_comps_input.setText(profile.get("comp_titles", ""))
         if profile.get("publishing_path"):
@@ -1105,7 +1114,12 @@ class AuthorPanel(QWidget):
         self._populate_tabs(full_response)
         word_count = len(self.author_draft_box.toPlainText().split())
         status = f"[Done] {word_count:,} words"
-        unsourced = full_response.count("[UNSOURCED]")
+        # Count in the text that will actually be published: a clean
+        # Continue must not hide chapter one's unverified claims — and a
+        # sectioned response must not hide marks routed to other tabs.
+        unsourced = max(
+            self.author_draft_box.toPlainText().count("[UNSOURCED]"),
+            full_response.count("[UNSOURCED]"))
         if unsourced:
             status += (f" — {unsourced} claim(s) marked [UNSOURCED]: "
                        "verify or cut before publishing")
@@ -1211,7 +1225,8 @@ class AuthorPanel(QWidget):
 
     def _clear_displays(self):
         for box in (self.author_draft_box, self.author_outline_box,
-                    self.author_characters_box, self.author_world_box):
+                    self.author_characters_box, self.author_world_box,
+                    self.author_sources_box):
             box.clear()
         self.author_word_count_label.setText("0")
         self.author_scene_count_label.setText("0")

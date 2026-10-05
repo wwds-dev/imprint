@@ -629,24 +629,29 @@ class ManuscriptPanel(QWidget):
         from services.database import get_setting
 
         parts = []
+        full_parts = []
         for integration, label in (("publishdrive", "PublishDrive"),
                                    ("kdp", "KDP reports")):
             raw = get_setting(f"manuscript_sync_{integration}", "")
             if not raw:
                 parts.append(f"{label}: never synced")
+                full_parts.append(f"{label}: never synced")
                 continue
             try:
                 state = json.loads(raw)
             except Exception:
                 parts.append(f"{label}: unreadable state")
+                full_parts.append(f"{label}: unreadable state")
                 continue
             when = (state.get("at") or "")[:16].replace("T", " ")
-            if state.get("ok"):
-                parts.append(f"{label}: ok {when} — {state.get('note', '')}")
-            else:
-                parts.append(f"{label}: FAILED {when} — "
-                             f"{state.get('note', '')}")
+            note = state.get("note", "")
+            shown = note if len(note) <= 90 else note[:90].rstrip() + "…"
+            word = "ok" if state.get("ok") else "FAILED"
+            parts.append(f"{label}: {word} {when} — {shown}")
+            full_parts.append(f"{label}: {word} {when} — {note}")
+        # The strip stays one line; the untruncated notes live in the tip.
         self.manuscript_sync_label.setText("   ·   ".join(parts))
+        self.manuscript_sync_label.setToolTip("\n".join(full_parts))
 
     def refresh_data(self):
         """Fetch PublishDrive data and display summary."""
@@ -695,14 +700,51 @@ class ManuscriptPanel(QWidget):
             return
         markets = sorted(summary.get("by_marketplace", []),
                          key=lambda m: -m["royalties"])
+        skipped = summary.get("skipped_files") or []
+        skipped_rows = summary.get("skipped_rows") or 0
+        problems = []
+        if skipped:
+            problems.append(
+                f"{len(skipped)} report file(s) could not be read and are "
+                f"missing from the chart: {', '.join(skipped[:3])}"
+                + ("…" if len(skipped) > 3 else ""))
+        if skipped_rows:
+            problems.append(f"{skipped_rows} row(s) had unparseable "
+                            "numbers and were dropped")
+        if problems:
+            self.manuscript_status_label.setText(
+                "[Warning] " + "; ".join(problems))
         if not markets:
             self.manuscript_royalty_chart.clear()
+            # The empty sentence must not keep a money caveat about data
+            # that no longer exists.
+            self.manuscript_royalty_chart.setToolTip("")
             return
+        # A "$" is a claim: it applies only when every contributing row
+        # SAYS it is USD — absent currency columns state nothing.
+        currencies = {c for m in markets
+                      for c in (m.get("currencies") or ["unstated"])}
+        value_format = "${:,.2f}" if currencies == {"USD"} else "{:,.2f}"
         self.manuscript_royalty_chart.set_data(
             [m["marketplace"] for m in markets],
             [m["royalties"] for m in markets],
             second=[m["units"] for m in markets], second_name="units",
-            value_format="${:,.2f}")
+            value_format=value_format)
+        if currencies == {"USD"}:
+            # Clear a stale currency warning once the data is clean.
+            self.manuscript_royalty_chart.setToolTip("")
+        elif len(currencies) > 1:
+            self.manuscript_royalty_chart.setToolTip(
+                "Mixed currencies summed as reported ("
+                + ", ".join(sorted(currencies))
+                + ") — amounts are not converted.")
+        elif currencies == {"unstated"}:
+            self.manuscript_royalty_chart.setToolTip(
+                "The reports do not state a currency — amounts shown "
+                "as reported.")
+        else:
+            self.manuscript_royalty_chart.setToolTip(
+                f"Amounts in {next(iter(currencies))}.")
 
     def ask(self):
         """Send a query to ManuscriptAgent with current data as context."""
