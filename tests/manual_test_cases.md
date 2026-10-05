@@ -238,8 +238,16 @@ estimate. Send that request from Quill.
 - [ ] The request is refused with the cap reason stated
 - [ ] A dialog titled **Budget cap reached** offers the local model and says it
       "runs on this machine and costs nothing"
-- [ ] Saying **Yes** flips the provider box to `ollama` and picks a local model
+- [ ] It **names the model** it will switch to, e.g. `llama3.1:8b` — not a vague
+      "the local model" you cannot check
+- [ ] That model is one `ollama list` actually shows. The offer asks the daemon
+      which models are pulled; it must never name one you do not have
+- [ ] Saying **Yes** flips the provider box to `ollama` and selects that model
+- [ ] The model box never ends up showing a **cloud** model under provider
+      `ollama` — that would read as a free route and is not one
 - [ ] It does **not** auto-send — you press Send again deliberately
+- [ ] Press Send: the free request actually completes. This is the whole point
+      of the offer, and the one step that proves it
 - [ ] Saying **No** leaves the provider unchanged and the request refused
 
 **Test B — a per-agent cap is not negotiable**
@@ -254,6 +262,14 @@ estimate. Send that request from Quill.
 
 **Test D — ollama itself**
 - [ ] With `ollama` already selected, trip a cap. No offer to switch to ollama
+
+**Test E — no local model, no offer**
+Stop the ollama daemon (`killall ollama`), then trip a global cap.
+- [ ] **No offer appears.** The plain block message stands instead
+- [ ] Same with the daemon running but no models pulled. Offering a free route
+      that does not exist is worse than refusing: you would accept, re-send,
+      and fail
+- [ ] Restart ollama afterwards
 
 ## A7. Cost History and Run Log  `FREE` then `PAID`
 
