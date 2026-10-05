@@ -12,6 +12,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QFileDialog, QGridLayout, QHBoxLayout, QLabel, QMessageBox, QPushButton,
+    QDialog, QDialogButtonBox,
     QSizePolicy, QTabWidget, QTextBrowser, QTextEdit, QVBoxLayout, QWidget,
 )
 
@@ -29,7 +30,8 @@ class MusicPanel(QWidget):
         "music_artist_input", "music_genre_box", "music_release_type_box",
         "music_distributor_box", "music_audience_input", "music_query_input",
         "music_panel_base", "music_provider_box", "music_model_box",
-        "music_analyse_btn", "music_save_btn", "music_clear_btn",
+        "music_analyse_btn", "music_save_btn", "music_outcome_btn",
+        "music_clear_btn",
         "music_stop_btn", "music_status_label", "music_tabs",
         "music_profile_box", "music_release_box", "music_distribution_box",
         "music_strategy_box", "music_income_box", "music_suno_panel",
@@ -118,6 +120,12 @@ class MusicPanel(QWidget):
         self.music_save_btn.setEnabled(False)
         self.music_save_btn.clicked.connect(self.save)
         actions.addWidget(self.music_save_btn)
+        self.music_outcome_btn = QPushButton("Record Outcome…")
+        self.music_outcome_btn.setToolTip(
+            "What the artist's last planned release actually did — streams, "
+            "revenue, notes. Self-reported; the next plan learns from it.")
+        self.music_outcome_btn.clicked.connect(self.record_outcome)
+        actions.addWidget(self.music_outcome_btn)
         self.music_clear_btn = QPushButton("Clear")
         self.music_clear_btn.clicked.connect(self.clear)
         actions.addWidget(self.music_clear_btn)
@@ -180,6 +188,16 @@ class MusicPanel(QWidget):
         audience = self.music_audience_input.text().strip()
         if audience:
             prompt_parts.append(f"Target Audience: {audience}")
+        # Measured reality beats a cold start: prior plans with recorded
+        # outcomes steer this one. Absent outcomes add nothing.
+        from agents.music import plans
+        try:
+            history = plans.outcomes_context(artist)
+        except Exception as exc:
+            history = ""
+            self.host._note_failure("music: load outcomes", exc)
+        if history:
+            prompt_parts.append(f"\n{history}")
         prompt_parts.append(f"\nMusic Description:\n{description}")
         prompt = "\n".join(prompt_parts)
 
@@ -217,7 +235,27 @@ class MusicPanel(QWidget):
         self.host.record_request("music", response)
         self.last_response = response
         self._populate_tabs(response)
-        self.music_status_label.setText("Plan complete — tabs populated.")
+        from agents.music import plans
+        try:
+            # Not in the AgentHost protocol — unit-test hosts lack it.
+            project = getattr(self.host, "_active_project", lambda: None)()
+            self._last_plan_id = plans.save_plan(
+                artist=self.music_artist_input.text().strip(),
+                genre=self.music_genre_box.currentText(),
+                release_type=self.music_release_type_box.currentText(),
+                distributor=self.music_distributor_box.currentText(),
+                audience=self.music_audience_input.text().strip(),
+                description=self.music_query_input.toPlainText().strip(),
+                plan_text=response,
+                sections=self.parse_sections(response),
+                project=project["id"] if project else None)
+            self.music_status_label.setText(
+                "Plan complete — tabs populated and stored.")
+        except Exception as exc:
+            self._last_plan_id = None
+            self.host._note_failure("music: store plan", exc)
+            self.music_status_label.setText(
+                "Plan complete — tabs populated (storing it failed).")
         self._set_idle()
         self.music_save_btn.setEnabled(True)
 
@@ -238,6 +276,62 @@ class MusicPanel(QWidget):
             worker.cancel()
         self.music_status_label.setText("Stopped.")
         self._set_idle()
+
+    def record_outcome(self):
+        """Attach what a planned release actually did to its stored plan."""
+        from agents.music import plans
+
+        artist = self.music_artist_input.text().strip()
+        candidates = plans.list_plans(artist=artist, limit=1)
+        if not candidates:
+            QMessageBox.information(
+                self, "No Stored Plan",
+                "Generate a plan first — outcomes attach to the artist's "
+                "most recent stored plan.")
+            return
+        plan = candidates[0]
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Record outcome — {plan['artist'] or 'plan'} "
+                              f"{plan['release_type']}")
+        layout = QVBoxLayout(dialog)
+        note = QLabel("Self-reported numbers for the most recent stored "
+                      f"plan ({(plan['created_at'] or '')[:10]}). The next "
+                      "generated plan uses them as context.")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        streams_input = line_edit(placeholder="Streams, e.g. 120000")
+        revenue_input = line_edit(placeholder="Revenue USD, e.g. 340.50")
+        notes_input = line_edit(placeholder="What worked, what did not")
+        layout.addWidget(field("Streams", streams_input))
+        layout.addWidget(field("Revenue (USD)", revenue_input))
+        layout.addWidget(field("Notes", notes_input))
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        try:
+            streams = (int(streams_input.text().replace(",", ""))
+                       if streams_input.text().strip() else None)
+            revenue = (float(revenue_input.text().replace(",", ""))
+                       if revenue_input.text().strip() else None)
+        except ValueError:
+            QMessageBox.warning(self, "Invalid Numbers",
+                                "Streams must be a whole number and revenue "
+                                "a number.")
+            return
+        try:
+            plans.record_outcome(plan["id"], streams=streams,
+                                 revenue_usd=revenue,
+                                 notes=notes_input.text().strip())
+        except Exception as exc:
+            self.host._note_failure("music: record outcome", exc,
+                                    self.music_status_label)
+            return
+        self.music_status_label.setText(
+            "Outcome recorded — the next plan will plan against it.")
 
     def save(self):
         if not self.last_response:

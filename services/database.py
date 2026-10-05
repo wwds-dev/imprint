@@ -462,6 +462,28 @@ CREATE TABLE IF NOT EXISTS audiobook_conversions (
     updated_at    TEXT NOT NULL
 );
 
+-- One row per generated Music release plan: the inputs, the parsed
+-- sections, the owning Project — and the self-reported outcome, which the
+-- next plan's prompt learns from. No platform API is wired; outcome
+-- numbers are what the user typed and are labelled as such.
+CREATE TABLE IF NOT EXISTS music_release_plans (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    project             TEXT,
+    artist              TEXT NOT NULL DEFAULT '',
+    genre               TEXT NOT NULL DEFAULT '',
+    release_type        TEXT NOT NULL DEFAULT '',
+    distributor         TEXT NOT NULL DEFAULT '',
+    audience            TEXT NOT NULL DEFAULT '',
+    description         TEXT NOT NULL DEFAULT '',
+    plan_text           TEXT NOT NULL DEFAULT '',
+    sections_json       TEXT NOT NULL DEFAULT '{}',
+    outcome_streams     INTEGER,
+    outcome_revenue_usd REAL,
+    outcome_notes       TEXT NOT NULL DEFAULT '',
+    outcome_recorded_at TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL
+);
+
 -- Direct provider renders from the Video workspace.  A row is written just
 -- before the create POST and updated on every provider transition, so a
 -- render that outlives the process is resumed, downloaded and billed on the
@@ -510,6 +532,7 @@ CREATE INDEX IF NOT EXISTS idx_creator_media_account   ON creator_media(account_
 CREATE INDEX IF NOT EXISTS idx_creator_video_jobs_account ON creator_video_jobs(account_id);
 CREATE INDEX IF NOT EXISTS idx_video_jobs_status       ON video_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_audiobook_conversions_status ON audiobook_conversions(status);
+CREATE INDEX IF NOT EXISTS idx_music_release_plans_artist ON music_release_plans(artist);
 CREATE INDEX IF NOT EXISTS idx_social_publish_jobs_status
     ON social_publish_jobs(status);
 CREATE INDEX IF NOT EXISTS idx_project_artifacts_project
