@@ -103,7 +103,9 @@ class RouterAgent:
         if matches:
             key, keyword = matches[0]
             reason = f'matched "{keyword}"'
-            others = sorted({k for k, _kw in matches} - {key})
+            labels = {spec.key: spec.label for spec in AGENT_SPECS}
+            others = sorted(labels.get(k, k)
+                            for k in {k for k, _kw in matches} - {key})
             if others:
                 reason += f" — but also matched {', '.join(others)}"
             return RouteDecision(key=key, confidence="intent",

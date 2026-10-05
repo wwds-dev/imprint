@@ -88,6 +88,9 @@ def outcomes_context(artist: str, *, limit: int = 3) -> str:
             """SELECT * FROM music_release_plans
                 WHERE LOWER(artist) = LOWER(?)
                   AND outcome_recorded_at != ''
+                  AND (outcome_streams IS NOT NULL
+                       OR outcome_revenue_usd IS NOT NULL
+                       OR outcome_notes != '')
                 ORDER BY id DESC LIMIT ?""",
             (artist, int(limit))).fetchall()
     if not rows:

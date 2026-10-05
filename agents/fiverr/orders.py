@@ -33,16 +33,20 @@ def open_order(brief: dict) -> dict:
                     WHERE LOWER(client) = LOWER(?) AND status = 'open'
                     ORDER BY id DESC LIMIT 1""", (client,)).fetchone()
         if row is not None:
+            # Newest instructions win, but an EMPTY form field carries no
+            # instruction — it must not erase the stored value (the
+            # jobs.update_job falsy-skip precedent).
+            sets, params = ["updated_at = ?"], [now]
+            for column in ("industry", "style", "colors", "notes",
+                           "brand_fonts", "brand_voice", "brand_rules"):
+                value = (brief.get(column) or "").strip()
+                if value:
+                    sets.append(f"{column} = ?")
+                    params.append(value)
+            params.append(row["id"])
             conn.execute(
-                """UPDATE fiverr_orders
-                      SET industry = ?, style = ?, colors = ?, notes = ?,
-                          brand_fonts = ?, brand_voice = ?, brand_rules = ?,
-                          updated_at = ?
-                    WHERE id = ?""",
-                (brief.get("industry", ""), brief.get("style", ""),
-                 brief.get("colors", ""), brief.get("notes", ""),
-                 brief.get("brand_fonts", ""), brief.get("brand_voice", ""),
-                 brief.get("brand_rules", ""), now, row["id"]))
+                f"UPDATE fiverr_orders SET {', '.join(sets)} WHERE id = ?",
+                params)
             fresh = conn.execute(
                 "SELECT * FROM fiverr_orders WHERE id = ?",
                 (row["id"],)).fetchone()

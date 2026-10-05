@@ -2746,11 +2746,15 @@ class GodAI(QWidget):
                 self.routing_status_card.set_route(agent, provider, model)
             else:
                 self.routing_status_card.reset_route()
+            # Every route update owns the WHY tooltip too — a stale note
+            # from the Route button must not describe a newer decision.
+            self.routing_status_card.setToolTip("")
             return
         if hasattr(self, "route_result_label"):
             self.route_result_label.setText(
                 f"Router: {agent} · {provider} · {model}"
                 if agent or provider or model else "Router: not yet computed")
+            self.route_result_label.setToolTip("")
 
     def auto_route_agent(self):
         raw_text = self.input_box.toPlainText().strip()
@@ -3057,7 +3061,7 @@ class GodAI(QWidget):
             **self._project_budget_fields(),
         )
         if not validation.allowed:
-            if self._offer_local_fallback(agent, provider, validation.reason,
+            if self._offer_local_fallback(agent, provider, validation,
                                           flat_cost_eur):
                 return False   # switched; the user re-sends on the free model
             QMessageBox.warning(self, "Request Blocked", validation.reason)
@@ -3117,7 +3121,7 @@ class GodAI(QWidget):
             self._note_failure(f"models: {provider}", RuntimeError(error))
 
     def _offer_local_fallback(self, agent: str, provider: str,
-                              reason: str, flat_cost_eur) -> bool:
+                              validation, flat_cost_eur) -> bool:
         """On a budget refusal, offer the free local model; True if switched.
 
         Only for token-priced text work (a video render or TTS book has no
@@ -3131,12 +3135,15 @@ class GodAI(QWidget):
         """
         if provider == "ollama" or flat_cost_eur is not None:
             return False
-        lowered = reason.lower()
-        if "session budget" not in lowered and "daily budget" not in lowered:
-            # Only the global caps: a per-agent or per-project budget is a
-            # fence the user drew around that scope on purpose, and the
-            # right response is the block message, not a provider switch.
+        # Only the GLOBAL caps, decided by the validator's machine-readable
+        # scope — never by parsing the sentence (the project cap's wording
+        # contains "daily budget" and fooled exactly such a match). A
+        # per-agent or per-project budget is a fence the user drew around
+        # that scope on purpose: the right response is the block message.
+        if getattr(validation, "scope", "") not in ("session_cap",
+                                                    "daily_cap"):
             return False
+        reason = validation.reason
         widgets = AGENT_SETUP_WIDGETS.get(agent)
         if not widgets:
             return False

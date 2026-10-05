@@ -577,13 +577,23 @@ class FiverrPanel(QWidget):
         """Store an artifact on the current order; never block the flow.
 
         A delivery or gig written with no prior logo run still deserves a
-        record, so the order is opened on demand from the current brief.
+        record, so the order is opened on demand from the current brief —
+        and a cached id is re-derived whenever the brief's client differs
+        from the cached order's, so one client's delivery can never land
+        on the previous client's record.
         """
         from agents.fiverr import orders
 
         try:
+            brief = self._get_brief()
+            if self._order_id is not None:
+                held = orders.get_order(self._order_id)
+                held_client = (held or {}).get("client", "")
+                if (held is None or held_client.strip().lower()
+                        != brief.get("business_name", "").strip().lower()):
+                    self._order_id = None
             if self._order_id is None:
-                self._order_id = orders.open_order(self._get_brief())["id"]
+                self._order_id = orders.open_order(brief)["id"]
             orders.attach(self._order_id, **fields)
             orders.record_event(self._order_id, event)
         except Exception as exc:
@@ -611,6 +621,11 @@ class FiverrPanel(QWidget):
             table.setItem(row, 1, QTableWidgetItem(
                 (order["updated_at"] or "")[:16].replace("T", " ")))
             table.setItem(row, 2, QTableWidgetItem(order["status"]))
+            if order["id"] == self._order_id:
+                # Keep the loaded order visibly selected across refreshes;
+                # signals are still blocked, so nothing reloads over the
+                # user's edits.
+                table.selectRow(row)
         table.blockSignals(False)
 
     def _order_selected(self) -> None:
@@ -623,7 +638,11 @@ class FiverrPanel(QWidget):
             return
         order_id = self.fiverr_order_table.item(items[0].row(), 0).data(
             Qt.UserRole)
-        order = orders.get_order(order_id) if order_id else None
+        try:
+            order = orders.get_order(order_id) if order_id else None
+        except Exception as exc:
+            self.host._note_failure("fiverr: load order", exc)
+            return
         if order is None:
             return
         self._order_id = order["id"]
@@ -637,11 +656,14 @@ class FiverrPanel(QWidget):
         index = self.fiverr_style_box.findText(order["style"])
         if index >= 0:
             self.fiverr_style_box.setCurrentIndex(index)
-        if order["delivery_text"]:
-            self.fiverr_delivery_box.setPlainText(order["delivery_text"])
-        if order["gig_text"]:
-            self.fiverr_gig_box.setPlainText(order["gig_text"])
-        history = _json.loads(order["history_json"] or "[]")
+        # Unconditional: an order without a delivery must not show the
+        # previous order's.
+        self.fiverr_delivery_box.setPlainText(order["delivery_text"] or "")
+        self.fiverr_gig_box.setPlainText(order["gig_text"] or "")
+        try:
+            history = _json.loads(order["history_json"] or "[]")
+        except Exception:
+            history = []
         last = history[-1] if history else None
         self.fiverr_status_label.setText(
             f"Order loaded — {len(history)} event(s)"
@@ -707,6 +729,7 @@ class FiverrPanel(QWidget):
             f"Saved {len(self._image_paths)} image(s).")
 
     def clear(self) -> None:
+        self._order_id = None   # a cleared workspace holds no order
         self._clear_logo_grid()
         self.fiverr_delivery_box.clear()
         self.fiverr_gig_box.clear()

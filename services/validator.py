@@ -19,6 +19,12 @@ def _money(value: float | int | str) -> Decimal:
 class ValidationResult:
     allowed: bool
     reason: str
+    # Which rule refused, machine-readable — consumers must never classify
+    # a refusal by substring-matching the human sentence (the project cap's
+    # wording contains "daily budget" and misled exactly such a match).
+    # "" when allowed; else one of: agent_disabled, tool_disabled,
+    # permission, agent_cap, project_cap, session_cap, daily_cap, approval.
+    scope: str = ""
 
 
 class Validator:
@@ -99,7 +105,8 @@ class Validator:
                     False,
                     f"Agent '{agent_name}' has a budget cap of €{agent_budget:.2f}/day. "
                     f"€{agent_daily_cost:.4f} is already spent today and this "
-                    f"request is estimated at €{estimated_cost:.4f}."
+                    f"request is estimated at €{estimated_cost:.4f}.",
+                    scope="agent_cap",
                 )
 
         # 8. Optional daily cap for the currently selected project.
@@ -109,7 +116,8 @@ class Validator:
                 return ValidationResult(
                     False,
                     f"Project '{project_name}' daily budget exceeded. "
-                    f"Remaining: €{project_remaining:.4f}, request: ~€{estimated_cost:.4f}."
+                    f"Remaining: €{project_remaining:.4f}, request: ~€{estimated_cost:.4f}.",
+                    scope="project_cap",
                 )
 
         # 9. Session budget
@@ -119,7 +127,8 @@ class Validator:
                 return ValidationResult(
                     False,
                     f"Session budget exceeded. "
-                    f"Remaining: €{session_remaining:.4f}, request: ~€{estimated_cost:.4f}."
+                    f"Remaining: €{session_remaining:.4f}, request: ~€{estimated_cost:.4f}.",
+                    scope="session_cap",
                 )
 
         # 10. Daily budget
@@ -129,7 +138,8 @@ class Validator:
                 return ValidationResult(
                     False,
                     f"Daily budget exceeded. "
-                    f"Remaining: €{daily_remaining:.4f}, request: ~€{estimated_cost:.4f}."
+                    f"Remaining: €{daily_remaining:.4f}, request: ~€{estimated_cost:.4f}.",
+                    scope="daily_cap",
                 )
 
         # 11. Approval required?

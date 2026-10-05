@@ -430,7 +430,7 @@ class VideoPanel(QWidget):
         self.video_status_label.setText("Starting…")
         self.video_render_btn.setEnabled(False)
         self.video_stop_btn.setText(
-            "Stop" if kind == "pipeline"
+            "Stop" if kind in ("pipeline", "gemini-video", "qwen-video")
             else "Cancel" if can_cancel else "Cannot Cancel")
         self.video_stop_btn.setEnabled(can_cancel)
         self.video_stop_btn.show()
@@ -519,11 +519,11 @@ class VideoPanel(QWidget):
             self._persist_submission(token, provider_key,
                                      selection.model_id, cost_eur)
             active_kind = f"{provider_key}-video"
-            self._begin(active_kind, can_cancel=False)
+            self._begin(active_kind, can_cancel=True)
             self.video_status_label.setText(
-                f"Submitting to {selection.provider}… The provider has no safe "
-                "cancel operation after submission, so Imprint will preserve "
-                "the result locally.")
+                f"Submitting to {selection.provider}… Stop stops watching: "
+                "the job stays tracked, and the paid result is saved on the "
+                "next launch.")
             worker = VideoGenerationWorker(
                 client, topic, output_path, provider=selection.provider,
                 model=selection.model_id, seconds=seconds,
@@ -955,8 +955,9 @@ class VideoPanel(QWidget):
             if worker is not None and hasattr(worker, "cancel"):
                 worker.cancel()   # exits silently; the row stays reserved
             context = self._external_context
+            acked = bool(context.get("job_id"))
             provider_cancelled = False
-            if (self._active_kind == "qwen-video" and context.get("job_id")
+            if (self._active_kind == "qwen-video" and acked
                     and hasattr(self.host.qwen, "cancel_video")):
                 from services.qwen_client import WanVideoJob
                 provider_cancelled = self.host.qwen.cancel_video(
@@ -965,30 +966,53 @@ class VideoPanel(QWidget):
                                 seconds=context.get("seconds", 0),
                                 aspect_ratio=context.get("aspect", "")))
             token, self._request_token = self._request_token, None
-            if token:
-                self.host.abandon_request(token, reason="stopped")
-            row_id, context["job_row_id"] = context.get("job_row_id"), None
             from agents.video import jobs
-            try:
-                if provider_cancelled and row_id:
-                    # Confirmed dead before rendering: nothing to resume,
-                    # nothing was charged.
-                    jobs.mark_terminal(row_id, spend_state="released",
-                                       fallback_status="cancelled")
-                elif row_id:
-                    jobs.update_job(row_id, error="stopped watching")
-            except Exception as exc:
-                self.host._note_failure("video: close stopped job", exc)
             if provider_cancelled:
+                # Confirmed dead before rendering: nothing will bill, so
+                # the reservation and the row both close.
+                if token:
+                    self.host.abandon_request(token, reason="stopped")
+                row_id = context.get("job_row_id")
+                context["job_row_id"] = None
+                try:
+                    if row_id:
+                        jobs.mark_terminal(row_id, spend_state="released",
+                                           fallback_status="cancelled")
+                except Exception as exc:
+                    self.host._note_failure("video: close stopped job", exc)
                 self._reset("Cancelled at the provider before rendering "
                             "started — nothing was charged.")
-            else:
-                provider = {"gemini-video": "Gemini",
-                            "qwen-video": "Wan"}[self._active_kind]
-                self._reset(
-                    f"Stopped watching. The {provider} render continues at "
-                    "the provider; the next launch checks and saves the "
-                    "paid result.")
+                return
+            # Stopped watching, but the render may still complete and be
+            # charged: the session's reservation stays (abandoning it
+            # would let the caps double-commit money this job will still
+            # bill), only its run-log entry closes. The row id is popped
+            # only once the create POST was acknowledged — during the
+            # submission window the queued job_signal must still find it
+            # to persist the job id, or an acknowledged, chargeable job
+            # strands as 'lost'.
+            if token:
+                try:
+                    snapshot = self.host.pending_request_snapshot(token)
+                    if snapshot.get("run_id"):
+                        self.host.run_logger.finish(
+                            run_id=snapshot["run_id"], status="stopped")
+                except Exception as exc:
+                    self.host._note_failure("video: close stopped run", exc)
+            if acked:
+                row_id = context.get("job_row_id")
+                context["job_row_id"] = None
+                try:
+                    if row_id:
+                        jobs.update_job(row_id, error="stopped watching")
+                except Exception as exc:
+                    self.host._note_failure("video: note stopped job", exc)
+            provider = {"gemini-video": "Gemini",
+                        "qwen-video": "Wan"}[self._active_kind]
+            self._reset(
+                f"Stopped watching. The {provider} render continues at "
+                "the provider; the next launch checks and saves the "
+                "paid result.")
             return
         if self.host.video_worker is not None:
             if self._active_kind == "higgsfield-estimate":

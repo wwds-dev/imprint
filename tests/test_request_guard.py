@@ -662,6 +662,30 @@ class TestLocalFallbackOffer:
         assert asked == []
         assert warned
 
+    def test_project_cap_gets_no_offer_despite_its_wording(
+            self, win, monkeypatch):
+        """The project refusal SAYS "daily budget"; the machine-readable
+        scope, not the sentence, must decide."""
+        from PySide6.QtWidgets import QMessageBox
+        win.session_budget_eur = 1000.0
+        win.session_cost_total = 0.0
+        monkeypatch.setattr(win, "estimate_chat_cost",
+                            lambda *a, **k: (1.0, 100))
+        monkeypatch.setattr(win, "_project_budget_fields",
+                            lambda: {"project_name": "Moonlight Novel",
+                                     "project_cost": 5.0,
+                                     "project_budget": 0.01})
+        asked, warned = [], []
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: asked.append(a)
+                                         or QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: warned.append(a)))
+        assert not win.authorize_request(
+            "author", "anthropic", "claude-sonnet-4-6", "write a chapter")
+        assert asked == []
+        assert warned and "Moonlight Novel" in warned[-1][2]
+
     def test_agent_without_ollama_gets_no_offer(self, win, monkeypatch):
         from PySide6.QtWidgets import QMessageBox
         self._cap_budget(win)

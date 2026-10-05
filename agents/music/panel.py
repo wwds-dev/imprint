@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QFileDialog, QGridLayout, QHBoxLayout, QLabel, QMessageBox, QPushButton,
-    QDialog, QDialogButtonBox,
+    QComboBox, QDialog, QDialogButtonBox,
     QSizePolicy, QTabWidget, QTextBrowser, QTextEdit, QVBoxLayout, QWidget,
 )
 
@@ -278,30 +278,64 @@ class MusicPanel(QWidget):
         self._set_idle()
 
     def record_outcome(self):
-        """Attach what a planned release actually did to its stored plan."""
+        """Attach what a planned release actually did to a stored plan.
+
+        The plan is an explicit pick, not silently "the newest" — after a
+        regenerate, the newest plan is usually NOT the one that shipped.
+        An empty Artist field would match any artist's plans, so it
+        refuses instead of guessing.
+        """
         from agents.music import plans
 
         artist = self.music_artist_input.text().strip()
-        candidates = plans.list_plans(artist=artist, limit=1)
+        if not artist:
+            QMessageBox.information(
+                self, "Which Artist?",
+                "Enter the artist / project name whose release you are "
+                "recording — outcomes attach per artist.")
+            return
+        try:
+            candidates = plans.list_plans(artist=artist, limit=10)
+        except Exception as exc:
+            self.host._note_failure("music: list plans", exc,
+                                    self.music_status_label)
+            return
         if not candidates:
             QMessageBox.information(
                 self, "No Stored Plan",
-                "Generate a plan first — outcomes attach to the artist's "
-                "most recent stored plan.")
+                "Generate a plan first — outcomes attach to a stored plan.")
             return
-        plan = candidates[0]
         dialog = QDialog(self)
-        dialog.setWindowTitle(f"Record outcome — {plan['artist'] or 'plan'} "
-                              f"{plan['release_type']}")
+        dialog.setWindowTitle(f"Record outcome — {artist}")
         layout = QVBoxLayout(dialog)
-        note = QLabel("Self-reported numbers for the most recent stored "
-                      f"plan ({(plan['created_at'] or '')[:10]}). The next "
-                      "generated plan uses them as context.")
+        note = QLabel("Self-reported numbers. Pick the plan that actually "
+                      "shipped; the next generated plan uses its outcome "
+                      "as context.")
         note.setWordWrap(True)
         layout.addWidget(note)
+        picker = QComboBox()
+        for plan in candidates:
+            label = (f"{(plan['created_at'] or '')[:10]} "
+                     f"{plan['release_type']} ({plan['genre']})")
+            if plan["outcome_recorded_at"]:
+                label += " — outcome recorded"
+            picker.addItem(label, plan["id"])
+        layout.addWidget(field("Plan", picker))
         streams_input = line_edit(placeholder="Streams, e.g. 120000")
         revenue_input = line_edit(placeholder="Revenue USD, e.g. 340.50")
         notes_input = line_edit(placeholder="What worked, what did not")
+
+        def prefill(index):
+            plan = candidates[index]
+            streams_input.setText(
+                "" if plan["outcome_streams"] is None
+                else str(plan["outcome_streams"]))
+            revenue_input.setText(
+                "" if plan["outcome_revenue_usd"] is None
+                else f"{plan['outcome_revenue_usd']:g}")
+            notes_input.setText(plan["outcome_notes"] or "")
+        picker.currentIndexChanged.connect(prefill)
+        prefill(0)   # re-recording starts from the stored numbers
         layout.addWidget(field("Streams", streams_input))
         layout.addWidget(field("Revenue (USD)", revenue_input))
         layout.addWidget(field("Notes", notes_input))
@@ -322,10 +356,15 @@ class MusicPanel(QWidget):
                                 "Streams must be a whole number and revenue "
                                 "a number.")
             return
+        notes = notes_input.text().strip()
+        if streams is None and revenue is None and not notes:
+            QMessageBox.information(
+                self, "Nothing Entered",
+                "No numbers, no notes — nothing was recorded.")
+            return
         try:
-            plans.record_outcome(plan["id"], streams=streams,
-                                 revenue_usd=revenue,
-                                 notes=notes_input.text().strip())
+            plans.record_outcome(picker.currentData(), streams=streams,
+                                 revenue_usd=revenue, notes=notes)
         except Exception as exc:
             self.host._note_failure("music: record outcome", exc,
                                     self.music_status_label)

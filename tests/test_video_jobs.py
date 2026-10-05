@@ -634,7 +634,12 @@ def test_stop_keeps_a_direct_render_tracked_and_resumable(
         window.video_worker = None
         panel._active_kind = ""
     assert cancelled == [True]
-    assert token not in window._pending_requests
+    # The render may still complete and be charged, so the session's
+    # reservation STAYS — abandoning it would let the caps double-commit
+    # money this job will still bill. Only its run-log entry closes.
+    assert token in window._pending_requests
+    window._pending_requests.pop(token)   # test hygiene
+    window._pending_by_agent.get("video", [])[:] = []
     (row,) = jobs.pending_rows()          # still reserved: resumable
     assert row["id"] == row_id
     assert "Stopped watching" in panel.video_status_label.text()
@@ -670,3 +675,35 @@ def test_stop_settles_a_wan_job_the_provider_confirms_cancelled(
                            "WHERE id = ?", (row_id,)).fetchone()
     assert (row["status"], row["spend_state"]) == ("cancelled", "released")
     assert "nothing was charged" in panel.video_status_label.text().lower()
+
+
+def test_stop_during_the_submission_window_keeps_the_row_live(
+        window, clean_jobs_table):
+    """Stop before the create POST is acknowledged must NOT pop the row:
+    the queued job_signal still needs it to persist the job id, or an
+    acknowledged, chargeable job strands as 'lost'."""
+    if not window.video_panel._available:
+        pytest.skip("vidforge is not importable in this checkout")
+    panel = window.video_panel
+    row_id = _submit(slug="in-flight", provider="gemini")
+    token = window.restore_request(
+        "video", "gemini", "veo-3.1", "a render",
+        label="direct video", flat_cost_eur=0.4)
+    panel._request_token = token
+    panel._active_kind = "gemini-video"
+    panel._external_context = {"job_row_id": row_id, "job_id": "",
+                               "provider_completed": False}
+    window.video_worker = types.SimpleNamespace(cancel=lambda: None)
+    try:
+        panel.stop()
+        # The ack arrives after the click: the row is still wired, so the
+        # transition persists the id and the job is resumable.
+        assert panel._external_context["job_row_id"] == row_id
+        panel._external_job(types.SimpleNamespace(
+            job_id="op-late", status="queued", error="", status_url=""))
+    finally:
+        window.video_worker = None
+        panel._active_kind = ""
+        window._pending_requests.pop(token, None)
+    (row,) = jobs.pending_rows()
+    assert row["job_id"] == "op-late"
