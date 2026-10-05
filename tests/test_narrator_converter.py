@@ -14,6 +14,7 @@ Run with:  pytest tests/test_narrator_converter.py -v
 import os
 import sys
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -289,3 +290,87 @@ def test_mp3_keeps_whole_book_chunk_boundaries(tmp_path, monkeypatch):
         "Book", source, whole_book)["text_sha256"]             # so an old manifest still matches
 
     assert run("m4b")["total_chunks"] == 3                      # One: 1 chunk; Two: 2
+
+
+# ── Resume safety: a chunk stopped mid-stream ────────────────────────────────
+class _Stream:
+    """A stand-in for the OpenAI streaming response: writes some audio, then
+    does as told."""
+
+    def __init__(self, then):
+        self.then = then
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def stream_to_file(self, path):
+        Path(path).write_bytes(b"\xff\xfb" * 64)
+        if self.then is not None:
+            raise self.then
+
+
+def _client(then):
+    class Speech:
+        class with_streaming_response:
+            @staticmethod
+            def create(**kwargs):
+                return _Stream(then)
+
+    class Audio:
+        speech = Speech()
+
+    class Client:
+        audio = Audio()
+
+    return Client()
+
+
+def test_a_chunk_stopped_mid_stream_is_not_resumed_as_done(tmp_path, monkeypatch):
+    """Stop in the audiobook panel kills the worker. The bytes already streamed
+    used to sit under the chunk's final name, and the next run took that short
+    file for a finished chunk and stitched a mid-sentence cut into the book."""
+    final = tmp_path / "chunk_57.mp3"
+    monkeypatch.setattr(converter, "get_client", lambda: _client(KeyboardInterrupt()))
+
+    with pytest.raises(KeyboardInterrupt):
+        converter.generate_tts_chunk("text", final, retries=1)
+
+    assert not final.exists()
+    manifest = {"chunks": [{"index": 57, "filename": final.name, "status": "done"}]}
+    converter.sync_manifest_with_files(manifest, tmp_path)
+    assert manifest["chunks"][0]["status"] == "pending"
+
+
+def test_a_finished_chunk_lands_under_its_final_name_only(tmp_path, monkeypatch):
+    final = tmp_path / "chunk_0.mp3"
+    monkeypatch.setattr(converter, "get_client", lambda: _client(None))
+
+    assert converter.generate_tts_chunk("text", final, retries=1)
+    assert final.stat().st_size > 0
+    assert list(tmp_path.glob("*" + converter.CHUNK_PARTIAL_SUFFIX)) == []
+
+
+def test_a_failed_attempt_leaves_no_partial_behind(tmp_path, monkeypatch):
+    final = tmp_path / "chunk_0.mp3"
+    monkeypatch.setattr(converter, "get_client", lambda: _client(RuntimeError("dropped")))
+    monkeypatch.setattr(converter.time, "sleep", lambda seconds: None)
+
+    assert not converter.generate_tts_chunk("text", final, retries=2)
+    assert not final.exists()
+    assert list(tmp_path.glob("*" + converter.CHUNK_PARTIAL_SUFFIX)) == []
+
+
+def test_cleanup_sweeps_partial_chunks_too(tmp_path):
+    temp_dir = tmp_path / "temp_audio"
+    temp_dir.mkdir()
+    (temp_dir / "chunk_0.mp3").write_bytes(b"x")
+    (temp_dir / ("chunk_1.mp3" + converter.CHUNK_PARTIAL_SUFFIX)).write_bytes(b"x")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{}")
+
+    converter.cleanup_after_success(temp_dir, manifest_path)
+
+    assert not temp_dir.exists() and not manifest_path.exists()
