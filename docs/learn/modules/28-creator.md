@@ -102,3 +102,138 @@ says what you will actually do.
 ## Next action
 
 For measurement, create an [evidence passport](30-evidence.md).
+
+## Recipe: plan and draft one post, start to finish
+
+You will plan and draft one piece of content — a launch post for the
+cosy-mystery novella *The Lantern Route*, filed under the campaign
+`lantern-launch` — and land it on the week plan with a real date and an
+exported `.ics`. Copy the example inputs exactly the first time, then swap in
+your own. Each **Show me** closes this lesson, opens the control it names and
+rings it; **Back to lesson** in the callout brings you back to that step.
+
+**Time:** about 25 minutes. **Cost:** one text request in Imprint — you see
+its estimate and approve it before anything is sent. The optional teaser in
+Step 8 is a separate paid Higgsfield render: the provider's exact price is
+shown first and nothing is generated until you approve it. Skip Step 8 and
+there is no teaser cost. Imprint records its own generation spend in EUR
+against the calendar item; receipts and revenue live in Backstage, and
+nothing in this recipe predicts what the post will earn.
+
+### Step 1 — Create the content profile
+
+Fill in the profile fields at the top of Muse and click **Save Profile**. The
+handle and platform travel with every draft, so the copy fits the same
+account each time. The profile exists only inside Imprint — saving or
+removing it touches nothing on the platform, and account consent records
+live in Backstage, not here.
+
+```
+Handle / project:    @lanternpress
+Platform / venture:  Writing / Publishing
+```
+
+[Show me](show:creator_handle_input)
+
+### Step 2 — Teach it the voice
+
+Open the **Voice** tab and paste five or six of this account's own posts —
+the model imitates these, and it is what stops drafts reading like generic
+AI copy. Fill the four small fields, then click **Save Voice & Character**.
+On a persona account the Character bible appears below: appearance,
+backstory, personality, boundaries and a locked seed keep every draft and
+render the same character.
+
+```
+Tone:       dry, warm, a bit deadpan
+Emoji:      sparse — one at most
+Length:     1–2 short sentences
+Never say:  babe, hun, limited time only
+```
+
+[Show me](show:creator_voice_samples)
+
+### Step 3 — Say what this one is
+
+Back in **Compose**, pick the kind, name the campaign, and write the brief.
+Channel only appears when the kind is `promo` — for a plain post the row
+closes up without it. The brief is what makes the draft yours: audience,
+offer, one intended action, and what it must never claim.
+
+```
+Kind:      post
+Campaign:  lantern-launch
+```
+
+```
+Announce that "The Lantern Route", a cosy small-town mystery novella, is out
+on 19 October. Audience: cosy-mystery readers, 30–60, who finish a book a
+week. Offer: pre-order link in bio. CTA: one action — tap the link and
+pre-order. Proof boundary: quote only the two review lines we actually have.
+Never say: bestseller, #1, "readers are calling it", or anything about
+earnings.
+```
+
+[Show me](show:creator_brief_input)
+
+### Step 4 — Draft it
+
+Pick a provider and model — **BEST FIT** marks the recommended route for
+this task; any model that writes well is fine. Click **Draft**. Imprint
+shows the estimate; approve it. While it runs, **Stop** cancels locally
+where possible. The result lands in the **Draft** tab, fully editable, and
+is sent nowhere — the status line says exactly that: review before posting.
+
+**Good result:** it reads like your samples, makes one ask, and claims
+nothing outside the proof boundary. **Weak result:** generic copy — add more
+voice samples; or invented praise — tighten "Never say" and draft again.
+
+[Show me](show:creator_generate_btn)
+
+### Step 5 — Put it on the plan
+
+Edit the draft until you would actually post it, then click **Add to
+Calendar**. The dialog asks when — nothing posts itself; this is your own
+plan. Tick **No date yet** this first time: the item lands in the Undated
+list with status `draft`, which means prepared in Imprint, never that
+anything was published. Keep the same profile selected — a draft made for
+one profile will not schedule under another.
+
+[Show me](show:creator_schedule_btn)
+
+### Step 6 — Give it its first real date
+
+The **Calendar** tab is a seven-day grid with the Undated list beneath it.
+Select your item there and click **Reschedule…** (double-clicking it works
+too), then pick a date and time — or tick **Whole day** if you have not
+chosen a time; the grid shows a dash rather than inventing midnight. The
+view jumps to the week that now holds the item, and the week buttons move
+you back and forth from there.
+
+[Show me](show:creator_calendar_reschedule_btn)
+
+### Step 7 — Export the week
+
+Click **Export…** to work the plan somewhere else: `.ics` writes the dated
+items for your calendar app and tells you how many undated items it skipped
+(use CSV for those); CSV writes everything. The export is your plan, not a
+record of publication — confirm on the platform itself before treating
+anything as live.
+
+[Show me](show:creator_calendar_export_btn)
+
+### Step 8 — Optional: render a teaser
+
+With the calendar item still selected — the finished render attaches to it —
+click **Generate Teaser**. This needs the Higgsfield keys in Imprint's
+private `.env`, the Higgsfield permission enabled in the API permissions
+row, rights to any likeness or reference image it uses, and a prompt that
+passes the SFW check. Imprint fetches Higgsfield's estimate and shows the
+exact price in dollars and credits; no paid generation starts until you
+approve it. The file is saved into the **Media** tab with its source and job
+id. **Cancel Teaser** is honest about its limits: during preparation it
+cancels cleanly, but once rendering has begun Higgsfield may finish and
+charge, and Imprint saves the paid result rather than inviting a duplicate.
+If you quit mid-render, the next launch resumes the job and saves it.
+
+[Show me](show:creator_video_btn)

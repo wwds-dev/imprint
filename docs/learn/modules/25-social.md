@@ -94,3 +94,136 @@ and a later outcome record—not merely a generated caption.
 ## Next action
 
 Build the measurement chain in [Funnels, attribution, and cohorts](34-funnels-attribution.md).
+
+## Recipe: run one small campaign, brief to measured post
+
+You will run one small campaign for a novel called *The Salt Road*: two
+X / Twitter variants drafted from one brief, both given dates, one posted by
+hand and marked posted, and its real reach and clicks recorded. Copy the
+example inputs exactly the first time, then swap in your own. Each **Show me**
+closes this lesson, opens the control it names and rings it; **Back to lesson**
+in the callout brings you back to that step.
+
+**Time:** about 15 minutes in Imprint, plus the minute on the platform when you
+post, and a short return visit later for the numbers. **Cost:** one text
+request in Imprint — you see its estimate and approve it before anything is
+sent (free with a local Ollama model). Posting by hand costs nothing. **Make a
+Clip** starts a paid video render with its own cost confirmation; this recipe
+never touches it.
+
+### Step 1 — Create the campaign
+
+Fill in the Campaign fields. They are sent with every drafting request this
+campaign makes, so each variant keeps the same subject, goal and audience.
+
+```
+Subject:       The Salt Road
+Subject is a:  book
+Goal:          launch week sales
+Audience:      literary fiction readers
+Link:          https://yoursite.example/the-salt-road
+```
+
+Click **New Campaign**: the campaign appears in the selector, named after its
+subject. **Save Campaign** writes later edits back into whichever campaign is
+selected.
+
+[Show me](show:social_new_campaign_btn)
+
+### Step 2 — Aim the post
+
+Set the Compose row. One platform at a time — the drafter writes *for* a
+platform, not once for everywhere. Two variants gives you a real choice without
+doubling the review work.
+
+```
+Platform:   X / Twitter
+Angle:      launch
+Variants:   2
+Specifics:  out Tuesday; paperback and ebook; first chapter free on the site
+```
+
+Below the row, pick a provider and model for the writing. Choose Ollama if the
+request should stay on your Mac and cost nothing.
+
+[Show me](show:social_platform_box)
+
+### Step 3 — Write the variants
+
+Click **Write Posts**. Imprint shows the estimate; approve it. After a few
+seconds the Draft tab fills with two variants separated by a long dash line.
+
+**Good result:** two genuinely different openings on the same offer, each
+within the limit, and no invented reviews, quotes or figures — the drafter is
+instructed never to make those up, but check anyway and delete any that slip
+through. **Weak result:** the same post reworded twice — add one concrete
+specific and write again.
+
+[Show me](show:social_write_btn)
+
+### Step 4 — Edit against the counter, then save
+
+The drafts are fully yours to edit. The counter under the box counts live
+against the platform's ceiling — for X / Twitter it reads `… / 280 characters`
+and says how far over you are, because an over-length post is a rejected call
+at the worst moment. Keep the dash separator line while you edit: it is what
+splits the box into separate posts. Click **Save to Schedule** — each variant
+becomes its own row and the panel switches to the Schedule tab.
+
+[Show me](show:social_save_draft_btn)
+
+### Step 5 — Give the rows dates
+
+Click **Schedule Drafts**. Every undated draft in the campaign gets a date
+spread across the coming weeks at its platform's own cadence — spaced out on
+purpose, because bunched posting is the pattern that reads as a bot. The rows
+now say scheduled. That is a plan in your calendar, nothing more: no post has
+crossed into any platform yet.
+
+[Show me](show:social_schedule_btn)
+
+### Step 6 — Read what connecting grants
+
+Open the **Accounts** tab. Drafting works for every platform listed; posting
+from Imprint works only for the ones marked **ready**. For a connectable
+platform the entry states what connecting grants — Reddit's, for example, says
+it can submit posts as your user and nothing else, and that the script-app flow
+keeps your Reddit password in the `.env` — *before* the numbered setup steps.
+Read the grants before you paste any secret, and if a grant is more than you
+want to give, post by hand instead. X / Twitter is marked **drafting only**
+(its API requires a paid tier), so this recipe posts it by hand. **Re-check**
+re-reads the statuses after you change credentials.
+
+[Show me](show:social_accounts_box)
+
+### Step 7 — Post by hand, then mark it
+
+Select the first row in Schedule and click **Copy Text**. Open X in your
+browser, paste, read it once as a stranger would, and post it yourself. Back in
+Imprint, click **Mark Posted**. That records your own verification that the
+post exists — a statement you make, not an API receipt — so make it true.
+(**Post Now** exists only for configured, ready integrations, and even there it
+confirms each single post before publishing from your account.)
+
+[Show me](show:social_mark_posted_btn)
+
+### Step 8 — Record what actually happened
+
+A day or a week later, select the posted row and click **Record metrics**.
+Imprint asks four things, and refuses to save without the source and window:
+
+```
+Unique accounts reached:   412
+Link clicks:               9
+Platform report or export: X analytics — post detail
+Measurement window:        2026-10-06 to 2026-10-13
+```
+
+Copy reach and clicks from the platform's own report. These numbers are
+self-reported — you typed them — so the Analytics tab labels every row with its
+source and window, and computes click rate as clicks ÷ reach for that one post
+and window. Clicks are visits, not sales, and one post's rate does not fairly
+compare different audiences; what a click is worth is a question for your
+funnel, not this tab.
+
+[Show me](show:social_metrics_btn)
