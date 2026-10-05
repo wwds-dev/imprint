@@ -41,6 +41,12 @@ class PublishResult:
 
 
 class Publisher:
+    #: What the stored credentials let THIS APP do, in the user's words —
+    #: shown before anyone pastes a secret, because consent to "connect"
+    #: is meaningless without knowing what connecting grants.
+    scopes: tuple[str, ...] = ()
+    #: The exact steps to obtain the credentials, numbered by the panel.
+    setup_steps: tuple[str, ...] = ()
     """One platform's posting mechanics."""
 
     key = ""
@@ -79,6 +85,23 @@ class RedditPublisher(Publisher):
     key = "reddit"
     required_env = ("REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET",
                     "REDDIT_USERNAME", "REDDIT_PASSWORD")
+    scopes = (
+        "Submit posts as your Reddit user, to subreddits you choose per "
+        "post (OAuth scope: submit).",
+        "Nothing else: it cannot read your inbox, vote, comment, or "
+        "moderate.",
+        "Because this is the script-app flow, the app holds your Reddit "
+        "password in the .env — anyone with that file can act as your "
+        "account.",
+    )
+    setup_steps = (
+        "Sign in to Reddit, open reddit.com/prefs/apps and create an app "
+        "of type 'script' (personal use; no review needed).",
+        "Copy the app's client id and secret into REDDIT_CLIENT_ID and "
+        "REDDIT_CLIENT_SECRET in the .env.",
+        "Add REDDIT_USERNAME and REDDIT_PASSWORD for the posting account.",
+        "Restart Imprint; this tab re-checks on open.",
+    )
     USER_AGENT = "imprint-social/1.0 (personal script)"
 
     def _token(self) -> str:
@@ -150,6 +173,20 @@ class YouTubePublisher(Publisher):
 
     key = "youtube"
     required_env = ()
+    scopes = (
+        "Upload videos to the one YouTube channel you authorize in the "
+        "browser consent screen (youtube.upload).",
+        "Uploads arrive PRIVATE; publishing stays a manual step unless "
+        "vidforge's two-key public-publish guard is deliberately set.",
+        "It cannot read analytics, comments, or other channels.",
+    )
+    setup_steps = (
+        "Create a Google Cloud project, enable the YouTube Data API v3, "
+        "and create an OAuth client of type Desktop.",
+        "Download the client_secret*.json into vidforge's secrets folder.",
+        "First upload opens a browser consent screen for the channel; the "
+        "token is cached by vidforge after that.",
+    )
 
     @property
     def configured(self) -> bool:
@@ -221,6 +258,17 @@ class PinterestPublisher(Publisher):
 
     key = "pinterest"
     required_env = ("PINTEREST_ACCESS_TOKEN",)
+    scopes = (
+        "Create pins on boards of the connected business account "
+        "(pins:write, boards:read).",
+        "It cannot read analytics or act on other accounts.",
+    )
+    setup_steps = (
+        "Convert the account to a (free) business account.",
+        "Create an app at developers.pinterest.com and generate an access "
+        "token with pins:write and boards:read.",
+        "Put it in PINTEREST_ACCESS_TOKEN in the .env and restart.",
+    )
 
     def publish(self, body: str, media_path: str = "", *, board_id: str = "",
                 title: str = "", link: str = "", **_kwargs) -> PublishResult:
@@ -269,6 +317,25 @@ def publisher_for(platform_key: str) -> Publisher | None:
 def can_publish(platform_key: str) -> bool:
     publisher = PUBLISHERS.get(platform_key)
     return bool(publisher and publisher.configured)
+
+
+def connection_guide(platform_key: str) -> str:
+    """Scopes first, then steps: what connecting GRANTS, before how.
+
+    Empty string for drafting-only platforms — there is nothing to
+    connect, and inventing steps would imply otherwise.
+    """
+    publisher = PUBLISHERS.get(platform_key)
+    if publisher is None:
+        return ""
+    lines = ["This connection lets Imprint:"]
+    lines += [f"  • {scope}" for scope in publisher.scopes]
+    lines.append("To connect:")
+    lines += [f"  {i}. {step}"
+              for i, step in enumerate(publisher.setup_steps, start=1)]
+    if publisher.required_env:
+        lines.append("Credential keys: " + ", ".join(publisher.required_env))
+    return "\n".join(lines)
 
 
 def status_lines() -> list[tuple[str, bool, str]]:

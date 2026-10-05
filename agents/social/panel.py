@@ -963,15 +963,28 @@ class SocialPanel(QWidget):
         """What can post today, and what stands in the way of the rest."""
         from agents.social import publishing
 
+        from agents.social.platforms import PLATFORMS
+        keys = {platform.name: platform.key for platform in PLATFORMS}
         rows = []
         for name, ready, note in publishing.status_lines():
             colour = ACCENT if ready else TEXT_MUTE
             label = "ready" if ready else "drafting only"
+            guide = publishing.connection_guide(keys.get(name, ""))
+            # Onboarding with the permissions up front: a connectable
+            # platform states what connecting GRANTS, then the steps — for
+            # the ready ones too, so what was consented to stays visible.
+            guide_html = ""
+            if guide:
+                guide_html = ("<br><span style='color:" + TEXT_MUTE
+                              + "; white-space:pre-wrap'>"
+                              + guide.replace("&", "&amp;")
+                                     .replace("<", "&lt;") + "</span>")
             rows.append(
                 f"<p style='margin:0 0 10px 0'>"
                 f"<b style='color:{colour}'>{name}</b> "
                 f"<span style='color:{TEXT_MUTE}'>— {label}</span><br>"
-                f"<span style='color:{TEXT_DIM}'>{note}</span></p>")
+                f"<span style='color:{TEXT_DIM}'>{note}</span>"
+                f"{guide_html}</p>")
         self.social_accounts_box.setHtml(
             f"<div style='color:{TEXT_DIM}; font-size:12px'>"
             "<p style='margin:0 0 14px 0'>Writing works for every platform "
