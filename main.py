@@ -3131,7 +3131,11 @@ class GodAI(QWidget):
         """
         if provider == "ollama" or flat_cost_eur is not None:
             return False
-        if "budget" not in reason.lower():
+        lowered = reason.lower()
+        if "session budget" not in lowered and "daily budget" not in lowered:
+            # Only the global caps: a per-agent or per-project budget is a
+            # fence the user drew around that scope on purpose, and the
+            # right response is the block message, not a provider switch.
             return False
         widgets = AGENT_SETUP_WIDGETS.get(agent)
         if not widgets:

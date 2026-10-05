@@ -483,6 +483,11 @@ def test_creator_calendar_and_media_keep_all_and_project_views(
             return found
 
         panel.refresh_accounts()
+        # An earlier test's schedule() legitimately jumped the view to its
+        # item's week; this test's rows are dated today.
+        from datetime import date, timedelta
+        panel._calendar_week_start = (
+            date.today() - timedelta(days=date.today().weekday()))
         panel.creator_calendar_scope.setCurrentIndex(0)
         panel.creator_media_scope.setCurrentIndex(0)
         panel.refresh_calendar()

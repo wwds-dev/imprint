@@ -638,6 +638,30 @@ class TestLocalFallbackOffer:
             label="direct video", flat_cost_eur=0.5)
         assert asked == []                # a render has no local equivalent
 
+    def test_scoped_caps_get_no_offer(self, win, monkeypatch):
+        """A per-agent or per-project budget is a deliberate fence — the
+        block message stands, and no modal fires (an unstubbed question
+        here froze the offscreen suite)."""
+        from PySide6.QtWidgets import QMessageBox
+        win.session_budget_eur = 1000.0
+        win.session_cost_total = 0.0
+        monkeypatch.setattr(win.validator.registry, "get_agent_budget",
+                            lambda agent: 0.000001)
+        # Pricing rows in the test DB can estimate €0, which skips the cap.
+        monkeypatch.setattr(win, "estimate_chat_cost",
+                            lambda *a, **k: (1.0, 100))
+        asked, warned = [], []
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: asked.append(a)
+                                         or QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: warned.append(a)))
+        assert not win.authorize_request(
+            "author", "anthropic", "claude-sonnet-4-6",
+            "write a chapter " * 400)
+        assert asked == []
+        assert warned
+
     def test_agent_without_ollama_gets_no_offer(self, win, monkeypatch):
         from PySide6.QtWidgets import QMessageBox
         self._cap_budget(win)
