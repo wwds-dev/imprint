@@ -53,7 +53,8 @@ class AuthorPanel(QWidget):
         "author_compose_actions", "author_write_btn", "author_continue_btn",
         "author_stop_btn", "author_compose_grid", "author_tabs",
         "author_draft_box", "author_outline_box", "author_characters_box",
-        "author_world_box", "author_chapters_tab",
+        "author_world_box", "author_sources_box", "author_sources_field",
+        "author_chapters_tab",
         "author_chapters_stats_label", "author_chapters_list",
         "author_word_metric", "author_word_count_label", "author_scene_metric",
         "author_scene_count_label", "author_save_btn", "author_export_label",
@@ -292,6 +293,16 @@ class AuthorPanel(QWidget):
         self.author_world_box.setPlaceholderText(
             "World-building notes, lore, setting, rules…")
         self.author_tabs.addTab(self.author_world_box, "World Notes")
+
+        # Non-fiction evidence: the sources the draft may assert from. The
+        # tab only exists in Non-Fiction mode (toggled with the task list).
+        self.author_sources_box = QTextEdit()
+        self.author_sources_box.setPlaceholderText(
+            "One source per line — book, paper, URL, interview note. When "
+            "anything is listed here, drafting may only assert facts these "
+            "sources support and must mark everything else [UNSOURCED].")
+        self.author_sources_field = self.author_sources_box
+        self._sources_tab_index: int | None = None
 
         self.author_chapters_tab = QWidget()
         ct_layout = QVBoxLayout(self.author_chapters_tab)
@@ -730,6 +741,16 @@ class AuthorPanel(QWidget):
         if current in tasks:
             self.author_task_box.setCurrentText(current)
         self.author_task_box.blockSignals(False)
+        # The Sources tab is a non-fiction instrument; fiction has no
+        # citations to control.
+        if content_type == "Non-Fiction" and self._sources_tab_index is None:
+            self._sources_tab_index = self.author_tabs.addTab(
+                self.author_sources_box, "Sources")
+        elif content_type != "Non-Fiction" and \
+                self._sources_tab_index is not None:
+            self.author_tabs.removeTab(
+                self.author_tabs.indexOf(self.author_sources_box))
+            self._sources_tab_index = None
 
     def get_book_profile(self) -> dict:
         return {
@@ -948,10 +969,34 @@ class AuthorPanel(QWidget):
             "established characters, world rules, or recent events.\n\n" + "\n\n".join(sections)
         )
 
+    def _build_evidence_block(self) -> str:
+        """Citation rules for non-fiction, only when sources are provided.
+
+        An empty Sources tab imposes nothing: inventing a rule with no
+        sources to check against would just teach the model to decorate.
+        """
+        if self.author_content_type_box.currentText() != "Non-Fiction":
+            return ""
+        sources = self.author_sources_box.toPlainText().strip()
+        if not sources:
+            return ""
+        return (
+            "EVIDENCE RULES — this is non-fiction with a declared source "
+            "list. Assert factual claims ONLY where these sources support "
+            "them, and cite the supporting source inline in parentheses. "
+            "Mark every factual claim you cannot ground in them with "
+            "[UNSOURCED] so the author can verify or cut it. Do not invent "
+            "sources.\n\nDECLARED SOURCES:\n" + sources
+        )
+
     def _start_worker(self, provider: str, model: str, prompt: str,
                       recent_draft_text: str = ""):
         agent = self.host.agent_instances["author"]
         consistency_context = self._build_consistency_context(recent_draft_text)
+        evidence = self._build_evidence_block()
+        if evidence:
+            consistency_context = (f"{consistency_context}\n\n{evidence}"
+                                   if consistency_context else evidence)
         book_profile_context = self._build_book_profile_block()
         content_type = self.author_content_type_box.currentText()
         messages = agent.build_messages(
@@ -1059,7 +1104,12 @@ class AuthorPanel(QWidget):
             self.host.record_request(token, full_response)
         self._populate_tabs(full_response)
         word_count = len(self.author_draft_box.toPlainText().split())
-        self.author_status_label.setText(f"[Done] {word_count:,} words")
+        status = f"[Done] {word_count:,} words"
+        unsourced = full_response.count("[UNSOURCED]")
+        if unsourced:
+            status += (f" — {unsourced} claim(s) marked [UNSOURCED]: "
+                       "verify or cut before publishing")
+        self.author_status_label.setText(status)
         self.author_write_btn.setEnabled(True)
         self.author_continue_btn.setEnabled(True)
         self.author_stop_btn.setEnabled(False)
