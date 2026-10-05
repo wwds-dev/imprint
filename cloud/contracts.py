@@ -4,7 +4,7 @@ import hashlib
 from pathlib import PurePosixPath
 
 
-ALLOWED_EXTENSIONS = {".epub", ".pdf", ".txt", ".mobi"}
+ALLOWED_EXTENSIONS = {".epub", ".pdf", ".txt", ".mobi", ".azw3"}
 
 
 def ebook_parts(path: str) -> tuple[str, ...]:
