@@ -606,3 +606,67 @@ def test_live_local_exception_keeps_the_row_pending(window, clean_jobs_table):
     (row,) = jobs.pending_rows()
     assert row["id"] == row_id
     assert row["spend_state"] == "reserved"
+
+
+# ── the uniform stop contract (P2, 2026-09-30) ──────────────────────────────
+
+def test_stop_keeps_a_direct_render_tracked_and_resumable(
+        window, clean_jobs_table):
+    """Stop always works: it stops WATCHING, never loses the paid job."""
+    if not window.video_panel._available:
+        pytest.skip("vidforge is not importable in this checkout")
+    panel = window.video_panel
+    row_id = _submit(slug="stopped", provider="gemini")
+    jobs.update_job(row_id, job_id="op-1", status="running")
+    token = window.restore_request(
+        "video", "gemini", "veo-3.1", "a render",
+        label="direct video", flat_cost_eur=0.4)
+    panel._request_token = token
+    panel._active_kind = "gemini-video"
+    panel._external_context = {"job_row_id": row_id, "job_id": "op-1",
+                               "provider_completed": False}
+    cancelled = []
+    window.video_worker = types.SimpleNamespace(
+        cancel=lambda: cancelled.append(True))
+    try:
+        panel.stop()
+    finally:
+        window.video_worker = None
+        panel._active_kind = ""
+    assert cancelled == [True]
+    assert token not in window._pending_requests
+    (row,) = jobs.pending_rows()          # still reserved: resumable
+    assert row["id"] == row_id
+    assert "Stopped watching" in panel.video_status_label.text()
+
+
+def test_stop_settles_a_wan_job_the_provider_confirms_cancelled(
+        window, clean_jobs_table, monkeypatch):
+    if not window.video_panel._available:
+        pytest.skip("vidforge is not importable in this checkout")
+    panel = window.video_panel
+    row_id = _submit(slug="undone", provider="qwen")
+    jobs.update_job(row_id, job_id="task-1", status="queued")
+    token = window.restore_request(
+        "video", "qwen", "wan3.0-video", "a render",
+        label="direct video", flat_cost_eur=0.4)
+    panel._request_token = token
+    panel._active_kind = "qwen-video"
+    panel._external_context = {"job_row_id": row_id, "job_id": "task-1",
+                               "provider_completed": False, "model":
+                               "wan3.0-video", "seconds": 8, "aspect": "9:16"}
+    monkeypatch.setattr(
+        window, "qwen", types.SimpleNamespace(cancel_video=lambda job: True))
+    window.video_worker = types.SimpleNamespace(cancel=lambda: None)
+    try:
+        panel.stop()
+    finally:
+        window.video_worker = None
+        panel._active_kind = ""
+    assert jobs.pending_rows() == []      # confirmed dead: not resumable
+    from services.database import get_connection
+    with get_connection() as conn:
+        row = conn.execute("SELECT status, spend_state FROM video_jobs "
+                           "WHERE id = ?", (row_id,)).fetchone()
+    assert (row["status"], row["spend_state"]) == ("cancelled", "released")
+    assert "nothing was charged" in panel.video_status_label.text().lower()

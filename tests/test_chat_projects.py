@@ -633,6 +633,13 @@ def test_project_filter_intersects_search_and_agent_without_reapplying_defaults(
             QMessageBox, "warning",
             staticmethod(lambda _parent, _title, message: warnings.append(message)),
         )
+        # A budget refusal now offers the free local model first. Decline it,
+        # so the refusal surfaces as the warning this test is about. Left
+        # unpatched, the offer is a real modal and the suite waits forever.
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            staticmethod(lambda *_a, **_k: QMessageBox.No),
+        )
         window.allow_openai_checkbox.setChecked(True)
         window.session_budget_eur = 1000.0
         window.daily_budget_eur = 1000.0

@@ -577,3 +577,77 @@ class TestFiverrPanelBillingDecision:
         assert panel._image_token is None
         assert abandoned == [
             ("prompt-token", "stopped"), ("image-token", "stopped")]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Ollama as the zero-cost fallback at the budget cap (P2, 2026-09-30)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestLocalFallbackOffer:
+    """A budget refusal offers the free local model — and only then.
+
+    The guard never silently re-routes: it flips the agent's provider box
+    and still returns False, so the user re-sends deliberately on ollama.
+    """
+
+    def _cap_budget(self, win):
+        win.session_budget_eur = 0.01
+        win.session_cost_total = 5.0
+
+    def test_budget_refusal_offers_and_switches(self, win, monkeypatch):
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: QMessageBox.Yes))
+        warned = []
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: warned.append(a)))
+        token = win.authorize_request(
+            "author", "anthropic", "claude-sonnet-4-6", "write a chapter")
+        assert token is False or not token
+        panel_box = win.author_panel.author_provider_box
+        assert panel_box.currentText() == "ollama"
+        assert warned == []               # the offer replaced the block box
+
+    def test_declined_offer_blocks_and_keeps_the_provider(
+            self, win, monkeypatch):
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+        win.author_panel.author_provider_box.setCurrentText("anthropic")
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: QMessageBox.No))
+        warned = []
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: warned.append(a)))
+        assert not win.authorize_request(
+            "author", "anthropic", "claude-sonnet-4-6", "write a chapter")
+        assert win.author_panel.author_provider_box.currentText() == "anthropic"
+        assert warned                     # the block still surfaced
+
+    def test_per_unit_work_gets_no_local_offer(self, win, monkeypatch):
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+        asked = []
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: asked.append(a)
+                                         or QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: None))
+        assert not win.authorize_request(
+            "video", "higgsfield", "/bytedance/x", "a render",
+            label="direct video", flat_cost_eur=0.5)
+        assert asked == []                # a render has no local equivalent
+
+    def test_agent_without_ollama_gets_no_offer(self, win, monkeypatch):
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+        asked = []
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: asked.append(a)
+                                         or QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: None))
+        # The manuscript panel deliberately omits ollama from its providers.
+        assert not win.authorize_request(
+            "manuscript", "anthropic", "claude-sonnet-4-6", "a blurb")
+        assert asked == []

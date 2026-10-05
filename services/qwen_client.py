@@ -241,6 +241,23 @@ class QwenClientWrapper:
             response.json(), model=job.model, seconds=job.seconds,
             aspect_ratio=job.aspect_ratio)
 
+    def cancel_video(self, job: WanVideoJob) -> bool:
+        """Ask DashScope to cancel a task; True only when it confirms.
+
+        Only PENDING tasks can be cancelled — a running render keeps
+        going, which is why the caller treats False as "keep the job
+        tracked" rather than as an error.
+        """
+        try:
+            response = self.video_session.post(
+                f"{self.video_base_url}/tasks/{job.job_id}/cancel",
+                headers=self._video_headers(),
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+            return response.status_code == 200
+        except Exception:
+            return False
+
     def wait_video(self, job: WanVideoJob, *, timeout: int = 900,
                    interval: float = 15.0, on_progress=None,
                    should_cancel=None) -> WanVideoJob:
