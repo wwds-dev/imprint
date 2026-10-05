@@ -38,6 +38,21 @@ controls through `GodAI._find_control()`.
 
 ## v2 — current
 
+- [ ] `P1` `bug` `@ai` **Fix the wave-one P2 review's 13 confirmed defects** (2026-10-05 adversarial review of 55a04ae/cb8e99f/f66d6f7/5bf63fd/c8b6144; full verdicts in review run wf_226addb2-bae; dupes across lenses merged). Nothing should build on these five features until this closes. In order:
+  1. HIGH — the Gemini/Wan Stop contract is UNREACHABLE: `render_direct` still calls `_begin(kind, can_cancel=False)` so the button is disabled and labeled "Cannot Cancel", and the submit message still claims no safe cancel. Pass can_cancel=True, label it "Stop", fix the message, add a button-enabled UI test.
+  2. HIGH — the local-fallback gate still false-positives on PROJECT caps: the validator's project refusal contains "daily budget". Preferred fix: ValidationResult gains a machine-readable scope (session/daily/agent/project/permission) and the gate reads it; add the project-cap guard test; the then-dead question stub in test_chat_projects can go.
+  3. HIGH — fiverr: a stale `_order_id` writes the next client's delivery/gig onto the previous client's order (and survives Clear). Re-derive the order when the brief's client differs from the cached order's; reset `_order_id` in clear().
+  4. MEDIUM — video stop during the submission window (job_id still ''): don't pop job_row_id yet — leave the row live so the post-POST job_signal persists the id; otherwise an acknowledged, chargeable job strands as 'lost'.
+  5. MEDIUM — fiverr open_order reuse overwrites stored brief/brand-kit fields with EMPTY form fields: falsy-skip the UPDATE (jobs.update_job precedent).
+  6. MEDIUM — fiverr _order_selected leaves the previous order's delivery/gig text when the new order has none: write unconditionally.
+  7. MEDIUM — music record_outcome targets the artist's NEWEST plan, which after a regenerate is not the released one: offer an explicit plan picker (date/type, outcome-recorded marker).
+  8. LOW — music: empty Artist field attaches the outcome to ANY artist's latest plan (guard + ask); an all-empty outcome still counts as "measured reality" (no-op + defense in outcomes_context); re-record erases prior numbers (prefill dialog from stored row).
+  9. LOW — video stop releases the reservation while the row stays 'reserved': the session can double-commit budget a continuing render will still bill — keep the estimate reserved for the session (re-label, don't abandon).
+  10. LOW — fiverr refresh_orders wipes the visual selection after every event: restore the loaded order's row while signals are blocked.
+  11. LOW — router: "also matched" leaks internal keys where the UI speaks codenames (map through catalog labels); the WHY tooltip goes stale after any send/reset (clear it in _set_route_result).
+  12. LOW — fiverr/music GUI handlers with unguarded SQL/JSON reads (_order_selected, record_outcome): house _note_failure wrapping.
+  13. INFO — TODO.md's Ollama-fallback note cites f66d6f7, which is not on main; the reachable commit is 4b09a06.
+
 - [x] `P1` `feature` `@ai` **Derived version badge in the header (`v2.xxx`).** Done 2026-09-22: `services/version.py` computes `v<MAJOR>.<BUILD>` from the `VERSION` file plus `git rev-list --count HEAD`, zero-padded to three digits; the header bar shows it beside the wordmark and its tooltip carries the commit, the date and the staleness. A frozen bundle has no git, so `scripts/stamp_version.py` bakes `_build_info.json` in at package time and both install scripts call it; the frozen app prefers its own stamp and compares it against the checkout when one is reachable, which is how the badge can say *N commits behind*. With neither source it reads `v2.???` and says unknown rather than claiming to be current — `TestStalenessIsHonest` fails the build on that. The padding test is driven with small build numbers on purpose: asserting only against the live build (112, already three digits) still passes with the padding removed, which is a guard that tests nothing. 15 tests. README §18.1.
 
 **Product P1s promoted 2026-09-21** — the three non-refactor swings, tracked here
