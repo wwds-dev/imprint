@@ -15,10 +15,11 @@ class ContractTests(unittest.TestCase):
 
     def test_ebook_path_accepts_nested_drive_folder(self):
         self.assertEqual(ebook_parts("Fiction/Example.epub"), ("Fiction", "Example.epub"))
+        self.assertEqual(ebook_parts("Fiction/Example.azw3"), ("Fiction", "Example.azw3"))
 
     def test_ebook_path_rejects_traversal_and_unsupported_formats(self):
         for path in ("../secret.epub", "/root/book.epub", "folder/../book.epub",
-                     "folder\\book.epub", "book.azw3", ""):
+                     "folder\\book.epub", "book.docx", ""):
             with self.subTest(path=path), self.assertRaises(ValueError):
                 ebook_parts(path)
 

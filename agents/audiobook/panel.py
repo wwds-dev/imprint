@@ -25,7 +25,7 @@ from agents.audiobook.audio_player import AudiobookPlayer
 from ui.forms import CONTROL_HEIGHT, LG, MD, SM, combo, field, line_edit, primary, rule, section
 from ui.widgets import FlowLayout, scrollable
 
-SUPPORTED_EBOOKS = {".pdf", ".epub", ".txt", ".mobi"}
+SUPPORTED_EBOOKS = {".pdf", ".epub", ".txt", ".mobi", ".azw3"}
 OUTPUT_MODE_KEY = "audiobook_output_mode"
 LOCAL_OUTPUT_KEY = "audiobook_local_output_folder"
 DRIVE_OUTPUT_KEY = "audiobook_drive_output_folder"
@@ -91,7 +91,7 @@ class AudiobookPanel(QWidget):
         page.setSpacing(LG)
         page.addWidget(section("Book"))
         self.audiobook_book_help = QLabel(
-            "Choose a PDF, EPUB, TXT, or MOBI file from the input folder. "
+            "Choose a PDF, EPUB, TXT, MOBI, or AZW3 file from the input folder. "
             "Imprint converts the selected title and remembers completed output.")
         self.audiobook_book_help.setObjectName("EstimateLine")
         self.audiobook_book_help.setWordWrap(True)
@@ -105,8 +105,8 @@ class AudiobookPanel(QWidget):
             lambda *_: self.estimate_cost_from_selection())
 
         self.audiobook_empty_state = QLabel(
-            "No supported books found yet. Add a PDF, EPUB, TXT, or MOBI file "
-            "to the input folder, then refresh the list.")
+            "No supported books found yet. Add a PDF, EPUB, TXT, MOBI, or AZW3 "
+            "file to the input folder, then refresh the list.")
         self.audiobook_empty_state.setObjectName("InlineEmptyState")
         self.audiobook_empty_state.setWordWrap(True)
         self.audiobook_empty_state.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
@@ -304,7 +304,7 @@ class AudiobookPanel(QWidget):
         if not input_folder.exists():
             self._update_source_state(
                 "The input folder does not exist yet. Set it up, add a PDF, "
-                "EPUB, TXT, or MOBI file, then refresh the list.")
+                "EPUB, TXT, MOBI, or AZW3 file, then refresh the list.")
             self.host.output_box.setPlainText(
                 f"[Error] Input folder does not exist:\n{input_folder}")
             self.audiobook_status_label.setText(
@@ -317,11 +317,11 @@ class AudiobookPanel(QWidget):
         if not books:
             self._update_source_state(
                 "No supported books found in the input folder. Add a PDF, "
-                "EPUB, TXT, or MOBI file, then refresh the list.")
+                "EPUB, TXT, MOBI, or AZW3 file, then refresh the list.")
             self.host.output_box.setPlainText(
                 f"[Info] No supported ebooks found in:\n{input_folder}")
             self.audiobook_status_label.setText(
-                "No books yet — add a PDF, EPUB, TXT, or MOBI file.")
+                "No books yet — add a PDF, EPUB, TXT, MOBI, or AZW3 file.")
             return
 
         for book in books:
