@@ -7,17 +7,26 @@
 Full reasoning, measurements and verification notes for each item are kept below
 under **Detail** — this checklist is the summary view.
 
-**State, September 2026.** Eight agents behind mode tabs; the GUI rebuilt on
-`ui/forms.py` over a header bar and two fixed rails; Video and Social shipped,
-which closes the last two gaps against the original plan. Every paid path in
+**State, October 2026.** Ten agents across eight workspaces in the header bar
+(`agents/catalog.py` is the roster); the GUI rebuilt on `ui/forms.py` over a
+header bar and two fixed rails; Video and Social shipped, which closes the last
+two gaps against the original plan. Every paid path in
 the GUI goes through the request guard, including the ones billed per unit
 rather than per token — the 2026-09-20 re-analysis found and closed the last
 in-app exception (ElevenLabs shorts). The Primer CLI was the one paid
 workflow outside it; it was archived on 2026-09-30, so every paid path now
-goes through the guard. 745 tests pass in
-an isolated database (2026-09-22; isolation enforced by conftest rather
-than per-fixture convention). The installed macOS app is a live launcher into
-this source tree; restarting it loads changes.
+goes through the guard. 944 tests pass in 91s in
+an isolated database (2026-10-05; isolation enforced by conftest rather
+than per-fixture convention) — but see the suite-wedge item below: one run in
+three today hangs instead of finishing. `main.py` is 4,324 lines. The installed
+macOS app is a live launcher into this source tree; restarting it loads changes.
+
+**Feature-complete for hand testing as of 2026-10-05.** Every v2 item above P3
+is closed, the ten agents all have a panel and a Learning Centre recipe, and
+`tests/manual_test_cases.md` is the UAT pass over them. What stands between the
+app and a real functional test is setup, not code: no `.env` exists, so no cloud
+provider is reachable, and the only local models pulled are `deepseek-r1`
+variants, whose `<think>` monologue lands in the output box.
 
 **Versioning is `v<MAJOR>.<BUILD>`** as of 2026-09-22 — `MAJOR` from the
 `VERSION` file, `BUILD` from `git rev-list --count HEAD`, zero-padded to three.
@@ -37,6 +46,10 @@ controls through `GodAI._find_control()`.
 ---
 
 ## v2 — current
+
+- [ ] `P1` `testing` `@ai` **The full suite intermittently wedges instead of finishing.** Seen 2026-10-05: a `pytest -q` run sat for 25 minutes on four seconds of CPU and produced no output at all. A stack sample put the main thread in `QObject::disconnect` beneath `ui/widgets.py:polish_combo` → `QComboBox.setStyle()`, blocked on a Qt mutex (`__ulock_wait`), while three live `QFFmpeg` threads (`AudioRenderer`, `StreamDecoder1`, `Demuxer`) were still running from `tests/test_audiobook_player.py`. That module builds six `AudiobookPlayer` instances and releases none of them, so their `QMediaPlayer` threads outlive it for the rest of the process. The next three full runs passed (944 in ~91s), so it is order- and timing-dependent. This is the same failure class the `tests/conftest.py` docstring already records (a 57-minute wedge inside `QComboBox::addItems`); making the offscreen platform unconditional reduced it but did not close it. Two fixes, both small: (1) tear the players down — `player._player.setSource(QUrl())` then `player.deleteLater()` in a fixture `finally`, and assert no `QMediaPlayer` survives the module; (2) add `pytest-timeout` to a test-requirements file and set a per-test limit in `pytest.ini`, so a wedge fails loudly with a stack instead of looking like a slow run. Until (2) lands, a silent run is not a passing run, and `tests/manual_test_cases.md` says so in its preconditions.
+- [ ] `P2` `infra` `@ai` **Test dependencies are unpinned and provider deps are stale.** `requirements.txt` names no test package at all — `pytest` 9.1.1 is in the venv by hand, so a fresh clone cannot run the suite from the file. It also still carries `python-whois` and `dnspython` "for domain_lookup provider", which is a `sentinel_ai` OSINT leftover: neither is imported anywhere in this repo. Split a `requirements-dev.txt` (pytest, pytest-timeout, pytest-subtests) and drop the two dead lines.
+- [ ] `P2` `docs` `@ai` **`.env.example` does not list the Herald publishing credentials.** `agents/social/publishing.py` requires `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, `REDDIT_USERNAME`, `REDDIT_PASSWORD` and `PINTEREST_ACCESS_TOKEN`; the template names only the model providers. The in-app connection guide names them correctly, so the gap is only in the file a new checkout copies — which is where someone setting up to test publishing will look first.
 
 - [x] `P1` `bug` `@ai` **Fix the wave-one P2 review's 13 confirmed defects** — all fixed 2026-10-06 (suite 881): ValidationResult carries a machine-readable `scope` and the fallback gate reads it instead of parsing prose (the dead modal stub in test_chat_projects became a tripwire that fails loudly if the offer ever fires on a project cap); the Gemini/Wan Stop button is enabled, labeled Stop, and the submit message states the contract; Stop during the unacknowledged submission window leaves the row wired for the late job_signal; stopping keeps the session's reservation (a continuing render will still bill — only the run log closes); fiverr re-derives the order when the client changes, Clear resets the held id, reuse merges instead of erasing, reloads write unconditionally, refreshes keep the selection, reads are guarded; music outcomes pick the shipped plan explicitly (prefilled, outcome-marked), refuse an empty artist, and an all-blank entry records nothing (with a query-side defense); the router speaks codenames in ambiguity reasons and the WHY tooltip clears on every route update; the stale commit cite is corrected. Original card follows: (2026-10-05 adversarial review of 55a04ae/cb8e99f/f66d6f7/5bf63fd/c8b6144; full verdicts in review run wf_226addb2-bae; dupes across lenses merged). Nothing should build on these five features until this closes. In order:
   1. HIGH — the Gemini/Wan Stop contract is UNREACHABLE: `render_direct` still calls `_begin(kind, can_cancel=False)` so the button is disabled and labeled "Cannot Cancel", and the submit message still claims no safe cancel. Pass can_cancel=True, label it "Stop", fix the message, add a button-enabled UI test.
