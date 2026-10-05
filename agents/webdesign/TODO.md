@@ -11,6 +11,6 @@
 
 - [x] `P1` Site Builder's panel, guarded generation lifecycle, output parsing, copy and export now live in `panel.py`.
 - [x] `P2` Retire temporary host-control aliases after recommendation and tooltip bindings use the panel contract directly. Done 2026-09-21, in the sweep that finished the pattern music started: the panel no longer mirrors its widgets onto the host, every shared consumer (tooltips, recommendation installs, context watchers, panel_base lookup) resolves through `GodAI._find_control()`, and the ownership test asserts the absence of aliases.
-- [ ] `P2` Export structured multi-file projects, not only one response blob.
-- [ ] `P2` Add automated HTML and accessibility validation before export.
+- [x] `P2` Export structured multi-file projects, not only one response blob. Done 2026-10-05: **Export Project…** writes `index.html` + extracted `styles.css`/`script.js` into a timestamped folder — inline assets move out with references injected (`<link>` into head, deferred `<script src>` before `</body>`), a `<script src=…>` stays where it is, and empty asset files are not written. `agents/webdesign/export.py`, Qt-free.
+- [x] `P2` Add automated HTML and accessibility validation before export. Done 2026-10-05: static checks (doctype, html lang, title, viewport, img alt, labeled form controls, empty links, duplicate ids, heading-order jumps) run before BOTH export paths; findings list in a dialog where the user decides — export anyway is always available, and the wording says "checks", never "compliance", because these are text heuristics, not a browser. 15 tests incl. one mutation per rule.
 - [ ] `P3` Add safe local preview with explicit external-resource controls.

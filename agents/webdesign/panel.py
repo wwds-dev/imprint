@@ -25,6 +25,7 @@ class WebdesignPanel(QWidget):
         "webdesign_framework_box", "webdesign_brief_input",
         "webdesign_panel_base", "webdesign_provider_box", "webdesign_model_box",
         "webdesign_generate_btn", "webdesign_copy_btn", "webdesign_save_btn",
+        "webdesign_export_btn",
         "webdesign_clear_btn", "webdesign_stop_btn", "webdesign_status_label",
         "webdesign_responsive_label", "webdesign_framework_label",
         "webdesign_lines_label", "webdesign_tabs", "webdesign_html_box",
@@ -107,6 +108,13 @@ class WebdesignPanel(QWidget):
         self.webdesign_save_btn.setEnabled(False)
         self.webdesign_save_btn.clicked.connect(self.save)
         actions.addWidget(self.webdesign_save_btn)
+        self.webdesign_export_btn = QPushButton("Export Project…")
+        self.webdesign_export_btn.setEnabled(False)
+        self.webdesign_export_btn.setToolTip(
+            "Write index.html plus extracted styles.css / script.js into a "
+            "folder — the shape a real handoff expects.")
+        self.webdesign_export_btn.clicked.connect(self.export_project)
+        actions.addWidget(self.webdesign_export_btn)
         self.webdesign_clear_btn = QPushButton("Clear")
         self.webdesign_clear_btn.clicked.connect(self.clear)
         actions.addWidget(self.webdesign_clear_btn)
@@ -211,6 +219,7 @@ class WebdesignPanel(QWidget):
         self.webdesign_status_label.setText("Generation complete.")
         self._set_idle()
         self.webdesign_save_btn.setEnabled(True)
+        self.webdesign_export_btn.setEnabled(True)
         self.webdesign_copy_btn.setEnabled(True)
 
     def _on_error(self, error: str):
@@ -231,8 +240,39 @@ class WebdesignPanel(QWidget):
         self.webdesign_status_label.setText("Stopped.")
         self._set_idle()
 
+    def _passes_preflight(self) -> bool:
+        """Static HTML/accessibility checks; the user decides on findings.
+
+        Heuristics over text, not a browser — the dialog says "checks",
+        never "compliance", and exporting anyway is always available.
+        """
+        from agents.webdesign.export import validate
+
+        findings = validate(self.extract_full_html(self.last_response))
+        if not findings:
+            self.webdesign_status_label.setText("Checks passed.")
+            return True
+        errors = sum(1 for f in findings if f.level == "error")
+        listing = "\n".join(
+            f"[{f.level}] {f.message}" for f in findings[:12])
+        if len(findings) > 12:
+            listing += f"\n… and {len(findings) - 12} more"
+        choice = QMessageBox.question(
+            self, "Checks found issues",
+            f"{errors} error(s), {len(findings) - errors} warning(s):\n\n"
+            f"{listing}\n\nExport anyway?")
+        if choice == QMessageBox.Yes:
+            self.webdesign_status_label.setText(
+                f"Exported with {len(findings)} open finding(s).")
+            return True
+        self.webdesign_status_label.setText(
+            f"Export cancelled — {len(findings)} finding(s) to fix.")
+        return False
+
     def save(self):
         if not self.last_response:
+            return
+        if not self._passes_preflight():
             return
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         path, _ = QFileDialog.getSaveFileName(
@@ -242,6 +282,33 @@ class WebdesignPanel(QWidget):
         )
         if path:
             Path(path).write_text(self.extract_full_html(self.last_response), encoding="utf-8")
+
+    def export_project(self):
+        """index.html + extracted styles.css/script.js into a chosen folder."""
+        if not self.last_response:
+            return
+        if not self._passes_preflight():
+            return
+        from agents.webdesign.export import split_project
+
+        directory = QFileDialog.getExistingDirectory(
+            self, "Export Project Folder", str(user_data_base() / "data"))
+        if not directory:
+            return
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        target = Path(directory) / f"site_{timestamp}"
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+            files = split_project(self.extract_full_html(self.last_response))
+            for name, content in files.items():
+                (target / name).write_text(content, encoding="utf-8")
+        except Exception as exc:
+            self.host._note_failure("webdesign: export project", exc,
+                                    self.webdesign_status_label)
+            return
+        self.webdesign_status_label.setText(
+            f"Exported {len(files)} file(s) to {target.name}/ "
+            f"({', '.join(sorted(files))}).")
 
     def copy_all(self):
         if not self.last_response:
@@ -263,6 +330,7 @@ class WebdesignPanel(QWidget):
         self.webdesign_framework_label.setText("—")
         self.webdesign_lines_label.setText("—")
         self.webdesign_save_btn.setEnabled(False)
+        self.webdesign_export_btn.setEnabled(False)
         self.webdesign_copy_btn.setEnabled(False)
 
     @staticmethod

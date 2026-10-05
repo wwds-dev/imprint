@@ -2,7 +2,7 @@
 
 import pytest
 from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QApplication, QFileDialog
+from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from agents.webdesign import WebdesignAgent, WebdesignPanel
 
@@ -113,6 +113,9 @@ def test_generated_site_splits_tabs_and_saves_clean_html(app, tmp_path, monkeypa
         assert panel.webdesign_save_btn.isEnabled()
 
         output = tmp_path / "site.html"
+        monkeypatch.setattr(
+            QMessageBox, "question",
+            staticmethod(lambda *a, **k: QMessageBox.Yes))
         monkeypatch.setattr(
             QFileDialog, "getSaveFileName",
             staticmethod(lambda *_args: (str(output), "HTML files (*.html)")),
