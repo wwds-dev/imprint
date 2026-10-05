@@ -4151,6 +4151,12 @@ class GodAI(QWidget):
             if (audiobook_process is not None and
                     audiobook_process.state() != QProcess.NotRunning):
                 audiobook_process.kill()
+            # The player's FFmpeg backend threads are not QThread workers, so
+            # the sweep below never saw them. release() saves the playhead and
+            # retires them; without it they outlive the window.
+            player = getattr(self.audiobook_panel, "audiobook_player", None)
+            if player is not None:
+                player.release()
             # Every worker, not just chat: quitting mid-run used to leave the
             # others' QThreads to be destroyed while still running (a Qt
             # abort) and lose the paid request's record. cancel() + a short

@@ -202,6 +202,30 @@ class AudiobookPlayer(QWidget):
         self.sleep_box.setCurrentIndex(0)
         self._player.stop()
 
+    def release(self) -> None:
+        """Shut the media engine down and stop the timers. Idempotent.
+
+        `stop()` ends playback but leaves the source set, and a QMediaPlayer
+        with a source holds the FFmpeg backend's demuxer, decoder and renderer
+        threads open. Those threads outliving the widget is the same hazard
+        `GodAI.closeEvent` already guards for every QThread worker: a Qt object
+        destroyed while its thread still runs. It has also deadlocked a test
+        process — a later `QComboBox.setStyle()` blocked in
+        `QObject::disconnect` against the live audio threads, which under
+        `pytest -q` looks exactly like a slow run.
+
+        The playhead is saved first, so releasing is never a lost position.
+        """
+        self.save_now()
+        self._save_timer.stop()
+        self._sleep_timer.stop()
+        self._player.stop()
+        # Clearing the source is what actually retires the backend threads;
+        # dropping the audio output stops the sink behind them.
+        self._player.setSource(QUrl())
+        self._player.setAudioOutput(None)
+        self._path = None
+
     def add_mark(self) -> None:
         if not self._path:
             return

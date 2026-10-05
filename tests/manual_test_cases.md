@@ -360,14 +360,31 @@ after the first.
 - [ ] It carries the **tail** of the recent draft — a window, not the whole book
 - [ ] Characters and World Notes tabs stay editable and persist
 
-**Test C — non-fiction evidence rules**
-Set Type to a non-fiction type, then:
+**Test C — non-fiction evidence rules and the Sources tab**
+Set **Type** to `Non-Fiction`.
+- [ ] A **Sources** tab appears. Switch Type back to `Fiction` — it disappears
+      (it is a non-fiction instrument, not a permanent tab)
+
+Back on Non-Fiction, leave Sources **empty** and draft:
 ```
 Draft 250 words on why most meal-planning apps lose users in week two.
 ```
 - [ ] The non-fiction persona is used, not the fiction one
 - [ ] No invented statistics, studies, surveys or named sources
-- [ ] Where a number is needed, it asks for one or marks it as needing a source
+
+Now declare sources and draft again:
+```
+Smith (2024), The Atlas Problem
+Field interview, 2026-03-02
+```
+- [ ] With sources declared, the evidence rules apply: the model is told not to
+      invent sources, and your declared sources are passed through verbatim
+- [ ] Any claim it cannot attribute comes back marked **`[UNSOURCED]`**
+- [ ] The status line counts them — `N claim(s) marked [UNSOURCED]` — and says
+      **verify or cut**
+- [ ] With Sources **empty** there are no evidence rules at all. An empty tab is
+      decoration, not evidence, and the app does not pretend otherwise
+- [ ] Sources persist with the project: switch away, come back, still there
 
 **Test D — Publish mode**
 ```

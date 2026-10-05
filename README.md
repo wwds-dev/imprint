@@ -2193,7 +2193,7 @@ imprint/
 │   # domain_lookup.py, email_lookup.py, username_lookup.py, and
 │   # result_normalizer.py (the OSINT lookup layer) stayed with the security half.
 │
-├── tests/                         # ~160 tests — see §15.1
+├── tests/                         # 950 tests — see §15.1
 │   ├── test_agents_scenarios.py   # agent prompt construction
 │   ├── test_cost_and_limits.py    # Validator gates + token/cost maths
 │   ├── test_request_guard.py      # authorize/record/abandon_request
@@ -2238,12 +2238,22 @@ imprint/
 ### 16.1 Tests
 
 ```bash
-QT_QPA_PLATFORM=offscreen python3 -m pytest tests/ -q
+.venv/bin/python -m pytest -q
 ```
 
-~160 tests. `QT_QPA_PLATFORM=offscreen` is required — some tests construct
-the real `GodAI` window. (Down from 219 before the fork's security-agent test
-coverage in `test_agents_scenarios.py` was stripped along with the agents themselves.)
+950 tests in about 95 seconds (2026-10-06). Install the suite's own
+dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
+covers pytest and `pytest-timeout`:
+
+```bash
+uv pip install -r requirements.txt -r requirements-dev.txt
+```
+
+`QT_QPA_PLATFORM=offscreen` is required because some tests construct the real
+`GodAI` window, but no longer needs stating on the command line:
+`tests/conftest.py` sets it before any test module can reach Qt, and redirects
+`services.database.DB_PATH` at a temp directory so no run touches
+`data/imprint.db`.
 
 | File | Covers |
 |------|--------|
@@ -2251,8 +2261,14 @@ coverage in `test_agents_scenarios.py` was stripped along with the agents themse
 | `test_cost_and_limits.py` | `Validator`'s ten rules (agent/tool enabled, provider permissions, per-agent/session/daily budgets, approval) and `UsageTracker` token/cost accounting. Owns these — do not duplicate elsewhere. |
 | `test_request_guard.py` | `authorize_request` / `record_request` / `abandon_request`. Blocked requests open no run; recording without authorising bills nothing; double-record bills once; abandoned requests stay unbilled. |
 | `test_book_pipeline.py` | Chapter detection and offsets, EPUB/DOCX/PDF export, calendar scheduling, KDP CSV summarisation, LLM list parsing, collision-proof asset paths. |
+| `test_audiobook_player.py` | Library scan, resume bookkeeping, playback against a real MP3, and `release()` — the media engine must not outlive the widget. |
 
-Two conventions worth keeping:
+`tests/manual_test_cases.md` sits on top of all of this: the hand pass over the
+eight workspaces, the ten agents and the systems under them, with every case
+marked `FREE` / `PAID` / `PAID-UNIT` so the free pass runs first. It has no
+automated equivalent by design — it covers what a person has to judge.
+
+Three conventions worth keeping:
 
 - **Tests never touch real state.** `test_request_guard.py` fakes the usage
   tracker, chat history and run logger, so no test bills a request or writes into
@@ -2260,9 +2276,21 @@ Two conventions worth keeping:
 - **New tests are mutation-checked.** Break the code the test claims to cover and
   confirm that test fails, then revert. A test that passes against broken code is
   worse than no test.
+- **A run that stops is a failure, not a slow run.** A Qt suite can deadlock
+  rather than fail, and under `-q` that prints nothing at all. `pytest.ini` sets
+  a 300-second per-test timeout using the `thread` method — `signal` cannot
+  interrupt a main thread parked in a C++ mutex, which is the case that actually
+  happens here. A wedge now dies with every thread's stack dumped. It fired on a
+  real one: `agents/audiobook/README.md` records what it was.
 
-There is **no automated UI coverage**. The only check that a panel still
-constructs is building the window offscreen:
+UI coverage is **behavioural, not visual** — no screenshot comparisons.
+`test_panel_layout.py` asserts the property that actually broke, that no two
+sibling widgets in a panel may occupy the same pixels, across every agent panel
+at the window's minimum size; it also covers the header's shedding order and
+the **More ▾** overflow. `test_agent_panel.py` and `test_status_cards.py` cover
+control state and the rail cards. What none of them can judge is whether a
+result is any good — that is what `tests/manual_test_cases.md` is for. To check
+by hand that a panel still constructs, build the window offscreen:
 
 ```bash
 QT_QPA_PLATFORM=offscreen python3 -c "
