@@ -45,7 +45,8 @@ class ManuscriptPanel(QWidget):
     HOST_CONTROLS = (
         "manuscript_period_box", "manuscript_refresh_btn",
         "manuscript_ingest_btn", "manuscript_next_step_label",
-        "manuscript_tabs", "manuscript_metrics_box", "manuscript_query_input",
+        "manuscript_tabs", "manuscript_metrics_box",
+        "manuscript_royalty_chart", "manuscript_query_input",
         "manuscript_panel_base", "manuscript_provider_box",
         "manuscript_model_box", "manuscript_ask_btn", "manuscript_todo_list",
         "manuscript_todo_input", "manuscript_add_todo_btn",
@@ -142,11 +143,25 @@ class ManuscriptPanel(QWidget):
         # ── Main area: metrics display + Q&A sidebar ─────────────────────────
         splitter = QSplitter(Qt.Horizontal)
 
-        # Left: metrics summary display
+        # Left: royalties as a chart, raw metrics text beneath it. The
+        # chart replaces the monospace royalty summary; the text box stays
+        # for PublishDrive payloads and as the Ask context.
+        from ui.charts import BarChart
+        from ui.forms import section as _section
+        left = QWidget()
+        left.setObjectName("Transparent")
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(SM)
+        left_layout.addWidget(_section("Royalties by marketplace"))
+        self.manuscript_royalty_chart = BarChart(
+            empty_text="Ingest a KDP CSV to see royalties by marketplace.")
+        left_layout.addWidget(self.manuscript_royalty_chart, 1)
         self.manuscript_metrics_box = QTextBrowser()
         self.manuscript_metrics_box.setPlaceholderText(
             "Click Refresh Data to load publishing metrics…")
-        splitter.addWidget(self.manuscript_metrics_box)
+        left_layout.addWidget(self.manuscript_metrics_box, 1)
+        splitter.addWidget(left)
 
         # Right: Q&A and todos. Section labels and fields rather than a stack
         # of "Ask about your book:" / "Provider:" / "Model:" colon captions,
@@ -222,6 +237,7 @@ class ManuscriptPanel(QWidget):
         # through host._find_control(); HOST_CONTROLS stays as the
         # published contract of what this panel owns.
         host.manuscript_panel = self
+        self.refresh_royalty_chart()
         self.refresh_connections_status()
         self.hide()
 
@@ -605,6 +621,27 @@ class ManuscriptPanel(QWidget):
                 f"[Done] Ingested: {', '.join(ingested)}")
         else:
             self.manuscript_status_label.setText("[Info] No new KDP reports found.")
+        self.refresh_royalty_chart()
+
+    def refresh_royalty_chart(self) -> None:
+        """Royalties (and units, as the thin bar) per marketplace."""
+        from agents.manuscript.kdp_csv_parser import marketplace_summary
+
+        try:
+            summary = marketplace_summary()
+        except Exception as exc:
+            self.host._note_failure("manuscript: royalty summary", exc)
+            return
+        markets = sorted(summary.get("by_marketplace", []),
+                         key=lambda m: -m["royalties"])
+        if not markets:
+            self.manuscript_royalty_chart.clear()
+            return
+        self.manuscript_royalty_chart.set_data(
+            [m["marketplace"] for m in markets],
+            [m["royalties"] for m in markets],
+            second=[m["units"] for m in markets], second_name="units",
+            value_format="${:,.2f}")
 
     def ask(self):
         """Send a query to ManuscriptAgent with current data as context."""

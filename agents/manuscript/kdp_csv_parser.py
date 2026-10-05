@@ -132,6 +132,23 @@ def summarise_kdp_rows(rows: list[dict]) -> dict:
     }
 
 
+def marketplace_summary() -> dict:
+    """Aggregate every KDP CSV in the reports folder, for the chart.
+
+    The CSVs are the source of truth (nothing persists their rows), so the
+    chart re-reads them — they are small, local files. Unreadable files are
+    skipped rather than sinking the whole summary.
+    """
+    rows: list[dict] = []
+    if KDP_REPORTS_DIR.exists():
+        for path in sorted(KDP_REPORTS_DIR.glob("*.csv")):
+            try:
+                rows.extend(parse_kdp_csv(path))
+            except Exception:
+                continue
+    return summarise_kdp_rows(rows)
+
+
 def ingest_new_reports() -> list[str]:
     """Scan kdp_reports/ for CSV files not yet in the DB. Returns list of ingested filenames."""
     conn = sqlite3.connect(DB_PATH)
