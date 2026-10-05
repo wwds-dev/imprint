@@ -73,8 +73,27 @@ Test these first. They sit under every agent.
 > workspace tabs, status pill, Docs / Tooltips / Settings) and lands on a
 > workspace.
 
-**Steps:** launch the app. Hover the wordmark. Resize the window narrower, down
-to about 1000 px.
+**Launch it from a terminal for this one**, not from the Dock:
+
+```bash
+cd ~/Documents/lab/active/imprint && .venv/bin/python main.py
+```
+
+The app catches its own startup failures and notes them rather than crashing,
+which is right — but it means a broken subsystem looks like a clean launch from
+the Dock. The startup reconciliation that finishes jobs left in flight is the
+clearest example: a missing database column made it fail on every launch, the
+app started normally, and paid renders were quietly never resumed. It was found
+by reading this output, not by using the app.
+
+- [ ] The only output is Qt's FFmpeg version line. Any `[warn]` line is a
+      finding — read it before going further, especially one naming `resume`,
+      `pending`, or a database column
+- [ ] `.venv/bin/python main.py --selftest` passes every check (writable data
+      directory outside the bundle, every panel agent registered, vidforge
+      imports and its config loads, bundled resources present)
+
+**Then:** hover the wordmark. Resize the window narrower, down to about 1000 px.
 
 **What to verify:**
 - [ ] Window opens maximised; nothing overlaps in the header
@@ -311,6 +330,9 @@ Relaunch.
 **What to verify:**
 - [ ] Each job is picked up and finished, or reported as failed — never silently
       stranded
+- [ ] Nothing in the terminal output says a resume **failed to read** its jobs.
+      All three reconcilers swallow their own exceptions, so a broken one reads
+      as "nothing was pending" in the UI and only shows up in that log
 - [ ] You are **not** asked to approve the spend again
 - [ ] Cost History shows **one** charge per job, not two
 - [ ] Booth resumes mid-book: completed chunks survive, and billing spans the
