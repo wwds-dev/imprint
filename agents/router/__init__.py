@@ -1,5 +1,5 @@
 """Public interface for the internal intent router."""
 
-from .agent import ROUTES, RouterAgent
+from .agent import ROUTES, RouteDecision, RouterAgent
 
-__all__ = ["ROUTES", "RouterAgent"]
+__all__ = ["ROUTES", "RouteDecision", "RouterAgent"]
