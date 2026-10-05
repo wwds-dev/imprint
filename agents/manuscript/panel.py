@@ -44,7 +44,8 @@ class ManuscriptPanel(QWidget):
 
     HOST_CONTROLS = (
         "manuscript_period_box", "manuscript_refresh_btn",
-        "manuscript_ingest_btn", "manuscript_next_step_label",
+        "manuscript_ingest_btn", "manuscript_sync_label",
+        "manuscript_next_step_label",
         "manuscript_tabs", "manuscript_metrics_box",
         "manuscript_royalty_chart", "manuscript_query_input",
         "manuscript_panel_base", "manuscript_provider_box",
@@ -112,6 +113,15 @@ class ManuscriptPanel(QWidget):
 
         tb.addStretch()
         layout.addWidget(top_bar)
+
+        # Each integration wears its last outcome instead of vanishing into
+        # a transient status flash: what synced, when, and the exact error
+        # when it failed — persisted, so a failure survives the restart
+        # that would otherwise hide it.
+        self.manuscript_sync_label = QLabel("")
+        self.manuscript_sync_label.setWordWrap(True)
+        self.manuscript_sync_label.setObjectName("EstimateLine")
+        layout.addWidget(self.manuscript_sync_label)
 
         self.manuscript_next_step_label = QLabel("")
         self.manuscript_next_step_label.setWordWrap(True)
@@ -238,6 +248,7 @@ class ManuscriptPanel(QWidget):
         # published contract of what this panel owns.
         host.manuscript_panel = self
         self.refresh_royalty_chart()
+        self.refresh_sync_states()
         self.refresh_connections_status()
         self.hide()
 
@@ -598,6 +609,45 @@ class ManuscriptPanel(QWidget):
             self.manuscript_connections_layout.addWidget(row)
 
     # ── overview: data, ask, todos ──────────────────────────────────────
+    def _record_sync(self, integration: str, ok: bool, note: str) -> None:
+        """Persist an integration's last outcome; failures must survive a
+        restart rather than disappearing with the status flash."""
+        import json
+        from services.database import save_setting
+        from datetime import datetime
+
+        try:
+            save_setting(f"manuscript_sync_{integration}", json.dumps({
+                "at": datetime.now().isoformat(timespec="seconds"),
+                "ok": bool(ok), "note": note[:400]}))
+        except Exception as exc:
+            self.host._note_failure("manuscript: record sync state", exc)
+        self.refresh_sync_states()
+
+    def refresh_sync_states(self) -> None:
+        import json
+        from services.database import get_setting
+
+        parts = []
+        for integration, label in (("publishdrive", "PublishDrive"),
+                                   ("kdp", "KDP reports")):
+            raw = get_setting(f"manuscript_sync_{integration}", "")
+            if not raw:
+                parts.append(f"{label}: never synced")
+                continue
+            try:
+                state = json.loads(raw)
+            except Exception:
+                parts.append(f"{label}: unreadable state")
+                continue
+            when = (state.get("at") or "")[:16].replace("T", " ")
+            if state.get("ok"):
+                parts.append(f"{label}: ok {when} — {state.get('note', '')}")
+            else:
+                parts.append(f"{label}: FAILED {when} — "
+                             f"{state.get('note', '')}")
+        self.manuscript_sync_label.setText("   ·   ".join(parts))
+
     def refresh_data(self):
         """Fetch PublishDrive data and display summary."""
         import json
@@ -609,18 +659,29 @@ class ManuscriptPanel(QWidget):
             self.manuscript_metrics_box.setPlainText(json.dumps(data, indent=2))
             self.manuscript_status_label.setText("[Done] Data refreshed.")
             self._last_data = json.dumps(data)
+            self._record_sync("publishdrive", True,
+                              "last 30 days fetched")
         except Exception as e:
             self.manuscript_status_label.setText(f"[Error] {e}")
+            self._record_sync("publishdrive", False, str(e))
 
     def ingest_kdp(self):
         """Ingest any new KDP CSV files from data/kdp_reports/."""
         from agents.manuscript.kdp_csv_parser import ingest_new_reports
-        ingested = ingest_new_reports()
+        try:
+            ingested = ingest_new_reports()
+        except Exception as exc:
+            self.manuscript_status_label.setText(f"[Error] {exc}")
+            self._record_sync("kdp", False, str(exc))
+            return
         if ingested:
             self.manuscript_status_label.setText(
                 f"[Done] Ingested: {', '.join(ingested)}")
+            self._record_sync("kdp", True,
+                              f"{len(ingested)} new report(s)")
         else:
             self.manuscript_status_label.setText("[Info] No new KDP reports found.")
+            self._record_sync("kdp", True, "no new reports")
         self.refresh_royalty_chart()
 
     def refresh_royalty_chart(self) -> None:

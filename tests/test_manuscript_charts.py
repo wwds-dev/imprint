@@ -79,3 +79,42 @@ def test_chart_clears_honestly_without_data(window, monkeypatch):
                         lambda: {"by_marketplace": []})
     panel.refresh_royalty_chart()
     assert panel.manuscript_royalty_chart.row_count == 0
+
+
+# ── integration sync/error states (P2, 2026-10-06) ──────────────────────────
+
+def test_sync_states_persist_and_render(window, monkeypatch):
+    panel = window.manuscript_panel
+    panel._record_sync("publishdrive", True, "last 30 days fetched")
+    panel._record_sync("kdp", False, "folder unreadable")
+    text = panel.manuscript_sync_label.text()
+    assert "PublishDrive: ok" in text
+    assert "KDP reports: FAILED" in text and "folder unreadable" in text
+    # Persisted: a fresh render from storage shows the same states.
+    panel.manuscript_sync_label.setText("")
+    panel.refresh_sync_states()
+    assert "FAILED" in panel.manuscript_sync_label.text()
+
+
+def test_failed_publishdrive_fetch_records_the_error(window, monkeypatch):
+    panel = window.manuscript_panel
+    from agents.manuscript import publishdrive_client
+
+    class ExplodingClient:
+        def get_last_30_days(self):
+            raise RuntimeError("401 from PublishDrive")
+    monkeypatch.setattr(publishdrive_client, "PublishDriveClient",
+                        ExplodingClient)
+    panel.refresh_data()
+    assert "FAILED" in panel.manuscript_sync_label.text()
+    assert "401" in panel.manuscript_sync_label.text()
+
+
+def test_kdp_ingest_records_a_clean_sync(window, monkeypatch):
+    panel = window.manuscript_panel
+    from agents.manuscript import kdp_csv_parser as parser_module
+    import agents.manuscript.panel as panel_module
+    monkeypatch.setattr(parser_module, "ingest_new_reports", lambda: ["a.csv"])
+    panel.ingest_kdp()
+    text = panel.manuscript_sync_label.text()
+    assert "KDP reports: ok" in text and "1 new report(s)" in text
