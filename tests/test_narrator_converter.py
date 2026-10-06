@@ -508,3 +508,83 @@ def test_a_failing_tool_reports_what_it_said(tmp_path):
 
     with pytest.raises(RuntimeError, match="ffmpeg could not be started"):
         converter.run_checked([str(tmp_path / "missing-ffmpeg")], "ffmpeg")
+
+
+# ── One run per book ─────────────────────────────────────────────────────────
+def test_a_second_run_on_the_same_book_is_refused(tmp_path):
+    """Two runs share the manifest and the chunk names, so each could publish
+    or delete the other's work."""
+    lock = tmp_path / converter.LOCK_FILENAME
+    with converter.BookLock(tmp_path):
+        assert lock.read_text() == str(os.getpid())
+        with pytest.raises(converter.BookLocked, match=f"pid {os.getpid()}"):
+            with converter.BookLock(tmp_path):
+                pass
+        assert lock.read_text() == str(os.getpid())      # the loser touched nothing
+    assert not lock.exists()
+
+
+def test_the_lock_goes_with_the_run_even_when_it_fails(tmp_path):
+    with pytest.raises(RuntimeError, match="boom"):
+        with converter.BookLock(tmp_path):
+            raise RuntimeError("boom")
+    assert not (tmp_path / converter.LOCK_FILENAME).exists()
+
+
+def test_a_lock_left_by_a_killed_run_is_taken_over(tmp_path):
+    """Stop in the tab kills the worker, which never releases. Its pid is gone,
+    so the next run takes the folder."""
+    import subprocess as _subprocess
+    gone = _subprocess.Popen([sys.executable, "-c", "pass"])
+    gone.wait()
+    assert converter.pid_is_alive(os.getpid())
+    assert not converter.pid_is_alive(gone.pid)
+
+    lock = tmp_path / converter.LOCK_FILENAME
+    lock.write_text(str(gone.pid))
+    with converter.BookLock(tmp_path):
+        assert lock.read_text() == str(os.getpid())
+    assert not lock.exists()
+
+
+def test_a_lock_that_names_no_pid_is_left_for_a_human(tmp_path):
+    """Nothing can tell an empty lock from one a run is still writing, so it
+    is refused with the way out spelled out rather than deleted."""
+    lock = tmp_path / converter.LOCK_FILENAME
+    lock.write_text("")
+    with pytest.raises(converter.BookLocked, match="delete"):
+        with converter.BookLock(tmp_path):
+            pass
+    assert lock.exists()
+
+
+def test_a_run_refuses_a_book_another_run_holds(tmp_path, monkeypatch, capsys):
+    """Through convert(): the refusal comes before the text is read, and the
+    run reports failure so the tab shows it."""
+    monkeypatch.setattr(converter, "ensure_ffmpeg_available", lambda: "ffmpeg")
+    monkeypatch.setattr(converter, "load_chapters",
+                        lambda *a, **k: pytest.fail("the text was read"))
+    book = tmp_path / "Book.txt"
+    book.write_text("Some text.")
+    out = tmp_path / "out"
+    lock = out / "Book" / converter.LOCK_FILENAME
+    lock.parent.mkdir(parents=True)
+    lock.write_text(str(os.getpid()))
+
+    assert converter.convert(input=str(book), output=str(out)) is False
+    assert "Another conversion of Book is running" in capsys.readouterr().out
+    assert lock.read_text() == str(os.getpid())
+
+
+def test_a_finished_book_leaves_no_lock_behind(tmp_path, monkeypatch):
+    monkeypatch.setattr(converter, "ensure_ffmpeg_available", lambda: "ffmpeg")
+    monkeypatch.setattr(converter, "load_chapters", lambda *a, **k: [("Book", "Some text.")])
+    monkeypatch.setattr(converter, "count_text_tokens", lambda text: 3)   # no tiktoken fetch
+    monkeypatch.setattr(converter, "text_to_audio", lambda **k: True)
+    monkeypatch.setattr(converter, "get_audio_duration_seconds", lambda p: 1.0)
+    book = tmp_path / "Book.txt"
+    book.write_text("Some text.")
+    out = tmp_path / "out"
+
+    assert converter.convert(input=str(book), output=str(out)) is True
+    assert not (out / "Book" / converter.LOCK_FILENAME).exists()
