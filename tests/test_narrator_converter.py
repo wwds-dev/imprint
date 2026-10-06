@@ -437,22 +437,34 @@ def test_calibres_epub_goes_into_the_temp_dir_and_leaves_with_it(tmp_path, monke
 
 def test_tools_run_in_the_launch_environment_not_the_bundles(monkeypatch):
     """PyInstaller points the linker at the bundle's libraries and stashes the
-    launch-time value as <VAR>_ORIG; ffmpeg must get the latter back."""
+    launch-time value as <VAR>_ORIG; a tool must get the latter back. Checked
+    on a real child process, not the helper's dictionary, so `run_checked`
+    forgetting to pass the environment on would fail here."""
     monkeypatch.setenv("DYLD_LIBRARY_PATH", "/Bundle/Frameworks")
-    monkeypatch.setenv("DYLD_LIBRARY_PATH_ORIG", "/usr/local/lib")
+    monkeypatch.setenv("DYLD_LIBRARY_PATH_ORIG", "/launch/Frameworks")
     monkeypatch.setenv("LD_LIBRARY_PATH", "/Bundle/lib")
     monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
     monkeypatch.setenv("PATH", "/usr/bin:/bin")
 
-    env = converter.subprocess_env()
-    assert env["DYLD_LIBRARY_PATH"] == "/usr/local/lib"
-    assert "DYLD_LIBRARY_PATH_ORIG" not in env
-    assert env["LD_LIBRARY_PATH"] == "/Bundle/lib"       # from source: nothing to undo
-    assert env["PATH"].split(os.pathsep) == [
-        "/usr/bin", "/bin", "/opt/homebrew/bin", "/usr/local/bin"]
+    # LD_LIBRARY_PATH rather than DYLD_*: macOS strips the latter from any
+    # child of a system binary, which the test's Python may be.
+    probe = [sys.executable, "-c",
+             "import os; print(os.environ.get('LD_LIBRARY_PATH'), os.environ['PATH'])"]
 
+    seen = converter.run_checked(probe, "probe").stdout.split()
+    assert seen[0] == "/Bundle/lib"                     # from source: nothing to undo
+    assert seen[1].split(os.pathsep) == [
+        "/usr/bin", "/bin", "/opt/homebrew/bin", "/usr/local/bin"]
+    env = converter.subprocess_env()
+    assert env["DYLD_LIBRARY_PATH"] == "/launch/Frameworks"
+    assert "DYLD_LIBRARY_PATH_ORIG" not in env
+
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/launch/lib")
+    assert converter.run_checked(probe, "probe").stdout.split()[0] == "/launch/lib"
+
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG")
     monkeypatch.setattr(sys, "frozen", True, raising=False)
-    assert "LD_LIBRARY_PATH" not in converter.subprocess_env()
+    assert converter.run_checked(probe, "probe").stdout.split()[0] == "None"
 
 
 def test_a_tool_finders_bare_path_hides_is_still_found(tmp_path, monkeypatch):
