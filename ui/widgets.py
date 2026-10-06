@@ -6,7 +6,7 @@ Moved verbatim out of main.py (see docs/refactor_plan.md, phase 1).
 minimum width, which pins an impossible minimum on a pane and makes Qt compress
 controls past their own minimums until the labels are chopped.
 """
-from PySide6.QtCore import QEvent, QObject, Qt, QRect, QPoint, QSize
+from PySide6.QtCore import QEvent, QObject, Qt, QRect, QPoint, QPointF, QSize
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QComboBox, QLayout, QProxyStyle,
@@ -14,6 +14,16 @@ from PySide6.QtWidgets import (
 )
 
 from ui.style import ACCENT, ELEVATED, TEXT, TEXT_MUTE
+from ui import theme
+
+
+def _c(token: str) -> QColor:
+    """One of ui.style's colours as a QColor, under the current theme.
+
+    The constants hold the authored green; painted code resolves them here so a
+    repaint after a theme change picks up the new palette.
+    """
+    return QColor(theme.recolour(token))
 
 
 # Semantic item roles used by the recommendation system.  A recommendation is
@@ -81,7 +91,7 @@ class DropdownItemDelegate(QStyledItemDelegate):
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         enabled = bool(option.state & QStyle.StateFlag.State_Enabled)
-        recommendation_color = QColor(ACCENT)
+        recommendation_color = _c(ACCENT)
         recommended = bool(index.data(RECOMMENDED_ROLE))
 
         painter.setPen(Qt.PenStyle.NoPen)
@@ -89,10 +99,10 @@ class DropdownItemDelegate(QStyledItemDelegate):
             painter.setBrush(self._wash(ACCENT, 30))
             painter.drawRoundedRect(row, 7, 7)
             rail = QRect(row.left(), row.top() + 8, 3, max(8, row.height() - 16))
-            painter.setBrush(QColor(ACCENT))
+            painter.setBrush(_c(ACCENT))
             painter.drawRoundedRect(rail, 2, 2)
         elif hovered:
-            painter.setBrush(QColor(ELEVATED))
+            painter.setBrush(_c(ELEVATED))
             painter.drawRoundedRect(row, 7, 7)
 
         icon = index.data(Qt.ItemDataRole.DecorationRole)
@@ -112,8 +122,8 @@ class DropdownItemDelegate(QStyledItemDelegate):
         if isinstance(foreground, QBrush):
             foreground = foreground.color()
         text_color = (recommendation_color if recommended else
-                      foreground if isinstance(foreground, QColor) else QColor(TEXT))
-        painter.setPen(text_color if enabled else QColor(TEXT_MUTE))
+                      foreground if isinstance(foreground, QColor) else _c(TEXT))
+        painter.setPen(text_color if enabled else _c(TEXT_MUTE))
         badge_space = self.BADGE_SPACE if recommended else 0
         text_rect = QRect(
             text_left,
@@ -139,7 +149,7 @@ class DropdownItemDelegate(QStyledItemDelegate):
             badge_font.setPointSizeF(max(8.0, badge_font.pointSizeF() - 2.0))
             badge_font.setWeight(QFont.Weight.DemiBold)
             painter.setFont(badge_font)
-            painter.setPen(QColor(ACCENT))
+            painter.setPen(_c(ACCENT))
             badge_text = str(index.data(RECOMMENDATION_BADGE_ROLE) or "BEST FIT")
             painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, badge_text)
 
@@ -148,7 +158,7 @@ class DropdownItemDelegate(QStyledItemDelegate):
             painter.setBrush(self._wash(ACCENT, 36))
             painter.setPen(QPen(self._wash(ACCENT, 105), 1))
             painter.drawEllipse(centre, 10, 10)
-            check_pen = QPen(QColor(ACCENT), 2)
+            check_pen = QPen(_c(ACCENT), 2)
             check_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             check_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             painter.setPen(check_pen)
@@ -364,7 +374,7 @@ class CollapsibleSection(QWidget):
         self.header_btn.setObjectName("CollapsibleHeader")
         self.header_btn.setCheckable(True)
         self.header_btn.setChecked(expanded)
-        self.header_btn.setStyleSheet(self.HEADER_STYLE)
+        theme.themed(self.header_btn, self.HEADER_STYLE)
         self.header_btn.setAccessibleName(title)
         self.header_btn.setAccessibleDescription(
             f"Show or hide the {title} section")
@@ -463,3 +473,127 @@ def let_combos_shrink(root: QWidget, visible_chars: int = 8) -> int:
         polish_combo(combo, visible_chars)
         count += 1
     return count
+
+class ThemeDots(QWidget):
+    """One dot per theme, in the header. Click one to wear it.
+
+    Each dot is painted in its own theme's accent, which is the whole
+    affordance: you are picking a colour by looking at it, not reading its
+    name. The current one carries a ring rather than being the only bright
+    dot — three dots where two are greyed out reads as two disabled controls.
+
+    `on_change` is what repaints the window; the widget does not reach for the
+    main window itself, so it can be dropped into any header.
+    """
+
+    DOT = 9             # diameter of a dot
+    RING = 4            # clearance around it for the current-theme ring
+    GAP = 8             # between slots
+
+    def __init__(self, on_change=None, parent=None):
+        super().__init__(parent)
+        self._on_change = on_change
+        self._hovered = -1
+        self._span = self.DOT + 2 * self.RING
+        count = len(theme.THEMES)
+        self.setFixedSize(count * self._span + (count - 1) * self.GAP, self._span)
+        self.setMouseTracking(True)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.setAccessibleName("Colour theme")
+        self._describe(-1)
+
+    # ── geometry ──────────────────────────────────────────────────────
+    def _centre(self, index: int) -> int:
+        return self._span // 2 + index * (self._span + self.GAP)
+
+    def _at(self, x: int) -> int:
+        """The dot under `x`, or -1. The whole slot is the target, not the 9px."""
+        for index in range(len(theme.THEMES)):
+            if abs(x - self._centre(index)) <= self._span // 2:
+                return index
+        return -1
+
+    def _describe(self, index: int) -> None:
+        if index < 0:
+            self.setToolTip("Colour theme — " + theme.LABELS[theme.current()])
+        else:
+            self.setToolTip(theme.LABELS[theme.THEMES[index]])
+
+    # ── painting ──────────────────────────────────────────────────────
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        current = theme.current()
+        middle = self.height() / 2
+
+        for index, name in enumerate(theme.THEMES):
+            colour = QColor(theme.accent(name))
+            centre = QPointF(self._centre(index), middle)
+
+            if name == current:
+                ring = QColor(colour)
+                ring.setAlpha(130)
+                painter.setPen(QPen(ring, 1.3))
+                painter.setBrush(Qt.NoBrush)
+                radius = self.DOT / 2 + self.RING - 1.4
+                painter.drawEllipse(centre, radius, radius)
+
+            fill = QColor(colour)
+            if name != current and index != self._hovered:
+                fill.setAlpha(140)
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(fill)
+            painter.drawEllipse(centre, self.DOT / 2, self.DOT / 2)
+
+        if self.hasFocus():
+            outline = QColor(theme.accent())
+            outline.setAlpha(90)
+            painter.setPen(QPen(outline, 1))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(self.rect().adjusted(0, 0, -1, -1), 4, 4)
+
+    # ── interaction ───────────────────────────────────────────────────
+    def _choose(self, index: int) -> None:
+        name = theme.THEMES[index]
+        if name == theme.current():
+            return
+        theme.set_current(name)
+        self._describe(self._hovered)
+        if self._on_change is not None:
+            self._on_change()
+        self.update()
+
+    def mousePressEvent(self, event):
+        index = self._at(int(event.position().x()))
+        if index >= 0:
+            self._choose(index)
+        else:
+            super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):
+        index = self._at(int(event.position().x()))
+        if index != self._hovered:
+            self._hovered = index
+            self._describe(index)
+            self.update()
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = -1
+        self._describe(-1)
+        self.update()
+        super().leaveEvent(event)
+
+    def keyPressEvent(self, event):
+        """Left and right step through the themes, applying as they go.
+
+        Switching is instant and reversible, so there is nothing to confirm —
+        stepping *is* the preview.
+        """
+        step = {Qt.Key_Left: -1, Qt.Key_Right: 1}.get(event.key())
+        if step is None:
+            super().keyPressEvent(event)
+            return
+        here = list(theme.THEMES).index(theme.current())
+        self._choose((here + step) % len(theme.THEMES))

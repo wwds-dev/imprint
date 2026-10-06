@@ -27,6 +27,7 @@ from services.pricing_catalog import (
 )
 from services.registry import Registry
 from services.validator import Validator
+from ui import theme
 from ui.style import (
     ACCENT, ACCENT_WASH, BG, BORDER, ELEVATED, SUNKEN, SURFACE, TEXT,
     TEXT_DIM, TEXT_MUTE,
@@ -371,6 +372,48 @@ def show_settings(app):
     gl.addWidget(daily_input, 2, 1)
     gl.setColumnStretch(1, 1)
     general_page.addWidget(general_card)
+
+    page_intro(
+        general_page,
+        "Appearance",
+        "Imprint comes in two themes. Only the accent, the phosphor you type in "
+        "and the tint of the greys change — status colour means the same thing "
+        "in both, so a destructive action stays red, a paid step stays amber, "
+        "and an informational note stays blue.",
+    )
+    appearance_card = QFrame()
+    appearance_card.setObjectName("SettingsCard")
+    al = QGridLayout(appearance_card)
+    al.setSpacing(14)
+    al.setContentsMargins(18, 18, 18, 18)
+    al.addWidget(QLabel("Theme"), 0, 0)
+    theme_box = QComboBox()
+    theme_box.setObjectName("ThemePick")
+    for key in theme.THEMES:
+        theme_box.addItem(theme.LABELS[key], key)
+    theme_opened_with = theme.current()
+    theme_box.setCurrentIndex(list(theme.THEMES).index(theme_opened_with))
+    al.addWidget(theme_box, 0, 1)
+    al.setColumnStretch(1, 1)
+    general_page.addWidget(appearance_card)
+
+    def preview_theme(index: int) -> None:
+        """Repaint live, so the choice is made by looking rather than guessing.
+
+        This writes the setting immediately — that is what lets the window
+        repaint — so Cancel has to put the old one back.
+        """
+        theme.set_current(theme_box.itemData(index))
+        app.apply_global_style()
+
+    def restore_theme() -> None:
+        if theme.current() != theme_opened_with:
+            theme.set_current(theme_opened_with)
+            app.apply_global_style()
+
+    theme_box.currentIndexChanged.connect(preview_theme)
+    dialog.rejected.connect(restore_theme)
+
     general_page.addStretch()
     tabs.addTab(general_tab, "General")
 
@@ -640,7 +683,7 @@ def show_settings(app):
     projects_layout.addStretch()
     tabs.addTab(projects_tab, "Projects")
 
-    dialog.setStyleSheet(f"""
+    theme.themed(dialog, f"""
         QDialog#SettingsDialog {{ background: {BG}; }}
         QLabel#SettingsTitle {{ color: {TEXT}; font-size: 24px; font-weight: 700; }}
         QLabel#SettingsSubtitle, QLabel#SettingsHelp, QLabel#PricingSummary {{

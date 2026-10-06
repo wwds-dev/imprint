@@ -29,6 +29,7 @@ from agents.social.agent import (
 )
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
 from ui.panels.base import AgentPanel
+from ui import theme
 from ui.style import ACCENT, TEXT_DIM, TEXT_MUTE
 from ui.widgets import FlowLayout, scrollable
 
@@ -967,7 +968,7 @@ class SocialPanel(QWidget):
         keys = {platform.name: platform.key for platform in PLATFORMS}
         rows = []
         for name, ready, note in publishing.status_lines():
-            colour = ACCENT if ready else TEXT_MUTE
+            colour = theme.recolour(ACCENT if ready else TEXT_MUTE)
             label = "ready" if ready else "drafting only"
             guide = publishing.connection_guide(keys.get(name, ""))
             # Onboarding with the permissions up front: a connectable

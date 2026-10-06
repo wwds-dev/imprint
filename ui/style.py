@@ -34,6 +34,7 @@ pure grey next to the emerald reads faintly magenta.
 """
 
 from services.runtime_paths import resource_base
+from ui.theme import palette as _palette
 
 # ── Tokens ───────────────────────────────────────────────────────────────
 # Surfaces, darkest first. Page sits behind cards; inputs sink below cards.
@@ -88,7 +89,7 @@ RADIUS_LG = "12px"
 CHEVRON_DOWN = (resource_base() / "assets" / "dropdown-chevron.svg").as_posix()
 
 
-GLOBAL_STYLESHEET = f"""
+_STYLESHEET_TEMPLATE = """
         QWidget {{
             background-color: {BG};
             color: {TEXT_DIM};
@@ -901,3 +902,27 @@ GLOBAL_STYLESHEET = f"""
             color: {ACCENT};
         }}
 """
+
+
+def _tokens(theme: str | None = None) -> dict[str, str]:
+    """Every name the template needs: the shared ones, then the themed ones.
+
+    Reading them off the module rather than listing them is deliberate — a new
+    token added above is usable in a rule immediately, and cannot be forgotten
+    here.
+    """
+    shared = {
+        name: value for name, value in globals().items()
+        if name.isupper() and isinstance(value, str)
+    }
+    shared.update(_palette(theme))
+    return shared
+
+
+def global_stylesheet(theme: str | None = None) -> str:
+    """The whole sheet under `theme`, defaulting to the saved one.
+
+    Called again on every theme change — ``ImprintApp.apply_global_style``
+    re-sets it on the window and Qt repolishes every child from there.
+    """
+    return _STYLESHEET_TEMPLATE.format(**_tokens(theme))

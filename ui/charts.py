@@ -19,11 +19,18 @@ from PySide6.QtGui import QColor, QFontMetrics, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ui.style import ACCENT_LINE, BORDER, SUNKEN, TEXT, TEXT_MUTE
+from ui.theme import recolour
 
 
 def _qcolor(css: str) -> QColor:
     """The stylesheet constants include CSS rgba() strings, which QColor
-    does not parse — convert those; pass hex/names through."""
+    does not parse — convert those; pass hex/names through.
+
+    Every painted colour in this file comes through here, which is also where
+    the theme is applied: the constants hold the authored green, and a chart is
+    repainted after a theme change like any other widget.
+    """
+    css = recolour(css)
     match = re.fullmatch(
         r"rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)",
         css.strip())
@@ -34,7 +41,6 @@ def _qcolor(css: str) -> QColor:
 
 
 _ROW_HEIGHT = 26
-_SECOND_SERIES = _qcolor(TEXT_MUTE)
 
 
 class BarChart(QWidget):
@@ -112,7 +118,7 @@ class BarChart(QWidget):
                            + (_ROW_HEIGHT - bar_height) / 2)
                 width = bar_span * (abs(value) / peak)
                 color = (_qcolor(ACCENT_LINE) if series_index == 0
-                         else _SECOND_SERIES)
+                         else _qcolor(TEXT_MUTE))
                 if value < 0:
                     # A negative drawn as a filled positive-length bar
                     # reads as a gain; outline-only keeps the magnitude

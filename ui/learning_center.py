@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui import theme
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BG, BORDER, BORDER_STRONG, ELEVATED,
     SURFACE, SUNKEN, TEXT, TEXT_DIM, TEXT_MUTE,
@@ -186,7 +187,7 @@ def show_learning_center(app, resource_dir: Path,
     browser.setOpenLinks(False)
     browser.setOpenExternalLinks(False)
     browser.setSearchPaths([str(base)])
-    browser.document().setDefaultStyleSheet(DOCUMENT_CSS)
+    browser.document().setDefaultStyleSheet(theme.recolour(DOCUMENT_CSS))
     reading_layout.addWidget(browser, 1)
 
     splitter.addWidget(nav)
@@ -212,7 +213,7 @@ def show_learning_center(app, resource_dir: Path,
     footer.addWidget(close_btn)
     outer.addLayout(footer)
 
-    dialog.setStyleSheet(f"""
+    theme.themed(dialog, f"""
         QDialog#LearningCentreDialog {{ background: {BG}; }}
         QFrame#LearnHeader {{ background: {SURFACE}; border: 1px solid {BORDER};
                              border-radius: 12px; }}
@@ -285,7 +286,7 @@ def show_learning_center(app, resource_dir: Path,
         )
         html = _fit_images(html, max(browser.viewport().width(), 780))
         browser.setSearchPaths([str(base)])
-        browser.document().setDefaultStyleSheet(DOCUMENT_CSS)
+        browser.document().setDefaultStyleSheet(theme.recolour(DOCUMENT_CSS))
         browser.setHtml(html)
         if anchor:
             browser.scrollToAnchor(anchor)

@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.forms import SM, XS
+from ui.theme import recolour
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BORDER, ELEVATED, SUNKEN, TEXT,
     TEXT_DIM, TEXT_MUTE, WARNING, WARNING_LINE, WARNING_WASH,
@@ -66,8 +67,13 @@ class ResourceStatusCard(RailCard):
 
     @staticmethod
     def _tone(level: str) -> str:
-        return {"green": ACCENT, "yellow": WARNING, "red": "#f87171"}.get(
-            level, TEXT_DIM)
+        """The colour for one reading, under the current theme.
+
+        Resolved per snapshot rather than once, so a theme change reaches these
+        on the next refresh without the cards being rebuilt.
+        """
+        return recolour({"green": ACCENT, "yellow": WARNING,
+                         "red": "#f87171"}.get(level, TEXT_DIM))
 
     def set_snapshot(self, stats: dict) -> None:
         readings = {

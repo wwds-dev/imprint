@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui import theme
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BG, BORDER, BORDER_STRONG, ELEVATED,
     INFO, INFO_WASH, SURFACE, SUNKEN, TEXT, TEXT_DIM, TEXT_MUTE,
@@ -417,7 +418,7 @@ class LearningCentreDialog(QDialog):
         self.browser.setAccessibleDescription(
             "Read the lesson; links stay inside Imprint unless they are external.")
         self.browser.setSearchPaths([str(self.base), str(self.base / "modules")])
-        self.browser.document().setDefaultStyleSheet(DOCUMENT_CSS)
+        self.browser.document().setDefaultStyleSheet(theme.recolour(DOCUMENT_CSS))
         self.reader_splitter.addWidget(self.browser)
 
         self.outline_panel = QFrame()
@@ -469,7 +470,7 @@ class LearningCentreDialog(QDialog):
         footer.addWidget(close_btn)
         outer.addLayout(footer)
 
-        self.setStyleSheet(f"""
+        theme.themed(self, f"""
             QDialog#LearningCentreDialog {{ background: {BG}; }}
             QFrame#LearnTopBar {{ background: {SURFACE}; border: 1px solid {BORDER};
                 border-radius: 10px; }}
@@ -668,7 +669,7 @@ class LearningCentreDialog(QDialog):
         self.current_raw = raw
         self.browser.setSearchPaths([
             str(path.parent), str(self.base), str(self.base / "modules")])
-        self.browser.document().setDefaultStyleSheet(DOCUMENT_CSS)
+        self.browser.document().setDefaultStyleSheet(theme.recolour(DOCUMENT_CSS))
         self.browser.setHtml(html)
         self.current_page = page
         self.current_anchor = anchor
