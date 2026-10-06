@@ -24,6 +24,10 @@ The rules here:
   so they read on every surface without being redefined per card.
 * **One spacing and radius scale.** 6/8/10/12px radii by element size; padding
   in multiples of 2.
+* **Typed text is phosphor.** Editable fields carry a monospaced face in CRT
+  green. This is the one place neon is allowed, and it is not the accent: it
+  marks *what you entered*, so your own text never reads back as something the
+  app wrote. Read-only panes, text browsers and lists keep ``TEXT``.
 
 Greys are slightly blue rather than neutral (#0d0f12, not #0f0f0f) because a
 pure grey next to the emerald reads faintly magenta.
@@ -64,6 +68,18 @@ WARNING_LINE = "rgba(251, 191, 36, 0.32)"
 INFO        = "#60a5fa"
 INFO_WASH   = "rgba(96, 165, 250, 0.12)"
 INFO_LINE   = "rgba(96, 165, 250, 0.32)"
+
+# Phosphor — the text you type, and nothing else. A terminal face in CRT
+# green, bright enough on SUNKEN to read as lit rather than painted. Kept out
+# of the accent family on purpose: ACCENT says "this is current", PHOSPHOR
+# says "you wrote this".
+MONO_FONT     = "'SF Mono', 'Menlo', 'JetBrains Mono', 'Consolas', monospace"
+PHOSPHOR      = "#00ff41"   # typed glyphs, and the caret that follows them
+PHOSPHOR_LINE = "rgba(0, 255, 65, 0.45)"
+# SUNKEN with a tenth of PHOSPHOR mixed in, flattened to an opaque value: a
+# translucent green here would composite over the *card* behind the field, not
+# over SUNKEN, and the field would come out lighter than the one beside it.
+SUNKEN_LIT    = "#0a2414"   # a focused field, lit from behind
 
 RADIUS    = "8px"
 RADIUS_SM = "6px"
@@ -151,9 +167,6 @@ GLOBAL_STYLESHEET = f"""
             border-radius: {RADIUS_SM};
             padding: 7px 10px;
         }}
-        QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus,
-        QDateEdit:focus,
-        QTimeEdit:focus {{ border: 1px solid {ACCENT_LINE}; }}
 
         QLineEdit {{
             background-color: {SUNKEN};
@@ -167,6 +180,30 @@ GLOBAL_STYLESHEET = f"""
         QLineEdit:focus {{
             border: 1px solid {ACCENT_LINE};
         }}
+
+        /* ── Phosphor ──────────────────────────────────────────────── */
+        /* Text you typed is monospaced and lit; text the app wrote is not.
+           The `:!read-only` guard is the whole of that distinction — a
+           QTextEdit locked for a preview, a log or a transcript falls through
+           to the rules above and keeps TEXT in the UI face, and QTextBrowser
+           is never in scope. Selection inverts, the way a terminal's does.
+           Focus lights the field itself as well as the glyphs, because green
+           text on a dead panel reads as coloured, not as glowing. */
+        QLineEdit:!read-only, QTextEdit:!read-only,
+        QSpinBox, QDoubleSpinBox, QDateTimeEdit, QDateEdit, QTimeEdit {{
+            font-family: {MONO_FONT};
+            color: {PHOSPHOR};
+            selection-background-color: {PHOSPHOR};
+            selection-color: {BG};
+        }}
+        QLineEdit:!read-only:focus, QTextEdit:!read-only:focus,
+        QSpinBox:focus, QDoubleSpinBox:focus, QDateTimeEdit:focus,
+        QDateEdit:focus, QTimeEdit:focus {{
+            background-color: {SUNKEN_LIT};
+            border: 1px solid {PHOSPHOR_LINE};
+        }}
+
+        /* …except when the field is dead, which outranks all of it. */
         QLineEdit:disabled, QTextEdit:disabled {{
             color: {TEXT_MUTE};
             background-color: {BG};
@@ -640,9 +677,13 @@ GLOBAL_STYLESHEET = f"""
             border: 1px solid {BORDER};
             border-radius: {RADIUS};
             padding: 6px 10px;
-            color: {TEXT};
+            font-family: {MONO_FONT};
+            color: {PHOSPHOR};
         }}
-        QWidget#LeftPanel QLineEdit:focus {{ border: 1px solid {ACCENT_LINE}; }}
+        QWidget#LeftPanel QLineEdit:focus {{
+            background-color: {SUNKEN_LIT};
+            border: 1px solid {PHOSPHOR_LINE};
+        }}
         QWidget#LeftPanel QListWidget {{
             background-color: {SUNKEN};
             border: 1px solid {BORDER};
@@ -678,9 +719,13 @@ GLOBAL_STYLESHEET = f"""
             border: 1px solid {BORDER};
             border-radius: {RADIUS_SM};
             padding: 5px 10px;
-            color: {TEXT};
+            font-family: {MONO_FONT};
+            color: {PHOSPHOR};
         }}
-        QGroupBox#RightCard QLineEdit:focus {{ border: 1px solid {ACCENT_LINE}; }}
+        QGroupBox#RightCard QLineEdit:focus {{
+            background-color: {SUNKEN_LIT};
+            border: 1px solid {PHOSPHOR_LINE};
+        }}
         QGroupBox#RightCard QPushButton {{
             background-color: {ELEVATED};
             border: 1px solid {BORDER};

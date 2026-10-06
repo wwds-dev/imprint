@@ -2193,7 +2193,7 @@ imprint/
 │   # domain_lookup.py, email_lookup.py, username_lookup.py, and
 │   # result_normalizer.py (the OSINT lookup layer) stayed with the security half.
 │
-├── tests/                         # ~160 tests — see §15.1
+├── tests/                         # 950 tests — see §15.1
 │   ├── test_agents_scenarios.py   # agent prompt construction
 │   ├── test_cost_and_limits.py    # Validator gates + token/cost maths
 │   ├── test_request_guard.py      # authorize/record/abandon_request
@@ -2238,12 +2238,22 @@ imprint/
 ### 16.1 Tests
 
 ```bash
-QT_QPA_PLATFORM=offscreen python3 -m pytest tests/ -q
+.venv/bin/python -m pytest -q
 ```
 
-~160 tests. `QT_QPA_PLATFORM=offscreen` is required — some tests construct
-the real `GodAI` window. (Down from 219 before the fork's security-agent test
-coverage in `test_agents_scenarios.py` was stripped along with the agents themselves.)
+950 tests in about 95 seconds (2026-10-06). Install the suite's own
+dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
+covers pytest and `pytest-timeout`:
+
+```bash
+uv pip install -r requirements.txt -r requirements-dev.txt
+```
+
+`QT_QPA_PLATFORM=offscreen` is required because some tests construct the real
+`GodAI` window, but no longer needs stating on the command line:
+`tests/conftest.py` sets it before any test module can reach Qt, and redirects
+`services.database.DB_PATH` at a temp directory so no run touches
+`data/imprint.db`.
 
 | File | Covers |
 |------|--------|
@@ -2251,8 +2261,14 @@ coverage in `test_agents_scenarios.py` was stripped along with the agents themse
 | `test_cost_and_limits.py` | `Validator`'s ten rules (agent/tool enabled, provider permissions, per-agent/session/daily budgets, approval) and `UsageTracker` token/cost accounting. Owns these — do not duplicate elsewhere. |
 | `test_request_guard.py` | `authorize_request` / `record_request` / `abandon_request`. Blocked requests open no run; recording without authorising bills nothing; double-record bills once; abandoned requests stay unbilled. |
 | `test_book_pipeline.py` | Chapter detection and offsets, EPUB/DOCX/PDF export, calendar scheduling, KDP CSV summarisation, LLM list parsing, collision-proof asset paths. |
+| `test_audiobook_player.py` | Library scan, resume bookkeeping, playback against a real MP3, and `release()` — the media engine must not outlive the widget. |
 
-Two conventions worth keeping:
+`tests/manual_test_cases.md` sits on top of all of this: the hand pass over the
+eight workspaces, the ten agents and the systems under them, with every case
+marked `FREE` / `PAID` / `PAID-UNIT` so the free pass runs first. It has no
+automated equivalent by design — it covers what a person has to judge.
+
+Three conventions worth keeping:
 
 - **Tests never touch real state.** `test_request_guard.py` fakes the usage
   tracker, chat history and run logger, so no test bills a request or writes into
@@ -2260,9 +2276,21 @@ Two conventions worth keeping:
 - **New tests are mutation-checked.** Break the code the test claims to cover and
   confirm that test fails, then revert. A test that passes against broken code is
   worse than no test.
+- **A run that stops is a failure, not a slow run.** A Qt suite can deadlock
+  rather than fail, and under `-q` that prints nothing at all. `pytest.ini` sets
+  a 300-second per-test timeout using the `thread` method — `signal` cannot
+  interrupt a main thread parked in a C++ mutex, which is the case that actually
+  happens here. A wedge now dies with every thread's stack dumped. It fired on a
+  real one: `agents/audiobook/README.md` records what it was.
 
-There is **no automated UI coverage**. The only check that a panel still
-constructs is building the window offscreen:
+UI coverage is **behavioural, not visual** — no screenshot comparisons.
+`test_panel_layout.py` asserts the property that actually broke, that no two
+sibling widgets in a panel may occupy the same pixels, across every agent panel
+at the window's minimum size; it also covers the header's shedding order and
+the **More ▾** overflow. `test_agent_panel.py` and `test_status_cards.py` cover
+control state and the rail cards. What none of them can judge is whether a
+result is any good — that is what `tests/manual_test_cases.md` is for. To check
+by hand that a panel still constructs, build the window offscreen:
 
 ```bash
 QT_QPA_PLATFORM=offscreen python3 -c "
@@ -2436,21 +2464,66 @@ workspace `AGENTS.md`.
 
 ### Environment Variables (API Keys)
 
+Copy `.env.example` to `.env` and paste keys into it. **Where `.env` has to
+live depends on how the app is running**, because both read it from the same
+place the app keeps its data:
+
+| Running from | `.env` goes in |
+|---|---|
+| this checkout (`python main.py`, and the live-launcher `.app`) | the repository root, beside `main.py` |
+| a frozen build | `~/Library/Application Support/Imprint/` |
+
+`main.py` calls `load_dotenv()` at startup, so a key pasted into `.env` is
+picked up on the next launch — nothing needs to be exported in a shell first. A
+value already in the environment wins over the file. `.env` is in
+`.gitignore`; `.env.example` never ships a value for a secret, and a test
+enforces both.
+
+**Model providers.** Every one is optional; the app runs on Ollama alone.
+
 | Variable | Provider | Where to get it |
 |----------|---------|-----------------|
 | `ANTHROPIC_API_KEY` | Anthropic (Claude) | console.anthropic.com → API Keys |
-| `OPENAI_API_KEY` | OpenAI | platform.openai.com → API Keys |
+| `OPENAI_API_KEY` | OpenAI — also the TTS backend Booth narrates with, so audiobooks need this one specifically | platform.openai.com → API Keys |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Gemini, and Veo video | aistudio.google.com → Get API key |
 | `DEEPSEEK_API_KEY` | DeepSeek | platform.deepseek.com → API Keys |
-| `GOOGLE_API_KEY` | Gemini | console.cloud.google.com |
-| `DASHSCOPE_API_KEY` | Qwen / Wan | bailian.console.alibabacloud.com |
+| `KIMI_API_KEY` | Kimi (Moonshot) | platform.moonshot.ai → API Keys |
+| `DASHSCOPE_API_KEY` | Qwen chat, and Wan video | bailian.console.alibabacloud.com |
+| `HF_API_KEY_ID` + `HF_API_KEY_SECRET` | Higgsfield — a key **pair**, not a bearer token | cloud.higgsfield.ai |
 
-Wan video optionally uses `DASHSCOPE_VIDEO_BASE_URL` for a workspace-scoped
-regional `/api/v1` endpoint. This is separate from `DASHSCOPE_BASE_URL`, which
-points at the OpenAI-compatible chat endpoint.
+Optional overrides, all with working defaults: `DASHSCOPE_BASE_URL` (the
+OpenAI-compatible chat endpoint — set it for a mainland-China account or a
+workspace-scoped regional host), `DASHSCOPE_VIDEO_BASE_URL` (Wan's separate
+asynchronous `/api/v1` endpoint), `HIGGSFIELD_TEXT_VIDEO_ENDPOINT` and
+`HIGGSFIELD_IMAGE_VIDEO_ENDPOINT` (default to Seedance 1.0 Lite), and
+`HIGGSFIELD_BASE_URL`. The Higgsfield pair is also accepted as
+`HIGGSFIELD_API_KEY_ID` / `HIGGSFIELD_API_KEY_SECRET`.
 
-Keys are stored in `~/.zshrc` (or a `.env` file in the project root) and loaded at startup. Never commit them to version control.
+`ELEVENLABS_API_KEY` (elevenlabs.io → API Keys) is optional and used by one
+thing: the narration in Press's Shorts tab. Without it that tab falls back to a
+mock voice and the voice list reads "(ElevenLabs key not set)". Booth's
+audiobook narration is OpenAI TTS and does not touch it.
 
-Keys must be set in the shell environment before launching the application. They are never stored in files or the database.
+**Herald publishing.** Only needed to post from the Social workspace; drafting
+and scheduling need none of it. `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`,
+`REDDIT_USERNAME`, `REDDIT_PASSWORD` (a script-type app at
+reddit.com/prefs/apps — note that this flow keeps the account password in the
+file) and `PINTEREST_ACCESS_TOKEN` (a business account's token with
+`pins:write` and `boards:read`, from developers.pinterest.com). YouTube takes no
+key here: it needs a Google Cloud Desktop OAuth `client_secret*.json` in
+vidforge's secrets folder. The Accounts tab states what each connection grants
+before you set it up and names whatever is missing.
+
+To see what is actually working — set is not the same as accepted, since a typo,
+a revoked key and a key for the wrong account all look alike until a provider
+is asked:
+
+```bash
+.venv/bin/python scripts/check_keys.py
+```
+
+It lists each provider's models, which is a metadata call that bills nothing,
+and never prints a key or any part of one.
 
 ### config/commands.json
 

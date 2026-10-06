@@ -670,11 +670,21 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
     column in SCHEMA never reaches one. Each entry is applied only when absent.
     """
     wanted = {
+        # One entry per table. This was two for a while, and a duplicate key in
+        # a dict literal is not an error — the later one simply replaced the
+        # earlier, so the four settlement columns below were dead code and
+        # never reached a database created before the teaser-resume feature.
+        # `resume_pending_teasers` then failed on every launch with "no such
+        # column: spend_state", which `_note_failure` caught, which left paid
+        # Higgsfield renders stranded rather than resumed. The suite missed it
+        # because every test builds its database from SCHEMA, where the columns
+        # are already present — the migration path was the untested one.
         "creator_video_jobs": [
             ("spend_state", "TEXT NOT NULL DEFAULT ''"),
             ("flat_cost_eur", "REAL NOT NULL DEFAULT 0.0"),
             ("output_path", "TEXT NOT NULL DEFAULT ''"),
             ("run_id", "TEXT NOT NULL DEFAULT ''"),
+            ("project_id", "TEXT REFERENCES projects(id) ON DELETE SET NULL"),
         ],
         "projects": [
             ("kind", "TEXT NOT NULL DEFAULT ''"),
@@ -707,9 +717,6 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
             ("clicks", "INTEGER NOT NULL DEFAULT 0"),
             ("metric_source", "TEXT NOT NULL DEFAULT ''"),
             ("metric_window", "TEXT NOT NULL DEFAULT ''"),
-        ],
-        "creator_video_jobs": [
-            ("project_id", "TEXT REFERENCES projects(id) ON DELETE SET NULL"),
         ],
     }
     for table, columns in wanted.items():
