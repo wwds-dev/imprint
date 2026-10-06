@@ -374,3 +374,42 @@ def test_cleanup_sweeps_partial_chunks_too(tmp_path):
     converter.cleanup_after_success(temp_dir, manifest_path)
 
     assert not temp_dir.exists() and not manifest_path.exists()
+
+
+def test_a_resume_sweeps_the_partial_a_stop_left_behind(tmp_path):
+    """A kill skips the cleanup a caught failure gets, so the partial stays on
+    disk; the next run should not carry it around."""
+    partial = tmp_path / ("chunk_3.mp3" + converter.CHUNK_PARTIAL_SUFFIX)
+    partial.write_bytes(b"x")
+    manifest = converter.build_manifest("Book", tmp_path / "b.epub", ["one"])
+
+    converter.sync_manifest_with_files(manifest, tmp_path)
+
+    assert not partial.exists()
+
+
+def test_a_manifest_from_before_partial_files_trusts_only_recorded_chunks(tmp_path):
+    """Before partial files, a stop could leave a cut-short chunk under its
+    final name. Such a manifest recorded a chunk as done only after its
+    stream finished, so a present chunk it never recorded is the suspect one
+    and is redone; the recorded ones stay."""
+    (tmp_path / "chunk_0.mp3").write_bytes(b"complete")
+    (tmp_path / "chunk_1.mp3").write_bytes(b"cut short")
+    manifest = {"chunks": [
+        {"index": 0, "filename": "chunk_0.mp3", "status": "done"},
+        {"index": 1, "filename": "chunk_1.mp3", "status": "pending"},
+    ]}                                                  # no "format": the old layout
+
+    converter.sync_manifest_with_files(manifest, tmp_path)
+
+    assert [c["status"] for c in manifest["chunks"]] == ["done", "pending"]
+    assert (tmp_path / "chunk_0.mp3").exists()
+    assert not (tmp_path / "chunk_1.mp3").exists()
+    assert manifest["format"] == converter.MANIFEST_FORMAT
+
+    # Under the new layout a present chunk is complete even if the manifest,
+    # saved every few chunks, had not recorded it yet.
+    (tmp_path / "chunk_1.mp3").write_bytes(b"complete by rename")
+    manifest["chunks"][1]["status"] = "pending"
+    converter.sync_manifest_with_files(manifest, tmp_path)
+    assert manifest["chunks"][1]["status"] == "done"
