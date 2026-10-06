@@ -204,6 +204,42 @@ def shutil_which(name):
     return shutil.which(name)
 
 
+@pytest.fixture
+def make_player(app, monkeypatch, library):
+    """Build players through this, not directly, so they are released.
+
+    Every player here used to be constructed and dropped on the floor. A
+    QMediaPlayer with a source open holds three FFmpeg threads
+    (AudioRenderer, StreamDecoder, Demuxer), and those survived the test, the
+    module and the fixture teardown -- they only died with the process. Later
+    in a full run a `QComboBox.setStyle()` inside `ui.widgets.polish_combo`
+    deadlocked in `QObject::disconnect` against them: one run in three sat for
+    25 minutes on four seconds of CPU, and under `pytest -q` that is
+    indistinguishable from a slow run.
+
+    `release()` saves the playhead, stops the timers and clears the source,
+    which is what actually retires those threads. The event loop is pumped
+    afterwards so `deleteLater()` is honoured here rather than whenever the
+    next loop happens to spin.
+    """
+    import agents.audiobook.audio_player as player_module
+    monkeypatch.setattr(player_module, "save_position", library.save_position)
+
+    built = []
+
+    def build():
+        player = player_module.AudiobookPlayer()
+        built.append(player)
+        return player
+
+    yield build
+
+    for player in built:
+        player.release()
+        player.deleteLater()
+    _wait(50)
+
+
 def _wait(ms):
     from PySide6.QtCore import QEventLoop, QTimer
     loop = QEventLoop()
@@ -211,14 +247,11 @@ def _wait(ms):
     loop.exec()
 
 
-def test_stopping_does_not_overwrite_the_saved_position(app, audio_file,
-                                                        library, monkeypatch):
+def test_stopping_does_not_overwrite_the_saved_position(make_player, audio_file,
+                                                        library):
     """The bug that defeated the whole feature: stop() saved the real position,
     then QMediaPlayer reset to 0 and the state change saved over it."""
-    import agents.audiobook.audio_player as player_module
-    monkeypatch.setattr(player_module, "save_position", library.save_position)
-
-    player = player_module.AudiobookPlayer()
+    player = make_player()
     player.load(audio_file, title="T", resume_ms=0)
     player.play()
     _wait(2500)
@@ -228,14 +261,11 @@ def test_stopping_does_not_overwrite_the_saved_position(app, audio_file,
         "position was overwritten with 0 on stop"
 
 
-def test_a_reopened_player_resumes_where_it_stopped(app, audio_file,
-                                                    library, monkeypatch):
+def test_a_reopened_player_resumes_where_it_stopped(make_player, audio_file,
+                                                    library):
     """The second bug: the seek was applied before the media was seekable, so
     it looked applied and played from the beginning anyway."""
-    import agents.audiobook.audio_player as player_module
-    monkeypatch.setattr(player_module, "save_position", library.save_position)
-
-    first = player_module.AudiobookPlayer()
+    first = make_player()
     first.load(audio_file, title="T", resume_ms=0)
     first.play()
     _wait(2500)
@@ -243,7 +273,7 @@ def test_a_reopened_player_resumes_where_it_stopped(app, audio_file,
     saved = library.load_position(audio_file)
     assert saved > 500
 
-    second = player_module.AudiobookPlayer()
+    second = make_player()
     second.load(audio_file, title="T", resume_ms=saved)
     second.play()
     _wait(1500)
@@ -251,22 +281,18 @@ def test_a_reopened_player_resumes_where_it_stopped(app, audio_file,
     second.stop()
 
 
-def test_saving_with_nothing_loaded_is_harmless(app, library, monkeypatch):
-    import agents.audiobook.audio_player as player_module
-    monkeypatch.setattr(player_module, "save_position", library.save_position)
-    player_module.AudiobookPlayer().save_now()
+def test_saving_with_nothing_loaded_is_harmless(make_player):
+    make_player().save_now()
 
 
-def test_controls_are_disabled_until_something_is_loaded(app):
-    from agents.audiobook.audio_player import AudiobookPlayer
-    assert not AudiobookPlayer().play_btn.isEnabled()
+def test_controls_are_disabled_until_something_is_loaded(make_player):
+    assert not make_player().play_btn.isEnabled()
 
 
-def test_player_has_sleep_and_keyboard_transport_controls(app, library, audio_file):
+def test_player_has_sleep_and_keyboard_transport_controls(make_player, audio_file):
     from PySide6.QtGui import QShortcut
-    from agents.audiobook.audio_player import AudiobookPlayer
 
-    player = AudiobookPlayer()
+    player = make_player()
     player.load(audio_file)
     assert player.chapters_btn.isEnabled()
     assert player.mark_btn.isEnabled()
@@ -276,3 +302,67 @@ def test_player_has_sleep_and_keyboard_transport_controls(app, library, audio_fi
     player._on_sleep_expired()
     assert player.sleep_box.currentText() == "Off"
     assert not player._sleep_timer.isActive()
+
+
+# ── Release: the media engine must not outlive the widget ────────────────────
+# Added 2026-10-06 after a full-suite wedge. The tests above leaked six
+# players; these pin the method that stops them doing it, and the shutdown
+# path that calls it in the real app.
+
+def test_release_retires_the_source_and_the_timers(make_player, audio_file):
+    """A player with a source open holds the FFmpeg backend's threads. Clearing
+    the source is what retires them, so release() has to do that and not just
+    stop playback."""
+    from PySide6.QtMultimedia import QMediaPlayer
+
+    player = make_player()
+    player.load(audio_file, title="T", resume_ms=0)
+    player.play()
+    _wait(800)
+    assert player._player.source().toString()          # something is loaded
+
+    player.release()
+
+    assert player._player.source().isEmpty(), "source still set after release"
+    assert player._player.audioOutput() is None
+    assert not player._save_timer.isActive()
+    assert not player._sleep_timer.isActive()
+    assert player._player.playbackState() != QMediaPlayer.PlayingState
+
+
+def test_release_saves_the_playhead_before_tearing_down(make_player, audio_file,
+                                                        library):
+    """Releasing must not cost the listener their position — otherwise closing
+    the app would be the one way to lose it."""
+    player = make_player()
+    player.load(audio_file, title="T", resume_ms=0)
+    player.play()
+    _wait(2500)
+    player.release()
+    assert library.load_position(audio_file) > 500
+
+
+def test_release_is_idempotent(make_player, audio_file):
+    """The fixture releases every player, and closeEvent releases the panel's.
+    A double release is the normal case, not an error."""
+    player = make_player()
+    player.load(audio_file, title="T", resume_ms=0)
+    player.release()
+    player.release()
+
+
+def test_releasing_a_player_that_never_loaded_is_harmless(make_player):
+    make_player().release()
+
+
+def test_app_shutdown_releases_the_audiobook_player(monkeypatch):
+    """closeEvent sweeps every QThread worker but the player's threads are not
+    QThreads, so they were never in that sweep. Assert the call is wired rather
+    than building the whole window: this pins the contract that the shutdown
+    path owns the media engine."""
+    import inspect
+    import main
+
+    source = inspect.getsource(main.GodAI.closeEvent)
+    assert "player.release()" in source, \
+        "closeEvent no longer releases the audiobook player"

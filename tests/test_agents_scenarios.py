@@ -1,9 +1,9 @@
 """
-Sentinel AI — Agent Scenario Tests
-===================================
+Imprint — Agent Scenario Tests
+==============================
 Type: Functional / Scenario-based Tests  (also called "Use Case Tests")
 
-These tests verify that every agent:
+These tests verify that an agent:
   1. Produces a correctly structured message list for the LLM.
   2. Injects the right system prompt for its domain.
   3. Embeds every piece of user-supplied input into the user message.
@@ -12,6 +12,19 @@ These tests verify that every agent:
 They are NOT unit tests of individual helper lines, and they are NOT
 end-to-end tests that call a live LLM.  The sweet spot is: "given this
 realistic scenario, does the agent behave exactly as designed?"
+
+Sections are in `agents.catalog` order, and each one names the codename the
+app shows.  Four agents build their prompts under their own, larger contracts
+and are covered in their own modules rather than duplicated here:
+
+  Herald  (social)   -> tests/test_social.py
+  Muse    (creator)  -> tests/test_creator_agent.py, tests/test_creator_v2.py
+  Reel    (video)    -> no agent class; scripts come from vidforge
+                        (tests/test_media_generation.py, test_video_jobs.py)
+  Stamp   (fiverr)   -> order state in tests/test_fiverr_orders.py; its three
+                        prompt formats are below
+
+The hand-test pass that sits on top of these is tests/manual_test_cases.md.
 
 Run with:  pytest tests/test_agents_scenarios.py -v
 """
@@ -26,10 +39,11 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from agents.router             import RouterAgent
 from agents.chat               import ChatAgent
 from agents.author             import AuthorAgent
-from agents.fiverr             import FiverrAgent
+from agents.manuscript         import ManuscriptAgent
+from agents.audiobook          import AudiobookConnector
 from agents.music              import MusicAgent
 from agents.webdesign          import WebdesignAgent
-from agents.audiobook          import AudiobookConnector
+from agents.fiverr             import FiverrAgent
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -56,7 +70,7 @@ def _user(msgs):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. RouterAgent
+# 1. RouterAgent — the Intent Router
 # Scenario: classify representative creative work, plus the safe fallback
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -170,7 +184,7 @@ class TestRouterAgent:
             "open Quill and write a social post") == "author"
 
 
-# 3. ChatAgent
+# 2. ChatAgent — Chat
 # Scenario: pass a multi-line, conversational prompt
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -198,7 +212,7 @@ class TestChatAgent:
         assert _system(msgs) is None
 
 
-# 8. AuthorAgent
+# 3. AuthorAgent — Quill
 # Scenario: draft prose  |  publish query letter  |  marketing copy
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -252,7 +266,143 @@ class TestAuthorAgent:
         assert "marketing" in sys.lower() or "copy" in sys.lower() or "launch" in sys.lower()
 
 
-# 10. FiverrAgent
+# 4. ManuscriptAgent — Press
+# Scenario: ask a grounded sales question  |  parse PublishDrive  |  parse KDP
+#           |  pull verbatim quotes  |  caption them per platform
+#
+# Added 2026-10-05.  Press shipped with five prompt builders and no test of any
+# of them, which this file's own docstring said it covered.  The two that matter
+# most are the ones where a loose prompt turns into a false number: the grounded
+# Q&A (its data is injected, so it must be told not to fabricate) and the quote
+# extractor (a paraphrase would publish words the author never wrote).
+# ─────────────────────────────────────────────────────────────────────────────
+
+class TestManuscriptAgent:
+    agent = ManuscriptAgent()
+
+    ASK = "What did I make on Amazon.de last month?"
+    CONTEXT = '{"by_marketplace": [{"marketplace": "Amazon.de", "royalty": 9.10}]}'
+
+    def test_ask_message_structure(self):
+        msgs = self.agent.build_messages(self.ASK)
+        assert _roles(msgs) == ["system", "user"]
+
+    def test_the_question_reaches_the_user_message_unchanged(self):
+        msgs = self.agent.build_messages(self.ASK)
+        assert _user(msgs) == self.ASK
+
+    def test_injected_data_travels_in_the_system_message(self):
+        """The panel reads the database and hands the rows over; the model must
+        answer from them rather than from the question alone."""
+        msgs = self.agent.build_messages(self.ASK, self.CONTEXT)
+        assert "Amazon.de" in _system(msgs)
+        assert self.CONTEXT not in _user(msgs)
+
+    def test_no_context_leaves_the_system_prompt_alone(self):
+        plain = _system(self.agent.build_messages(self.ASK))
+        with_data = _system(self.agent.build_messages(self.ASK, self.CONTEXT))
+        assert plain != with_data
+        assert with_data.startswith(plain)
+
+    def test_the_grounded_prompt_refuses_to_invent_figures(self):
+        sys = _system(self.agent.build_messages(self.ASK, self.CONTEXT))
+        assert "Do not fabricate figures." in sys
+
+    def test_missing_or_stale_data_must_be_declared(self):
+        """A publishing number the user acts on has to say when it is unknown."""
+        sys = _system(self.agent.build_messages(self.ASK))
+        assert "missing or stale" in sys
+
+    # ── The two parsers: JSON in, strict JSON out, no prose ──────────────────
+
+    def test_publishdrive_parse_asks_for_the_agreed_keys(self):
+        raw = '{"sales": [{"store": "Kobo", "units": 3}]}'
+        msgs = self.agent.build_publishdrive_parse_messages(raw)
+        assert _roles(msgs) == ["system", "user"]
+        assert _user(msgs) == raw
+        sys = _system(msgs)
+        for key in ("total_units", "total_revenue_usd", "by_platform",
+                    "by_country", "pending_stores", "rejected_stores",
+                    "period"):
+            assert key in sys
+        assert "only valid JSON, no prose" in sys
+
+    def test_kdp_parse_asks_for_the_agreed_keys(self):
+        rows = '[{"Marketplace": "Amazon.com", "Units Sold": 10}]'
+        msgs = self.agent.build_kdp_parse_messages(rows)
+        assert _user(msgs) == rows
+        sys = _system(msgs)
+        for key in ("total_units_sold", "total_royalties_usd",
+                    "by_marketplace", "kenp_pages_read",
+                    "period_start", "period_end"):
+            assert key in sys
+        assert "only valid JSON, no prose" in sys
+
+    def test_the_two_parsers_do_not_share_a_prompt(self):
+        """They return different key sets; one prompt for both would make a KDP
+        summary claim PublishDrive's shape."""
+        publishdrive = _system(self.agent.build_publishdrive_parse_messages("{}"))
+        kdp = _system(self.agent.build_kdp_parse_messages("[]"))
+        assert publishdrive != kdp
+
+    # ── Quote extraction: verbatim is the whole contract ─────────────────────
+
+    MANUSCRIPT = (
+        "She had spent eleven years learning to be useful and none at all "
+        "learning to be happy. The harbour was empty by then.")
+
+    def test_quote_suggestions_carry_the_manuscript_and_the_count(self):
+        msgs = self.agent.build_quote_suggestions_messages(self.MANUSCRIPT, count=4)
+        assert _roles(msgs) == ["system", "user"]
+        user = _user(msgs)
+        assert "4" in user
+        assert self.MANUSCRIPT in user
+
+    def test_quote_count_defaults_to_ten(self):
+        user = _user(self.agent.build_quote_suggestions_messages(self.MANUSCRIPT))
+        assert "10" in user
+
+    def test_quotes_must_be_verbatim_substrings(self):
+        """Press publishes these lines under the author's name. A paraphrase
+        would attribute words to them that are not in the book."""
+        sys = _system(self.agent.build_quote_suggestions_messages(self.MANUSCRIPT))
+        assert "verbatim substring" in sys
+        assert "do not paraphrase" in sys.lower()
+
+    def test_quotes_must_stand_alone_and_be_short(self):
+        sys = _system(self.agent.build_quote_suggestions_messages(self.MANUSCRIPT))
+        assert "zero context" in sys
+        assert "6-20 words" in sys
+
+    def test_quote_suggestions_return_bare_json(self):
+        sys = _system(self.agent.build_quote_suggestions_messages(self.MANUSCRIPT))
+        assert "JSON array of strings" in sys
+        assert "no markdown fences" in sys
+
+    # ── Calendar captions: one per item, in the platform's voice ─────────────
+
+    ITEMS = ('[{"quote": "The harbour was empty by then.", '
+             '"platform": "pinterest"}]')
+
+    def test_calendar_captions_pass_the_items_through(self):
+        msgs = self.agent.build_calendar_caption_messages(self.ITEMS)
+        assert _roles(msgs) == ["system", "user"]
+        assert _user(msgs) == self.ITEMS
+
+    def test_each_supported_platform_gets_its_own_voice(self):
+        sys = _system(self.agent.build_calendar_caption_messages(self.ITEMS))
+        for platform in ("tiktok", "instagram", "pinterest"):
+            assert platform in sys
+        # Pinterest behaves like a search engine, so hashtags are wrong there —
+        # the one per-platform rule that is easy to lose in a rewrite.
+        assert "no hashtags" in sys
+
+    def test_captions_come_back_one_per_item_in_order(self):
+        sys = _system(self.agent.build_calendar_caption_messages(self.ITEMS))
+        assert "same order and length as the input" in sys
+
+
+# 5. FiverrAgent — Stamp
 # Scenario: delivery message  |  gig description  |  GPT Image logo prompt
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -305,7 +455,7 @@ class TestFiverrAgent:
         assert "NovaBrew Coffee" in _user(msgs)
 
 
-# 15. MusicAgent
+# 6. MusicAgent — Label
 # Scenario: full Spotify artist setup for an indie electronic artist
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -348,7 +498,7 @@ class TestMusicAgent:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 16. WebdesignAgent
+# 7. WebdesignAgent — Sitebuilder
 # Scenario: SaaS landing page with hero, features, pricing, CTA
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -388,7 +538,7 @@ class TestWebdesignAgent:
         assert "jQuery" in sys or "vanilla" in sys.lower()
 
 
-# 18. AudiobookConnector
+# 8. AudiobookConnector — Booth
 # Scenario A: full valid config  |  B: minimal valid  |  C/D: missing required fields
 # ─────────────────────────────────────────────────────────────────────────────
 

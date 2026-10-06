@@ -588,7 +588,20 @@ class TestLocalFallbackOffer:
 
     The guard never silently re-routes: it flips the agent's provider box
     and still returns False, so the user re-sends deliberately on ollama.
+
+    Every test here stubs the Ollama daemon. The offer asks it which models
+    are actually pulled, so without the stub these tests would pass or fail
+    depending on whether the developer happens to be running ollama — and
+    would quietly stop covering the offer at all on a machine without it.
     """
+
+    INSTALLED = ["llama3.1:8b", "deepseek-r1:8b"]
+
+    @pytest.fixture(autouse=True)
+    def _daemon(self, win, monkeypatch):
+        """A daemon with two models pulled, unless a test says otherwise."""
+        monkeypatch.setattr(win.ollama, "list_models",
+                            lambda: list(self.INSTALLED))
 
     def _cap_budget(self, win):
         win.session_budget_eur = 0.01
@@ -699,3 +712,123 @@ class TestLocalFallbackOffer:
         assert not win.authorize_request(
             "manuscript", "anthropic", "claude-sonnet-4-6", "a blurb")
         assert asked == []
+
+    # ── The offered model has to be one that is actually pulled ─────────────
+    # Added 2026-10-06. OllamaClient.KNOWN_MODELS exists to populate a dropdown
+    # when the daemon is unreachable; it is a list of names, not a claim that
+    # any are installed, and its first entry is a 21 GB Muse Glimmer build.
+    # The offer used to take model_list_cache["ollama"] or that list, so an
+    # offer made before anything had fetched the live list switched the agent
+    # to a model the user did not have: "it runs on this machine and costs
+    # nothing" became model-not-found on the next Send.
+
+    def test_the_offered_model_is_one_the_daemon_reports(self, win, monkeypatch):
+        from PySide6.QtWidgets import QMessageBox
+        from services.ollama_client import OllamaClient
+        self._cap_budget(win)
+        # The state that produced the bug: nothing has cached a live list, so
+        # the old code reached for KNOWN_MODELS.
+        win.model_list_cache.pop("ollama", None)
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: None))
+
+        assert not win.authorize_request(
+            "author", "anthropic", "claude-sonnet-4-6", "write a chapter")
+
+        chosen = win.author_panel.author_model_box.currentText()
+        assert chosen in self.INSTALLED, f"offered {chosen}, which is not pulled"
+        assert chosen not in OllamaClient.KNOWN_MODELS or chosen in self.INSTALLED
+
+    def test_a_stale_cache_does_not_decide_the_model(self, win, monkeypatch):
+        """The cache is seeded from whatever a panel last fetched, including the
+        offline fallback names. The daemon is the authority."""
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+        win.model_list_cache["ollama"] = ["muse-glimmer:30b-mlx"]
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: None))
+
+        assert not win.authorize_request(
+            "author", "anthropic", "claude-sonnet-4-6", "write a chapter")
+
+        assert win.author_panel.author_model_box.currentText() in self.INSTALLED
+
+    def test_the_dialog_names_the_model_it_will_switch_to(self, win, monkeypatch):
+        """"The local model" is not a thing the user can check; a name is."""
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+        asked = []
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: asked.append(a)
+                                         or QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: None))
+
+        win.authorize_request("author", "anthropic", "claude-sonnet-4-6",
+                              "write a chapter")
+
+        assert asked and self.INSTALLED[0] in asked[-1][2]
+
+    def test_no_model_pulled_means_no_offer(self, win, monkeypatch):
+        """Offering a free local route that does not exist is worse than the
+        plain refusal: the user accepts, re-sends, and fails."""
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+        monkeypatch.setattr(win.ollama, "list_models", lambda: [])
+        asked, warned = [], []
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: asked.append(a)
+                                         or QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: warned.append(a)))
+
+        assert not win.authorize_request(
+            "author", "anthropic", "claude-sonnet-4-6", "write a chapter")
+
+        assert asked == []
+        assert warned, "the block message has to stand in place of the offer"
+
+    def test_an_unreachable_daemon_means_no_offer(self, win, monkeypatch):
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+
+        def dead():
+            raise OSError("connection refused")
+
+        monkeypatch.setattr(win.ollama, "list_models", dead)
+        asked, warned = [], []
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: asked.append(a)
+                                         or QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: warned.append(a)))
+
+        assert not win.authorize_request(
+            "author", "anthropic", "claude-sonnet-4-6", "write a chapter")
+
+        assert asked == []
+        assert warned
+
+    def test_the_model_box_never_keeps_a_cloud_model_under_ollama(
+            self, win, monkeypatch):
+        """Provider ollama with a cloud model still selected reads as a free
+        route and is not one. If the box has not been repopulated yet, the
+        offered model is added to it."""
+        from PySide6.QtWidgets import QMessageBox
+        self._cap_budget(win)
+        monkeypatch.setattr(win.ollama, "list_models",
+                            lambda: ["qwen2.5:7b"])        # not in the box
+        monkeypatch.setattr(QMessageBox, "question",
+                            staticmethod(lambda *a, **k: QMessageBox.Yes))
+        monkeypatch.setattr(QMessageBox, "warning",
+                            staticmethod(lambda *a, **k: None))
+
+        win.authorize_request("author", "anthropic", "claude-sonnet-4-6",
+                              "write a chapter")
+
+        box = win.author_panel.author_model_box
+        assert box.currentText() == "qwen2.5:7b"

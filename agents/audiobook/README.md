@@ -45,6 +45,16 @@ folder by default; **Current Project** shows only linked audiobooks.
   once played past 99% rather than parked at the last second;
   `embedded_chapters()` (via `ffprobe`), `saved_marks()`, `save_mark()` and
   `delete_mark()` back the Chapters & marks menu.
+  `release()` (2026-10-06) saves the playhead, stops both timers, clears the
+  source and drops the audio output. `stop()` ends playback but leaves the
+  source set, and a `QMediaPlayer` holding a source keeps the FFmpeg backend's
+  demuxer, decoder and renderer threads open — threads that are not `QThread`
+  workers, so `GodAI.closeEvent`'s shutdown sweep never saw them. It now calls
+  `release()` there. The same leak in `tests/test_audiobook_player.py` (six
+  players, none released) wedged a full suite run for 25 minutes: a later
+  `QComboBox.setStyle()` deadlocked in `QObject::disconnect` against the live
+  audio threads. The tests build players through a `make_player` fixture that
+  releases them, and four tests pin the method itself.
 - `recommendations.py` — exports `RECOMMENDATION_PROFILE`, an `AgentProfile`
   (from `services.recommendations`) describing what this agent needs from an
   AI provider/model: tagged `narration`, `longform`, `reliability`, weighted

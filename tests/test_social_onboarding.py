@@ -92,3 +92,21 @@ def test_reddit_token_requests_only_the_submit_scope(monkeypatch):
     monkeypatch.setattr(requests, "post", fake_post)
     assert publishing.PUBLISHERS["reddit"]._token() == "tok"
     assert captured["data"].get("scope") == "submit"
+
+
+def test_env_example_lists_every_credential_a_publisher_needs():
+    """The in-app guide named these correctly while `.env.example` listed only
+    the model providers — so the one file a fresh checkout copies was the one
+    place a publishing credential could not be found. Keep them in step: this
+    reads the requirement off the publishers rather than a second hardcoded
+    list, so adding a publisher fails here until its keys are in the template.
+    """
+    from pathlib import Path
+
+    template = (Path(__file__).resolve().parents[1] / ".env.example"
+                ).read_text(encoding="utf-8")
+    required = {name for publisher in publishing.PUBLISHERS.values()
+                for name in publisher.required_env}
+    missing = sorted(name for name in required
+                     if f"\n{name}=" not in f"\n{template}")
+    assert not missing, f".env.example does not list: {', '.join(missing)}"

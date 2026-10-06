@@ -1,0 +1,8 @@
+# Test-only dependencies. `requirements.txt` named none at all, so a fresh
+# clone installed the app and then could not run its own suite — pytest was in
+# the venv by hand on the one machine that had it.
+#
+#   uv pip install -r requirements.txt -r requirements-dev.txt
+
+pytest                 # the suite itself
+pytest-timeout         # see pytest.ini: a deadlocked Qt run must fail, not hang

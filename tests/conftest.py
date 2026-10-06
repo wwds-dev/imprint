@@ -67,3 +67,40 @@ _database.DB_PATH = Path(tempfile.mkdtemp(prefix="imprint-tests-")) / "imprint.d
 # The app runs init_db() at startup; tests that query without building the
 # window were leaning on the dev database's schema being there already.
 _database.init_db()
+
+# ── The developer's .env must not reach the suite ────────────────────────────
+# `main.py` calls load_dotenv() at import, and most modules here import main,
+# so every value in a local .env became part of the test environment. That is
+# not hypothetical: creating a .env from .env.example — whose only non-blank
+# entries are two Higgsfield endpoint defaults — immediately failed two tests
+# in test_higgsfield_client.py that assert the built-in default endpoint.
+#
+# The worse case is the one that has not happened yet. A suite that sees a live
+# ANTHROPIC_API_KEY or HF_API_KEY_ID is a suite where one unmocked call spends
+# real money, and the guard tests in test_request_guard.py exist precisely
+# because that path is easy to get wrong.
+#
+# So: clear them here, before any test module imports anything. A test that
+# wants a credential sets it with monkeypatch, which is already the convention
+# in every module that needs one.
+_CREDENTIAL_ENV = (
+    "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY",
+    "DEEPSEEK_API_KEY", "KIMI_API_KEY", "DASHSCOPE_API_KEY",
+    "DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_BASE_URL",
+    "HF_API_KEY_ID", "HF_API_KEY_SECRET",
+    "HIGGSFIELD_API_KEY_ID", "HIGGSFIELD_API_KEY_SECRET",
+    "HIGGSFIELD_BASE_URL",
+    "HIGGSFIELD_TEXT_VIDEO_ENDPOINT", "HIGGSFIELD_IMAGE_VIDEO_ENDPOINT",
+    "ELEVENLABS_API_KEY", "HEYGEN_API_KEY", "SYNTHESIA_API_KEY",
+    "REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET", "REDDIT_USERNAME",
+    "REDDIT_PASSWORD", "PINTEREST_ACCESS_TOKEN",
+)
+
+for _name in _CREDENTIAL_ENV:
+    os.environ.pop(_name, None)
+
+# load_dotenv does not overwrite a variable that is already set, so claiming
+# each name with a sentinel keeps main.py's import from putting the real value
+# back. The clients all treat a missing key and an empty one the same way.
+for _name in _CREDENTIAL_ENV:
+    os.environ[_name] = ""
