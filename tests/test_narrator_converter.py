@@ -374,3 +374,137 @@ def test_cleanup_sweeps_partial_chunks_too(tmp_path):
     converter.cleanup_after_success(temp_dir, manifest_path)
 
     assert not temp_dir.exists() and not manifest_path.exists()
+
+
+def test_a_resume_sweeps_the_partial_a_stop_left_behind(tmp_path):
+    """A kill skips the cleanup a caught failure gets, so the partial stays on
+    disk; the next run should not carry it around."""
+    partial = tmp_path / ("chunk_3.mp3" + converter.CHUNK_PARTIAL_SUFFIX)
+    partial.write_bytes(b"x")
+    manifest = converter.build_manifest("Book", tmp_path / "b.epub", ["one"])
+
+    converter.sync_manifest_with_files(manifest, tmp_path)
+
+    assert not partial.exists()
+
+
+def test_a_manifest_from_before_partial_files_trusts_only_recorded_chunks(tmp_path):
+    """Before partial files, a stop could leave a cut-short chunk under its
+    final name. Such a manifest recorded a chunk as done only after its
+    stream finished, so a present chunk it never recorded is the suspect one
+    and is redone; the recorded ones stay."""
+    (tmp_path / "chunk_0.mp3").write_bytes(b"complete")
+    (tmp_path / "chunk_1.mp3").write_bytes(b"cut short")
+    manifest = {"chunks": [
+        {"index": 0, "filename": "chunk_0.mp3", "status": "done"},
+        {"index": 1, "filename": "chunk_1.mp3", "status": "pending"},
+    ]}                                                  # no "format": the old layout
+
+    converter.sync_manifest_with_files(manifest, tmp_path)
+
+    assert [c["status"] for c in manifest["chunks"]] == ["done", "pending"]
+    assert (tmp_path / "chunk_0.mp3").exists()
+    assert not (tmp_path / "chunk_1.mp3").exists()
+    assert manifest["format"] == converter.MANIFEST_FORMAT
+
+    # Under the new layout a present chunk is complete even if the manifest,
+    # saved every few chunks, had not recorded it yet.
+    (tmp_path / "chunk_1.mp3").write_bytes(b"complete by rename")
+    manifest["chunks"][1]["status"] = "pending"
+    converter.sync_manifest_with_files(manifest, tmp_path)
+    assert manifest["chunks"][1]["status"] == "done"
+
+
+# ── External tools ───────────────────────────────────────────────────────────
+def test_calibres_epub_goes_into_the_temp_dir_and_leaves_with_it(tmp_path, monkeypatch):
+    """`ebook-convert` wrote `<stem>.converted.epub` beside the audiobook, where
+    nothing ever removed it. In the temp dir the usual cleanup takes it."""
+    monkeypatch.setattr(converter, "ensure_ebook_convert_available", lambda: "ebook-convert")
+
+    def fake_calibre(cmd, what):
+        Path(cmd[2]).write_bytes(b"epub")
+    monkeypatch.setattr(converter, "run_checked", fake_calibre)
+
+    temp_dir = tmp_path / "temp_audio"                   # not there yet: a first run
+    converted = converter.convert_mobi_to_epub(tmp_path / "Book.mobi", temp_dir)
+    assert converted.parent == temp_dir and converted.exists()
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{}")
+    converter.cleanup_after_success(temp_dir, manifest_path)
+    assert not temp_dir.exists()
+
+
+def test_tools_run_in_the_launch_environment_not_the_bundles(monkeypatch):
+    """PyInstaller points the linker at the bundle's libraries and stashes the
+    launch-time value as <VAR>_ORIG; a tool must get the latter back. Checked
+    on a real child process, not the helper's dictionary, so `run_checked`
+    forgetting to pass the environment on would fail here."""
+    monkeypatch.setenv("DYLD_LIBRARY_PATH", "/Bundle/Frameworks")
+    monkeypatch.setenv("DYLD_LIBRARY_PATH_ORIG", "/launch/Frameworks")
+    monkeypatch.setenv("LD_LIBRARY_PATH", "/Bundle/lib")
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG", raising=False)
+    monkeypatch.setenv("PATH", "/usr/bin:/bin")
+
+    # LD_LIBRARY_PATH rather than DYLD_*: macOS strips the latter from any
+    # child of a system binary, which the test's Python may be.
+    probe = [sys.executable, "-c",
+             "import os; print(os.environ.get('LD_LIBRARY_PATH'), os.environ['PATH'])"]
+
+    seen = converter.run_checked(probe, "probe").stdout.split()
+    assert seen[0] == "/Bundle/lib"                     # from source: nothing to undo
+    assert seen[1].split(os.pathsep) == [
+        "/usr/bin", "/bin", "/opt/homebrew/bin", "/usr/local/bin"]
+    env = converter.subprocess_env()
+    assert env["DYLD_LIBRARY_PATH"] == "/launch/Frameworks"
+    assert "DYLD_LIBRARY_PATH_ORIG" not in env
+
+    monkeypatch.setenv("LD_LIBRARY_PATH_ORIG", "/launch/lib")
+    assert converter.run_checked(probe, "probe").stdout.split()[0] == "/launch/lib"
+
+    monkeypatch.delenv("LD_LIBRARY_PATH_ORIG")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert converter.run_checked(probe, "probe").stdout.split()[0] == "None"
+
+
+def test_a_tool_finders_bare_path_hides_is_still_found(tmp_path, monkeypatch):
+    """An app launched from Finder gets a PATH without Homebrew, so a tool that
+    works in Terminal is invisible to `shutil.which` alone."""
+    homebrew = tmp_path / "homebrew"
+    homebrew.mkdir()
+    ffmpeg = homebrew / "ffmpeg"
+    ffmpeg.write_text("#!/bin/sh\n")
+    ffmpeg.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
+    monkeypatch.setattr(converter, "EXTRA_PATH_ENTRIES", (str(homebrew),))
+
+    assert converter.ensure_ffmpeg_available() == str(ffmpeg)
+    with pytest.raises(RuntimeError, match="ffprobe was not found"):
+        converter.ensure_ffprobe_available()
+
+
+def test_calibres_app_bundle_is_a_fallback_for_ebook_convert(tmp_path, monkeypatch):
+    """Calibre's installer ships an app bundle and no PATH entry."""
+    in_app = tmp_path / "calibre.app" / "ebook-convert"
+    in_app.parent.mkdir()
+    in_app.write_text("#!/bin/sh\n")
+    monkeypatch.setenv("PATH", str(tmp_path / "nowhere"))
+    monkeypatch.setattr(converter, "EXTRA_PATH_ENTRIES", ())
+    monkeypatch.setattr(converter, "EBOOK_CONVERT_IN_APP",
+                        str(in_app.relative_to(in_app.anchor)))
+
+    with pytest.raises(RuntimeError, match="ebook-convert was not found"):
+        converter.ensure_ebook_convert_available()       # present, not executable
+    in_app.chmod(0o755)
+    assert converter.ensure_ebook_convert_available() == str(in_app)
+
+
+def test_a_failing_tool_reports_what_it_said(tmp_path):
+    with pytest.raises(RuntimeError, match="ffprobe failed .*exit code 3") as info:
+        converter.run_checked(
+            [sys.executable, "-c", "import sys; sys.stderr.write('no such stream'); sys.exit(3)"],
+            "ffprobe")
+    assert "no such stream" in str(info.value)
+
+    with pytest.raises(RuntimeError, match="ffmpeg could not be started"):
+        converter.run_checked([str(tmp_path / "missing-ffmpeg")], "ffmpeg")
