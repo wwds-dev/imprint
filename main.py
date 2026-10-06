@@ -50,7 +50,7 @@ from ui.style import (
     global_stylesheet, ACCENT, ACCENT_LINE, ACCENT_WASH, INFO, WARNING,
     TEXT, TEXT_DIM, TEXT_MUTE,
 )
-from ui import theme, vibe
+from ui import appkit_guard, theme, tray, vibe
 from services.ollama_client import OllamaClient, MUSE_GLIMMER_VARIANTS, muse_glimmer_default
 from services.openai_client import OpenAIClientWrapper
 from services.deepseek_client import DeepSeekClientWrapper
@@ -4338,8 +4338,15 @@ def _selftest() -> int:
             check(f"{module} importable", False, str(exc))
 
     # 5. Read-only resources that are seeded from the bundle on first run.
-    for name in ("agents", "docs/agents", "docs/learn", "config"):
+    for name in ("agents", "docs/agents", "docs/learn", "config",
+                 "assets/tray.png"):
         check(f"bundled resource: {name}", (_Path(RESOURCE_DIR) / name).exists())
+
+    # 6. The menu bar item, which has two silent ways to be useless: a glyph
+    #    that did not ship (checked above) and the AppKit guard not installing.
+    #    Unguarded on macOS 27, clicking the item aborts the app — so a build
+    #    that fails this check ships a crash, not a missing feature.
+    check("AppKit clickCount guard installs", appkit_guard.install())
 
     print()
     if failures:
@@ -4352,6 +4359,13 @@ def _selftest() -> int:
 if __name__ == "__main__":
     if "--selftest" in sys.argv:
         sys.exit(_selftest())
+
+    # macOS 27 aborts the app the moment a menu bar menu opens — Qt's cocoa
+    # plugin reads clickCount off an event that has none, and AppKit raises
+    # instead of answering zero. Install before any menu can be built, because
+    # the abort happens inside AppKit with nothing of ours on the stack to
+    # point at. See ui/appkit_guard.py; the same copy is in Lab Hub and SONAR.
+    appkit_guard.install()
 
     app = QApplication([])
 
@@ -4370,8 +4384,8 @@ if __name__ == "__main__":
     # the layout looks worst in.
     window.showFullScreen()
 
-    def _raise_existing_window():
-        instance_server.nextPendingConnection()      # drain the pending connection
+    def _present():
+        """Bring the window forward, from wherever the request came from."""
         window.setWindowState(
             (window.windowState() & ~Qt.WindowMinimized) | Qt.WindowActive
         )
@@ -4379,6 +4393,25 @@ if __name__ == "__main__":
         window.raise_()
         window.activateWindow()
 
+    def _raise_existing_window():
+        instance_server.nextPendingConnection()      # drain the pending connection
+        _present()
+
     instance_server.newConnection.connect(_raise_existing_window)
+
+    # The menu bar item. Only reachable while something else is frontmost —
+    # a fullscreen window covers the menu bar — which is exactly when a way
+    # back to the window is worth having.
+    #
+    # Quit routes through close(), never QApplication.quit(): closeEvent is
+    # where the manuscript is saved and the worker QThreads are cancelled, and
+    # Qt aborts the process outright if a QThread is still running when it is
+    # destroyed. quit() skips all of it. Closing the last window ends the app
+    # on its own — a status item is not a window, so nothing keeps it alive.
+    menu_bar_item = tray.Tray(window) if tray.available() else None
+    if menu_bar_item is not None:
+        menu_bar_item.open_requested.connect(_present)
+        menu_bar_item.quit_requested.connect(window.close)
+        menu_bar_item.show()
 
     app.exec()

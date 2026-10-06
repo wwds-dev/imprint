@@ -15,6 +15,7 @@ hasn't been done.
 
 1. [Overview](#1-overview)
 2. [Application Layout](#2-application-layout)
+   - [The menu bar item](#the-menu-bar-item)
 3. [Header Bar — Modes and Chrome](#3-header-bar--modes-and-chrome)
    - [Themes](#themes)
 4. [Left Rail — Projects](#4-left-rail--projects)
@@ -118,8 +119,36 @@ resolves that by letting widgets overlap rather than refusing; every
 overlapping-control bug this app has had started there. Both rails scroll when
 the window is short, which is the vertical half of the same problem.
 
-The window always opens maximised. Its minimum is 1000 × 600, and the layout
+The window always opens fullscreen. Its minimum is 1000 × 600, and the layout
 tests run every panel down to that size.
+
+### The menu bar item
+
+A fullscreen window covers the macOS menu bar, so while Imprint is frontmost
+there is nothing of it up there to see. The menu bar item (`ui/tray.py`) is for
+the other half of the time: bring another app forward and Imprint's mark — the
+open book and its spark, in whatever colour the menu bar is using — appears
+beside the clock, with two entries behind it.
+
+| Entry | What it does |
+|-------|--------------|
+| **Open Imprint** | Brings the window back and focuses it, the same path a second launch takes |
+| **Quit Imprint** | Closes the window, which saves the open manuscript and stops background work before the app exits |
+
+Quit routes through the window's own close path rather than quitting the
+application directly; the two are not interchangeable. `closeEvent` is where
+the manuscript is persisted and the worker `QThread`s are cancelled, and Qt
+aborts the process outright if a thread is still running when it is destroyed.
+
+Imprint does not hide to the menu bar. Closing the window still quits the app —
+unlike SONAR and Lab Hub, which stay resident and have to be quit from their
+menu bar item. There is no state here worth keeping alive behind a closed
+window, and an app that silently kept running would be one more process to
+notice in the launcher.
+
+There is no click-to-open: macOS does not deliver a plain click to a status
+item that owns a menu, it opens the menu. That is why Open is an entry rather
+than a behaviour.
 
 ---
 
@@ -2288,8 +2317,9 @@ imprint/
 │   ├── registry.json  agents.json  tools.json
 │   ├── tool_prompts.json  pricing.json  settings.json  commands.json
 │
-├── scripts/                       # build_app.sh, install_app.sh, make_icon.py
-├── assets/                        # Icons
+├── scripts/                       # build_app.sh, install_app.sh, make_icon.py,
+│                                  #   make_tray_icon.py
+├── assets/                        # Icons: icon.icns, tray.png + tray@2x.png
 │
 └── data/
     ├── imprint.db      # Primary data store (SQLite)
@@ -2504,6 +2534,15 @@ old number would mislead — the same judgement that made this arc `2`.
 
 One source, one name: `assets/icon_source.png` → `assets/icon.icns`, generated
 by `scripts/make_icon.py`. Both install paths read `assets/icon.icns`.
+
+The menu bar glyph is the exception, and is generated separately by
+`scripts/make_tray_icon.py` into `assets/tray.png` and `assets/tray@2x.png`. It
+cannot come from the same source: flatten `icon_source.png` and what you get is
+the silhouette of its rounded-square tile, not the book inside it. macOS wants
+a *template* image there — flat black on transparent, which it then recolours
+for a light or dark menu bar — so the mark is redrawn at 18 px rather than
+resampled. Both PNGs are listed in `Imprint.spec`; ship only the base file and
+the item is a blurred upscale on every Retina display.
 
 That is worth stating because it was not true until September 2026. The icon
 inherited from the `sentinel_ai` fork — a surveillance eye in a shield, wrong
