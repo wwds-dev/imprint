@@ -14,6 +14,7 @@ from services.income_lab import (
     automation_payback, break_even, compare_variants, contribution, funnel,
     recurring_cohort, workflow_cost,
 )
+from ui import theme
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BG, BORDER, ELEVATED, SURFACE, SUNKEN,
     TEXT, TEXT_DIM, TEXT_MUTE,
@@ -96,7 +97,7 @@ class IncomeWorksheetsDialog(QDialog):
                       if target in label or label in target), 0)
         self.tabs.setCurrentIndex(index)
 
-        self.setStyleSheet(f"""
+        theme.themed(self, f"""
             QDialog#IncomeWorksheetsDialog {{ background: {BG}; }}
             QLabel#WorksheetTitle {{ color: {TEXT}; font-size: 23px; font-weight: 700; }}
             QLabel#WorksheetNote {{ color: {TEXT_DIM}; background: {ACCENT_WASH};

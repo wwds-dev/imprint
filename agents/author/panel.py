@@ -34,6 +34,7 @@ from ui.forms import (
     LG, MD, SM, XS, combo, field, form_grid, line_edit, micro, quiet, section,
 )
 from ui.panels.base import AgentPanel
+from ui import theme
 from ui.style import TEXT_MUTE
 
 
@@ -310,8 +311,8 @@ class AuthorPanel(QWidget):
         ct_layout.setSpacing(6)
 
         self.author_chapters_stats_label = QLabel("No chapters detected yet.")
-        self.author_chapters_stats_label.setStyleSheet(
-            f"font-size: 12px; color: {TEXT_MUTE};")
+        theme.themed(self.author_chapters_stats_label,
+                     f"font-size: 12px; color: {TEXT_MUTE};")
         ct_layout.addWidget(self.author_chapters_stats_label)
 
         self.author_chapters_list = QListWidget()
@@ -615,8 +616,8 @@ class AuthorPanel(QWidget):
         layout.addWidget(self.author_content_stack, 1)
 
         self.author_status_label = QLabel("")
-        self.author_status_label.setStyleSheet(
-            f"font-size: 12px; color: {TEXT_MUTE}; padding: 2px 4px;")
+        theme.themed(self.author_status_label,
+                     f"font-size: 12px; color: {TEXT_MUTE}; padding: 2px 4px;")
         layout.addWidget(self.author_status_label)
 
         self.author_draft_box.textChanged.connect(self._update_counts)

@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.style import ACCENT, BORDER_STRONG, ELEVATED, TEXT, TEXT_DIM
+from ui import theme
 
 RING_PAD = 5
 CALLOUT_GAP = 10
@@ -65,7 +66,7 @@ class _Ring(QWidget):
     def paintEvent(self, event):  # noqa: N802 - Qt API
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing)
-        color = QColor(ACCENT)
+        color = QColor(theme.accent())
         # A slow breath rather than a blink: noticeable, never frantic.
         color.setAlpha(255 if self.pulse % 2 == 0 else 150)
         painter.setPen(QPen(color, 3))
@@ -83,7 +84,7 @@ class Spotlight(QFrame):
         self.on_back = on_back
         self.setObjectName("Spotlight")
         self.setMaximumWidth(340)
-        self.setStyleSheet(f"""
+        theme.themed(self, f"""
             QFrame#Spotlight {{ background: {ELEVATED};
                 border: 1px solid {ACCENT}; border-radius: 10px; }}
             QLabel#SpotlightEyebrow {{ color: {ACCENT}; font-size: 10px;

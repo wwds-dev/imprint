@@ -35,6 +35,7 @@ from agents.manuscript.book_widgets import (
 )
 from ui.forms import MD, SM, combo, field, line_edit, micro, primary, section
 from ui.panels.base import AgentPanel
+from ui import theme
 from ui.style import ACCENT
 from ui.widgets import CollapsibleSection, FlowLayout, scrollable
 
@@ -600,7 +601,7 @@ class ManuscriptPanel(QWidget):
             opt_tag = " (optional)" if optional else ""
             if connected:
                 text = f"{name}{opt_tag} — connected"
-                color = ACCENT
+                color = theme.recolour(ACCENT)
             else:
                 text = f"{name}{opt_tag} — not connected · get a key at {where}"
                 color = "#999999"

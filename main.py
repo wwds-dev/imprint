@@ -47,9 +47,10 @@ from PySide6.QtWidgets import (
 )
 
 from ui.style import (
-    GLOBAL_STYLESHEET, ACCENT, ACCENT_LINE, ACCENT_WASH, INFO, WARNING,
+    global_stylesheet, ACCENT, ACCENT_LINE, ACCENT_WASH, INFO, WARNING,
     TEXT, TEXT_DIM, TEXT_MUTE,
 )
+from ui import theme, vibe
 from services.ollama_client import OllamaClient, MUSE_GLIMMER_VARIANTS, muse_glimmer_default
 from services.openai_client import OpenAIClientWrapper
 from services.deepseek_client import DeepSeekClientWrapper
@@ -159,7 +160,7 @@ from ui.forms import (
     line_edit, micro, nav_tab, primary, quiet, rail, rule, section, stat,
 )
 from ui.widgets import (
-    FlowLayout, CollapsibleSection, install_dropdown_system, scrollable,
+    FlowLayout, CollapsibleSection, ThemeDots, install_dropdown_system, scrollable,
     let_combos_shrink, RECOMMENDED_ROLE, RECOMMENDATION_REASON_ROLE,
     RECOMMENDATION_SCORE_ROLE, RECOMMENDATION_CONFIDENCE_ROLE,
     RECOMMENDATION_BADGE_ROLE,
@@ -1293,6 +1294,11 @@ class GodAI(QWidget):
         # Qt replaces item delegates while polishing a new stylesheet.
         self.apply_global_style()
 
+        # Every field you compose in gets the underscore caret. After the
+        # panels exist, so the sweep finds them, and after the stylesheet, so
+        # each one has its real font to measure a character against.
+        self._carets = vibe.install_carets(self)
+
         # After every panel exists: a combo sized to its longest item pins the
         # control columns wider than the panes they live in, which is what cut
         # the fields off down the right-hand edge.
@@ -1403,6 +1409,13 @@ class GodAI(QWidget):
         self.agent_status_pill.setObjectName("StatusPill")
         row.addWidget(self.agent_status_pill)
         row.addSpacing(LG)
+
+        # The themes, as themselves. A picker also lives in Settings, which
+        # is where someone goes to *read* what the choice means; this is for
+        # changing your mind about it mid-sentence.
+        self.theme_dots = ThemeDots(on_change=self.apply_global_style)
+        row.addWidget(self.theme_dots, 0, Qt.AlignVCenter)
+        row.addSpacing(MD)
 
         self.agent_docs_btn = quiet("Docs")
         self.agent_docs_btn.setFixedWidth(56)
@@ -2333,7 +2346,7 @@ class GodAI(QWidget):
         system_layout.setContentsMargins(SM, XS, SM, SM)
         system_layout.setSpacing(SM)
         self.resource_status_card = ResourceStatusCard()
-        self.resource_status_card.setStyleSheet(STATUS_CARD_STYLES)
+        theme.themed(self.resource_status_card, STATUS_CARD_STYLES)
         # Compatibility alias for tooltips and existing extensions.  The old
         # object was one long rich-text QLabel; the new card owns four rows.
         self.resource_label = self.resource_status_card
@@ -2351,7 +2364,7 @@ class GodAI(QWidget):
         routing_layout.setContentsMargins(SM, XS, SM, SM)
         routing_layout.setSpacing(XS)
         self.routing_status_card = RoutingStatusCard()
-        self.routing_status_card.setStyleSheet(STATUS_CARD_STYLES)
+        theme.themed(self.routing_status_card, STATUS_CARD_STYLES)
         # These aliases retain the public widget attributes used by tooltips
         # and integrations while avoiding the original paragraph-style UI.
         self.route_result_label = self.routing_status_card.route_value
@@ -2368,7 +2381,7 @@ class GodAI(QWidget):
         keys_layout.setSpacing(XS)
         self.api_keys_status_card = ApiKeysStatusCard(
             ("OpenAI", "DeepSeek", "Kimi", "Gemini", "Anthropic"))
-        self.api_keys_status_card.setStyleSheet(STATUS_CARD_STYLES)
+        theme.themed(self.api_keys_status_card, STATUS_CARD_STYLES)
         key_classes = {
             "OpenAI": OpenAIClientWrapper, "DeepSeek": DeepSeekClientWrapper,
             "Kimi": KimiClientWrapper, "Gemini": GeminiClientWrapper,
@@ -2514,7 +2527,19 @@ class GodAI(QWidget):
             self.output_box.append(f"[Settings Save Error] {e}")   
 
     def apply_global_style(self):
-        self.setStyleSheet(GLOBAL_STYLESHEET)
+        """Re-paint the window under the current theme.
+
+        The sheet carries almost everything; `theme.repaint()` catches the
+        handful of sheets that call sites build by hand, which are applied once
+        at build time and would otherwise keep the old accent until relaunch.
+        """
+        self.setStyleSheet(global_stylesheet())
+        theme.repaint()
+        # The dots paint from `theme.current()`, so they also have to be told
+        # when the choice was made somewhere else — the Settings picker, or the
+        # restore when it is cancelled.
+        if hasattr(self, "theme_dots"):
+            self.theme_dots.update()
 
     # ── Bug Bounty handlers ───────────────────────────────────────────────────
     # ──────────────────────────────────────────────────────────────────

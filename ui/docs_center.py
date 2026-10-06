@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from ui.learning_center_v2 import (
     DOCUMENT_CSS, _document_sections, _fit_images,
 )
+from ui import theme
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BG, BORDER, BORDER_STRONG, ELEVATED,
     INFO, INFO_WASH, SURFACE, SUNKEN, TEXT, TEXT_DIM, TEXT_MUTE,
@@ -229,7 +230,7 @@ class DocsCentreDialog(QDialog):
         self.browser.setOpenLinks(False)
         self.browser.setOpenExternalLinks(False)
         self.browser.setSearchPaths([str(self.base)])
-        self.browser.document().setDefaultStyleSheet(DOC_CSS)
+        self.browser.document().setDefaultStyleSheet(theme.recolour(DOC_CSS))
         self.browser.setAccessibleName("Current documentation article")
         self.reader_splitter.addWidget(self.browser)
 
@@ -276,7 +277,7 @@ class DocsCentreDialog(QDialog):
         footer.addWidget(close_btn)
         outer.addLayout(footer)
 
-        self.setStyleSheet(f"""
+        theme.themed(self, f"""
             QDialog#DocsCentreDialog {{ background: {BG}; }}
             QFrame#DocsTopBar {{ background: {SURFACE}; border: 1px solid {BORDER};
                 border-radius: 10px; }}
@@ -444,7 +445,7 @@ class DocsCentreDialog(QDialog):
             raw, extensions=["tables", "fenced_code", "toc", "sane_lists"])
         html = _fit_images(html, max(self.browser.viewport().width(), 700))
         self.browser.setSearchPaths([str(path.parent), str(self.base)])
-        self.browser.document().setDefaultStyleSheet(DOC_CSS)
+        self.browser.document().setDefaultStyleSheet(theme.recolour(DOC_CSS))
         self.browser.setHtml(html)
         self.current_page = page
         section = self._section_for(page)
