@@ -17,9 +17,10 @@
 | Control/tab | Meaning |
 |---|---|
 | Brief/provider/model | Generates a proposed implementation; recommendations optimise the task route |
-| HTML / CSS / JS | Separate editable outputs that must work together |
+| HTML / CSS / JS | Separate read-only views of one generated page; fix problems through the brief |
 | Copy All | Copies the current complete proposal for review/use |
-| Save .html | Writes a local deliverable; verify embedded/linked CSS and JS behavior |
+| Save .html | Runs the pre-export checks, then writes the whole page as one local file |
+| Export Project… | Runs the same checks, then writes a `site_<timestamp>` folder with `index.html` plus extracted `styles.css` / `script.js` — the shape a handoff expects |
 | Clear | Clears visible output after saving; not undo |
 | Stop | Requests local streaming cancellation |
 
@@ -105,8 +106,17 @@ clearer; add it and generate again.
 
 ### Step 7 — Save it as a file
 
-Click **Save .html** and save it somewhere you will find it, such as your
-Desktop. The file holds the whole page.
+Click **Save .html**. Imprint first runs quick HTML and accessibility checks
+on the page — doctype, page language, title, viewport, image alt text,
+labelled form fields, empty links, duplicate ids, heading order. If any turn
+up, a dialog lists them and asks **Export anyway?**: choose **No** and put the
+fix into the brief, or **Yes** to save regardless. These are text checks, not
+a browser test, so Step 8 still matters. Then save the file somewhere you
+will find it, such as your Desktop. The file holds the whole page.
+
+For a client handoff, **Export Project…** runs the same checks and writes a
+folder instead: `index.html` with the styles and scripts moved into
+`styles.css` and `script.js` next to it.
 
 [Show me](show:webdesign_save_btn)
 

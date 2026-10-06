@@ -1,12 +1,14 @@
 # Stamp
 
 Owns client-service workflows: brief interpretation, logo concepts, gig listing
-copy and professional delivery messages. Its public API exposes
+copy, professional delivery messages and a durable per-client order record
+with a reusable brand kit. Its public API exposes
 `agents.fiverr.FiverrAgent` and the lazily loaded `FiverrPanel`; provider
 execution, image generation and budget services remain shared by the umbrella.
 
 User guidance: `docs/agents/fiverr.md`.  Run focused coverage with
-`pytest tests/test_agents_scenarios.py tests/test_panel_layout.py tests/test_request_guard.py -k fiverr`.
+`pytest tests/test_agents_scenarios.py tests/test_panel_layout.py tests/test_request_guard.py -k fiverr`
+and `pytest tests/test_fiverr_orders.py`.
 
 ## Files
 
@@ -16,6 +18,17 @@ User guidance: `docs/agents/fiverr.md`.  Run focused coverage with
 - **`panel.py`** — owns the complete Client Gigs workspace: brief and model
   controls, price estimate, guarded prompt/image/delivery/gig request
   lifecycles with exact tokens, result tabs, order log, save, clear and Stop.
+  Since 2026-10-05 the brief carries a **brand kit** row (Brand fonts / Brand
+  voice / Brand rules), and the Orders tab is a view over `orders.py` rather
+  than an in-memory table: **Generate Logos** opens (or reuses) the client's
+  order and logs the run; finished logos, the delivery message and the gig
+  listing are attached to it as each finishes (`_attach_to_order()` re-derives
+  the order whenever the brief's client no longer matches the cached one, so
+  one client's delivery never lands on another's record). Selecting a row
+  reloads the brief, brand kit, delivery and gig text into the workspace;
+  typing a known client's name (`editingFinished`) fills their stored
+  industry/colours/brand kit into EMPTY fields only. **Clear log** clears the
+  workspace and forgets the current order; the saved rows stay.
   The workers themselves stay on the host so the umbrella's global Stop and
   shutdown sweeps keep seeing them. The old `setattr(host, name, ...)` alias
   loop that mirrored every `HOST_CONTROLS` widget onto the umbrella was
@@ -47,6 +60,24 @@ User guidance: `docs/agents/fiverr.md`.  Run focused coverage with
   - `build_image_prompt_request(brief)` — the same context block, with the
     task fixed to "build an image-generation prompt for the selected GPT
     Image model to create a logo for this business."
+  - `_brand_kit_lines(brief)` — appends `Brand fonts` / `Brand voice` /
+    `Brand rules` lines to both context blocks, only for fields that are
+    non-empty ("Fonts: N/A" teaches the model nothing).
+
+- **`orders.py`** — one durable record per client order in the
+  `fiverr_orders` table (schema in `services/database.py`), Qt-free.
+  `open_order(brief)` reuses the client's newest `open` order (matched
+  case-insensitively on business name; a returning client's new round is a
+  revision on the same record) or inserts one; on reuse, non-empty brief and
+  brand-kit fields overwrite the stored ones and empty fields never erase
+  them. `record_event(id, kind, detail)` appends to `history_json` (logos
+  requested/delivered, run failed, delivery written, gig listing written);
+  `attach(id, ...)` stores `image_paths_json`, `delivery_text`, `gig_text` or
+  `status` and rejects any other column; `get_order()`, `list_orders(limit)`
+  (newest update first) and `latest_for_client()` (newest order, open or
+  not — the source of the brand-kit auto-fill) read them back. The panel
+  never changes `status` today, so every order stays `open`. Covered by
+  `tests/test_fiverr_orders.py`.
 
 - **`recommendations.py`** — registers Stamp's `RECOMMENDATION_PROFILE`
   (an `AgentProfile` from `services.recommendations.models`) with the shared

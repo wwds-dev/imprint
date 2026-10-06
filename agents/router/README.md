@@ -2,15 +2,18 @@
 
 Internal intent classifier used by the umbrella runtime.  It is infrastructure,
 not a visible creative workspace.  Its public API is
-`agents.router.RouterAgent`.
+`agents.router.RouterAgent` and the `RouteDecision` it returns; the umbrella's
+**Auto Route** button (`GodAI.auto_route_agent()` in `main.py`) calls
+`RouterAgent().route()`, switches to the decided agent, and puts the
+decision's confidence tier and reason in the **Chat routing** card's tooltip.
 
 Routing should return stable agent keys from `agents.catalog`; it must never
 execute provider calls or bypass the shared request guard.
 
 ## Files
 
-- `__init__.py` — public surface of the package: re-exports `ROUTES` and
-  `RouterAgent` from `agent.py`.
+- `__init__.py` — public surface of the package: re-exports `ROUTES`,
+  `RouteDecision` and `RouterAgent` from `agent.py`.
 - `agent.py` — the whole implementation. `ROUTES` is an ordered tuple of
   `(agent_key, keyword_tuple)` pairs covering nine modes —
   `video`, `social`, `audiobook`, `music`, `webdesign`, `fiverr`, `creator`,
@@ -18,13 +21,27 @@ execute provider calls or bypass the shared request guard.
   trigger phrases (e.g. `video` matches "video", "youtube", "shorts",
   "reel", "storyboard", "sora"; `manuscript` matches "query letter",
   "synopsis", "kdp", "goodreads", "book marketing"; `author` matches "write
-  a chapter", "novel", "manuscript", "book outline"). `RouterAgent.classify(
-  text)` case-folds the input and returns the key of the first route whose
-  any keyword is a substring of it; ordering in `ROUTES` therefore matters
-  whenever two routes' keyword lists could both match the same input. If no
-  route matches, it falls back to the literal key `"chat"` (not itself an
-  entry in `ROUTES`). There is no scoring, no ML model and no external call
-  — it is a pure substring matcher.
+  a chapter", "novel", "manuscript", "book outline").
+
+  `RouterAgent.route(text)` case-folds the input and returns a frozen
+  `RouteDecision(key, confidence, reason, matches)` (added 2026-09-30,
+  `cb8e99f`). `confidence` is one of three named tiers, not a probability:
+  - `"addressed"` — the text named an agent (see below); reason
+    `addressed by name ("<Codename>")`.
+  - `"intent"` — at least one keyword is a substring of the text. The key is
+    still the first route in `ROUTES` order that matched, so ordering matters,
+    but `matches` now carries every `(agent_key, keyword)` hit and the
+    reason reads `matched "<keyword>"`, adding `— but also matched <other
+    codenames>` when several agents hit. The `ambiguous` property is true
+    when more than one agent matched. Since `4570784` those reasons name the
+    catalog codenames, not internal keys.
+  - `"fallback"` — nothing matched; the key is the literal `"chat"` (not an
+    entry in `ROUTES`) and the reason says Chat is the default rather than
+    claiming a verdict.
+
+  `RouterAgent.classify(text)` stays as `route(text).key` for call sites that
+  only need the key. There is no numeric scoring, no ML model and no external
+  call — keyword matching is plain substring search.
 
   Before that table runs, `classify()` checks whether the text **addresses**
   an agent by name. The 2026-09-30 rename gave the agents codenames, and

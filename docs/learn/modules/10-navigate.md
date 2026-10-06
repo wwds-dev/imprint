@@ -13,8 +13,9 @@
 
 | Region | Purpose | Do not confuse it with |
 |---|---|---|
-| Header workspace tabs | Select the business stage: Author, Audio + Music, Video + Ads, Social, Web, Brand Design, Brand Content | A model family or autonomous business process |
-| Tool switcher | Selects related agents inside a workspace, such as Draft/Publish | A project; switching tools does not create one |
+| Header workspace tabs | Select the business stage: Author, Audio + Music, Video + Ads, Social, Web, Brand Design, Brand Content, Assistant | A model family or autonomous business process |
+| Header right side | Status pill, the three theme dots, **Docs**, **Tooltips**, **Settings** | A theme is colour only: red, amber and blue status colours mean the same in every theme |
+| Tool switcher | Selects related agents inside a workspace, such as Quill/Press under Author or Booth/Label under Audio + Music | A project; switching tools does not create one |
 | Project rail | Creates, searches, opens, renames, and removes saved contexts | A file browser or undo history |
 | Centre canvas | The current agent's brief, actions, status, and output | A universal form; each agent has different contracts |
 | Right rail | System health, routing, key readiness, limits, Cost History, Run Log, Learning Centre | Proof that an external provider or platform accepted a job |
@@ -22,16 +23,21 @@
 ## Walkthrough
 
 1. Click each workspace tab and note which ones contain more than one tool.
-2. Return to **Write** and switch between **Draft** and **Publish**. The page
+2. Return to **Author** and switch between **Quill** and **Press**. The page
    title and controls change; the selected project does not.
-3. Open **SYSTEM**. Treat **Ready** as local readiness, not output quality.
-4. Open **ROUTING**. A recommendation is guidance for the current task and
+3. Open **System**. Treat **Ready** as local readiness, not output quality.
+4. Open **Chat routing**. A recommendation is guidance for the current task and
    eligible configuration; inspect the visible provider/model badges where the
    dedicated agent exposes them.
-5. Open **API KEYS**. This is readiness/status, not a place to paste secrets.
+5. Open **API keys**. This is readiness/status, not a place to paste secrets.
 6. Inspect session/daily limits, Cost History, and Run Log before a long job.
 7. Use the header **Docs** for an agent's technical sheet and **Learning
    Centre** for operating lessons and cross-agent workflows.
+8. Optional: click one of the three dots left of **Docs** to change the colour
+   theme (Green, Red, Blue). It applies at once and is saved; the same picker
+   is under **Settings → General → Appearance**. Only the accent and the colour
+   of text you type change — a "ready" badge takes the theme's accent, while
+   red still means stop and amber still means paid.
 
 ## How to read the result
 

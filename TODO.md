@@ -15,10 +15,12 @@ the GUI goes through the request guard, including the ones billed per unit
 rather than per token — the 2026-09-20 re-analysis found and closed the last
 in-app exception (ElevenLabs shorts). The Primer CLI was the one paid
 workflow outside it; it was archived on 2026-09-30, so every paid path now
-goes through the guard. 944 tests pass in 91s in
-an isolated database (2026-10-05; isolation enforced by conftest rather
-than per-fixture convention) — but see the suite-wedge item below: one run in
-three today hangs instead of finishing. `main.py` is 4,324 lines. The installed
+goes through the guard. The suite runs in an isolated database (isolation
+enforced by conftest rather than per-fixture convention): 993 collected at the
+2026-10-06 merge — 981 passed, 11 skipped, 1 known red (the converter-drift card
+below) — before `test_theme.py` and `test_vibe.py` added more. The
+one-run-in-three wedge seen on 2026-10-05 is fixed (item below). `main.py` is
+4,384 lines. The installed
 macOS app is a live launcher into this source tree; restarting it loads changes.
 
 **Feature-complete for hand testing as of 2026-10-05.** Every v2 item above P3
@@ -46,6 +48,11 @@ controls through `GodAI._find_control()`.
 ---
 
 ## v2 — current
+
+- [x] `P2` `design` `@ai` **Three colour themes, picked from three dots, and an underscore caret.** Shipped 2026-10-06 (`aec5342`). `ui/theme.py` owns Green (Matrix, default), Red and Blue (Cyberpunk); only the accent, the phosphor and the grey tint change, and `DANGER`/`WARNING`/`INFO` are identical in all three (Red's accent is rose so it never reads as `DANGER`; Blue's is cyan at 188° so it stays 25° clear of `INFO`). `ui/style.py` keeps the authored green as its constants and `global_stylesheet(theme)` builds the sheet; ~90 out-of-sheet uses route through `theme.recolour()` / `theme.themed()`, whose weakref registry lets `repaint()` reach sheets applied once at build time. Picked from `ThemeDots` in the header (click or ←/→) or **Settings → General → Appearance** (live preview; Cancel restores); saved as `ui_theme`. `ui/vibe.py` draws a blinking underscore caret in every editable `QTextEdit` — one cadence, no moving backdrop, by design. `tests/test_theme.py` and `tests/test_vibe.py`. README §3 *Themes*.
+- [ ] `P2` `bug` `@ai` **The Settings Appearance copy says Imprint "comes in two themes"; three ship.** `ui/dialogs.py` (the `page_intro` under General → Appearance) reads "Imprint comes in two themes … status colour means the same thing in both", and `ui/theme.py`'s module docstring still opens "Two palettes, one design system" and says "both themes" twice. Written before Blue was added in the same commit. User-visible in the one place someone goes to read what the choice means; say "three" / "every theme".
+- [ ] `P3` `docs` `@ai` **Learning Centre screenshots predate the theme dots.** `docs/learn/img/` was last regenerated in `63eb9ec` (2026-09-30), and `scripts/make_learning_shots.py` grabs the whole window, so every shot shows a header without the dots added in `aec5342`. Before regenerating, make the script pin the green theme (it uses the real database, so today it would photograph whichever theme the developer last picked — set `ui.theme`'s cached choice for the run rather than calling `set_current`, which would overwrite the saved setting).
+- [ ] `P3` `design` `@ai` **The underscore caret reaches only editors that exist at startup.** `vibe.install_carets(self)` runs once in `GodAI.__init__`, after the panels are built; nothing else calls `install_caret`, so a `QTextEdit` created later — in the Project manager, other dialogs, or any lazily built tab — keeps Qt's bar while still being styled in the phosphor. Either sweep on dialog show (an app-level event filter on `QEvent.Show`) or install in the few dialogs that have editable multi-line fields; extend `test_every_editable_text_box_gets_one_and_no_other` to a dialog.
 
 - [x] `P1` `testing` `@ai` **The suite ran with the developer's `.env` loaded, so a live key could have paid for a test.** Found 2026-10-06 the moment a `.env` existed: `main.py` calls `load_dotenv()` at import and most test modules import `main`, so every value in a local `.env` joined the test environment. Creating the file from `.env.example` — whose only non-blank entries are two Higgsfield endpoint defaults — immediately failed two tests in `test_higgsfield_client.py` that assert the built-in endpoint. The failure was the harmless half. The other half is that a suite seeing a real `ANTHROPIC_API_KEY` or `HF_API_KEY_ID` is a suite where one unmocked call spends money, which is the whole reason `test_request_guard.py` exists; and it had been true for as long as anyone on this machine had keys configured. `tests/conftest.py` now pops all 24 credential and endpoint names before any test module imports anything, then claims each with an empty sentinel — `load_dotenv` does not overwrite a variable that is already set, so claiming the name is what stops `main`'s import putting the real value back. Tests that want a credential monkeypatch it, which was already the convention. Suite: 974 passed.
 

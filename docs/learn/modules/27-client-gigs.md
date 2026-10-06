@@ -9,7 +9,8 @@
 
 - Written client brief, authorised source assets, delivery format, deadline,
   price/fees, revision count, and acceptance criteria.
-- One project/order record for this engagement.
+- Nothing to set up for the order record: Imprint opens one durable order per
+  client the first time you generate for them.
 
 ## Control atlas
 
@@ -174,7 +175,9 @@ Click **Delivery Message**, approve the estimate, and watch the draft stream
 into its tab. Then edit it until it is true: name only the files you are
 actually sending, claim only the checks you performed in Step 5, and state
 the remaining revision count and the next decision the client owns. The
-edited text is attached to the order.
+draft is attached to the order the moment it finishes streaming; edits you
+make afterwards are not saved back to the order, so keep the version you
+actually send.
 
 [Show me](show:fiverr_delivery_btn)
 
@@ -191,11 +194,14 @@ is not something this panel, or anyone, can predict.
 ### Step 8 — Read back the order record
 
 Open the **Orders** tab. The order from Step 4 lists its client, last update
-and status, with every event logged along the way — logos requested and
-delivered, delivery written, gig listing written. These rows are durable:
+and status. Every event along the way — logos requested and delivered,
+delivery written, gig listing written — is logged on the order, and the status
+line shows the event count and the last one when you load it. These rows are durable:
 they survive a restart. Click the row and the whole record reloads into the
-workspace — brief, brand kit, delivery message and gig text — ready for a
-revision round weeks later. **Clear log** resets the visible workspace for
+workspace — brief, brand kit, delivery message and gig text (the logo
+previews are not reloaded) — ready for a revision round weeks later. A new
+round for the same client name is logged on that same order, which stays
+open. **Clear log** resets the visible workspace for
 the next client; the saved rows stay. The money facts — marketplace fee,
 refunds, the client's actual acceptance — happen outside Imprint, so record
 them against the order yourself and treat them as self-reported until the

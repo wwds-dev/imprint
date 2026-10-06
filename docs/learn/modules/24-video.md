@@ -36,8 +36,9 @@
    Video** once.
 4. Watch the log to identify whether this is an assembled narrated pipeline or
    a direct asynchronous provider job.
-5. If stopping, press once and read the result. Keep monitoring accepted jobs
-   that cannot be cancelled so the paid file is not lost. Closing Imprint
+5. If stopping, press once and read the result: either the provider cancelled
+   a job that had not started (nothing charged), or Imprint only stopped
+   watching a job that keeps rendering and will still bill. Closing Imprint
    does not lose an accepted job: reopening it re-polls, downloads and
    bills it exactly once on the next launch. A submission that never got a
    provider job id (the app closed between the paid request and the
@@ -63,8 +64,11 @@ prove copyright, likeness, disclosure, platform compliance, or marketing value.
 ## Cost, cancellation, and gates
 
 Images/video may bill by asset or duration; narration and script may add costs.
-Veo/Gemini, Wan/Qwen, and other direct jobs may have no safe cancellation
-after acceptance. Higgsfield cancellation can depend on queued/processing state.
+Stop works for every direct provider, but it only cancels at the provider
+where that is possible before rendering starts (a queued Wan or Higgsfield
+job). For an accepted Veo/Gemini job, or one already rendering, Stop stops
+watching: the budget reservation stays, the provider may still bill, and the
+next launch saves the result and bills it once.
 Humans approve paid submission and public release.
 
 ## Verification

@@ -10,4 +10,10 @@ Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 |---|---|
 | Profit-per-order dashboard including provider cost and revision time | IDEA |
 | Delivery package builder with named asset variants | PLANNED |
-| Repeat-client templates and upsell suggestions | IDEA |
+| Upsell suggestions for repeat clients | IDEA |
+
+## Done
+
+| Suggestion | Status |
+|---|---|
+| Repeat-client preferences — the brand kit (fonts, voice, rules) persists on the client's order in `orders.py` and auto-fills empty fields when their name is typed again (2026-10-05) | DONE |

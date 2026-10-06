@@ -25,7 +25,8 @@
 | Spotify Strategy | Discovery/content proposals | Follows current platform rules and maps to a measured action |
 | Income Roadmap | Scenario variables and revenue-route ideas | Label assumptions; never treat streams × static rate as a forecast |
 | Songs & Albums | Lyrics and Suno style prompts, saved with the imported audio | Lyrics are original and your Suno plan covers how you use the audio |
-| Save Full Plan / Clear / Stop | Persist, reset visible work, or request cancellation | Save before Clear; review before use |
+| Save Full Plan / Clear / Stop | Export the plan as text, reset visible work, or request cancellation | Every generated plan is already stored as a record; Save Full Plan is the plain-text copy |
+| Record Outcome… | Attach what a shipped release actually did (streams, revenue, notes) to the stored plan you pick | Numbers are self-reported; the next plan for that artist plans against them |
 
 ## Recipe: make one song, start to finish
 
@@ -134,8 +135,32 @@ Double-click the track to play it. You have a finished song.
 When a song is worth releasing, describe it under **Describe your music** and
 click **Generate Plan** for a release checklist: metadata, distribution and
 promotion. Treat every number in it as a scenario to check, not a forecast.
+When it finishes the status line reads `Plan complete — tabs populated and
+stored.`: the plan is kept as a record for this artist, whether or not you
+also click **Save Full Plan** for a text copy.
 
 [Show me](show:music_analyse_btn)
+
+### Step 10 — Optional: record what the release actually did
+
+Weeks after release, with the artist name still in **Artist / project name**,
+click **Record Outcome…**. Pick the plan that actually shipped from the list
+(dated; one marked *outcome recorded* already has numbers, which are
+prefilled), then type what your distributor dashboard shows:
+
+```
+Streams:        4200
+Revenue (USD):  14.70
+Notes:          playlist pitch landed one indie list; TikTok clip did nothing
+```
+
+The numbers are self-reported — Imprint does not read any platform. The next
+time you click **Generate Plan** for the same artist, the prompt carries a
+short *past releases and measured outcomes* block, so the new plan starts
+from what really happened instead of from zero. Leaving all three fields
+blank records nothing.
+
+[Show me](show:music_outcome_btn)
 
 ## How to read the output
 

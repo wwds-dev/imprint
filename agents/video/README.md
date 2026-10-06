@@ -13,7 +13,8 @@ Project ID persisted with the job. The shared vidforge Library defaults to all
 renders, including standalone builds with no Imprint Project context; its
 **Current Project** view filters to linked clips.
 
-Run focused coverage with `pytest tests/test_media_generation.py tests/test_vidforge_contract.py tests/test_panel_layout.py -k video`.
+Run focused coverage with `pytest tests/test_media_generation.py tests/test_vidforge_contract.py tests/test_panel_layout.py -k video`
+and `pytest tests/test_video_jobs.py` (job persistence, resume and the Stop contract).
 
 ## Files
 
@@ -32,6 +33,21 @@ Run focused coverage with `pytest tests/test_media_generation.py tests/test_vidf
   billing so a crash in that window undercounts once instead of
   double-billing; when vidforge itself is unavailable, pending/lost rows
   are still surfaced as failures instead of being silently stranded.
+  `stop()` gives every direct provider one Stop contract (2026-09-30,
+  `55a04ae`; hardened in `4570784`): the button reads **Stop** for the
+  pipeline and for Gemini/Wan direct jobs (which used to show "Cannot
+  Cancel"), and Stop never loses a paid render. For Wan with an acknowledged
+  job it first asks `qwen.cancel_video()`; only a confirmed provider
+  cancellation releases the budget reservation and marks the `video_jobs`
+  row `cancelled`/`released` ("nothing was charged"). Otherwise — Gemini, or
+  a Wan job already rendering — Stop only stops *watching*: the worker exits,
+  the session's reservation is kept (the render may still complete and bill,
+  so releasing it would let the caps double-commit the same money), only the
+  run-log entry closes as `stopped`, and the row stays `reserved` so the next
+  launch's `resume_pending_jobs()` downloads and bills it once. The row id is
+  detached only after the create POST was acknowledged, so a job id arriving
+  late from the submission window is still persisted rather than stranding
+  the job as `lost`. Higgsfield keeps its queued-vs-processing cancel path.
   Host-control aliases were retired 2026-09-21: the panel no longer
   mirrors its widgets onto the umbrella (`HOST_CONTROLS`
   stays only as the published contract of what it owns); the umbrella now

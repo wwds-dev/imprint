@@ -16,6 +16,7 @@ hasn't been done.
 1. [Overview](#1-overview)
 2. [Application Layout](#2-application-layout)
 3. [Header Bar — Modes and Chrome](#3-header-bar--modes-and-chrome)
+   - [Themes](#themes)
 4. [Left Rail — Projects](#4-left-rail--projects)
 5. [Right Rail — Spend, Budget and Utilities](#5-right-rail--spend-budget-and-utilities)
 6. [Centre Panel — Main Workspace](#6-centre-panel--main-workspace)
@@ -100,7 +101,7 @@ fixed width and cannot be dragged.
 
 | Region | Width | Purpose |
 |--------|-------|---------|
-| **Header bar** | full width, 56 px | Wordmark, workspace tabs, agent status, Docs / Tooltips / Settings |
+| **Header bar** | full width, 56 px | Wordmark, workspace tabs, agent status, theme dots, Docs / Tooltips / Settings |
 | **Left rail** | 236 px | Project context, saved-chat filters, and New Project / New Chat |
 | **Centre** | fills the remainder | The current agent's panel |
 | **Right rail** | 268 px | Spend, budget limits, utilities, and collapsed reference panels |
@@ -135,9 +136,58 @@ competed with the one button on each page that actually spends money.
 **Status** — `● Ready` while idle; changes colour while a request runs or after
 one fails.
 
+**Theme dots** — three small dots between the status pill and **Docs**, each
+painted in its own theme's accent; the current one carries a ring. Click one to
+switch, or focus the row and use ←/→ to step through them — the window repaints
+immediately, with nothing to confirm. Hover names the theme. The same choice is
+in **Settings → General → Appearance** (see [§13.3](#133-settings)).
 **Docs** — opens the documentation sheet for the current agent.
 **Tooltips: On/Off** — toggles hover help across the whole app.
 **Settings** — opens the settings dialog.
+
+### Themes
+
+Imprint ships three colour themes. The choice is saved in the `settings` table
+under `ui_theme` and survives a restart; Green is the default and the fallback
+for any unreadable value.
+
+| Theme | Accent | Phosphor (typed text) | Greys |
+|---|---|---|---|
+| **Green (Matrix)** — default | emerald `#34d399` | `#00ff41` | tinted slightly blue |
+| **Red** | rose `#f43f5e` | `#ff0033` | the same values, tint rotated toward red |
+| **Blue (Cyberpunk)** | cyan `#22d3ee` | electric aqua `#00ffdd` | the same values, tint rotated toward cyan |
+
+Only the accent, the phosphor and the tint of the greys change; lightness does
+not. **Status colour is the same in every theme** — `DANGER` (coral) stops
+work, `WARNING` (amber) flags a paid or irreversible step, `INFO` (blue) is
+neutral emphasis. That is why Red's accent is rose rather than red, and Blue's
+is cyan at 188° rather than azure: an accent too close to `DANGER` or `INFO`
+would read as the same claim. Anything the docs call "green" in the status
+cards — a **Configured** key, a Resource Monitor row under threshold — is the
+accent, so it is rose or cyan under the other two themes.
+
+**The caret.** Every editable multi-line field (`QTextEdit`) draws a blinking
+underscore in the phosphor colour instead of Qt's bar: one cadence (on for
+about 620 ms of a 1.2 s cycle) in every theme. Read-only previews, logs and
+transcripts keep no caret, and single-line `QLineEdit` fields keep Qt's native
+bar because Qt offers no way to switch it off. There is deliberately no moving
+backdrop — Sentinel has one; a tool you write books in should not.
+
+**Where it lives.** `ui/theme.py` owns the three palettes, the saved choice
+(`current()` / `set_current()`), `recolour()` for colours built outside the
+main sheet, and `themed(widget, css)` — a weak-reference registry for sheets
+applied once at build time, so `repaint()` can re-apply them. `ui/style.py`
+stays the design system: its module constants hold the authored green values
+and `global_stylesheet(theme)` formats the one sheet from the current palette.
+`GodAI.apply_global_style()` re-sets that sheet and calls `theme.repaint()`.
+The header widget is `ThemeDots` in `ui/widgets.py`; the caret is
+`ui/vibe.py` (`install_carets()` sweeps the main window once, after every
+panel exists, so an editor created later — in a dialog, say — keeps Qt's bar
+unless `install_caret()` is called on it). A
+colour written into a rule as a literal stops following the theme and no test
+will notice — always use a token. `tests/test_theme.py` pins the palettes to
+`style.py`'s constants, the accent's distance from `INFO`, and that semantic
+colours never change; `tests/test_vibe.py` pins the caret.
 
 ---
 
@@ -254,6 +304,9 @@ Under **System**, collapsed by default. Four scannable rows update every second:
 | Swap % and GB used/total | Green < 20%, Yellow < 50%, Red ≥ 50% |
 | Battery % and charging state | Green if charging or > 40%, Yellow > 20%, Red ≤ 20% |
 
+"Green" here is the theme accent (rose or cyan under the other themes — see
+[Themes](#themes)); yellow and red are the shared `WARNING` and `DANGER`.
+
 **Realtime Monitor** — reserved button, currently disabled.
 
 ### Routing
@@ -286,9 +339,11 @@ duplicated.
 
 ### API Key Status
 
-Under **API KEYS**, collapsed by default. One line per provider — OpenAI,
-DeepSeek, Kimi, Gemini, Anthropic — reading `available` or `not set` depending
-on whether the key is present in the environment.
+Under **API keys**, collapsed by default. One row per provider — OpenAI,
+DeepSeek, Kimi, Gemini, Anthropic — with a **Configured**, **Not configured**
+or **Check failed** badge depending on whether the key is present in the
+environment. Presence is not reachability: `scripts/check_keys.py` asks each
+provider (see §19).
 
 ---
 
@@ -369,7 +424,7 @@ These checkboxes are a deliberate safety mechanism. Even if the provider is sele
 
 ### 6.4 Input Box
 
-A multi-line text field where the user types their message. The minimum height is 190 px.
+A multi-line text field where the user types their message. The minimum height is 190 px. Typed text is drawn in the theme's phosphor colour with the underscore caret (see [Themes](#themes)).
 
 Every change to the input box triggers two reactive updates:
 1. `update_live_cost_estimate()` — recalculates the estimated token count and cost shown in the right panel.
@@ -1111,7 +1166,7 @@ A separate workflow that converts ebook files into MP3 audiobooks using OpenAI's
 
 #### What the Narrator Agent Does
 
-For a selected ebook (PDF / EPUB / TXT / MOBI), the engine:
+For a selected ebook (PDF / EPUB / TXT / MOBI / AZW3 — MOBI and AZW3 are converted to EPUB first with Calibre's `ebook-convert`, which must be installed), the engine:
 
 1. Extracts the book's text content.
 2. Chunks it (default 1400 tokens per chunk).
@@ -1129,7 +1184,7 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 
 | Element | Purpose |
 |---------|---------|
-| **Book list** | Populated from the configured input folder. Supports `.pdf`, `.epub`, `.txt`, `.mobi`. |
+| **Book list** | Populated from the configured input folder. Supports `.pdf`, `.epub`, `.txt`, `.mobi`, `.azw3`. |
 | **Refresh List** | Re-scans the input folder. |
 | **Start** | Begins conversion of the selected book (confirmation dialog first). |
 | **⛔ Stop** | Kills the running conversion subprocess. |
@@ -1168,7 +1223,7 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 #### How to Use — Step by Step
 
 1. Drop one or more ebooks into the configured input folder.
-2. Click **Audiobooks** under **Creative**.
+2. Open the **Audio + Music** workspace and choose **Booth**.
 3. Click **Refresh List** to populate the book list.
    Or select a named Project and click **Use Project Book** to add its linked
    Write export without changing the normal input folder.
@@ -1195,6 +1250,8 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 > The Audiobook agent has **no LLM provider selector** — the only AI involved is OpenAI TTS. Other Sentinel providers are irrelevant here.
 
 > If conversion is `[Blocked]`, top up OpenAI billing then click **Start** again — partial progress is preserved.
+
+> Resume trusts only finished chunks. Each chunk streams into `<chunk>.part` and is renamed into place only once complete, so a run stopped mid-stream (⛔ Stop, a crash, a quota cut) leaves nothing a resume can mistake for a finished chunk; partials are swept on the next run.
 
 > Smaller chunk tokens mean more API calls and slightly more cost; larger chunks risk hitting API per-request limits. The default 1400 is a good trade-off.
 
@@ -1918,7 +1975,7 @@ Status values are colour-coded: green (success), red (error), amber (cancelled).
 
 ### 13.3 Settings
 
-Opened by the **⚙ Settings** button. A tabbed dialog with four sections.
+Opened by the **Settings** button in the header. A tabbed dialog with five tabs: General, Agents, Tools, Pricing and Projects.
 
 #### General Tab
 
@@ -1927,6 +1984,11 @@ Opened by the **⚙ Settings** button. A tabbed dialog with four sections.
 | EUR / USD rate | Conversion rate used for cost calculations |
 | Default session budget (€) | Starting value for the session budget input on startup |
 | Default daily budget (€) | Starting value for the daily budget input on startup |
+
+**Appearance** (also on the General tab) — a **Theme** picker: Green (Matrix),
+Red, Blue (Cyberpunk). Choosing one repaints the window immediately and saves
+it, so the choice is made by looking; **Cancel** puts back the theme the dialog
+opened with. The header's theme dots do the same thing — see [Themes](#themes).
 
 #### Agents Tab
 
@@ -1950,6 +2012,12 @@ Shows every row in the `pricing` table with editable fields:
 - **Output /1M USD** — Cost per million output tokens.
 
 Pricing rows are created during the initial migration from `config/pricing.json` and can be updated here.
+
+#### Projects Tab
+
+**Manage Projects** opens the project manager: group saved chats, reuse
+instructions and setup, and set an optional daily project spend cap. Archiving
+hides a project without deleting its chats. See §4.
 
 #### Save All
 
@@ -2122,6 +2190,7 @@ Key-value store for application settings.
 | `session_budget_eur` | Default session budget |
 | `daily_budget_eur` | Default daily budget |
 | `default_model_<provider>` | Last selected model per provider |
+| `ui_theme` | `green` / `red` / `blue` — the colour theme (`ui/theme.py`); written as soon as it is picked |
 
 ---
 
@@ -2129,7 +2198,7 @@ Key-value store for application settings.
 
 ```
 imprint/
-├── main.py                        # Entry point + main window (~7,100 lines — see
+├── main.py                        # Entry point + main window (~4,400 lines — see
 │                                  #   docs/refactor_plan.md, TODO.md #2)
 ├── README.md                      # This documentation file
 ├── FORK_PLAN.md                   # Split rationale, carved out of sentinel_ai
@@ -2153,8 +2222,11 @@ imprint/
 ├── ui/                            # Extracted from main.py (refactor Phases 1-3)
 │   ├── workers.py                 # ChatWorker, SubprocessWorker, ModelPullWorker,
 │   │                              #   FiverrImageWorker
-│   ├── widgets.py                 # FlowLayout, CollapsibleSection
-│   ├── style.py                   # GLOBAL_STYLESHEET
+│   ├── widgets.py                 # FlowLayout, CollapsibleSection, ThemeDots
+│   ├── style.py                   # Design tokens + global_stylesheet(theme)
+│   ├── theme.py                   # The three palettes, saved choice, repaint registry
+│   ├── vibe.py                    # Underscore caret for editable text fields
+│   ├── charts.py                  # House bar chart (QPainter, themed)
 │   ├── tooltips.py                # seed_tooltips(app)
 │   ├── dialogs.py                 # show_settings / show_model_guide /
 │   │                              #   show_cost_history / show_run_log
@@ -2193,7 +2265,7 @@ imprint/
 │   # domain_lookup.py, email_lookup.py, username_lookup.py, and
 │   # result_normalizer.py (the OSINT lookup layer) stayed with the security half.
 │
-├── tests/                         # 950 tests — see §15.1
+├── tests/                         # ~1,000 tests — see §16.1
 │   ├── test_agents_scenarios.py   # agent prompt construction
 │   ├── test_cost_and_limits.py    # Validator gates + token/cost maths
 │   ├── test_request_guard.py      # authorize/record/abandon_request
@@ -2241,7 +2313,9 @@ imprint/
 .venv/bin/python -m pytest -q
 ```
 
-950 tests in about 95 seconds (2026-10-06). Install the suite's own
+Just over 1,000 tests: 993 collected at the 2026-10-06 merge (981 passed,
+11 skipped, 1 known red — the converter-drift card in TODO.md), before
+`test_theme.py` and `test_vibe.py` were added. Install the suite's own
 dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
 covers pytest and `pytest-timeout`:
 
@@ -2262,6 +2336,8 @@ uv pip install -r requirements.txt -r requirements-dev.txt
 | `test_request_guard.py` | `authorize_request` / `record_request` / `abandon_request`. Blocked requests open no run; recording without authorising bills nothing; double-record bills once; abandoned requests stay unbilled. |
 | `test_book_pipeline.py` | Chapter detection and offsets, EPUB/DOCX/PDF export, calendar scheduling, KDP CSV summarisation, LLM list parsing, collision-proof asset paths. |
 | `test_audiobook_player.py` | Library scan, resume bookkeeping, playback against a real MP3, and `release()` — the media engine must not outlive the widget. |
+| `test_theme.py` | The three palettes match `ui/style.py`'s authored constants, semantic colours never change, the accents keep their distance from `INFO`, the choice persists and falls back to green, switching repaints every hand-built sheet, the Settings picker previews live and Cancel restores, and the header dots (click and ←/→). |
+| `test_vibe.py` | The underscore caret: one cadence for every theme, Qt's own caret off, follows focus and cursor, drawn in the theme phosphor, installed on every editable text box and no other, and no moving backdrop. |
 
 `tests/manual_test_cases.md` sits on top of all of this: the hand pass over the
 eight workspaces, the ten agents and the systems under them, with every case
@@ -2572,7 +2648,7 @@ The Audiobook agent reads its paths and defaults from `services/tool_runner.py`,
 
 ## 20. Learning Centre
 
-**Learning Centre** in the right rail opens a 27-lesson operating academy
+**Learning Centre** in the right rail (or **F1** anywhere) opens a 26-lesson operating academy
 rendered from `docs/learn/manifest.json` and `docs/learn/modules/`:
 
 | Section | Covers |
@@ -2586,6 +2662,15 @@ The lessons are plain Markdown and the manifest is the canonical navigation
 source. Search indexes headings and excerpts locally, opens the matching anchor,
 and makes no paid provider call. Guided completion and the last lesson are saved
 locally; reference use does not require completing lessons in order.
+
+**Every agent lesson is a recipe with Show me steps.** All ten agent lessons
+carry a worked recipe — a named outcome, copy-exact inputs, honest time and cost
+lines — whose steps link `[Show me](show:<control path>)`. Following one closes
+the lesson, opens the agent, switches every tab above the control, scrolls to it
+and rings it (`ui/spotlight.py`); **Back to lesson** returns to that step. F1
+opens the lesson for the focused control via `docs/learn/help_map.json`. Tests
+resolve every `show:` path and help-map entry against the built window, so a
+renamed or moved control fails the suite instead of the recipe.
 
 **Screenshots are generated, not pasted.** `scripts/make_learning_shots.py`
 drives the real window offscreen and writes `docs/learn/img/`:

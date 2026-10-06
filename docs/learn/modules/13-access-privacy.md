@@ -17,7 +17,7 @@
 | Provider is permitted | The current execution policy allows that provider to be used. |
 | Route is eligible | Credential, permission, capability, availability, and budget checks passed. |
 
-The **API KEYS** rail reports detected readiness. It is not the secret editor.
+The **API keys** rail card reports detected readiness. It is not the secret editor.
 The generic Chat exposes local/hybrid/cloud execution policy and
 provider permission controls; dedicated agent selectors expose only their real
 implemented routes and recommendations.
@@ -31,7 +31,7 @@ which build is running before changing a file.
 
 ## Walkthrough
 
-1. Open **API KEYS** and list only status—not secret values.
+1. Open **API keys** and list only status—not secret values.
 2. Identify the selected provider and whether the action sends prompt text,
    source files, images, voice references, identity data, or media to it.
 3. Keep unused provider permissions off where the control exists.
@@ -43,8 +43,9 @@ which build is running before changing a file.
 
 ## How to read the result
 
-A green key/status indicator shows detected configuration, not policy approval,
-account quota, current provider health, or rights to the submitted content.
+A **Configured** badge (drawn in the theme's accent colour) shows detected
+configuration, not policy approval, account quota, current provider health, or
+rights to the submitted content.
 
 ## Verification
 

@@ -5,7 +5,8 @@
 
 ## Prerequisites
 
-- PDF, EPUB, TXT, or MOBI source you are authorised to process.
+- PDF, EPUB, TXT, MOBI, or AZW3 source you are authorised to process
+  (MOBI and AZW3 also need Calibre's `ebook-convert` installed).
 - OpenAI TTS access; audiobook narration uses it independently of text choices
   elsewhere.
 - Writable input/output folders and sufficient cap for the estimated length.
@@ -108,8 +109,8 @@ Contents:   one chapter or short story you own the rights to
             (roughly 1,500–3,000 words keeps the first run cheap)
 ```
 
-PDF, EPUB and MOBI work too; a plain .txt removes extraction surprises on the
-first try.
+PDF, EPUB, MOBI and AZW3 work too (MOBI and AZW3 need Calibre installed);
+a plain .txt removes extraction surprises on the first try.
 
 [Show me](show:audiobook_open_input_btn)
 

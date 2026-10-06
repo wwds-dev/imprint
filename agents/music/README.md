@@ -5,13 +5,17 @@ and income-roadmap generation.  Its public API is `agents.music.MusicAgent`.
 Provider execution and project persistence stay in the umbrella.
 
 User guidance: `docs/agents/music.md`.  Run focused coverage with
-`pytest tests/test_agents_scenarios.py -k music`.
+`pytest tests/test_agents_scenarios.py -k music` and `pytest tests/test_music_plans.py`.
 
 The package owns the Music workspace layout and release-plan lifecycle in
 `panel.py`, plus its **Songs & Albums** tab in `suno_panel.py`. Imprint still
-owns provider execution, the shared spending guard and run history. Temporary
-host-control aliases remain for recommendation and tooltip bindings. See
-`SUNO_WORKFLOW.md`.
+owns provider execution, the shared spending guard and run history. The
+host-control aliases were retired 2026-09-21 (Music was the first package to
+drop them): shared tooltip/recommendation/context wiring resolves controls
+through `host._find_control()`, and `HOST_CONTROLS` stays only as the
+published contract of what the panel owns. Every generated release plan is
+also stored as a record (`plans.py`), and self-reported outcomes of past
+releases feed the next plan's prompt. See `SUNO_WORKFLOW.md`.
 
 ## Files
 
@@ -70,6 +74,27 @@ host-control aliases remain for recommendation and tooltip bindings. See
   six result tabs, and guarded request/result lifecycle. The umbrella composes
   `MusicPanel`; it no longer defines Music's layout or plan handlers in
   `main.py`. A rejected paid request leaves Generate available.
+  **Generate Plan** prepends `plans.outcomes_context(artist)` to the prompt
+  when the artist has releases with recorded outcomes, and on completion
+  stores the plan with `plans.save_plan()` (status line: "tabs populated and
+  stored"); **Save Full Plan** remains a plain-text export. **Record
+  Outcome…** refuses an empty Artist field, then opens a dialog listing that
+  artist's last 10 stored plans (dated, marked when an outcome already
+  exists, prefilled from stored numbers) so the user picks the plan that
+  actually shipped and enters streams / revenue (USD) / notes; an all-blank
+  entry records nothing.
+
+- **`plans.py`** — structured release plans in the `music_release_plans`
+  table (schema in `services/database.py`), Qt-free. `save_plan()` stores
+  the inputs (artist, genre, release type, distributor, audience,
+  description), the full prose, the parsed sections as JSON and the owning
+  Project id; `get_plan()` and `list_plans(artist=, project=, limit=)`
+  (newest first) read them back; `record_outcome()` writes self-reported
+  streams, revenue and notes (no platform API is wired);
+  `outcomes_context(artist)` builds a compact "Past releases and measured
+  outcomes (self-reported…)" block from the artist's newest plans that
+  actually have an outcome, and returns an empty string otherwise so a
+  debut's prompt is untouched. Covered by `tests/test_music_plans.py`.
 
 - **`recommendations.py`** — registers Music's `RECOMMENDATION_PROFILE` (an
   `AgentProfile` from `services.recommendations.models`) with the shared

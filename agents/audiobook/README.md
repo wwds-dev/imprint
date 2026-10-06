@@ -13,6 +13,11 @@ conversion, the source (unless already linked) and verified MP3 are linked to
 the Project active when Start was pressed. Listen still scans the global output
 folder by default; **Current Project** shows only linked audiobooks.
 
+Convert lists PDF, EPUB, TXT, MOBI and AZW3 sources (`SUPPORTED_EBOOKS` in
+`panel.py`, matching `services/narrator/converter.py`'s `SUPPORTED_SUFFIXES`).
+MOBI and AZW3 are turned into EPUB by Calibre first, so they also need
+`ebook-convert` installed on the machine. AZW3 was added 2026-10-06 (`703c111`).
+
 ## Files
 
 - `__init__.py` — public interface; re-exports `AudiobookConnector` and lazily
@@ -37,15 +42,7 @@ folder by default; **Current Project** shows only linked audiobooks.
   persisted on a 5s timer and on pause/stop rather than only on clean exit —
   a bare `position <= 0` is never written, since both "not loaded yet" and
   "just stopped" report position 0.
-- `audiobook_library.py` — the audiobook library and its per-book resume
-  state: `scan(folder)` recursively lists audio files with saved progress
-  attached; `save_position()`/`load_position()` persist the playhead keyed by
-  file path rather than library index (files get renamed/re-converted, so an
-  index would quietly point at the wrong book) and mark a book `finished`
-  once played past 99% rather than parked at the last second;
-  `embedded_chapters()` (via `ffprobe`), `saved_marks()`, `save_mark()` and
-  `delete_mark()` back the Chapters & marks menu.
-  `release()` (2026-10-06) saves the playhead, stops both timers, clears the
+  `AudiobookPlayer.release()` (2026-10-06) saves the playhead, stops both timers, clears the
   source and drops the audio output. `stop()` ends playback but leaves the
   source set, and a `QMediaPlayer` holding a source keeps the FFmpeg backend's
   demuxer, decoder and renderer threads open — threads that are not `QThread`
@@ -55,6 +52,31 @@ folder by default; **Current Project** shows only linked audiobooks.
   `QComboBox.setStyle()` deadlocked in `QObject::disconnect` against the live
   audio threads. The tests build players through a `make_player` fixture that
   releases them, and four tests pin the method itself.
+- `audiobook_library.py` — the audiobook library and its per-book resume
+  state: `scan(folder)` recursively lists audio files with saved progress
+  attached; `save_position()`/`load_position()` persist the playhead keyed by
+  file path rather than library index (files get renamed/re-converted, so an
+  index would quietly point at the wrong book) and mark a book `finished`
+  once played past 99% rather than parked at the last second;
+  `embedded_chapters()` (via `ffprobe`), `saved_marks()`, `save_mark()` and
+  `delete_mark()` back the Chapters & marks menu.
+- `conversions.py` — the durable, Qt-free record of conversions in the
+  `audiobook_conversions` table: one row per book (source + output path),
+  reused across runs, holding voice/chunk settings, live chunk progress,
+  `estimate_eur` (the whole-book estimate captured at first start),
+  `billed_eur` (what has actually been logged) and `run_baseline` (where this
+  run started). `find_open()` returns a book's unfinished row;
+  `remaining_fraction()` is the unpaid share of it; `open_job()` reuses that
+  row (or `reset_progress=True` for a confirmed fresh start after changed
+  settings) or creates one; `update_progress()`, `run_spend_eur()`,
+  `settle()`, `get_job()` and `dead_runs()` complete the lifecycle. The panel
+  uses it on Convert to authorize only the remaining fraction of the estimate,
+  updates progress from the converter's stdout, settles before it bills on
+  stop/failure/success, and `resume_pending_conversions()` (called from
+  `main.py` at startup) settles rows the previous process died in and names
+  every interrupted book in the status label. Any number of interruptions
+  therefore converges on one estimate, never more.
+  Covered by `tests/test_audiobook_conversions.py`.
 - `recommendations.py` — exports `RECOMMENDATION_PROFILE`, an `AgentProfile`
   (from `services.recommendations`) describing what this agent needs from an
   AI provider/model: tagged `narration`, `longform`, `reliability`, weighted
@@ -64,4 +86,5 @@ folder by default; **Current Project** shows only linked audiobooks.
   shared `RecommendationEngine` to recommend a provider/model for narration jobs.
 
 User guidance: `docs/agents/audiobook.md`.  Run focused coverage with
-`pytest tests/test_audiobook_player.py tests/test_request_guard.py -k audiobook`.
+`pytest tests/test_audiobook_player.py tests/test_audiobook_conversions.py`
+and `pytest tests/test_request_guard.py -k audiobook`.
