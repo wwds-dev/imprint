@@ -50,13 +50,23 @@ session — set a low daily cap in Settings first so a mistake is cheap.
       cases below unreadable. `llama3.1:8b` or `qwen2.5:7b` is the right choice
       for this pass.
 - [ ] For the `PAID` pass only: a `.env` beside `main.py` with the provider keys
-      you intend to test. `.env.example` lists the model-provider names. The
-      app loads it at startup; with no `.env` and no keys in the environment,
-      every cloud provider is simply unavailable and the `PAID` cases cannot run.
-- [ ] For Herald's publishing cases: `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`,
-      `REDDIT_USERNAME`, `REDDIT_PASSWORD` and/or `PINTEREST_ACCESS_TOKEN`.
-      These are **not** in `.env.example` — read them off
-      `agents/social/publishing.py` or the in-app connection guide.
+      you intend to test — copy `.env.example`, which names all of them
+      including Herald's publishing credentials. The app loads it at startup;
+      with no keys, every cloud provider is simply unavailable and the `PAID`
+      cases cannot run.
+- [ ] Confirm what is actually working, not just what is set:
+
+      ```bash
+      .venv/bin/python scripts/check_keys.py
+      ```
+
+      A typo, a revoked key and a key for the wrong account all look identical
+      until a provider is asked. The check lists models (a metadata call that
+      bills nothing) and prints no key or part of one. Two provider-specific
+      notes: **Booth narrates with OpenAI TTS**, so B3 needs
+      `OPENAI_API_KEY` and no other key substitutes; and Press's **Shorts**
+      narration needs `ELEVENLABS_API_KEY`, falling back to a mock voice
+      without it.
 - [ ] A disposable project name is free to use — these cases create
       `UAT 2026-10-05` and delete it at the end.
 - [ ] Settings → budgets: set a small daily cap you are willing to lose.

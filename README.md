@@ -2464,21 +2464,66 @@ workspace `AGENTS.md`.
 
 ### Environment Variables (API Keys)
 
+Copy `.env.example` to `.env` and paste keys into it. **Where `.env` has to
+live depends on how the app is running**, because both read it from the same
+place the app keeps its data:
+
+| Running from | `.env` goes in |
+|---|---|
+| this checkout (`python main.py`, and the live-launcher `.app`) | the repository root, beside `main.py` |
+| a frozen build | `~/Library/Application Support/Imprint/` |
+
+`main.py` calls `load_dotenv()` at startup, so a key pasted into `.env` is
+picked up on the next launch — nothing needs to be exported in a shell first. A
+value already in the environment wins over the file. `.env` is in
+`.gitignore`; `.env.example` never ships a value for a secret, and a test
+enforces both.
+
+**Model providers.** Every one is optional; the app runs on Ollama alone.
+
 | Variable | Provider | Where to get it |
 |----------|---------|-----------------|
 | `ANTHROPIC_API_KEY` | Anthropic (Claude) | console.anthropic.com → API Keys |
-| `OPENAI_API_KEY` | OpenAI | platform.openai.com → API Keys |
+| `OPENAI_API_KEY` | OpenAI — also the TTS backend Booth narrates with, so audiobooks need this one specifically | platform.openai.com → API Keys |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Gemini, and Veo video | aistudio.google.com → Get API key |
 | `DEEPSEEK_API_KEY` | DeepSeek | platform.deepseek.com → API Keys |
-| `GOOGLE_API_KEY` | Gemini | console.cloud.google.com |
-| `DASHSCOPE_API_KEY` | Qwen / Wan | bailian.console.alibabacloud.com |
+| `KIMI_API_KEY` | Kimi (Moonshot) | platform.moonshot.ai → API Keys |
+| `DASHSCOPE_API_KEY` | Qwen chat, and Wan video | bailian.console.alibabacloud.com |
+| `HF_API_KEY_ID` + `HF_API_KEY_SECRET` | Higgsfield — a key **pair**, not a bearer token | cloud.higgsfield.ai |
 
-Wan video optionally uses `DASHSCOPE_VIDEO_BASE_URL` for a workspace-scoped
-regional `/api/v1` endpoint. This is separate from `DASHSCOPE_BASE_URL`, which
-points at the OpenAI-compatible chat endpoint.
+Optional overrides, all with working defaults: `DASHSCOPE_BASE_URL` (the
+OpenAI-compatible chat endpoint — set it for a mainland-China account or a
+workspace-scoped regional host), `DASHSCOPE_VIDEO_BASE_URL` (Wan's separate
+asynchronous `/api/v1` endpoint), `HIGGSFIELD_TEXT_VIDEO_ENDPOINT` and
+`HIGGSFIELD_IMAGE_VIDEO_ENDPOINT` (default to Seedance 1.0 Lite), and
+`HIGGSFIELD_BASE_URL`. The Higgsfield pair is also accepted as
+`HIGGSFIELD_API_KEY_ID` / `HIGGSFIELD_API_KEY_SECRET`.
 
-Keys are stored in `~/.zshrc` (or a `.env` file in the project root) and loaded at startup. Never commit them to version control.
+`ELEVENLABS_API_KEY` (elevenlabs.io → API Keys) is optional and used by one
+thing: the narration in Press's Shorts tab. Without it that tab falls back to a
+mock voice and the voice list reads "(ElevenLabs key not set)". Booth's
+audiobook narration is OpenAI TTS and does not touch it.
 
-Keys must be set in the shell environment before launching the application. They are never stored in files or the database.
+**Herald publishing.** Only needed to post from the Social workspace; drafting
+and scheduling need none of it. `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`,
+`REDDIT_USERNAME`, `REDDIT_PASSWORD` (a script-type app at
+reddit.com/prefs/apps — note that this flow keeps the account password in the
+file) and `PINTEREST_ACCESS_TOKEN` (a business account's token with
+`pins:write` and `boards:read`, from developers.pinterest.com). YouTube takes no
+key here: it needs a Google Cloud Desktop OAuth `client_secret*.json` in
+vidforge's secrets folder. The Accounts tab states what each connection grants
+before you set it up and names whatever is missing.
+
+To see what is actually working — set is not the same as accepted, since a typo,
+a revoked key and a key for the wrong account all look alike until a provider
+is asked:
+
+```bash
+.venv/bin/python scripts/check_keys.py
+```
+
+It lists each provider's models, which is a metadata call that bills nothing,
+and never prints a key or any part of one.
 
 ### config/commands.json
 
