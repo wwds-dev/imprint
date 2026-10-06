@@ -11,7 +11,7 @@ file, the file is right and this document is stale.
 > **This replaces the Sentinel AI test pass.** Imprint was forked from
 > `sentinel_ai` and kept only the creative/publishing half, so the agents the
 > previous version of this file tested do not exist here. Manager, OSINT, OSINT
-> Heavy, Bug Bounty and WiFi went to `active/sentinel_fork`, which has its own
+> Heavy, Bug Bounty and WiFi went to `active/sentinel`, which has its own
 > acceptance checklist. Coding, Writing, Health, Investment, NFL Bet and ROI
 > were retired from both apps. Nothing from either list belongs in this pass.
 
