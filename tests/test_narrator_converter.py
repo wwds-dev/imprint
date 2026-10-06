@@ -14,6 +14,7 @@ Run with:  pytest tests/test_narrator_converter.py -v
 import os
 import sys
 import zipfile
+from pathlib import Path
 
 import pytest
 
@@ -66,7 +67,7 @@ def test_chapters_follow_the_spine_not_the_file_order(tmp_path):
 
     chapters = converter.extract_epub_chapters(path)
     assert [title for title, _ in chapters] == ["First", "Second", "Third"]
-    assert "alpha text" in converter.extract_epub(path).split("beta text")[0]
+    assert "alpha text" in converter.load_text(path).split("beta text")[0]
 
 
 def test_a_section_without_a_heading_still_gets_a_name(tmp_path):
@@ -157,8 +158,7 @@ def test_chapter_metadata_places_each_chapter_at_a_measured_offset(
         path.write_bytes(b"x")
 
     written = converter.write_chapter_metadata(
-        tmp_path, tmp_path / "Book.m4b", chunks,
-        [("One", 0), ("Two", 2)], total_chunks=4)
+        tmp_path, "Book", chunks, [("One", 0), ("Two", 2)])
     text = written.read_text()
 
     assert "START=0" in text and "END=4000" in text     # chunks 0–1
@@ -225,9 +225,152 @@ def test_a_chapter_title_cannot_break_the_metadata_file(tmp_path, monkeypatch):
     chunk.write_bytes(b"x")
 
     written = converter.write_chapter_metadata(
-        tmp_path, tmp_path / "Book.m4b", [chunk],
-        [("Chapter 1 = the start; really # honestly", 0)], total_chunks=1)
+        tmp_path, "Book", [chunk], [("Chapter 1 = the start; really # honestly", 0)])
     line = [l for l in written.read_text().splitlines()
             if l.startswith("title=Chapter")][0]
 
     assert r"\=" in line and r"\;" in line and r"\#" in line
+
+
+def test_a_line_break_in_a_title_does_not_end_the_chapter_entry():
+    """ffmetadata ends a value at a carriage return as well as a newline, so a
+    CRLF heading used to keep only the words before the break."""
+    assert (converter.ffmetadata_escape("Chapter One\r\nThe Beginning")
+            == "Chapter One The Beginning")
+
+
+def test_the_merge_refuses_a_format_it_does_not_know(tmp_path, monkeypatch):
+    """Anything that was not "mp3" used to take the M4B branch and be renamed
+    onto whatever suffix the caller asked for."""
+    monkeypatch.setattr(converter, "ensure_ffmpeg_available", lambda: "ffmpeg")
+    (tmp_path / "chunk_0.mp3").write_bytes(b"x")
+
+    with pytest.raises(ValueError, match="wav"):
+        converter.merge_chunks_with_ffmpeg(tmp_path, tmp_path / "Book.wav", 1, [], "wav")
+
+
+# ── Chunking per format ──────────────────────────────────────────────────────
+class _WordEncoder:
+    """Counts words, so a chunk limit reads as a word limit."""
+
+    def encode(self, text):
+        return text.split()
+
+
+def test_mp3_keeps_whole_book_chunk_boundaries(tmp_path, monkeypatch):
+    """MP3 carries no chapter marks, so it chunks the whole book in one pass —
+    the boundaries every earlier version drew. Chunking it per chapter moved
+    all of them, and a run paused before that change met a 'settings changed'
+    rebuild on resume that threw its paid chunks away. M4B needs each chapter
+    on a chunk boundary and so chunks per chapter."""
+    monkeypatch.setattr(converter, "get_token_encoder", _WordEncoder)
+    monkeypatch.setattr(converter, "MAX_INPUT_TOKENS_PER_CHUNK", 4)
+
+    def fake_tts(text, path, retries=2):
+        path.write_bytes(b"x")
+        return True
+
+    monkeypatch.setattr(converter, "generate_tts_chunk", fake_tts)
+    monkeypatch.setattr(converter, "merge_chunks_with_ffmpeg", lambda *a, **k: None)
+    chapters = [("One", "a b c"), ("Two", "d e f g h")]      # 3 + 5 words
+    source = tmp_path / "b.epub"
+    manifest_path = tmp_path / "manifest.json"
+
+    def run(audio_format):
+        manifest_path.unlink(missing_ok=True)
+        assert converter.text_to_audio(
+            chapters, source, "Book", tmp_path / f"Book.{audio_format}",
+            tmp_path / "temp_audio", manifest_path, audio_format=audio_format)
+        return converter.json_load(manifest_path)
+
+    whole_book = converter.chunk_text("\n\n".join(text for _, text in chapters), 4)
+    mp3 = run("mp3")
+    assert mp3["total_chunks"] == len(whole_book) == 2          # eight words in fours
+    assert mp3["text_sha256"] == converter.build_manifest(
+        "Book", source, whole_book)["text_sha256"]             # so an old manifest still matches
+
+    assert run("m4b")["total_chunks"] == 3                      # One: 1 chunk; Two: 2
+
+
+# ── Resume safety: a chunk stopped mid-stream ────────────────────────────────
+class _Stream:
+    """A stand-in for the OpenAI streaming response: writes some audio, then
+    does as told."""
+
+    def __init__(self, then):
+        self.then = then
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def stream_to_file(self, path):
+        Path(path).write_bytes(b"\xff\xfb" * 64)
+        if self.then is not None:
+            raise self.then
+
+
+def _client(then):
+    class Speech:
+        class with_streaming_response:
+            @staticmethod
+            def create(**kwargs):
+                return _Stream(then)
+
+    class Audio:
+        speech = Speech()
+
+    class Client:
+        audio = Audio()
+
+    return Client()
+
+
+def test_a_chunk_stopped_mid_stream_is_not_resumed_as_done(tmp_path, monkeypatch):
+    """Stop in the audiobook panel kills the worker. The bytes already streamed
+    used to sit under the chunk's final name, and the next run took that short
+    file for a finished chunk and stitched a mid-sentence cut into the book."""
+    final = tmp_path / "chunk_57.mp3"
+    monkeypatch.setattr(converter, "get_client", lambda: _client(KeyboardInterrupt()))
+
+    with pytest.raises(KeyboardInterrupt):
+        converter.generate_tts_chunk("text", final, retries=1)
+
+    assert not final.exists()
+    manifest = {"chunks": [{"index": 57, "filename": final.name, "status": "done"}]}
+    converter.sync_manifest_with_files(manifest, tmp_path)
+    assert manifest["chunks"][0]["status"] == "pending"
+
+
+def test_a_finished_chunk_lands_under_its_final_name_only(tmp_path, monkeypatch):
+    final = tmp_path / "chunk_0.mp3"
+    monkeypatch.setattr(converter, "get_client", lambda: _client(None))
+
+    assert converter.generate_tts_chunk("text", final, retries=1)
+    assert final.stat().st_size > 0
+    assert list(tmp_path.glob("*" + converter.CHUNK_PARTIAL_SUFFIX)) == []
+
+
+def test_a_failed_attempt_leaves_no_partial_behind(tmp_path, monkeypatch):
+    final = tmp_path / "chunk_0.mp3"
+    monkeypatch.setattr(converter, "get_client", lambda: _client(RuntimeError("dropped")))
+    monkeypatch.setattr(converter.time, "sleep", lambda seconds: None)
+
+    assert not converter.generate_tts_chunk("text", final, retries=2)
+    assert not final.exists()
+    assert list(tmp_path.glob("*" + converter.CHUNK_PARTIAL_SUFFIX)) == []
+
+
+def test_cleanup_sweeps_partial_chunks_too(tmp_path):
+    temp_dir = tmp_path / "temp_audio"
+    temp_dir.mkdir()
+    (temp_dir / "chunk_0.mp3").write_bytes(b"x")
+    (temp_dir / ("chunk_1.mp3" + converter.CHUNK_PARTIAL_SUFFIX)).write_bytes(b"x")
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text("{}")
+
+    converter.cleanup_after_success(temp_dir, manifest_path)
+
+    assert not temp_dir.exists() and not manifest_path.exists()
