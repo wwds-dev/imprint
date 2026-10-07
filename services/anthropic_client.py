@@ -9,16 +9,58 @@ except ImportError:
     _HAS_SDK = False
 
 
+def _usage(usage) -> dict:
+    """Token counts as the usage tracker reads them.
+
+    Anthropic reports `input_tokens` *excluding* prompt-cache reads and
+    writes, which come back separately. The tracker treats input_tokens as
+    the whole prompt and bills the `cached_input_tokens` slice at the cached
+    rate, so the three are added up and the reads named.
+    """
+    read = int(getattr(usage, "cache_read_input_tokens", 0) or 0)
+    written = int(getattr(usage, "cache_creation_input_tokens", 0) or 0)
+    return {
+        "input_tokens": int(usage.input_tokens or 0) + read + written,
+        "output_tokens": int(usage.output_tokens or 0),
+        "cached_input_tokens": read,
+    }
+
+
+def _raise_on_refusal(message) -> None:
+    """A declined request is an error, not an empty answer.
+
+    Claude Opus 5.5, Sonnet 5.5 and Fable 5.1 run safety classifiers that can
+    stop a turn with stop_reason "refusal" (HTTP 200). Returning its empty
+    text made a refusal look like a blank reply.
+    """
+    if message is None or getattr(message, "stop_reason", None) != "refusal":
+        return
+    details = getattr(message, "stop_details", None)
+    category = getattr(details, "category", None) if details else None
+    explanation = getattr(details, "explanation", None) if details else None
+    reason = f" ({category})" if category else ""
+    raise RuntimeError(
+        f"The model declined this request{reason}."
+        + (f" {explanation}" if explanation else "")
+        + "\n→ Rephrase the request, or pick another model.")
+
+
 class AnthropicClientWrapper:
+    # Offline fallback, checked against the provider's model list on 2026-10-07.
+    # Every id here needs its own row in config/pricing.json
+    # (tests/test_settings_pricing.py fails otherwise).
+    # The claude-3 family is retired (the last on 2026-04-20). This client
+    # sends no temperature, thinking config or assistant prefill, all of
+    # which the 5.x models reject.
     KNOWN_MODELS = [
+        "claude-opus-5-5",
+        "claude-sonnet-5-5",
+        "claude-fable-5-1",
+        "claude-haiku-4-5-20251001",
         "claude-opus-4-6",
         "claude-sonnet-4-6",
-        "claude-haiku-4-5-20251001",
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022",
-        "claude-3-opus-20240229",
-        "claude-3-haiku-20240307",
     ]
+    DEFAULT_MODEL = "claude-sonnet-5-5"
 
     def __init__(self):
         api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -61,7 +103,7 @@ class AnthropicClientWrapper:
     # called either (the API-keys status card reads key_available() only),
     # and wiring one up would have made an unguarded paid call.
 
-    def stream_chat(self, messages: list, model: str = "claude-sonnet-4-6"):
+    def stream_chat(self, messages: list, model: str = "claude-sonnet-5-5"):
         if not self.client:
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set.\n"
@@ -88,12 +130,10 @@ class AnthropicClientWrapper:
                 try:
                     final = stream.get_final_message()
                     if final is not None and final.usage is not None:
-                        out.usage = {
-                            "input_tokens": final.usage.input_tokens,
-                            "output_tokens": final.usage.output_tokens,
-                        }
+                        out.usage = _usage(final.usage)
                 except Exception:
-                    pass    # usage is best-effort; the text already streamed
+                    final = None    # usage is best-effort; the text streamed
+                _raise_on_refusal(final)
         except _sdk.AuthenticationError:
             raise RuntimeError(
                 "AuthenticationError (401) — API key invalid or expired.\n"
@@ -123,7 +163,7 @@ class AnthropicClientWrapper:
                 f"APIStatusError ({e.status_code}) — {e.message}"
             )
 
-    def chat(self, messages: list, model: str = "claude-sonnet-4-6"):
+    def chat(self, messages: list, model: str = "claude-sonnet-5-5"):
         if not self.client:
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set.\n"
@@ -162,10 +202,8 @@ class AnthropicClientWrapper:
             raise RuntimeError(
                 f"APIStatusError ({e.status_code}) — {e.message}"
             )
-        usage = {
-            "input_tokens": response.usage.input_tokens,
-            "output_tokens": response.usage.output_tokens,
-        }
+        _raise_on_refusal(response)
+        usage = _usage(response.usage)
         # content can be empty (max_tokens exhausted before any text block)
         # and can carry more than one text block; indexing [0] crashed on the
         # first case and silently dropped the rest on the second.

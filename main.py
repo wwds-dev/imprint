@@ -2834,7 +2834,7 @@ class GodAI(QWidget):
 
             elif provider == "openai":
                 if not self.openai.client:
-                    models = ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"]
+                    models = list(self.openai.KNOWN_MODELS)
                 else:
                     result = self.openai.client.models.list()
                     models = sorted(
@@ -2854,13 +2854,7 @@ class GodAI(QWidget):
                     models = []
 
                 if not models:
-                    models = [
-                        "deepseek-chat",
-                        "deepseek-reasoner",
-                        "deepseek-coder",
-                        "deepseek-v4-pro",
-                        "deepseek-v4-flash",
-                    ]
+                    models = list(self.deepseek.KNOWN_MODELS)
 
             elif provider == "kimi":
                 # Try API model list if available. Fallback to known/common names.

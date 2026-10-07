@@ -18,11 +18,19 @@ DEFAULT_IMAGE_MODEL = "gpt-image-2.5-flare"
 
 
 class OpenAIClientWrapper:
+    # Offline fallback, checked against the provider's model list on 2026-10-07.
+    # Every id here needs its own row in config/pricing.json
+    # (tests/test_settings_pricing.py fails otherwise).
+    # GPT-6 tiers first; the 4.x ids are still served. o1 and o4-mini shut
+    # down on 2026-10-23 and are not listed.
     KNOWN_MODELS = [
-        "gpt-4o-mini",
-        "gpt-4o",
-        "gpt-4.1-mini",
+        "gpt-6.1-sol",
+        "gpt-6-luna",
+        "gpt-6-astra",
         "gpt-4.1",
+        "gpt-4.1-mini",
+        "gpt-4o",
+        "gpt-4o-mini",
     ]
 
     def __init__(self):

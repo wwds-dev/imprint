@@ -535,9 +535,7 @@ Changing the tool updates the live cost estimate and the recommendation label in
 **Model** (combo box) — Selects the specific model for the chosen provider. The list is populated dynamically:
 
 - **Ollama:** fetches the list of locally installed models via `ollama.list_models()`. Falls back to `deepseek-r1:8b` and `deepseek-r1:1.5b` if none are found.
-- **OpenAI:** queries the API for available GPT/o-series models. Falls back to a static list (`gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1`) if the API is unavailable.
-- **DeepSeek:** queries the API if a key is configured; otherwise uses a static list including `deepseek-chat`, `deepseek-reasoner`, `deepseek-coder`.
-- **Gemini:** queries the API for models supporting `generateContent`; otherwise uses current 3.8 Flash / 3.1 Pro Preview and 2.5 Flash / Pro fallbacks. Retired 1.5 and 2.0 IDs are not offered offline.
+- **Every cloud provider:** queries the provider's live model list when a key is configured, and otherwise falls back to the client's `KNOWN_MODELS` — the offline lists in §9, checked against each provider on 2026-10-07. Retired ids (the claude-3 family, `deepseek-chat`/`deepseek-reasoner`, Gemini 1.5/2.0, `qwen3-max`) are not offered offline. Every offline id has its own row in `config/pricing.json`; `tests/test_settings_pricing.py` fails otherwise.
 
 The last selected model for each provider is saved to `config/settings.json` and restored on the next startup.
 
@@ -1891,17 +1889,20 @@ Requires an `ANTHROPIC_API_KEY` environment variable. Get your key at **console.
 
 **Model discovery:** queries the Anthropic API for available models, falls back to the static list below.
 
-| Model | Tier | Input / 1M tokens | Output / 1M tokens | Best for |
-|-------|------|-------------------|---------------------|----------|
-| `claude-opus-4-7` | Flagship | $15.00 | $75.00 | Most complex reasoning, long documents, hard coding problems |
-| `claude-sonnet-4-6` | Balanced | $3.00 | $15.00 | Best all-round choice — coding, writing, analysis |
-| `claude-haiku-4-5-20251001` | Fast | $0.80 | $4.00 | Simple tasks, quick turnaround, high-volume use |
-| `claude-3-5-sonnet-20241022` | Prev. gen | $3.00 | $15.00 | Previous Sonnet — still highly capable |
-| `claude-3-5-haiku-20241022` | Prev. gen | $0.80 | $4.00 | Previous Haiku — fast and affordable |
-| `claude-3-opus-20240229` | Prev. gen | $15.00 | $75.00 | Previous Opus |
-| `claude-3-haiku-20240307` | Prev. gen | $0.25 | $1.25 | Previous cheapest model |
+| Model | Tier | Input / 1M | Cached input | Output / 1M |
+|-------|------|-----------|--------------|-------------|
+| `claude-opus-5-5` | Flagship | $4.00 | $0.20 | $20.00 |
+| `claude-sonnet-5-5` | Balanced | $2.00 | $0.20 | $10.00 |
+| `claude-fable-5-1` | Most capable | $10.00 | $0.25 | $50.00 |
+| `claude-haiku-4-5-20251001` | Fast | $1.00 | $0.10 | $5.00 |
+| `claude-opus-4-6`, `claude-sonnet-4-6` | Legacy | $5 / $3 | $0.50 / $0.30 | $25 / $15 |
 
-**Recommended model:** `claude-sonnet-4-6` for most tasks.
+The claude-3 family is retired. The 5.x models can stop a turn with
+`stop_reason: "refusal"`; the client raises that as an error instead of
+returning an empty reply, and counts prompt-cache reads so they bill at the
+cached rate.
+
+**Recommended model:** `claude-sonnet-5-5` for most tasks.
 
 ---
 
@@ -1913,12 +1914,15 @@ Requires an `OPENAI_API_KEY` environment variable. Get your key at **platform.op
 
 **Model discovery:** queries `client.models.list()` and filters for GPT and o-series models.
 
-| Model | Notes |
-|-------|-------|
-| `gpt-4o-mini` | Fast and affordable. Good for everyday tasks. |
-| `gpt-4.1-mini` | Improved mini model. Better reasoning than gpt-4o-mini. |
-| `gpt-4.1` | Full model. Best quality for demanding tasks. |
-| `o1` / `o3` / `o4-mini` | Reasoning models. Slow but excellent for hard logic. |
+| Model | Tier | Input / Cached / Output per 1M |
+|-------|------|--------------------------------|
+| `gpt-6.1-sol` | Balanced | $2.00 / $0.10 / $10.00 |
+| `gpt-6-luna` | Fast, cheap | $0.10 / $0.01 / $0.50 |
+| `gpt-6-astra` | Flagship | $10.00 / $1.00 / $50.00 |
+| `gpt-4.1`, `gpt-4.1-mini`, `gpt-4o`, `gpt-4o-mini` | Earlier, still served | see Settings → Pricing |
+
+`o1` and `o4-mini` shut down on 2026-10-23 and are not offered. Prompts above
+272K tokens bill at a higher tier the app does not model.
 
 ---
 
@@ -1930,11 +1934,14 @@ Requires a `DEEPSEEK_API_KEY` environment variable. Get your key at **platform.d
 
 **Model discovery:** queries the DeepSeek API or falls back to a static list.
 
-| Model | Notes |
-|-------|-------|
-| `deepseek-chat` | General-purpose. Strong for coding and analysis. |
-| `deepseek-reasoner` | Extended reasoning. Good for multi-step logic. |
-| `deepseek-coder` | Specialised for code generation and debugging. |
+| Model | Tier | Input / Cached / Output per 1M (peak) |
+|-------|------|----------------------------------------|
+| `deepseek-flash` | Fast, cheap (V4.1 Flash) | $0.30 / $0.006 / $1.20 |
+| `deepseek-v4-pro` | Flagship | $1.32 / $0.044 / $3.96 |
+
+`deepseek-chat` and `deepseek-reasoner` were discontinued on 2026-07-24;
+`deepseek-v4-flash` is a legacy name routed to `deepseek-flash`. Off-peak hours
+bill at half; the app estimates at peak, the safe side.
 
 ---
 
@@ -1948,10 +1955,12 @@ Requires a `GOOGLE_API_KEY` environment variable. Get your key at **console.clou
 
 | Model | Notes |
 |-------|-------|
-| `gemini-3.1-pro-preview` | Higher-capability paid-tier option; cost reserve uses the >200k-token tier. |
-| `gemini-3.8-flash` | Current fast general-purpose option. |
-| `gemini-2.5-pro` | Long-context fallback; cost reserve uses the >200k-token tier. |
-| `gemini-2.5-flash` | Lower-cost fallback for summaries and routine drafts. |
+| `gemini-3.1-pro-preview` | Most capable; cost reserve uses the >200k-token tier ($4 / $18). |
+| `gemini-3.8-flash` | Current fast general-purpose option; $0.75 / $3.75 until 2026-12-31, then $1.50 / $7.50 — the change applies itself on 2027-01-01. |
+| `gemini-3.5-flash-lite` | Cheapest current tier ($0.30 / $2.50). |
+
+The 2.5 models stay priced but are no longer offered offline: Google limits
+them to projects that used them before.
 
 The Pricing settings show explicit paid-tier text-token rates for these and other
 current Gemini Flash models. Unknown API-listed models use a conservative
@@ -2185,13 +2194,13 @@ If any field contains an invalid number, a warning lists all errors. Valid chang
 
 Opened by the **Model Guide** button. A four-tab reference dialog.
 
-**Models tab** — Guidance on when to use each provider: Ollama, OpenAI, DeepSeek, Gemini, and Audiobook mode.
+**Models tab** — What each provider is for and which key unlocks it, then its offline models with the price the app bills each at. The model rows are generated (`ui/dialogs.model_guide_html`) from each client's `KNOWN_MODELS` and the live pricing table, so the guide cannot drift from what the app offers and charges; a model billed at the provider default says so.
 
 **Agents tab** — Guidance on each agent's purpose and recommended provider.
 
 **Routing tab** — Explanation of Execution Mode options and API checkboxes.
 
-**System tab** — Live system information: current mode/provider/model selection, API key availability for all four cloud providers (Anthropic, OpenAI, DeepSeek, Gemini), list of installed Ollama models, and a contextual recommendation based on the current agent and command.
+**System tab** — Live system information: current mode/provider/model selection, API key availability for the cloud providers (OpenAI, DeepSeek, Kimi, Gemini, Anthropic, Qwen), list of installed Ollama models, and a contextual recommendation based on the current agent and command.
 
 **Search bar** — Filters all tabs to show only those containing the search term. Tabs without a match show a "No matches" notice.
 
@@ -2805,7 +2814,9 @@ Pricing definitions in USD per million tokens. Not a "legacy backup" despite the
 }
 ```
 
-A `default` model row acts as a fallback for any model not explicitly listed for that provider. `cached_input_per_1m_usd` is optional per model — omit it and cached tokens bill at the full input rate.
+How a model finds its price (`services/pricing_catalog.resolve_price_row`): its own row; else the row of the model it is a dated snapshot or alias of (`gpt-4o-2024-08-06` → `gpt-4o`, `claude-haiku-4-5` → `claude-haiku-4-5-20251001`, `gemini-3.8-flash-001` → `gemini-3.8-flash`); else the provider's `default` row. **`default` is the provider's dearest current rate on purpose**, so a model released after the file was written is over-, never under-estimated — and the Model updates tile says it has no price of its own. `cached_input_per_1m_usd` is optional per model — omit it and cached tokens bill at the full input rate.
+
+Seeding only ever inserts missing rows, so a corrected price never reached a database that already had the old one. Two mechanisms close that, both in `services/database.py` and both matching the *old shipped value exactly*, so a rate edited in Settings is never overwritten: a one-time correction list (`PRICING_CORRECTIONS_2026_10`), and `SCHEDULED_PRICING` for announced changes, applied on their date.
 
 ### Audiobook Tool Configuration
 

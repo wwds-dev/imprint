@@ -47,7 +47,9 @@ NON_CHAT_MARKERS = (
     "veo", "sora", "wanx", "wan2", "wan3", "search", "aqa",
 )
 
-_DATE_SUFFIX = re.compile(r"[-_@](?:20\d{2}-?\d{2}-?\d{2}|\d{4})$")
+# A trailing release marker: a date (-2026-08-01, -20251001), a four-digit
+# month-day (-0806) or Gemini's three-digit version (-001).
+_DATE_SUFFIX = re.compile(r"[-_@](?:20\d{2}-?\d{2}-?\d{2}|\d{4}|\d{3})$")
 
 
 def is_chat_model(model_id: str) -> bool:
@@ -57,7 +59,7 @@ def is_chat_model(model_id: str) -> bool:
 
 
 def canonical(model_id: str) -> str:
-    """`model_id` without a trailing release date (`-2026-08-01`, `-0806`)."""
+    """`model_id` without a trailing release marker (`-2026-08-01`, `-0806`, `-001`)."""
     return _DATE_SUFFIX.sub("", model_id.strip())
 
 

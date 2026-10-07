@@ -65,13 +65,10 @@ class UsageTracker:
             eur_row = conn.execute("SELECT value FROM settings WHERE key = 'eur_per_usd'").fetchone()
             eur_per_usd = float(eur_row["value"]) if eur_row else 0.92
 
-            row = conn.execute(
-                "SELECT input_per_1m_usd, output_per_1m_usd, cached_input_per_1m_usd "
-                "FROM pricing WHERE backend = ? AND model IN (?, 'default') "
-                "AND input_per_1m_usd > 0 AND output_per_1m_usd > 0 "
-                "ORDER BY CASE model WHEN ? THEN 0 ELSE 1 END LIMIT 1",
-                (backend, model, model)
-            ).fetchone()
+            # Exact row, else the row of the model this one is a dated
+            # snapshot or alias of, else the provider default.
+            from services.pricing_catalog import resolve_price_row
+            row, _source = resolve_price_row(conn, backend, model)
 
         if not row:
             return 0.0

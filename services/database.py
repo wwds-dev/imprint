@@ -656,6 +656,8 @@ def init_db() -> None:
     _purge_non_token_pricing_rows(conn)
     _correct_stale_pricing(conn)
     _correct_gemini_zero_pricing(conn)
+    _correct_pricing_2026_10(conn)
+    _apply_scheduled_pricing(conn)
     _seed_default_agents(conn)
     _purge_split_agents(conn)
     _sync_agent_labels(conn)
@@ -943,38 +945,126 @@ def _correct_gemini_zero_pricing(conn: sqlite3.Connection) -> None:
 
 
 def _seed_missing_pricing(conn: sqlite3.Connection) -> None:
-    """Insert default pricing rows that may not exist yet (e.g. new providers)."""
-    # Anthropic list prices per 1M tokens, from the official pricing table.
-    # Note the Opus 4.5-and-later tier is 5/25, NOT the 15/75 that Opus 4/4.1
-    # charged — seeding those at 15/75 overstated every estimate threefold.
+    """Insert default pricing rows that may not exist yet (e.g. new providers).
+
+    A belt to config/pricing.json's braces (which _seed_pricing_from_json reads
+    on every launch): rows here exist even if that file is unreadable. Keep
+    the two in step; tests/test_settings_pricing.py checks that every offline
+    model has an exact row.
+    """
+    # Anthropic list prices per 1M tokens (input, output, cached input), from
+    # platform.claude.com/docs/en/docs/about-claude/pricing, checked 2026-10-07.
+    # The claude-3 family is retired (last one 2026-04-20) and no longer seeded.
+    # `default` is the dearest current model, so an unpriced new one is
+    # over- rather than under-estimated.
     defaults = [
-        ("anthropic", "claude-fable-5",            10.00,  50.00),
-        ("anthropic", "claude-opus-5",              5.00,  25.00),
-        ("anthropic", "claude-sonnet-5",            2.00,  10.00),
-        ("anthropic", "claude-opus-4-8",            5.00,  25.00),
-        ("anthropic", "claude-opus-4-7",            5.00,  25.00),
-        ("anthropic", "claude-opus-4-6",            5.00,  25.00),
-        ("anthropic", "claude-opus-4-5-20251101",   5.00,  25.00),
-        ("anthropic", "claude-opus-4-1-20250805",  15.00,  75.00),
-        ("anthropic", "claude-sonnet-4-6",          3.00,  15.00),
-        ("anthropic", "claude-sonnet-4-5-20250929", 3.00,  15.00),
-        ("anthropic", "claude-haiku-4-5-20251001",  1.00,   5.00),
-        ("anthropic", "claude-3-5-sonnet-20241022", 3.00,  15.00),
-        ("anthropic", "claude-3-5-haiku-20241022",  0.80,   4.00),
-        ("anthropic", "claude-3-opus-20240229",    15.00,  75.00),
-        ("anthropic", "claude-3-haiku-20240307",    0.25,   1.25),
-        ("anthropic", "default",                    3.00,  15.00),
-        # Qwen via Alibaba Model Studio. Pricing is regional — these are the
-        # Frankfurt/EU rates (Singapore is dearer at 2.00 / 6.00).
-        ("qwen", "qwen3.8-max",                     1.65,   4.951),
-        ("qwen", "qwen3-max",                       1.65,   4.951),
-        ("qwen", "default",                         1.65,   4.951),
+        ("anthropic", "claude-fable-5-1",          10.00,  50.00, 0.25),
+        ("anthropic", "claude-opus-5-5",            4.00,  20.00, 0.20),
+        ("anthropic", "claude-sonnet-5-5",          2.00,  10.00, 0.20),
+        ("anthropic", "claude-fable-5",            10.00,  50.00, 1.00),
+        ("anthropic", "claude-opus-5",              5.00,  25.00, 0.50),
+        ("anthropic", "claude-sonnet-5",            2.00,  10.00, 0.20),
+        ("anthropic", "claude-opus-4-8",            5.00,  25.00, 0.50),
+        ("anthropic", "claude-opus-4-7",            5.00,  25.00, 0.50),
+        ("anthropic", "claude-opus-4-6",            5.00,  25.00, 0.50),
+        ("anthropic", "claude-opus-4-5-20251101",   5.00,  25.00, 0.50),
+        ("anthropic", "claude-opus-4-1-20250805",  15.00,  75.00, 1.50),
+        ("anthropic", "claude-sonnet-4-6",          3.00,  15.00, 0.30),
+        ("anthropic", "claude-sonnet-4-5-20250929", 3.00,  15.00, 0.30),
+        ("anthropic", "claude-haiku-4-5-20251001",  1.00,   5.00, 0.10),
+        ("anthropic", "default",                   10.00,  50.00, 0.25),
+        # Qwen via Alibaba Model Studio. Pricing is regional; these are the
+        # international (Singapore) rates, because that is the endpoint the
+        # client defaults to. Frankfurt/Hong Kong/Beijing list qwen3.8-max at
+        # 1.65/4.951 — set DASHSCOPE_BASE_URL and edit the rows to match.
+        ("qwen", "qwen3.8-max",                     2.00,   6.00, 0.00),
+        ("qwen", "default",                         2.00,   6.00, 0.00),
     ]
-    for backend, model, inp, out in defaults:
+    for backend, model, inp, out, cached in defaults:
         conn.execute(
-            "INSERT OR IGNORE INTO pricing (backend, model, input_per_1m_usd, output_per_1m_usd) VALUES (?,?,?,?)",
-            (backend, model, inp, out),
+            "INSERT OR IGNORE INTO pricing (backend, model, input_per_1m_usd, "
+            "output_per_1m_usd, cached_input_per_1m_usd) VALUES (?,?,?,?,?)",
+            (backend, model, inp, out, cached),
         )
+    conn.commit()
+
+
+# (backend, model, (old input, old output, old cached or None),
+#                  (new input, new output, new cached))
+# Rows shipped at a wrong or stale rate before 2026-10-07. Only a row still
+# holding the old value is touched — a rate edited in Settings is the user's.
+PRICING_CORRECTIONS_2026_10 = [
+    # Singapore, not Frankfurt: the client's default endpoint is dashscope-intl.
+    ("qwen", "qwen3.8-max", (1.65, 4.951, None), (2.00, 6.00, 0.0)),
+    ("qwen", "default", (1.65, 4.951, None), (2.00, 6.00, 0.0)),
+    # Defaults become the provider's dearest current rate, so a model with no
+    # row is over-estimated rather than billed at a cheap model's price
+    # (gpt-4o and deepseek-v4-pro were billing at ~1/16 and ~1/9).
+    ("openai", "default", (0.15, 0.60, None), (10.00, 50.00, 1.00)),
+    ("deepseek", "default", (0.14, 0.28, None), (1.32, 3.96, 0.044)),
+    ("anthropic", "default", (3.00, 15.00, None), (10.00, 50.00, 0.25)),
+    ("kimi", "default", (0.95, 4.00, None), (3.00, 15.00, 0.30)),
+    # Kimi cached-input rates were high.
+    ("kimi", "kimi-k3", (3.00, 15.00, 0.60), (3.00, 15.00, 0.30)),
+    ("kimi", "kimi-k2.6", (0.95, 4.00, 0.19), (0.95, 4.00, 0.16)),
+]
+
+
+def _correct_pricing_2026_10(conn: sqlite3.Connection) -> None:
+    """One-time repair of rows shipped at a stale rate (see the list above).
+
+    _seed_pricing_from_json and _seed_missing_pricing only ever INSERT OR
+    IGNORE, so a corrected price in config/pricing.json never reaches a
+    database that already holds the old row. Guarded by a settings flag, and
+    each update matches the old shipped value exactly.
+    """
+    flag = conn.execute(
+        "SELECT value FROM settings WHERE key = 'pricing_correction_2026_10'"
+    ).fetchone()
+    if flag:
+        return
+    for backend, model, old, new in PRICING_CORRECTIONS_2026_10:
+        old_in, old_out, old_cached = old
+        new_in, new_out, new_cached = new
+        query = ("UPDATE pricing SET input_per_1m_usd = ?, output_per_1m_usd = ?, "
+                 "cached_input_per_1m_usd = ? WHERE backend = ? AND model = ? "
+                 "AND abs(input_per_1m_usd - ?) < 1e-9 "
+                 "AND abs(output_per_1m_usd - ?) < 1e-9")
+        params = [new_in, new_out, new_cached, backend, model, old_in, old_out]
+        if old_cached is not None:
+            query += " AND abs(cached_input_per_1m_usd - ?) < 1e-9"
+            params.append(old_cached)
+        conn.execute(query, params)
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) "
+        "VALUES ('pricing_correction_2026_10', 'done')")
+    conn.commit()
+
+
+# Announced price changes, applied on their date: (effective ISO date,
+# backend, model, old (in, out, cached), new (in, out, cached)). A row is
+# changed only while it still holds the old price, so this is idempotent and
+# never overrides an edit. Source: ai.google.dev/gemini-api/docs/pricing,
+# checked 2026-10-07 ("$0.75 through 2026-12-31, then $1.50").
+SCHEDULED_PRICING = [
+    ("2027-01-01", "gemini", model, (0.75, 3.75, 0.075), (1.50, 7.50, 0.15))
+    for model in ("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash")
+]
+
+
+def _apply_scheduled_pricing(conn: sqlite3.Connection, today: str | None = None) -> None:
+    from datetime import date
+    today = today or date.today().isoformat()
+    for effective, backend, model, old, new in SCHEDULED_PRICING:
+        if today < effective:
+            continue
+        conn.execute(
+            "UPDATE pricing SET input_per_1m_usd = ?, output_per_1m_usd = ?, "
+            "cached_input_per_1m_usd = ? WHERE backend = ? AND model = ? "
+            "AND abs(input_per_1m_usd - ?) < 1e-9 "
+            "AND abs(output_per_1m_usd - ?) < 1e-9 "
+            "AND abs(cached_input_per_1m_usd - ?) < 1e-9",
+            (*new, backend, model, *old))
     conn.commit()
 
 

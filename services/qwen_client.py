@@ -50,9 +50,13 @@ class QwenClientWrapper:
     # Qwen3.8-Max — 2.4T-parameter MoE (95B active per token), released
     # 2026-08-03. 1M-token context, up to 131,072 output tokens, multimodal in
     # (text/image/video), text out, with function calling and structured output.
+    # Offline fallback, checked against Model Studio's model list on
+    # 2026-10-07; every id needs its own row in config/pricing.json.
+    # qwen3-max retires on 2026-10-10 and is not listed.
     KNOWN_MODELS = [
         "qwen3.8-max",
-        "qwen3-max",
+        "qwen3.7-plus",
+        "qwen3.8-flash",
         "qwen-plus",
         "qwen-flash",
     ]

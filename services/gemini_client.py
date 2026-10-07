@@ -38,11 +38,15 @@ class GeminiVideoJob:
 
 
 class GeminiClientWrapper:
+    # Offline fallback, checked against the provider's model list on 2026-10-07.
+    # Every id here needs its own row in config/pricing.json
+    # (tests/test_settings_pricing.py fails otherwise).
+    # The 2.5 models are kept in config/pricing.json but not offered offline:
+    # Google now limits them to projects that used them before.
     KNOWN_MODELS = [
         "gemini-3.8-flash",
         "gemini-3.1-pro-preview",
-        "gemini-2.5-flash",
-        "gemini-2.5-pro",
+        "gemini-3.5-flash-lite",
     ]
 
     def __init__(self):

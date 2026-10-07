@@ -329,8 +329,11 @@ def test_more_cached_than_input_tokens_cannot_go_negative(tracker):
 
 def test_a_backend_without_a_cached_rate_bills_at_full_input(tracker):
     """No cached rate known means no discount — never a free request."""
-    full = tracker.calculate_cost_eur("anthropic", "claude-sonnet-5", 10**6, 0)
-    claimed = tracker.calculate_cost_eur("anthropic", "claude-sonnet-5", 10**6, 0,
+    # qwen3.8-max: Model Studio publishes no context-cache rate for it on the
+    # international endpoint, so its row has none (Claude rows all have one
+    # since 2026-10-07).
+    full = tracker.calculate_cost_eur("qwen", "qwen3.8-max", 10**6, 0)
+    claimed = tracker.calculate_cost_eur("qwen", "qwen3.8-max", 10**6, 0,
                                          cached_input_tokens=10**6)
     assert claimed == full
 
@@ -338,7 +341,7 @@ def test_a_backend_without_a_cached_rate_bills_at_full_input(tracker):
 @pytest.mark.parametrize("backend,model", [
     ("kimi", "kimi-k2.7-code"),
     ("openai", "gpt-4o-mini"),
-    ("deepseek", "deepseek-chat"),
+    ("deepseek", "deepseek-flash"),
     ("gemini", "gemini-2.5-flash"),
     ("gemini", "gemini-2.5-pro"),
 ])
@@ -515,7 +518,10 @@ class TestPerUnitPricing:
             agent="fiverr", backend="openai", model="gpt-image-2.5-flare",
             prompt_text="two logo concepts", response_text="")
         real_cost = 0.06 * per_unit_eur_per_usd()
-        assert entry["cost_eur"] < real_cost / 1000, (
+        # Two orders of magnitude, not three: since 2026-10-07 OpenAI's
+        # default row is its dearest model (an unpriced id is over-, not
+        # under-estimated), which still prices an image ~660x too low.
+        assert entry["cost_eur"] < real_cost / 100, (
             "the token path should badly under-price an image; if this now "
             "prices it correctly the per-unit path may be redundant")
 

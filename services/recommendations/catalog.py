@@ -171,6 +171,14 @@ def known_text_models(provider: str) -> tuple[str, ...]:
     return tuple(getattr(getattr(module, class_name), "KNOWN_MODELS", ()))
 
 
+def _alias_price(table: dict, model: str):
+    """The price of the model `model` is a dated snapshot or alias of."""
+    from services.model_watch import canonical
+    base = canonical(model)
+    return next((price for name, price in sorted(table.items())
+                 if name != "default" and canonical(name) == base), None)
+
+
 def text_candidates(providers: list[str] | tuple[str, ...],
                     live_models: dict[str, list[str]] | None = None,
                     prices: dict[str, dict[str, tuple[float, float]]] | None = None,
@@ -193,7 +201,8 @@ def text_candidates(providers: list[str] | tuple[str, ...],
         for model in models:
             if not is_chat_model(model):
                 continue
-            price = table.get(model) or table.get("default")
+            price = table.get(model) or _alias_price(table, model) \
+                or table.get("default")
             result.append(text_candidate(provider, model, price=price))
     return result
 

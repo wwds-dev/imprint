@@ -831,6 +831,85 @@ def show_settings(app):
     return dialog
 
 
+# What each provider is for, and which key unlocks it. The model rows under
+# each are generated (model_guide_html), so they cannot drift from what the app
+# offers and bills: ids come from each client's KNOWN_MODELS and prices from
+# the pricing table, the same rows the request guard estimates with.
+_GUIDE_PROVIDERS = (
+    ("anthropic", "Anthropic (Claude)", "ANTHROPIC_API_KEY — console.anthropic.com",
+     "writing, editing, long documents, careful instruction-following, coding."),
+    ("openai", "OpenAI", "OPENAI_API_KEY — platform.openai.com",
+     "coding, reasoning, polished writing; also GPT Image and the audiobook voice."),
+    ("gemini", "Google Gemini", "GOOGLE_API_KEY (or GEMINI_API_KEY) — aistudio.google.com",
+     "long context, broad summaries, low-cost Flash tiers; also Veo video."),
+    ("deepseek", "DeepSeek", "DEEPSEEK_API_KEY — platform.deepseek.com",
+     "structured analysis and coding at a low price. Off-peak hours bill at half "
+     "the rate shown (the app estimates at peak)."),
+    ("kimi", "Kimi (Moonshot AI)", "KIMI_API_KEY — platform.kimi.ai",
+     "coding and long-context, multi-step tool work."),
+    ("qwen", "Qwen (Alibaba Model Studio)",
+     "DASHSCOPE_API_KEY — bailian.console.alibabacloud.com (international endpoint; "
+     "DASHSCOPE_BASE_URL switches region, and prices differ by region)",
+     "long-context drafting and analysis, structured output; also Wan video."),
+)
+
+
+def model_guide_html() -> str:
+    """The Models tab, built from the offline lists and the live price table."""
+    from html import escape
+    from services.database import get_connection
+    from services.pricing_catalog import resolve_price_row
+    from services.recommendations.catalog import known_text_models
+
+    def price(conn, provider, model):
+        row, source = resolve_price_row(conn, provider, model)
+        if row is None:
+            return "price unknown"
+        text = (f"${row['input_per_1m_usd']:g} in / "
+                f"${row['output_per_1m_usd']:g} out per 1M tokens")
+        cached = row["cached_input_per_1m_usd"] or 0
+        if cached:
+            text += f" (cached input ${cached:g})"
+        if source == "default":
+            text += " — no row of its own; estimated at the provider default"
+        return text
+
+    parts = ["<h2>Model Guide</h2>",
+             "<p>Model lists below are the offline fallbacks. With a key, each "
+             "dropdown shows the provider's live list instead, and the "
+             "<b>Model updates</b> tile in the right rail says when a provider "
+             "adds one. Prices are the rates the app estimates and bills with; "
+             "change them in Settings → Pricing.</p>",
+             "<h3>Ollama / Local Models</h3>",
+             "<p><b>Best for:</b> private tasks, drafts, offline use. "
+             "<b>Cost:</b> free — runs on this Mac.</p>"]
+    try:
+        conn = get_connection()
+    except Exception:
+        conn = None
+    try:
+        for key, name, key_help, best_for in _GUIDE_PROVIDERS:
+            parts.append(f"<h3>{escape(name)}</h3>")
+            parts.append(f"<p><b>Best for:</b> {escape(best_for)}</p>")
+            parts.append(f"<p><b>Key:</b> {escape(key_help)}</p><ul>")
+            for model in known_text_models(key):
+                line = escape(model)
+                if conn is not None:
+                    line += " — " + escape(price(conn, key, model))
+                parts.append(f"<li><b>{line.split(' — ')[0]}</b>"
+                             + (" — " + line.split(" — ", 1)[1] if " — " in line else "")
+                             + "</li>")
+            parts.append("</ul>")
+    finally:
+        if conn is not None:
+            conn.close()
+    parts.append("<h3>Image, video and speech</h3>"
+                 "<p>Chosen per request in Reel, Stamp, Press and Booth; every "
+                 "paid render is assessed against the other routes before you "
+                 "approve it, with its own cost estimate.</p>")
+    return "\n".join(parts)
+
+
 def show_model_guide(app):
     dialog = QDialog(app)
     dialog.setWindowTitle("Model & Agent Control Panel")
@@ -896,92 +975,7 @@ def show_model_guide(app):
     # TAB 1: MODELS
     # =========================
     model_tab = QTextBrowser()
-    model_tab.setHtml("""
-    <h2>Model Guide</h2>
-
-    <h3>Ollama / Local Models</h3>
-    <p><b>Best for:</b> private tasks, simple chat, drafts, quick analysis, offline usage.</p>
-    <p><b>Cost:</b> FREE — local execution. Uses your CPU/RAM instead of API credits.</p>
-    <p><b>Use when:</b> the task is not critical, not too complex, or you want privacy.</p>
-    <p><b>Popular models:</b> deepseek-r1:8b, deepseek-r1:1.5b, llama3, mistral, phi3</p>
-
-    <h3>Anthropic (Claude) API</h3>
-    <p><b>Best for:</b> coding, writing, reasoning, document analysis, nuanced instruction-following.</p>
-    <p><b>Key:</b> ANTHROPIC_API_KEY — get it at console.anthropic.com</p>
-    <p><b>Models:</b></p>
-    <ul>
-        <li><b>claude-opus-4-6</b> — Most capable. Best for complex reasoning, long documents, difficult coding. ~$15/$75 per 1M tokens.</li>
-        <li><b>claude-sonnet-4-6</b> — Best balance of quality and cost. Recommended for most tasks. ~$3/$15 per 1M tokens.</li>
-        <li><b>claude-haiku-4-5-20251001</b> — Fastest and cheapest. Good for simple tasks and high-volume use. ~$0.80/$4 per 1M tokens.</li>
-        <li><b>claude-3-5-sonnet-20241022</b> — Previous generation Sonnet. Still highly capable. ~$3/$15 per 1M tokens.</li>
-        <li><b>claude-3-5-haiku-20241022</b> — Previous generation Haiku. Fast and affordable. ~$0.80/$4 per 1M tokens.</li>
-        <li><b>claude-3-opus-20240229</b> — Previous generation Opus. ~$15/$75 per 1M tokens.</li>
-    </ul>
-    <p><b>Use when:</b> you need high-quality, nuanced responses — especially for coding, writing, and analysis.</p>
-
-    <h3>OpenAI API</h3>
-    <p><b>Best for:</b> coding, difficult reasoning, polished writing, professional documents, complex planning.</p>
-    <p><b>Key:</b> OPENAI_API_KEY — get it at platform.openai.com</p>
-    <p><b>Models:</b></p>
-    <ul>
-        <li><b>gpt-4o-mini</b> — Fast and affordable. Good for most everyday tasks.</li>
-        <li><b>gpt-4.1-mini</b> — Improved mini model. Better reasoning than gpt-4o-mini.</li>
-        <li><b>gpt-4.1</b> — Full model. Best for demanding tasks where quality is critical.</li>
-        <li><b>o1 / o3 / o4-mini</b> — Reasoning models. Slow but excellent for hard logic problems.</li>
-    </ul>
-    <p><b>Use when:</b> quality matters more than cost, or you need access to the OpenAI TTS API for Audiobook.</p>
-
-    <h3>DeepSeek API</h3>
-    <p><b>Best for:</b> structured analysis, coding support, OSINT-style reasoning, long analytical tasks.</p>
-    <p><b>Key:</b> DEEPSEEK_API_KEY — get it at platform.deepseek.com</p>
-    <p><b>Models:</b></p>
-    <ul>
-        <li><b>deepseek-chat</b> — General-purpose. Strong for coding and analysis.</li>
-        <li><b>deepseek-reasoner</b> — Extended reasoning model. Good for multi-step logic.</li>
-        <li><b>deepseek-coder</b> — Specialised for code generation and debugging.</li>
-    </ul>
-    <p><b>Use when:</b> you want strong analysis and coding at potentially lower cost than OpenAI.</p>
-
-    <h3>Kimi API (Moonshot AI)</h3>
-    <p><b>Best for:</b> coding and long-context agentic/tool-use tasks (OSINT-style multi-step work).</p>
-    <p><b>Key:</b> KIMI_API_KEY — get it at platform.kimi.ai</p>
-    <p><b>Models:</b></p>
-    <ul>
-        <li><b>kimi-k2.7-code</b> — Dedicated coding model, 256k context. Default Kimi model here.</li>
-        <li><b>kimi-k2.7-code-highspeed</b> — Same model, faster output.</li>
-        <li><b>kimi-k2.6</b> — General dialogue/agent model, visual + text input, 256k context.</li>
-        <li><b>kimi-k3</b> — Flagship model, 1M token context, strongest reasoning.</li>
-    </ul>
-    <p><b>Use when:</b> the task is coding-heavy or involves many chained tool calls / long context.</p>
-
-    <h3>Gemini API</h3>
-    <p><b>Best for:</b> general fallback, broad summaries, mixed tasks, long-context tasks.</p>
-    <p><b>Key:</b> GOOGLE_API_KEY — get it at console.cloud.google.com</p>
-    <p><b>Models:</b></p>
-    <ul>
-        <li><b>gemini-2.5-pro</b> — Most capable Gemini. Excellent long-context handling.</li>
-        <li><b>gemini-2.5-flash</b> — Fast and cost-effective. Good for summaries and drafts.</li>
-        <li><b>gemini-2.0-flash</b> — Previous generation Flash. Still solid for general use.</li>
-        <li><b>gemini-1.5-pro</b> — 1M token context window. Best for very long documents.</li>
-        <li><b>gemini-1.5-flash</b> — Affordable. Good fallback for most tasks.</li>
-    </ul>
-    <p><b>Use when:</b> you need very long context or a cost-effective alternative to OpenAI/Claude.</p>
-
-    <h3>Qwen API (Alibaba Model Studio)</h3>
-    <p><b>Best for:</b> long-context drafting and analysis, structured output, coding; Wan direct video clips in Reel.</p>
-    <p><b>Key:</b> DASHSCOPE_API_KEY — get it at bailian.console.alibabacloud.com. The international endpoint is the default; set DASHSCOPE_BASE_URL for a mainland-China account.</p>
-    <p><b>Models:</b></p>
-    <ul>
-        <li><b>qwen3.8-max</b> — Flagship. 1M-token context, function calling and structured output. Default Qwen model here.</li>
-        <li><b>qwen3-max</b> — Previous flagship.</li>
-        <li><b>qwen-plus</b> — Balanced quality and cost.</li>
-        <li><b>qwen-flash</b> — Fastest and cheapest.</li>
-    </ul>
-    <p><b>Use when:</b> you want a strong long-context model at a lower per-token price than the Western flagships.</p>
-
-    <h3>Audiobook Mode</h3>
-    <p>Uses OpenAI TTS only. Provider/model selection in the main panel is ignored for audiobook conversion.</p>
-    """)
+    model_tab.setHtml(model_guide_html())
     tabs.addTab(model_tab, "Models")
 
     # =========================

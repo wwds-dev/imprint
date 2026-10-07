@@ -6,12 +6,16 @@ from services.stream_usage import UsageStream, cached_input_tokens
 
 
 class DeepSeekClientWrapper:
-    # Offline fallback only. Ordered to match what the API currently serves —
-    # the older deepseek-chat / deepseek-reasoner ids are no longer offered.
+    # Offline fallback, checked against the provider's model list on 2026-10-07.
+    # Every id here needs its own row in config/pricing.json
+    # (tests/test_settings_pricing.py fails otherwise).
+    # deepseek-chat / deepseek-reasoner were discontinued on 2026-07-24, and
+    # deepseek-v4-flash is a legacy name routed to deepseek-flash (V4.1).
     KNOWN_MODELS = [
-        "deepseek-v4-flash",
+        "deepseek-flash",
         "deepseek-v4-pro",
     ]
+    DEFAULT_MODEL = "deepseek-flash"
 
     def __init__(self):
         self.api_key = os.getenv("DEEPSEEK_API_KEY")
@@ -56,7 +60,7 @@ class DeepSeekClientWrapper:
         models = sorted(m.id for m in result.data)
         return models if models else self.KNOWN_MODELS
 
-    def chat(self, messages, model="deepseek-v4-flash"):
+    def chat(self, messages, model="deepseek-flash"):
         if not self.client:
             raise RuntimeError("DEEPSEEK_API_KEY is not set.")
 
@@ -75,11 +79,11 @@ class DeepSeekClientWrapper:
 
         return text, usage
 
-    def generate(self, prompt, model="deepseek-v4-flash"):
+    def generate(self, prompt, model="deepseek-flash"):
         messages = [{"role": "user", "content": prompt}]
         return self.chat(messages=messages, model=model)
     
-    def stream_chat(self, messages, model="deepseek-v4-flash"):
+    def stream_chat(self, messages, model="deepseek-flash"):
         if not self.client:
             raise RuntimeError("DEEPSEEK_API_KEY is not set.")
 

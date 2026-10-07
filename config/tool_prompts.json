@@ -12,12 +12,12 @@
   "Coding": {
     "system": "You are a senior software engineering assistant. Help debug, refactor, explain errors, and produce clean, working code.",
     "recommended_provider": "deepseek",
-    "recommended_model": "deepseek-chat"
+    "recommended_model": "deepseek-flash"
   },
   "Summarize": {
     "system": "You summarize clearly and concisely. Preserve important facts, names, dates, numbers, decisions, and action items.",
     "recommended_provider": "gemini",
-    "recommended_model": "gemini-1.5-flash"
+    "recommended_model": "gemini-3.8-flash"
   },
   "Rewrite": {
     "system": "You rewrite text clearly, professionally, and naturally while preserving the original meaning.",
