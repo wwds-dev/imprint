@@ -37,7 +37,9 @@ remain at the location chosen by the user, including after Project deletion.
 - `panel.py` — `AuthorPanel`, the manuscript workbench: the project bar and
   Book Profile, the Write page (compose deck, manuscript/outline/characters/
   world tabs, chapters tab, a Sources tab in Non-Fiction mode only, document
-  bar), and the Publish & Market sub-pages,
+  bar), and the Publish & Market sub-pages. The whole panel scrolls below its
+  minimum height (a `ScrollContent` in `ui/widgets.scrollable()`) instead of
+  squeezing the editor; nothing inside it scrolls on its own,
   each of the three flows (write/continue, publish, market) keeping its own
   request token and running-worker guard so Stop only ever cancels its own
   flow. Save Draft and EPUB/DOCX/PDF export record project artifact links

@@ -80,7 +80,8 @@ Run focused coverage with `pytest tests/test_book_pipeline.py tests/test_manuscr
   (sync strip, royalty chart, metrics, Ask, publishing todos, Connections
   status), Quote Finder, Quote
   Graphics, Shorts and Calendar tabs, moved here from `main.py` in the Phase 4
-  extraction. Request tokens live on this panel — "manuscript" is shared by
+  extraction. The panel scrolls as a whole when the window is shorter than its
+  tallest tab needs (Quote Finder, ~580px), and only then. Request tokens live on this panel — "manuscript" is shared by
   four paid flows (Ask, quote suggestions, calendar captions, ElevenLabs
   narration) — so nothing here resolves a request by agent name. The old
   `setattr(host, name, ...)` alias loop that mirrored every `HOST_CONTROLS`

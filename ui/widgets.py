@@ -435,6 +435,24 @@ class CollapsibleSection(QWidget):
         self.header_btn.setChecked(self._expanded)
 
 
+class ScrollContent(QWidget):
+    """A column for scrollable() that asks for its minimum height, not more.
+
+    A resizable QScrollArea sizes height-for-width content to the layout's
+    *preferred* height at that width. A folding form grid makes a whole
+    panel height-for-width, so the panel scrolled even in windows that fit
+    its minimum — Manuscript by 225px at 1900x1200. Answering with the
+    minimum lets the content fill the viewport when it fits and scroll only
+    when it does not.
+    """
+
+    def heightForWidth(self, width: int) -> int:
+        layout = self.layout()
+        if layout is None or not layout.hasHeightForWidth():
+            return super().heightForWidth(width)
+        return layout.totalMinimumHeightForWidth(width)
+
+
 def scrollable(widget: QWidget, *, min_width: int | None = None,
                max_width: int | None = None) -> QScrollArea:
     """Wrap a control column so it scrolls instead of overlapping itself.

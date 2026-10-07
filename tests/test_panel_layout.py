@@ -365,6 +365,81 @@ def test_sub_mode_pages_never_overlap(app, window, agent, mode, size):
     )
 
 
+# The overlap tests compare siblings, so they never saw Quill at 1000x600:
+# its QVBoxLayout got 362px against a 1061px minimum and squeezed every row —
+# the editor stack to 102px of its 448px, the project bar to 103px of the
+# 152px its folded second row needs. A child clipped by its own parent is not
+# a sibling of anything. This asks the layout directly instead.
+
+def _scrolls_vertically(widget):
+    """True when `widget` sits inside a scroll area that can scroll down to
+    whatever its parent layout could not fit."""
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QScrollArea
+    node = widget
+    while node is not None:
+        if (isinstance(node, QScrollArea) and node is not widget
+                and node.widget() is not None
+                and (node.widget() is widget or node.widget().isAncestorOf(widget))
+                and node.verticalScrollBarPolicy() != Qt.ScrollBarAlwaysOff):
+            return True
+        node = node.parentWidget()
+    return False
+
+
+def _crushed_children(panel):
+    """Direct children of the panel's top-level layout given less height than
+    their minimum (or than their height-for-width at the width they got)."""
+    layout = panel.layout()
+    found = []
+    for i in range(layout.count()):
+        item = layout.itemAt(i)
+        widget = item.widget()
+        if item.isEmpty() or (widget is not None and not widget.isVisible()):
+            continue
+        rect = item.geometry()
+        if item.hasHeightForWidth():
+            need = item.heightForWidth(rect.width())
+        else:
+            need = item.minimumSize().height()
+        if rect.height() >= need - 1:
+            continue
+        if _scrolls_vertically(widget if widget is not None else panel):
+            continue
+        name = (widget.objectName() or type(widget).__name__) if widget \
+            else f"layout {type(item.layout()).__name__}"
+        found.append(f"{name} gets {rect.height()}px of {need}px")
+    return found
+
+
+@pytest.mark.parametrize("size", SIZES, ids=lambda s: f"{s[0]}x{s[1]}")
+@pytest.mark.parametrize(
+    "agent,mode",
+    [(a, None) for a in AGENTS if a not in SUB_MODES]
+    + [(a, m) for a, modes in SUB_MODES.items() for m, _ in modes],
+)
+def test_no_panel_row_is_crushed_below_its_minimum(app, window, agent, mode, size):
+    _settle(app, window, size, agent)
+    if mode is not None:
+        dict(SUB_MODES[agent])[mode](window)
+        for _ in range(6):
+            app.processEvents()
+    crushed = _crushed_children(getattr(window, f"{agent}_panel"))
+    assert not crushed, f"[{agent}/{mode or '-'}] " + "; ".join(crushed)
+
+
+@pytest.mark.parametrize("agent", ["author", "manuscript"])
+def test_whole_panel_scroll_only_scrolls_below_the_minimum(app, window, agent):
+    """A folding form grid makes these panels height-for-width, and a
+    QScrollArea sizes such content to its preferred height — Manuscript
+    scrolled 225px in a 1900x1200 window it fits. ui.widgets.ScrollContent
+    asks for the minimum instead."""
+    _settle(app, window, (1900, 1200), agent)
+    area = getattr(window, f"{agent}_panel").layout().itemAt(0).widget()
+    assert area.widget().minimumSizeHint().height() <= area.viewport().height()
+    assert area.verticalScrollBar().maximum() == 0
+
+
 @pytest.mark.parametrize("agent", AGENTS)
 def test_panel_controls_stay_inside_the_window(app, window, agent):
     """Overlap is not the only failure — a control pushed outside the window is
@@ -411,13 +486,24 @@ def test_no_control_is_unreachable(app, window, agent, size):
 
 
 def test_author_workbench_has_no_nested_control_scroller(app, window):
-    """Compose, Task and Model belong in the canvas, not a tiny scroll pane."""
+    """Compose, Task and Model belong in the canvas, not a tiny scroll pane.
+
+    The panel itself scrolls as a whole below its minimum height (see
+    test_no_panel_row_is_crushed_below_its_minimum); that one outer scroller
+    is the panel's frame. Nothing inside it may scroll on its own."""
     from PySide6.QtWidgets import QScrollArea
 
     _settle(app, window, (1760, 820), "author")
     window._author_set_mode("write")
     app.processEvents()
-    assert not window.author_panel.findChildren(QScrollArea)
+    panel = window.author_panel
+    scrollers = panel.findChildren(QScrollArea)
+    assert len(scrollers) == 1, scrollers
+    outer = scrollers[0]
+    assert panel.layout().indexOf(outer) == 0
+    for control in (panel.author_compose_card, panel.author_task_box,
+                    panel.author_model_box, panel.author_tabs):
+        assert outer.widget().isAncestorOf(control)
 
 
 def test_section_headings_are_readable_not_field_label_small_caps(app, window):

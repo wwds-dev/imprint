@@ -25,7 +25,8 @@ MOBI and AZW3 are turned into EPUB by Calibre first, so they also need
 - `agent.py` — `AudiobookConnector.parse_input(text)` parses a `key=value`-per-line
   config block into a dict with defaults (`voice="alloy"`, `chunk_tokens=1500`),
   and raises `ValueError` if `input=` or `output=` is missing.
-- `panel.py` — owns the Convert and Listen layouts, source discovery, exact-text
+- `panel.py` — owns the Convert and Listen layouts (each tab its own vertical
+  scroll surface, so neither is squeezed in a short window), source discovery, exact-text
   cost estimation, paid conversion authorization/process/result lifecycle,
   library scan, resume and playback actions, wiring `audiobook_library.scan()`
   into the Listen table and hosting one `audio_player.AudiobookPlayer` for

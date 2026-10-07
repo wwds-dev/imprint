@@ -37,7 +37,7 @@ from ui.forms import MD, SM, combo, field, line_edit, micro, primary, section
 from ui.panels.base import AgentPanel
 from ui import theme
 from ui.style import ACCENT
-from ui.widgets import CollapsibleSection, FlowLayout, scrollable
+from ui.widgets import CollapsibleSection, FlowLayout, ScrollContent, scrollable
 
 
 class ManuscriptPanel(QWidget):
@@ -85,7 +85,14 @@ class ManuscriptPanel(QWidget):
         self._calendar_captions_token = None
         self._shorts_token = None
         self.setObjectName("ManuscriptPanel")
-        layout = QVBoxLayout(self)
+        # Scrolls as a whole, like Muse: the Quote Finder tab alone needs
+        # ~580px, so even a 1500x950 window squeezed the tabs below it.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        content = ScrollContent()
+        content.setObjectName("Transparent")
+        outer.addWidget(scrollable(content))
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(MD)
 

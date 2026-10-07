@@ -232,7 +232,11 @@ class AudiobookPanel(QWidget):
         self.audiobook_convert_scroll.setAccessibleName(
             "Audiobook conversion controls")
         self.audiobook_tabs.addTab(self.audiobook_convert_scroll, "Convert")
-        self.audiobook_tabs.addTab(self._build_library_tab(host), "Listen")
+        # Listen scrolls the same way: its library, player and storage rows
+        # need ~420px, more than the tab gets at the 1000x600 window.
+        listen_scroll = scrollable(self._build_library_tab(host))
+        listen_scroll.setAccessibleName("Audiobook listening library")
+        self.audiobook_tabs.addTab(listen_scroll, "Listen")
 
         # Aliases retired 2026-09-21: shared wiring resolves controls
         # through host._find_control(); HOST_CONTROLS stays as the

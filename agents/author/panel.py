@@ -36,6 +36,7 @@ from ui.forms import (
 from ui.panels.base import AgentPanel
 from ui import theme
 from ui.style import TEXT_MUTE
+from ui.widgets import ScrollContent, scrollable
 
 
 class AuthorPanel(QWidget):
@@ -94,7 +95,17 @@ class AuthorPanel(QWidget):
         self._project_save_timer.setInterval(700)
         self._project_save_timer.timeout.connect(self._persist_project_state)
         self.setObjectName("AuthorPanel")
-        layout = QVBoxLayout(self)
+        # The whole workbench scrolls below its own minimum height rather than
+        # Qt squeezing every row past theirs: at the 1000x600 window the panel
+        # gets ~360px against ~680px, which crushed the editor to a sliver
+        # and clipped the project bar's folded second row. One scroller for
+        # the panel, never one around the compose controls alone.
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        content = ScrollContent()
+        content.setObjectName("Transparent")
+        outer.addWidget(scrollable(content))
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 

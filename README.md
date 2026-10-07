@@ -120,7 +120,14 @@ overlapping-control bug this app has had started there. Both rails scroll when
 the window is short, which is the vertical half of the same problem.
 
 The window always opens fullscreen. Its minimum is 1000 × 600, and the layout
-tests run every panel down to that size.
+tests run every panel down to that size. A panel taller than the room it gets
+scrolls as a whole (`ui/widgets.scrollable()`) rather than letting Qt squeeze its
+rows below their minimums: at 1000 × 600 Quill gets about 350 px against the
+~760 px it needs, and before it scrolled its editor was cut to a 102 px sliver.
+Content wrapped this way is a `ScrollContent`, which asks for its minimum height
+rather than its preferred one, so a panel that fits never scrolls.
+`test_no_panel_row_is_crushed_below_its_minimum` checks every row of every
+panel and sub-page at every tested size.
 
 ### Text that does not fit
 
@@ -2524,7 +2531,9 @@ Three conventions worth keeping:
 UI coverage is **behavioural, not visual** — no screenshot comparisons.
 `test_panel_layout.py` asserts the property that actually broke, that no two
 sibling widgets in a panel may occupy the same pixels, across every agent panel
-at the window's minimum size; it also covers the header's shedding order and
+at the window's minimum size, and that no row of a panel is given less height
+than its minimum unless it can scroll — a clipped child is not a sibling of what
+clips it, so the overlap check alone never saw Quill crushed; it also covers the header's shedding order and
 the **More ▾** overflow. `test_agent_panel.py` and `test_status_cards.py` cover
 control state and the rail cards. What none of them can judge is whether a
 result is any good — that is what `tests/manual_test_cases.md` is for. To check
