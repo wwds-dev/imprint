@@ -423,18 +423,51 @@ fetch also counts as a look, so news arrives with the startup check off.
 - It is **in the model dropdowns** of every panel that offers its provider,
   marked with a quiet **NEW** badge. A panel still showing the offline list
   for that provider is switched to the live one.
-- It is **ranked like every other model**: the recommendation engine re-runs
-  and the **BEST FIT** badge moves if it wins. Within a provider, the newest
-  generation of a family (`qwen4-max` over `qwen3.8-max`, `claude-opus-5-5`
-  over `claude-opus-4-6`) gets a small quality edge, so a successor is assessed
-  as one rather than tied with what it replaced. The tile says which agents it
-  is now the best pick for in that provider's menu — computed by the same
-  engine, profile and task context as the badge, so the two cannot disagree.
+- It is **ranked like every other model — and only like every other model.**
+  Being new earns nothing: a newer model is often dearer and says nothing
+  about fit, so it is scored on the same evidence as the rest (the agent's
+  task fit and weights, and its real price). The BEST FIT badge moves only if
+  that assessment says so. The tile says **Best choice for …** when it is an
+  agent's best option across every provider you have a key for and have
+  permitted, or **Best Qwen model for …** when it wins only within its
+  provider — the same engine, profile, task context and prices as the badge,
+  so the two cannot disagree.
 - If it has **no price of its own** in Settings → Pricing, the tile says it is
   estimated at the provider's `default` rate until a real one is added.
 
-**Dismiss** clears the notices and the NEW badges. The models stay in the menus
-and are not announced again.
+**Update selected.** Click models in the tile to mark them (the whole row is
+the target; the mark is a real checkbox, so Tab and Space work too), then
+**Update N selected**. Each agent is assessed for its current task and moves
+to a marked model only where that model is its best choice overall — which can
+change the provider, but only to one you have a key for and have permitted —
+or its best model within the provider it is already on. Nothing moves because
+a model is new; a marked model that wins nowhere is reported as *left in the
+menus, nothing switched*. The marked notices are cleared, the unmarked ones
+stay, and the tile lists what moved.
+
+**Dismiss** clears every notice and the NEW badges without switching anything.
+The models stay in the menus and are not announced again.
+
+### Cost in the ranking
+
+The recommendation engine scores cost from the **pricing table** — the same
+rates the bill is calculated from — not from a model's name. The blended rate
+(three parts input to one part output, per 1M tokens) is mapped onto a log
+scale: $0.10 scores 1.0, $30 scores 0.05. A model without its own row is
+costed at its provider's `default`, as the bill would be; only a model with
+neither falls back to a name-based guess ("mini" cheap, "opus" dear).
+
+### Every paid request is assessed
+
+The confirmation shown before any paid text request now carries an assessment
+of **that request**: the agent's context plus the request's own text, ranked
+across every provider you have a key for and have permitted. Either it says
+your selection is the best fit, or it names the better provider and model with
+both fit scores and both cost estimates. **Apply** switches the agent to it and
+does not send — you send again on the new choice, deliberately; a paid request
+is never re-routed behind your back. Per-unit work (renders, speech) has no
+text alternative to compare and is not assessed. When nothing else is
+permitted there is nothing to compare, and the dialog is unchanged.
 
 ---
 

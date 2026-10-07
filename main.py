@@ -5,6 +5,7 @@ import re
 import subprocess
 import sys
 import time
+import types
 from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
@@ -1000,7 +1001,134 @@ class GodAI(QWidget):
         checkbox = getattr(self, f"allow_{key}_checkbox", None)
         return bool(checkbox is not None and checkbox.isChecked())
 
-    def _text_recommendations(self, agent_key: str):
+    def _price_index(self) -> dict:
+        """The pricing table as {provider: {model: (input, output)}} USD/1M.
+
+        Read from the same table the bill is calculated from, so the
+        recommendation's idea of cost is the real one. Cached for a few
+        seconds: the chat recommendation re-ranks on every keystroke.
+        """
+        now = time.monotonic()
+        cached = getattr(self, "_price_index_cache", None)
+        if cached is not None and now - cached[0] < 10:
+            return cached[1]
+        index: dict = {}
+        try:
+            conn = get_connection()
+            try:
+                for row in conn.execute(
+                        "SELECT backend, model, input_per_1m_usd, output_per_1m_usd "
+                        "FROM pricing WHERE input_per_1m_usd > 0 "
+                        "AND output_per_1m_usd > 0"):
+                    index.setdefault(row["backend"].casefold(), {})[row["model"]] = (
+                        float(row["input_per_1m_usd"]),
+                        float(row["output_per_1m_usd"]))
+            finally:
+                conn.close()
+        except Exception as exc:
+            self._note_failure("recommendations: read prices", exc)
+        self._price_index_cache = (now, index)
+        return index
+
+    def _recommendation_context(self, agent_key: str,
+                                task: str | None = None) -> RecommendationContext:
+        return RecommendationContext(
+            agent=agent_key,
+            task=self._recommendation_task(agent_key) if task is None else task,
+            budget_remaining=max(0.0, self.session_budget_eur - self.session_cost_total),
+            priority=("privacy" if agent_key == "chat"
+                      and getattr(self, "execution_mode_box", None) is not None
+                      and self.execution_mode_box.currentText() == "Local only"
+                      else "balanced"),
+        )
+
+    def assess_request(self, agent_key: str, provider: str, model: str,
+                       task_text: str, billable_prompt: str | None = None):
+        """Which provider and model fit *this* request best, against the selection.
+
+        Run for every paid text request, at the confirmation. The task is the
+        agent's own context plus the request's text, so the answer is for this
+        request rather than for the agent in general. Only options that can
+        actually run are compared — a provider with a key that the user has
+        permitted — so the suggestion is never a setup target. None when
+        nothing can be compared (an agent with no provider/model pair, or no
+        permitted alternative at all).
+        """
+        if agent_key not in AGENT_SETUP_WIDGETS:
+            return None
+        task = " ".join(part for part in (
+            self._recommendation_task(agent_key), (task_text or "")[:240])
+            if part).strip()
+        provider_result, _model_result = self._text_recommendations(agent_key, task)
+        if provider_result is None or provider_result.fallback:
+            return None
+        best = provider_result.candidate
+        profile = profile_for(agent_key)
+        context = self._recommendation_context(agent_key, task)
+        selected = text_candidates([provider], {provider: [model]},
+                                   self._price_index())
+        prompt = billable_prompt if billable_prompt is not None else task_text
+        best_cost, _tokens = self.estimate_chat_cost(best.provider, best.model_id, prompt)
+        selected_score = (self.recommendation_engine.score(profile, selected[0], context)
+                          if selected else None)
+        best_score = self.recommendation_engine.score(profile, best, context)
+        same = best.provider == provider and best.model_id == model
+        return types.SimpleNamespace(
+            agent=agent_key,
+            best_provider=best.provider,
+            best_model=best.model_id,
+            best_score=best_score,
+            best_cost_eur=best_cost,
+            selected_score=selected_score,
+            selected_is_best=same or (selected_score is not None
+                                      and selected_score >= best_score),
+            reason=provider_result.reason,
+        )
+
+    def _assessment_text(self, assessment, estimated_cost: float) -> str:
+        if assessment is None:
+            return ""
+        who = AGENT_PRETTY_NAMES.get(assessment.agent, assessment.agent)
+        if assessment.selected_is_best:
+            return (f"\n\nAssessment for this request ({who}): your selection is "
+                    f"the best fit among the providers you have permitted "
+                    f"({round(assessment.best_score * 100)}/100).")
+        mine = ("unrated" if assessment.selected_score is None
+                else f"{round(assessment.selected_score * 100)}/100")
+        return (
+            f"\n\nAssessment for this request ({who}):\n"
+            f"  Best fit: {assessment.best_provider} · {assessment.best_model} — "
+            f"{round(assessment.best_score * 100)}/100, ~€{assessment.best_cost_eur:.2f}\n"
+            f"  Your selection: {mine}, ~€{estimated_cost:.2f}\n\n"
+            f"Apply switches to the best fit; you then send again.")
+
+    def _switch_agent_setup(self, agent_key: str, provider: str, model: str) -> bool:
+        """Point one agent's provider/model pair at `provider · model`."""
+        widgets = AGENT_SETUP_WIDGETS.get(agent_key)
+        if not widgets:
+            return False
+        provider_box = self._find_control(widgets[0])
+        model_box = self._find_control(widgets[1])
+        if provider_box is None or model_box is None:
+            return False
+        provider_index = self._find_provider_index(provider_box, provider)
+        if provider_index < 0:
+            return False
+        if provider_box.currentIndex() != provider_index:
+            provider_box.setCurrentIndex(provider_index)
+        index = model_box.findText(model)
+        if index < 0:
+            # Still on the offline list: the live one is cached by now.
+            panel = self._find_control(f"{agent_key}_panel_base")
+            if panel is not None:
+                panel.load_models()
+                index = model_box.findText(model)
+        if index < 0:
+            return False
+        model_box.setCurrentIndex(index)
+        return True
+
+    def _text_recommendations(self, agent_key: str, task: str | None = None):
         widgets = AGENT_SETUP_WIDGETS.get(agent_key)
         if not widgets:
             return None, None
@@ -1033,7 +1161,7 @@ class GodAI(QWidget):
         cache = getattr(self, "model_list_cache", {})
         live = {p: list(cache[p]) for p in providers if cache.get(p)}
         live[selected] = [model_box.itemText(i) for i in range(model_box.count())]
-        candidates = text_candidates(providers, live)
+        candidates = text_candidates(providers, live, self._price_index())
         candidates = [
             replace(item, available=(
                 bool(item.available and self._provider_permission(item.provider))
@@ -1044,15 +1172,7 @@ class GodAI(QWidget):
             for item in candidates
         ]
         profile = profile_for(agent_key)
-        base = RecommendationContext(
-            agent=agent_key,
-            task=self._recommendation_task(agent_key),
-            budget_remaining=max(0.0, self.session_budget_eur - self.session_cost_total),
-            priority=("privacy" if agent_key == "chat"
-                      and getattr(self, "execution_mode_box", None) is not None
-                      and self.execution_mode_box.currentText() == "Local only"
-                      else "balanced"),
-        )
+        base = self._recommendation_context(agent_key, task)
         provider_result = self.recommendation_engine.recommend(profile, candidates, base)
         model_result = self.recommendation_engine.recommend(
             profile, candidates,
@@ -2452,6 +2572,8 @@ class GodAI(QWidget):
             lambda: self.check_for_new_models())
         self.model_updates_card.dismiss_btn.clicked.connect(
             self.dismiss_new_models)
+        self.model_updates_card.update_btn.clicked.connect(
+            self.update_selected_models)
         self.model_updates_card.startup_checkbox.setChecked(
             bool(self.settings.get("model_check_on_startup", True)))
         self.model_updates_card.startup_checkbox.toggled.connect(
@@ -2968,6 +3090,8 @@ class GodAI(QWidget):
             final_model,
             estimated_cost,
             approx_tokens,
+            self._assess_safely("chat", final_backend, final_model, raw_text,
+                                billable_prompt),
         ):
             return
 
@@ -3035,7 +3159,15 @@ class GodAI(QWidget):
         except Exception as e:
             QMessageBox.warning(self, "Request failed", str(e))
 
-    def confirm_external_api_request(self, backend, model, estimated_cost, approx_tokens):
+    def confirm_external_api_request(self, backend, model, estimated_cost,
+                                     approx_tokens, assessment=None):
+        """The paid-request prompt, carrying this request's assessment.
+
+        When the assessment found a better fit than the selection, Apply
+        switches the agent to it and refuses this send — the user sends again
+        deliberately on the new choice, the same rule as the free-local offer:
+        a paid request is never silently re-routed.
+        """
         if backend == "ollama":
             return True
 
@@ -3044,18 +3176,37 @@ class GodAI(QWidget):
             f"Provider: {backend}\n"
             f"Model: {model}\n"
             f"Approx tokens: {approx_tokens}\n"
-            f"Estimated cost/quota impact: ~€{estimated_cost:.2f}\n\n"
+            f"Estimated cost/quota impact: ~€{estimated_cost:.2f}"
+            f"{self._assessment_text(assessment, estimated_cost)}\n\n"
             f"Continue?"
         )
+        buttons = QMessageBox.Yes | QMessageBox.No
+        offer = assessment is not None and not assessment.selected_is_best
+        if offer:
+            buttons |= QMessageBox.Apply
 
         result = QMessageBox.question(
             self,
             "Confirm External API Request",
             message,
-            QMessageBox.Yes | QMessageBox.No,
+            buttons,
         )
+        if offer and result == QMessageBox.Apply:
+            self._switch_agent_setup(assessment.agent, assessment.best_provider,
+                                     assessment.best_model)
+            return False
 
         return result == QMessageBox.Yes
+
+    def _assess_safely(self, agent_key, provider, model, task_text,
+                       billable_prompt=None):
+        """The assessment must never be the reason a request cannot be sent."""
+        try:
+            return self.assess_request(agent_key, provider, model, task_text,
+                                       billable_prompt)
+        except Exception as exc:
+            self._note_failure("assessment", exc)
+            return None
 
     # ── Shared request guard (TODO.md #1) ───────────────────────────────
     # Any agent that can spend money must go through these. Only send_prompt()
@@ -3153,7 +3304,13 @@ class GodAI(QWidget):
             QMessageBox.warning(self, "Request Blocked", validation.reason)
             return False
 
-        if not self.confirm_external_api_request(provider, model, estimated_cost, approx_tokens):
+        # Every paid text request is assessed for itself: is this provider and
+        # model the best fit for *this* request among what can run? Per-unit
+        # work (renders, speech) has no text alternative to compare.
+        assessment = (self._assess_safely(agent, provider, model, prompt)
+                      if flat_cost_eur is None else None)
+        if not self.confirm_external_api_request(
+                provider, model, estimated_cost, approx_tokens, assessment):
             return False
 
         descriptor = label or tool or "-"
@@ -3288,6 +3445,71 @@ class GodAI(QWidget):
 
     def dismiss_new_models(self) -> None:
         self.model_watch.acknowledge()
+        self.model_updates_card.set_result("")
+        self.refresh_model_updates()
+
+    def update_selected_models(self) -> None:
+        """Switch agents to the marked models — only where the assessment says so.
+
+        A newer model is not automatically the better one, so nothing moves
+        because a model is new. Each agent is assessed for its current task,
+        and moves to a marked model only when that model is:
+
+        * its best choice overall — provider and model, among providers with
+          a key that the user has permitted (the provider may change; it is
+          the cheaper or better-fitting option the assessment found), or
+        * its best model within the provider it is already on.
+
+        Overall wins are applied first, and each agent moves at most once.
+        The marked notices are cleared; unmarked ones stay.
+        """
+        card = self.model_updates_card
+        marked = card.marked()
+        if not marked:
+            return
+        wanted = set(marked)
+        moved: dict[str, list[str]] = {model: [] for _p, model in marked}
+        kept: list[str] = []
+        for agent_key, (provider_attr, model_attr) in AGENT_SETUP_WIDGETS.items():
+            provider_box = self._find_control(provider_attr)
+            model_box = self._find_control(model_attr)
+            if provider_box is None or model_box is None:
+                continue
+            provider_result, model_result = self._text_recommendations(agent_key)
+            target = None
+            # A tie is not a win: only a strictly higher score moves anyone.
+            if (provider_result is not None and not provider_result.fallback
+                    and provider_result.margin > 0):
+                pick = (provider_result.candidate.provider,
+                        provider_result.candidate.model_id)
+                if pick in wanted:
+                    target = pick
+            if (target is None and model_result is not None
+                    and model_result.margin > 0):
+                pick = (provider_box.currentText(), model_result.candidate.model_id)
+                if pick in wanted:
+                    target = pick
+            if target is None:
+                continue
+            label = AGENT_PRETTY_NAMES.get(agent_key, agent_key)
+            if (provider_box.currentText(), model_box.currentText()) == target:
+                kept.append(label)
+                continue
+            if self._switch_agent_setup(agent_key, *target):
+                moved[target[1]].append(label)
+
+        self.model_watch.acknowledge(marked)
+        parts = []
+        for _provider, model_id in marked:
+            agents = moved[model_id]
+            parts.append(
+                f"{model_id} → {', '.join(agents)}" if agents else
+                f"{model_id}: not the assessed best fit for any agent's current "
+                "task — left in the menus, nothing switched")
+        if kept:
+            parts.append(f"Already on it: {', '.join(kept)}")
+        card.set_result("\n".join(parts))
+        self.refresh_all_recommendations()
         self.refresh_model_updates()
 
     def _save_model_check_preference(self, checked: bool) -> None:
@@ -3301,13 +3523,14 @@ class GodAI(QWidget):
     def _agents_preferring(self, provider: str, model_id: str) -> tuple[str, ...]:
         """Agents whose BEST FIT within `provider` is now `model_id`.
 
-        Ranked exactly as the model dropdown ranks it — same engine, same
-        agent profile, same task context — so the tile and the badge in the
+        Ranked exactly as the model dropdown ranks it — same engine, agent
+        profile, task context and prices — so the tile and the badge in the
         menu can never disagree.
         """
         models = (self.model_list_cache.get(provider)
                   or list(known_text_models(provider)))
-        candidates = text_candidates([provider], {provider: models})
+        candidates = text_candidates([provider], {provider: models},
+                                     self._price_index())
         labels = []
         for agent_key, (provider_attr, _model_attr) in AGENT_SETUP_WIDGETS.items():
             provider_box = self._find_control(provider_attr)
@@ -3319,7 +3542,20 @@ class GodAI(QWidget):
                 RecommendationContext(
                     agent=agent_key, selected_provider=provider,
                     task=self._recommendation_task(agent_key)))
-            if result is not None and result.candidate.model_id == model_id:
+            if (result is not None and result.margin > 0
+                    and result.candidate.model_id == model_id):
+                labels.append(AGENT_PRETTY_NAMES.get(agent_key, agent_key))
+        return tuple(labels)
+
+    def _agents_choosing_overall(self, provider: str, model_id: str) -> tuple[str, ...]:
+        """Agents whose best choice across every permitted provider it now is."""
+        labels = []
+        for agent_key in AGENT_SETUP_WIDGETS:
+            result, _model_result = self._text_recommendations(agent_key)
+            if (result is not None and not result.fallback
+                    and result.margin > 0
+                    and result.candidate.provider == provider
+                    and result.candidate.model_id == model_id):
                 labels.append(AGENT_PRETTY_NAMES.get(agent_key, agent_key))
         return tuple(labels)
 
@@ -3353,7 +3589,10 @@ class GodAI(QWidget):
                 PROVIDER_LABELS.get(n.provider, n.provider.title()),
                 n.model_id,
                 best_for=self._agents_preferring(n.provider, n.model_id),
+                best_overall_for=self._agents_choosing_overall(
+                    n.provider, n.model_id),
                 exact_price=self._has_exact_price(n.provider, n.model_id),
+                provider=n.provider,
             )
             for n in pending
         ])

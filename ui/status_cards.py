@@ -266,6 +266,74 @@ class ModelNotice:
     model_id: str
     best_for: tuple[str, ...] = ()   # agent labels it is now the best pick for
     exact_price: bool = True
+    provider: str = ""               # the provider key, e.g. "qwen"
+    # Agents whose best choice across every permitted provider it now is.
+    best_overall_for: tuple[str, ...] = ()
+
+
+class ModelNoticeRow(QFrame):
+    """One new model; click anywhere on it to mark it for Update selected.
+
+    The mark is a real QCheckBox (named after the provider) so it is reachable
+    by keyboard and announced by VoiceOver; the rest of the row forwards its
+    clicks to it, because a 13px box is a small target in a 244px rail.
+    """
+
+    def __init__(self, notice: "ModelNotice"):
+        super().__init__()
+        self.notice = notice
+        self.setObjectName("RailModelRow")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setProperty("marked", False)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(XS + 2, XS + 2, XS + 2, XS + 2)
+        layout.setSpacing(2)
+        self.mark = QCheckBox(notice.provider_label)
+        self.mark.setObjectName("RailModelMark")
+        self.mark.setAccessibleName(
+            f"Mark {notice.provider_label} {notice.model_id} for update")
+        self.mark.toggled.connect(self._restyle)
+        layout.addWidget(self.mark)
+        layout.addWidget(ElidedLabel(notice.model_id, "RailModelId"))
+        if notice.best_overall_for:
+            fit = _label(
+                "Best choice for " + ", ".join(notice.best_overall_for),
+                "RailAvailability")
+            fit.setProperty("status", "ready")
+            fit.setToolTip("Assessed across every provider you have a key "
+                           "for and have permitted, on task fit and real "
+                           "price — not on being new.")
+        elif notice.best_for:
+            fit = _label(
+                f"Best {notice.provider_label} model for "
+                + ", ".join(notice.best_for), "RailDetail")
+            fit.setToolTip(f"Within {notice.provider_label} only; another "
+                           "provider is assessed as the better choice "
+                           "overall, or none is permitted yet.")
+        else:
+            fit = _label(f"Added to the {notice.provider_label} model menus",
+                         "RailDetail")
+        layout.addWidget(fit)
+        if not notice.exact_price:
+            price = _label(
+                f"No price on file — estimated at {notice.provider_label}'s "
+                "default rate", "RailAvailability")
+            price.setProperty("status", "warning")
+            price.setToolTip(
+                "Add its real rates in Settings → Pricing so budget caps "
+                "count it exactly.")
+            layout.addWidget(price)
+
+    def mouseReleaseEvent(self, event):  # noqa: N802 - Qt API
+        if event.button() == Qt.MouseButton.LeftButton and \
+                self.rect().contains(event.position().toPoint()):
+            self.mark.toggle()
+        super().mouseReleaseEvent(event)
+
+    def _restyle(self, marked: bool) -> None:
+        self.setProperty("marked", marked)
+        self.style().unpolish(self)
+        self.style().polish(self)
 
 
 class ModelUpdatesCard(RailCard):
@@ -287,10 +355,31 @@ class ModelUpdatesCard(RailCard):
 
         self.headline = _label("Not checked yet", "RailPrimaryValue")
         layout.addWidget(self.headline)
+        self.hint_label = _label(
+            "Click models to mark them, then update.", "RailDetail")
+        self.hint_label.hide()
+        layout.addWidget(self.hint_label)
         self.rows_box = QVBoxLayout()
         self.rows_box.setContentsMargins(0, 0, 0, 0)
         self.rows_box.setSpacing(XS)
         layout.addLayout(self.rows_box)
+        self.rows: list[ModelNoticeRow] = []
+
+        self.update_btn = QPushButton("Update selected")
+        self.update_btn.setObjectName("RailCardButton")
+        self.update_btn.setToolTip(
+            "Switch agents to the marked models — only where each agent's "
+            "current task is assessed (fit and real price) as best served by "
+            "it: overall, or within the provider the agent is already on. "
+            "Being new is not a reason to switch. Unmarked models stay as "
+            "notices.")
+        self.update_btn.setEnabled(False)
+        self.update_btn.hide()
+        layout.addWidget(self.update_btn)
+        self.result_label = _label("", "RailAvailability")
+        self.result_label.setProperty("status", "ready")
+        self.result_label.hide()
+        layout.addWidget(self.result_label)
 
         divider = QFrame()
         divider.setObjectName("RailCardDivider")
@@ -314,8 +403,8 @@ class ModelUpdatesCard(RailCard):
         self.dismiss_btn = QPushButton("Dismiss")
         self.dismiss_btn.setObjectName("RailCardButton")
         self.dismiss_btn.setToolTip(
-            "Clear these notices. The models stay in the menus and are not "
-            "announced again.")
+            "Clear every notice without switching to anything. The models "
+            "stay in the menus and are not announced again.")
         self.dismiss_btn.hide()
         buttons.addWidget(self.check_btn)
         buttons.addWidget(self.dismiss_btn)
@@ -330,55 +419,54 @@ class ModelUpdatesCard(RailCard):
         self.check_btn.setText("Checking…" if checking else "Check now")
 
     def set_notices(self, notices: list[ModelNotice]) -> None:
+        # A repaint keeps what was marked: the tile refreshes when a panel's
+        # model fetch lands, which must not undo a selection in progress.
+        still_marked = set(self.marked())
         while self.rows_box.count():
             item = self.rows_box.takeAt(0)
             if item.widget() is not None:
                 item.widget().deleteLater()
+        self.rows = []
         count = len(notices)
         self.headline.setText(
             "No new models" if count == 0 else
             "1 new model" if count == 1 else f"{count} new models")
         self.dismiss_btn.setVisible(count > 0)
+        self.update_btn.setVisible(count > 0)
+        self.hint_label.setVisible(count > 0)
         for notice in notices[:self.SHOWN]:
-            self.rows_box.addWidget(self._row(notice))
+            row = ModelNoticeRow(notice)
+            row.mark.setChecked(
+                (notice.provider, notice.model_id) in still_marked)
+            row.mark.toggled.connect(self._sync_update_button)
+            self.rows.append(row)
+            self.rows_box.addWidget(row)
+        self._sync_update_button()
         if count > self.SHOWN:
             self.rows_box.addWidget(_label(
                 f"+{count - self.SHOWN} more — all are in the model menus, "
                 "marked NEW.", "RailDetail"))
 
+    def marked(self) -> list[tuple[str, str]]:
+        """`(provider, model_id)` for every row the user has marked."""
+        return [(row.notice.provider, row.notice.model_id)
+                for row in self.rows if row.mark.isChecked()]
+
+    def _sync_update_button(self, *_args) -> None:
+        count = len(self.marked())
+        self.update_btn.setEnabled(count > 0)
+        self.update_btn.setText(
+            f"Update {count} selected" if count else "Update selected")
+
+    def set_result(self, text: str) -> None:
+        """What the last Update selected did, or nothing."""
+        self.result_label.setText(text)
+        self.result_label.setVisible(bool(text))
+
     def set_footer(self, checked: str, skipped: str = "") -> None:
         self.checked_label.setText(checked)
         self.skipped_label.setText(skipped)
         self.skipped_label.setVisible(bool(skipped))
-
-    @staticmethod
-    def _row(notice: ModelNotice) -> QWidget:
-        row = QWidget()
-        row.setObjectName("RailModelRow")
-        layout = QVBoxLayout(row)
-        layout.setContentsMargins(0, XS, 0, XS)
-        layout.setSpacing(2)
-        layout.addWidget(_label(notice.provider_label, "RailKeyName"))
-        layout.addWidget(ElidedLabel(notice.model_id, "RailModelId"))
-        if notice.best_for:
-            fit = _label(
-                f"Best {notice.provider_label} pick for "
-                + ", ".join(notice.best_for), "RailAvailability")
-            fit.setProperty("status", "ready")
-        else:
-            fit = _label(f"Added to the {notice.provider_label} model menus",
-                         "RailDetail")
-        layout.addWidget(fit)
-        if not notice.exact_price:
-            price = _label(
-                f"No price on file — estimated at {notice.provider_label}'s "
-                "default rate", "RailAvailability")
-            price.setProperty("status", "warning")
-            price.setToolTip(
-                "Add its real rates in Settings → Pricing so budget caps "
-                "count it exactly.")
-            layout.addWidget(price)
-        return row
 
 
 STATUS_CARD_STYLES = f"""
@@ -406,7 +494,12 @@ STATUS_CARD_STYLES = f"""
         color: {ACCENT}; }}
     QLabel#RailKeyStatus[status="warning"], QLabel#RailStatusDot[status="warning"] {{
         color: {WARNING}; }}
-    QWidget#RailModelRow {{ border-bottom: 1px solid {BORDER}; }}
+    QFrame#RailModelRow {{ border: 1px solid {BORDER}; border-radius: 7px; }}
+    QFrame#RailModelRow:hover {{ border-color: {TEXT_MUTE}; }}
+    QFrame#RailModelRow[marked="true"] {{ border-color: {ACCENT_LINE};
+        background: {ACCENT_WASH}; }}
+    QCheckBox#RailModelMark {{ color: {TEXT}; font-size: 11px; font-weight: 600;
+        background: transparent; }}
     QLabel#RailModelId {{ color: {TEXT}; font-size: 11px;
         font-family: "SF Mono", Menlo, monospace; }}
     QPushButton#RailCardButton {{ min-height: 26px; max-height: 26px;

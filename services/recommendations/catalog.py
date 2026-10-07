@@ -3,16 +3,22 @@
 This catalog describes stable product characteristics (fast/small/pro/local),
 not marketing claims or a frozen universal leaderboard. Unknown live model ids
 receive conservative provider-family defaults and are still rankable.
+
+Release order is deliberately *not* a signal. A newer model is not
+automatically the better choice for a given task — it is often dearer, and
+"newer" says nothing about fit — so a model released yesterday is ranked on
+the same evidence as every other: task fit, the agent's weights and, where the
+pricing table has them, its real per-token rates.
 """
 
 from __future__ import annotations
 
+import math
+
 import os
-import re
-from dataclasses import replace
 from datetime import date
 
-from services.model_watch import canonical, is_chat_model
+from services.model_watch import is_chat_model
 
 from .models import Candidate
 
@@ -33,10 +39,6 @@ _KEY_ENV = {
     "pexels": ("PEXELS_API_KEY",),
 }
 
-# A newer generation in the same family/tier gets this much extra quality.
-# Small on purpose: enough to rank qwen4-max over qwen3.8-max, never enough
-# to lift a "mini" over a full model or override the agent's task fit.
-NEWEST_GENERATION_BONUS = 0.04
 
 _PROVIDER_DEFAULTS = {
     "openai":       (0.84, 0.86, 0.55, 0.72, 0.78),
@@ -86,28 +88,27 @@ def provider_configured(provider: str) -> bool | None:
     return False
 
 
-def generation(model_id: str) -> tuple[float, ...]:
-    """The version numbers in an id, for ordering releases of one family.
 
-    "claude-opus-5-5" -> (5, 5) and "claude-opus-4-6" -> (4, 6), so the
-    tuple order is release order. A trailing release date is dropped first:
-    it orders snapshots, not generations.
-    """
-    return tuple(float(n) for n in re.findall(r"\d+(?:\.\d+)?",
-                                               canonical(model_id)))
+# Blended $ per 1M tokens (three parts input to one part output — a prompt
+# is usually longer than its answer) mapped onto 0..1 on a log scale:
+# $0.10 scores 1.0, $30 scores 0.05. Log, because the step from $0.30 to $3
+# matters as much to a budget as the step from $3 to $30.
+CHEAP_BLENDED_USD = 0.10
+DEAR_BLENDED_USD = 30.0
 
 
-def family(model_id: str) -> str:
-    """The id with its version numbers removed: the tier a release replaces.
-
-    "qwen3.8-max" and "qwen4-max" are both "qwen-max"; "qwen-plus" is not.
-    """
-    bare = re.sub(r"\d+(?:\.\d+)?", "", canonical(model_id).casefold())
-    return re.sub(r"[-_.]+", "-", bare).strip("-")
-
+def price_efficiency(input_per_1m: float, output_per_1m: float) -> float:
+    blended = max(1e-6, 0.75 * input_per_1m + 0.25 * output_per_1m)
+    span = math.log10(DEAR_BLENDED_USD) - math.log10(CHEAP_BLENDED_USD)
+    position = (math.log10(blended) - math.log10(CHEAP_BLENDED_USD)) / span
+    return max(0.05, min(1.0, 1.0 - 0.95 * position))
 
 def text_candidate(provider: str, model_id: str,
-                   *, available: bool | None = None) -> Candidate:
+                   *, available: bool | None = None,
+                   price: tuple[float, float] | None = None) -> Candidate:
+    """One model as a candidate. `price` is (input, output) USD per 1M tokens
+    from the pricing table; with it, cost efficiency is the real rate rather
+    than a guess from the model's name."""
     key = provider.casefold()
     name = model_id.casefold()
     quality, reliability, cost, speed, context = _PROVIDER_DEFAULTS.get(
@@ -131,6 +132,8 @@ def text_candidate(provider: str, model_id: str,
         privacy = 1.0
     else:
         privacy = 0.10
+    if price is not None and key != "ollama":
+        cost = price_efficiency(*price)
 
     return Candidate(
         provider=provider,
@@ -168,35 +171,29 @@ def known_text_models(provider: str) -> tuple[str, ...]:
 
 
 def text_candidates(providers: list[str] | tuple[str, ...],
-                    live_models: dict[str, list[str]] | None = None
+                    live_models: dict[str, list[str]] | None = None,
+                    prices: dict[str, dict[str, tuple[float, float]]] | None = None,
                     ) -> list[Candidate]:
     """Every selectable text model, ranked-ready.
 
     Live lists can carry embedding, speech and image ids beside the chat
-    models; those are not candidates. Within one provider, the newest
-    generation of each family gets `NEWEST_GENERATION_BONUS`, so a model
-    released after this catalogue was written is assessed as the successor
-    it is rather than tied with what it replaced.
+    models; those are not candidates. `prices` is the pricing table as
+    {provider: {model: (input, output)}} in USD per 1M tokens, with an
+    optional "default" row per provider. A model is costed at its own rate,
+    else at its provider's default — the same fallback the bill uses — and
+    only without either is the cost guessed from its name.
     """
     live_models = live_models or {}
+    prices = prices or {}
     result: list[Candidate] = []
     for provider in providers:
         models = live_models.get(provider, []) or list(known_text_models(provider))
-        models = [m for m in models if is_chat_model(m)]
-        newest: dict[str, tuple[float, ...]] = {}
-        generations: dict[str, set[tuple[float, ...]]] = {}
+        table = prices.get(provider.casefold(), {})
         for model in models:
-            tier, gen = family(model), generation(model)
-            generations.setdefault(tier, set()).add(gen)
-            newest[tier] = max(newest.get(tier, gen), gen)
-        for model in models:
-            candidate = text_candidate(provider, model)
-            tier = family(model)
-            if (len(generations[tier]) > 1
-                    and generation(model) == newest[tier]):
-                candidate = replace(candidate, quality=min(
-                    1.0, candidate.quality + NEWEST_GENERATION_BONUS))
-            result.append(candidate)
+            if not is_chat_model(model):
+                continue
+            price = table.get(model) or table.get("default")
+            result.append(text_candidate(provider, model, price=price))
     return result
 
 

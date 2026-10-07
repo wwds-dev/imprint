@@ -167,10 +167,17 @@ class ModelWatch:
         return any(p["provider"] == key and p["model_id"] == model_id
                    for p in self._state["pending"])
 
-    def acknowledge(self) -> None:
-        """Clear the notices. The models stay seen, so they are not re-announced."""
-        if self._state["pending"]:
-            self._state["pending"] = []
+    def acknowledge(self, models: Iterable[tuple[str, str]] | None = None) -> None:
+        """Clear notices: all of them, or only the `(provider, model_id)` pairs
+        given. The models stay seen either way, so they are not re-announced."""
+        if models is None:
+            keep = []
+        else:
+            drop = {(provider.casefold(), model) for provider, model in models}
+            keep = [p for p in self._state["pending"]
+                    if (p["provider"], p["model_id"]) not in drop]
+        if len(keep) != len(self._state["pending"]):
+            self._state["pending"] = keep
             self._save()
 
     def mark_checked(self) -> None:

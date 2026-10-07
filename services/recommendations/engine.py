@@ -53,7 +53,17 @@ class RecommendationEngine:
             confidence=confidence,
             reason=reason,
             fallback=fallback,
+            margin=gap if len(ranked) > 1 else 1.0,
         )
+
+    def score(self, profile: AgentProfile, item: Candidate,
+              context: RecommendationContext) -> float:
+        """The same fit score `recommend` ranks by, for any one candidate.
+
+        Used to put the user's own selection beside the winner when a paid
+        request is confirmed, so the two numbers are directly comparable.
+        """
+        return self._score(profile, item, context)
 
     @staticmethod
     def _eligible(item: Candidate, context: RecommendationContext) -> bool:

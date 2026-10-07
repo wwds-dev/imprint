@@ -66,6 +66,10 @@ class RecommendationResult:
     confidence: str
     reason: str
     fallback: bool = False
+    # Winner's score minus the runner-up's. 0 is a tie, decided only by the
+    # deterministic order of ids — which must never be reported as a win:
+    # "qwen4" sorting after "qwen3.8" is not evidence.
+    margin: float = 0.0
 
     @property
     def badge(self) -> str:
