@@ -131,9 +131,15 @@ class ModelWatch:
         record = self._state["providers"].get(key)
         if record is None:
             self._state["providers"][key] = {
-                "baseline_at": stamp, "seen": listed}
+                "baseline_at": stamp, "seen": listed,
+                "last_live": listed, "listed_at": stamp}
             self._save()
             return []
+        # What the provider offers *now*, separately from everything it has
+        # ever offered: a retired model stays seen (so it is never announced
+        # again) but leaves this list, which the ranking reads at startup.
+        record["last_live"] = listed
+        record["listed_at"] = stamp
 
         seen = set(record["seen"])
         seen_bases = {canonical(m) for m in seen}
@@ -154,6 +160,16 @@ class ModelWatch:
             for n in announced if (n.provider, n.model_id) not in pending)
         self._save()
         return announced
+
+    def last_live(self, provider: str) -> list[str]:
+        """The chat models the provider listed at the last live look.
+
+        Lets the startup ranking consider a model found in an earlier session
+        before this session's own check has answered. Empty when the provider
+        has never been looked at with a key.
+        """
+        record = self._state["providers"].get(provider.casefold()) or {}
+        return list(record.get("last_live") or [])
 
     def pending(self) -> list[NewModel]:
         """Announced and not yet dismissed, newest first."""

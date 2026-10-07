@@ -90,7 +90,8 @@ from agents.catalog import (
 from agents.recommendation_profiles import profile_for
 from services.recommendations import RecommendationContext, RecommendationEngine
 from services.recommendations.catalog import (
-    known_text_models, media_candidate, request_cost_efficiency,
+    known_text_models, media_candidate, provider_configured,
+    request_cost_efficiency,
     speech_candidate, text_candidates,
 )
 from services.model_watch import WATCHED_PROVIDERS, ModelWatch
@@ -1204,9 +1205,14 @@ class GodAI(QWidget):
                 return None
             selected_score = next((score for score, o in runnable if o is selected),
                                   None)
-            best_score, best = runnable[0]
+            # A route priced only by a later provider quote (Higgsfield)
+            # is listed, but never recommended on a guessed price: the user
+            # would be steered to a cost nobody has seen yet.
+            priced = [(score, o) for score, o in runnable
+                      if o.cost_eur is not None or o is selected]
+            best_score, best = (priced or runnable)[0]
             # A tie is not a win: the selection stands unless something
-            # scores strictly higher.
+            # scores at least a visible point higher.
             selected_is_best = (best is selected or selected_score is None
                                 or best_score - selected_score
                                 < MEANINGFUL_FIT_GAP)
@@ -1231,7 +1237,7 @@ class GodAI(QWidget):
     @staticmethod
     def _media_cost_text(option) -> str:
         if option.cost_eur is None:
-            return "quoted by provider before approval"
+            return "price only after the provider's quote — not ranked as best"
         return "free" if option.cost_eur <= 0 else f"~€{option.cost_eur:.2f}"
 
     def _media_assessment_text(self, a) -> str:
@@ -1290,6 +1296,15 @@ class GodAI(QWidget):
         model_box.setCurrentIndex(index)
         return True
 
+    def _best_known_models(self, provider: str) -> list[str]:
+        """This session's live list, else the last live list from an earlier
+        session, else nothing (the caller falls back to KNOWN_MODELS)."""
+        cached = getattr(self, "model_list_cache", {}).get(provider)
+        if cached:
+            return list(cached)
+        watch = getattr(self, "model_watch", None)
+        return watch.last_live(provider) if watch is not None else []
+
     def _text_recommendations(self, agent_key: str, task: str | None = None):
         widgets = AGENT_SETUP_WIDGETS.get(agent_key)
         if not widgets:
@@ -1320,8 +1335,8 @@ class GodAI(QWidget):
         # Every provider's live list this session, not just the selected
         # one's: a model a provider released after KNOWN_MODELS was written
         # must be able to win the provider-level BEST FIT too.
-        cache = getattr(self, "model_list_cache", {})
-        live = {p: list(cache[p]) for p in providers if cache.get(p)}
+        live = {p: models for p in providers
+                if (models := self._best_known_models(p))}
         live[selected] = [model_box.itemText(i) for i in range(model_box.count())]
         candidates = text_candidates(providers, live, self._price_index())
         candidates = [
@@ -1342,6 +1357,37 @@ class GodAI(QWidget):
         )
         return provider_result, model_result
 
+    def _selection_holds(self, agent_key: str, result, provider: str,
+                         model: str, model_box=None) -> bool:
+        """Whether the current selection is within a visible point of `result`.
+
+        The badge follows the dialog's rule (MEANINGFUL_FIT_GAP): when the
+        user's own choice scores within a point of the winner, the two read as
+        the same number, and moving the BEST FIT badge off it would steer them
+        to a different model — often only because its id sorts later. The
+        selection must also be able to run, or it is not a choice at all.
+        """
+        if result is None or not provider or not model:
+            return False
+        if (result.candidate.provider == provider
+                and result.candidate.model_id == model):
+            return True
+        if provider == "ollama":
+            runnable = bool(model_box is not None
+                            and model_box.property("imprintModelsLive"))
+        else:
+            runnable = bool(provider_configured(provider)
+                            and self._provider_permission(provider))
+        if not runnable and not result.fallback:
+            return False
+        mine = text_candidates([provider], {provider: [model]}, self._price_index())
+        if not mine:
+            return False
+        score = self.recommendation_engine.score(
+            profile_for(agent_key), mine[0],
+            self._recommendation_context(agent_key))
+        return result.score - score < MEANINGFUL_FIT_GAP
+
     def refresh_recommendation_marks(self, agent_key: str) -> None:
         """Mark the best provider overall and best model within the selection."""
         widgets = AGENT_SETUP_WIDGETS.get(agent_key)
@@ -1350,13 +1396,23 @@ class GodAI(QWidget):
         provider_box = self._find_control(widgets[0])
         model_box = self._find_control(widgets[1])
         provider_result, model_result = self._text_recommendations(agent_key)
+        current_provider = provider_box.currentText() if provider_box is not None else ""
+        current_model = model_box.currentText() if model_box is not None else ""
 
         if provider_box is not None and provider_result is not None:
             tooltip = (f"Best provider for {AGENT_PRETTY_NAMES.get(agent_key, agent_key)}: "
                        f"{provider_result.candidate.provider}\n{provider_result.reason}\n"
                        f"Confidence: {provider_result.confidence}")
-            idx = self._find_provider_index(provider_box,
-                                            provider_result.candidate.provider)
+            badged = (current_provider if self._selection_holds(
+                agent_key, provider_result, current_provider, current_model,
+                model_box) else provider_result.candidate.provider)
+            if badged != provider_result.candidate.provider:
+                tooltip = (f"Your selection ({current_provider} · {current_model}) is "
+                           f"within a point of the top score "
+                           f"({provider_result.candidate.provider} · "
+                           f"{provider_result.candidate.model_id}), so it keeps "
+                           "the badge.\n" + tooltip)
+            idx = self._find_provider_index(provider_box, badged)
             self._paint_recommended_item(
                 provider_box, idx, tooltip, score=provider_result.score,
                 confidence=provider_result.confidence, badge=provider_result.badge,
@@ -1368,7 +1424,14 @@ class GodAI(QWidget):
                        f"{AGENT_PRETTY_NAMES.get(agent_key, agent_key)}: "
                        f"{model_result.candidate.label}\n{model_result.reason}\n"
                        f"Confidence: {model_result.confidence}")
-            idx = self._find_model_index(model_box, model_result.candidate.model_id)
+            badged = (current_model if self._selection_holds(
+                agent_key, model_result, current_provider, current_model,
+                model_box) else model_result.candidate.model_id)
+            if badged != model_result.candidate.model_id:
+                tooltip = (f"Your selection ({current_model}) is within a point "
+                           f"of the top score ({model_result.candidate.model_id}), "
+                           "so it keeps the badge.\n" + tooltip)
+            idx = self._find_model_index(model_box, badged)
             self._paint_recommended_item(
                 model_box, idx, tooltip, score=model_result.score,
                 confidence=model_result.confidence, badge=model_result.badge,
@@ -3703,7 +3766,7 @@ class GodAI(QWidget):
         profile, task context and prices — so the tile and the badge in the
         menu can never disagree.
         """
-        models = (self.model_list_cache.get(provider)
+        models = (self._best_known_models(provider)
                   or list(known_text_models(provider)))
         candidates = text_candidates([provider], {provider: models},
                                      self._price_index())

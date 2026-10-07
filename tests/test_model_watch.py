@@ -522,3 +522,46 @@ def test_a_tie_is_never_reported_or_acted_on_as_a_win(app, watched_window):
     _row(window, "qwen4-max").mark.setChecked(True)
     window.update_selected_models()
     assert author.model_box.currentText() == "qwen3.8-max"
+
+
+def test_the_last_live_list_follows_the_provider_and_drops_retired_models(watch):
+    watch.observe("qwen", ["qwen3.8-max", "qwen-plus"])
+    assert watch.last_live("qwen") == ["qwen-plus", "qwen3.8-max"]
+    watch.observe("qwen", ["qwen-plus", "qwen4-max"])          # 3.8 retired
+    assert watch.last_live("qwen") == ["qwen-plus", "qwen4-max"]
+    # Still seen, so a return of the same id is not news.
+    assert watch.observe("qwen", ["qwen-plus", "qwen4-max", "qwen3.8-max"]) == []
+    assert watch.last_live("kimi") == []
+
+
+def test_ranking_uses_an_earlier_sessions_live_list_before_the_check(
+        app, watched_window):
+    window = watched_window
+    window.model_watch.observe("qwen", ["qwen3.8-max", "qwen-ultra"])
+    window.model_list_cache.pop("qwen", None)
+    assert window._best_known_models("qwen") == ["qwen-ultra", "qwen3.8-max"]
+    window.model_list_cache["qwen"] = ["qwen-plus"]
+    assert window._best_known_models("qwen") == ["qwen-plus"]
+
+
+def test_the_badge_stays_on_a_selection_within_a_point_of_the_top(
+        app, watched_window, qwen_permitted):
+    """qwen4-max and qwen3.8-max tie (same price, same name pattern); the id
+    order alone would hand qwen4-max the BEST FIT badge. The selection keeps
+    it instead, and the tooltip says why."""
+    from ui.widgets import RECOMMENDED_ROLE
+    window = watched_window
+    window.qwen = _FakeQwen(["qwen3.8-max", "qwen4-max"])
+    window.model_list_cache["qwen"] = list(window.qwen.models)
+    panel = _select(app, window, "author", "qwen")
+    panel.load_models()
+    _pump = lambda: [app.processEvents() for _ in range(4)]
+    _pump()
+    box = panel.model_box
+    box.setCurrentIndex(box.findText("qwen3.8-max"))
+    _pump()
+    window.refresh_recommendation_marks("author")
+    marked = [box.itemText(i) for i in range(box.count())
+              if box.itemData(i, RECOMMENDED_ROLE)]
+    assert marked == ["qwen3.8-max"]
+    assert "within a point" in box.toolTip()
