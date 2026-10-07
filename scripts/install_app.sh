@@ -16,9 +16,13 @@
 # Data lives in the project (data/, config/, .env) exactly as it does when you
 # run `python main.py` by hand, so the app and the terminal share one state.
 #
-# Built as a compiled AppleScript applet rather than a shell-script bundle:
-# macOS treats applets as a normal app type, while an unsigned shell-script
-# CFBundleExecutable gets killed silently by Gatekeeper on launch.
+# Built around a small compiled launcher (scripts/thin_launcher.c), the same one
+# Sentinel uses. Not a shell-script bundle — an unsigned shell-script
+# CFBundleExecutable gets killed silently by Gatekeeper on launch — and no longer
+# an AppleScript applet: the applet had to block in `do shell script` for as long
+# as the GUI ran, so its main thread never answered the window server and
+# Activity Monitor listed Imprint as "Not Responding" for its whole lifetime. The
+# launcher forks a detached child that execs python, then exits at once.
 set -euo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -43,48 +47,31 @@ STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
 APP_DIR="$STAGE/${APP_NAME}.app"
 
-# The launcher must not background python: the applet is the parent process, and
-# macOS reaps the child as soon as the parent returns. Blocking on `do shell
-# script` keeps the applet alive as the visible app for the GUI's lifetime.
-#
-# Two details that matter:
-#  * Missing venv/main.py is reported up front, so a broken install says why
-#    instead of bouncing the icon once and giving up.
-#  * The command ends in "; exit 0" so python's exit status never reaches
-#    AppleScript. Otherwise quitting or killing the app returns non-zero, which
-#    AppleScript raises as an error dialog — that left the applet alive with no
-#    window, and macOS then treated the app as running and refused to relaunch.
-cat > "$STAGE/launch.applescript" <<APPLESCRIPT
-set pythonBin to "${PY}"
-set mainPy to "${PROJECT_ROOT}/main.py"
-if (do shell script "[ -x " & quoted form of pythonBin & " ] && [ -f " & quoted form of mainPy & " ] && echo ok || echo missing") is not "ok" then
-    display alert "Imprint cannot start" message "The project is not where the app expects it:" & return & return & "${PROJECT_ROOT}" & return & return & "Re-run scripts/install_app.sh from the project." as critical
-    return
-end if
-do shell script "cd " & quoted form of "${PROJECT_ROOT}" & " && " & quoted form of pythonBin & " " & quoted form of mainPy & " > /tmp/imprint_launch.log 2>&1; exit 0"
-APPLESCRIPT
+mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
+xcrun clang -std=c11 -Wall -Wextra -Werror \
+    "$PROJECT_ROOT/scripts/thin_launcher.c" \
+    -o "$APP_DIR/Contents/MacOS/ImprintLauncher"
+cp "$PROJECT_ROOT/assets/icon.icns" "$APP_DIR/Contents/Resources/icon.icns"
+# The launcher reads the checkout's path from here rather than having it
+# compiled in, so the C source stays identical for every install location.
+printf '%s\n' "$PROJECT_ROOT" > "$APP_DIR/Contents/Resources/project_root.txt"
 
-osacompile -o "$APP_DIR" "$STAGE/launch.applescript"
-
-cp "$PROJECT_ROOT/assets/icon.icns" "$APP_DIR/Contents/Resources/applet.icns"
-
-# osacompile also emits Assets.car, an asset catalog holding the stock
-# AppleScript applet artwork (the scroll-on-a-folder). macOS resolves an app's
-# icon from the asset catalog BEFORE CFBundleIconFile, so leaving it in place
-# silently overrides the icon we just copied in. Drop it — the applet
-# has no UI of its own that needs those assets.
-rm -f "$APP_DIR/Contents/Resources/Assets.car"
 defaults write "$APP_DIR/Contents/Info" CFBundleName -string "${APP_NAME}"
 defaults write "$APP_DIR/Contents/Info" CFBundleDisplayName -string "${APP_NAME}"
 defaults write "$APP_DIR/Contents/Info" CFBundleIdentifier -string "com.netrunner3000.imprint"
+defaults write "$APP_DIR/Contents/Info" CFBundleExecutable -string "ImprintLauncher"
+defaults write "$APP_DIR/Contents/Info" CFBundleIconFile -string "icon.icns"
+defaults write "$APP_DIR/Contents/Info" CFBundlePackageType -string "APPL"
+defaults write "$APP_DIR/Contents/Info" NSHighResolutionCapable -bool true
 defaults write "$APP_DIR/Contents/Info" LSUIElement -bool false
 plutil -convert xml1 "$APP_DIR/Contents/Info.plist"
+printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 
-# Stop both halves of a running copy so Launch Services picks up the new bundle.
-# The AppleScript applet blocks while Python owns the window. Killing Python
-# alone can leave that applet alive briefly (or indefinitely after a launcher
-# error), and `open Imprint.app` then focuses the stale process instead of
-# starting the replacement bundle.
+# Stop a running copy so Launch Services picks up the new bundle. The new
+# launcher has already exited by the time the window is up, so Python is the only
+# process to stop — the `applet` line is for an install still on the old
+# AppleScript launcher, which blocked for the GUI's lifetime and, left alive,
+# made `open Imprint.app` focus the stale process instead of the new bundle.
 pkill -f "${PROJECT_ROOT}/main.py" 2>/dev/null || true
 pkill -f "${INSTALLED}/Contents/MacOS/applet" 2>/dev/null || true
 sleep 1

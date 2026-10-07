@@ -51,7 +51,7 @@ from ui.style import (
     global_stylesheet, ACCENT, ACCENT_LINE, ACCENT_WASH, INFO, WARNING,
     TEXT, TEXT_DIM, TEXT_MUTE,
 )
-from ui import appkit_guard, theme, tray, vibe
+from ui import app_identity, appkit_guard, theme, tray, vibe
 from services.ollama_client import OllamaClient, MUSE_GLIMMER_VARIANTS, muse_glimmer_default
 from services.openai_client import OpenAIClientWrapper
 from services.deepseek_client import DeepSeekClientWrapper
@@ -4849,12 +4849,21 @@ if __name__ == "__main__":
     # instead of answering zero. Install before any menu can be built, because
     # the abort happens inside AppKit with nothing of ours on the stack to
     # point at. See ui/appkit_guard.py; the same copy is in Lab Hub and SONAR.
+    #
+    # The name goes in before QApplication() too: the launcher execs the venv's
+    # python, which sits outside any bundle, and AppKit reads the name it titles
+    # the application menu with when Qt creates the application object.
+    app_identity.name_in_menu_bar("Imprint")
     appkit_guard.install()
 
     app = QApplication([])
 
-    # Second launch: focus the window that is already open and leave. The exit
-    # code has to be 0 — the launcher raises an error dialog on anything else.
+    # Qt does not set the Dock icon from setWindowIcon on macOS, so AppKit is
+    # asked directly, now that QApplication has made NSApp exist.
+    app_identity.set_dock_icon(RESOURCE_DIR / "assets" / "icon.icns")
+
+    # Second launch: focus the window that is already open and leave. Each
+    # launch through Imprint.app starts a fresh python, so this is the dedupe.
     if _hand_off_to_running_instance():
         sys.exit(0)
 
@@ -4876,6 +4885,9 @@ if __name__ == "__main__":
         window.show()
         window.raise_()
         window.activateWindow()
+        # Qt's calls only order windows within this app; a background process
+        # needs AppKit's own activation to come in front of the frontmost one.
+        app_identity.activate()
 
     def _raise_existing_window():
         instance_server.nextPendingConnection()      # drain the pending connection

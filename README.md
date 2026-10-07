@@ -2561,9 +2561,21 @@ To tell which produced the bundle you have:
 ls /Applications/Imprint.app/Contents/MacOS/
 ```
 
-`Imprint` is the frozen build. `applet` is the live launcher — `install_app.sh`
-builds it with `osacompile`, which is why the executable and the icon file
-inside carry AppleScript's `applet` name.
+`Imprint` is the frozen build. `ImprintLauncher` is the live launcher — a
+small C program (`scripts/thin_launcher.c`) that `install_app.sh` compiles. It
+starts the checkout's `python main.py` as a detached process and exits at once,
+so once the window is up, the only Imprint process is Python itself. If you
+see `applet` instead, that is the AppleScript launcher it replaced on
+2026-10-07. That launcher stayed blocked for as long as the app ran, which is
+why Activity Monitor always listed Imprint as *Not Responding*. Re-run
+`install_app.sh` to replace it.
+
+Because the running process is the venv's `python`, which sits outside any
+bundle, `ui/app_identity.py` sets the menu-bar name and the Dock icon at
+startup. The name under the Dock icon and in the app switcher still comes from
+the executable, so it can read *Python* — only the frozen build fixes that. If
+the launcher cannot find the checkout or its `.venv`, nothing opens and the
+reason is in `/tmp/imprint_launch.log`.
 
 ### 18.1 Versioning
 
