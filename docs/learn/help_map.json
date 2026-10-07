@@ -120,5 +120,6 @@
   "creator_video_cancel_btn": "creator#cost-cancellation-and-gates",
   "creator_stop_btn": "creator#cost-cancellation-and-gates",
   "creator_tabs": "creator#four-output-tabs",
-  "creator_add_media_btn": "creator#four-output-tabs"
+  "creator_add_media_btn": "creator#four-output-tabs",
+  "model_updates_card": "best-fit#new-models"
 }

@@ -18,7 +18,7 @@
 | Tool switcher | Selects related agents inside a workspace, such as Quill/Press under Author or Booth/Label under Audio + Music | A project; switching tools does not create one |
 | Project rail | Creates, searches, opens, renames, and removes saved contexts | A file browser or undo history |
 | Centre canvas | The current agent's brief, actions, status, and output | A universal form; each agent has different contracts |
-| Right rail | System health, routing, key readiness, limits, Cost History, Run Log, Learning Centre | Proof that an external provider or platform accepted a job |
+| Right rail | System health, routing, key readiness, model updates, limits, Cost History, Run Log, Learning Centre | Proof that an external provider or platform accepted a job |
 
 ## Walkthrough
 
@@ -30,6 +30,9 @@
    eligible configuration; inspect the visible provider/model badges where the
    dedicated agent exposes them.
 5. Open **API keys**. This is readiness/status, not a place to paste secrets.
+   Below it, **Model updates** lists models your providers released since
+   Imprint last looked; its title shows the count (*Model updates · 2 new*).
+   See [Best Fit](12-best-fit.md#new-models) before switching to one.
 6. Inspect session/daily limits, Cost History, and Run Log before a long job.
 7. Use the header **Docs** for an agent's technical sheet and **Learning
    Centre** for operating lessons and cross-agent workflows.

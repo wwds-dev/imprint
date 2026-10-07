@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated_at": "2026-09-17",
+  "updated_at": "2026-10-07",
   "sections": [
     {"id": "start", "title": "Start here", "description": "Architecture and shared systems"},
     {"id": "production", "title": "Create & publish", "description": "Writing, publishing, audio, music, and video"},
@@ -8,7 +8,7 @@
     {"id": "advanced", "title": "Advanced", "description": "Compatibility and command-line capabilities"}
   ],
   "pages": [
-    {"id": "overview", "filename": "overview.md", "title": "Imprint reference", "summary": "Architecture, shared systems, files, costs, and recovery.", "section": "start", "order": 1, "audience": "Everyone", "estimated_minutes": 8, "keywords": ["architecture", "routing", "api keys", "cost", "storage", "errors"], "updated_at": "2026-09-15"},
+    {"id": "overview", "filename": "overview.md", "title": "Imprint reference", "summary": "Architecture, shared systems, files, costs, and recovery.", "section": "start", "order": 1, "audience": "Everyone", "estimated_minutes": 8, "keywords": ["architecture", "routing", "api keys", "cost", "storage", "errors", "model updates", "assessment"], "updated_at": "2026-10-07"},
     {"id": "author", "filename": "author.md", "title": "Quill", "summary": "Long-form writing, continuity, profiles, and export.", "section": "production", "order": 10, "agent": "author", "workspace": "Author", "estimated_minutes": 9, "keywords": ["book", "fiction", "non-fiction", "characters", "epub"]},
     {"id": "manuscript", "filename": "manuscript.md", "title": "Press", "summary": "Sales data, quote assets, shorts, calendars, and launch tracking.", "section": "production", "order": 11, "agent": "manuscript", "workspace": "Author", "estimated_minutes": 9, "keywords": ["publisher", "kdp", "quotes", "calendar", "sales"]},
     {"id": "audiobook", "filename": "audiobook.md", "title": "Booth", "summary": "Ebook extraction, speech generation, resume state, and MP3 output.", "section": "production", "order": 12, "agent": "audiobook", "workspace": "Audio + Music", "estimated_minutes": 7, "keywords": ["narrator", "voice", "tts", "mp3", "chunks"]},

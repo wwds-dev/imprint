@@ -38,7 +38,9 @@ umbrella app owns only the shared seams needed to operate all agents together.
 3. **Best fit** ranks eligible providers and models for that exact agent and
    context. It is a recommendation, not a guarantee.
 4. **The request gate** checks availability, permissions, and budget before a
-   paid or remote call begins.
+   paid or remote call begins, and assesses that exact request across every
+   permitted route. A better route is offered with **Apply**, which switches
+   and does not send.
 5. **The agent** builds the provider request and validates the response.
 6. **Storage and history** keep outputs, settings, and measured usage in the
    writable Imprint data directory.
@@ -86,6 +88,15 @@ right rail reports only **Configured**, **Not configured**, or **Check failed**;
 it never displays the secret. A configured key still may lack billing, quota,
 model access, or regional availability, so the first real request remains the
 final capability check.
+
+### Model updates
+
+Under **API keys**, the Model updates card lists chat models the providers
+behind your keys have released since Imprint last looked, checked at start-up
+and on **Check now** (model lists are free). New models join the menus with a
+**NEW** badge and are ranked on the same evidence as every other model — being
+new earns nothing. **Update N selected** moves an agent to a marked model only
+where the assessment for its current task says it wins by at least one point.
 
 ### Files and persistence
 
