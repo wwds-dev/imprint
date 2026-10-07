@@ -266,6 +266,16 @@
     "gemini_tts_per_minute": {
       "gemini-3.8-flash-tts": 0.0137,
       "gemini-3.8-flash-tts@2027-01-01": 0.0272
+    },
+    "_gemini_image_comment": "Gemini image models per image at 1K (ai.google.dev/gemini-api/docs/pricing, checked 2026-10-07): Nano Banana 2.1 is 1,120 output tokens at $30/1M = $0.0336, rounded up to cover the prompt; Nano Banana Pro is $0.134.",
+    "gemini_image": {
+      "gemini-nano-banana-2.1": 0.04,
+      "gemini-3-pro-image": 0.14
+    },
+    "_qwen_image_comment": "Qwen Image per image, international endpoint (alibabacloud.com model pricing, checked 2026-10-07): qwen-image-3.0 $0.03; qwen-image-3.0-pro $0.04 at 1K. Failed requests are not billed.",
+    "qwen_image": {
+      "qwen-image-3.0": 0.03,
+      "qwen-image-3.0-pro": 0.04
     }
   }
 }

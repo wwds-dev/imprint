@@ -120,9 +120,14 @@ def to_eur(usd: float | None) -> float | None:
 
 
 def image_cost_eur(model: str, count: int = 1) -> float | None:
-    """What `count` images from `model` will cost, or None if unpriced."""
-    usd = rate_usd("openai_image", model)
-    return None if usd is None else to_eur(usd * max(0, int(count)))
+    """What `count` images from `model` will cost, or None if unpriced —
+    for any provider's image model (OpenAI, Gemini, Qwen)."""
+    from services.media_catalog import image_reserve_usd
+    try:
+        usd = image_reserve_usd(model)
+    except ValueError:
+        return None
+    return to_eur(usd * max(0, int(count)))
 
 
 def tts_cost_eur(characters: int) -> float | None:

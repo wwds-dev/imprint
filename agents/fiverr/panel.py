@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.openai_client import (
-    DEFAULT_IMAGE_MODEL, IMAGE_MODELS, OpenAIClientWrapper,
+    DEFAULT_IMAGE_MODEL,
 )
 from services.runtime_paths import user_data_base
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
@@ -130,7 +130,8 @@ class FiverrPanel(QWidget):
         self.fiverr_provider_box = self.fiverr_panel_base.provider_box
         self.fiverr_model_box = self.fiverr_panel_base.model_box
 
-        self.fiverr_image_model_box = combo(list(IMAGE_MODELS),
+        from services.image_generation import image_models
+        self.fiverr_image_model_box = combo(list(image_models()),
                                             DEFAULT_IMAGE_MODEL)
         self.fiverr_image_model_box.currentTextChanged.connect(
             self.update_estimate)
@@ -319,10 +320,18 @@ class FiverrPanel(QWidget):
         if not brief["business_name"]:
             QMessageBox.warning(self, "Missing Input", "Please enter a business name.")
             return
-        if not OpenAIClientWrapper.key_available():
+        # The selected image model's own key, checked before the paid prompt
+        # step: finding it missing after the prompt is written wastes that
+        # request. (This used to demand OPENAI_API_KEY whatever the model.)
+        from services.image_generation import provider_for
+        from services.recommendations.catalog import provider_configured
+        image_model = self.fiverr_image_model_box.currentText()
+        image_provider = provider_for(image_model) or "OpenAI"
+        if not provider_configured(image_provider.lower()):
             QMessageBox.warning(
                 self, "No API Key",
-                "OPENAI_API_KEY is required to generate logo images.")
+                f"{image_model} needs a {image_provider} key in Imprint's "
+                "private .env file. Pick another image model, or add the key.")
             return
 
         count = self.fiverr_count_spin.value()
@@ -360,12 +369,13 @@ class FiverrPanel(QWidget):
 
     def _image_assessment(self, selected: str, count: int, image_prompt: str):
         """Price these logos on every image model Stamp can run, and rank them."""
+        from services.image_generation import provider_for
         from services.media_catalog import find_model
         from services.per_unit_pricing import image_cost_eur
         options = []
         for i in range(self.fiverr_image_model_box.count()):
             model_id = self.fiverr_image_model_box.itemText(i)
-            model = find_model("OpenAI", model_id)
+            model = find_model(provider_for(model_id) or "", model_id)
             cost = image_cost_eur(model_id, count)
             if model is None or cost is None:
                 continue
@@ -405,9 +415,20 @@ class FiverrPanel(QWidget):
                 "Add a rate (0 means unknown) before generating.")
             self._reset_buttons()
             return
+        from services.image_generation import provider_for
+        from services.recommendations.catalog import provider_configured
+        provider = (provider_for(image_model) or "OpenAI").lower()
+        if not provider_configured(provider):
+            QMessageBox.warning(
+                self, "Key Needed",
+                f"{image_model} needs a {provider_for(image_model)} key in "
+                "Imprint's private .env file. Pick another image model, or "
+                "add the key.")
+            self._reset_buttons()
+            return
         assessment = self._image_assessment(image_model, count, image_prompt)
         image_token = self.host.authorize_request(
-            "fiverr", "openai", image_model,
+            "fiverr", provider, image_model,
             f"{count} logo concepts: {image_prompt[:200]}",
             label="logo images",
             flat_cost_eur=image_cost, assessment=assessment)

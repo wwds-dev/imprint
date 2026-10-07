@@ -257,10 +257,12 @@ class FiverrImageWorker(QThread):
                 return
             try:
                 self.status_signal.emit(f"Generating concept {i + 1} of {self.count}...")
-                # The adapter normalises every supported GPT Image response to
-                # bytes before the worker writes it to the local order folder.
-                data = self.openai_client.generate_image(
-                    self.image_prompt, model=self.image_model)
+                # One call for every image route (OpenAI, Gemini, Qwen); each
+                # normalises its response to bytes before the worker writes it.
+                from services.image_generation import generate_image
+                data = generate_image(self.image_model, self.image_prompt,
+                                      aspect="1:1",
+                                      openai_client=self.openai_client)
                 local_path = self.save_dir / f"logo_{i + 1}.png"
                 local_path.write_bytes(data)
                 paths.append(str(local_path))

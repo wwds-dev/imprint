@@ -219,9 +219,14 @@ def media_candidate(model, duration: int | None = None) -> Candidate:
         quality, reliability, cost, speed, privacy = .68, .92, .96, .92, .10
         available = provider_configured(model.provider)
     elif model.kind == "scene_images":
-        quality = .94 if "sunburst" in name else .84 if "flare" in name else .80
+        # Catalogue positioning, not a leaderboard: each provider's top tier
+        # and its fast tier, as the provider describes them.
+        quality = (.94 if "sunburst" in name or "3-pro-image" in name
+                   else .88 if "nano-banana" in name or "image-3.0-pro" in name
+                   else .84 if "flare" in name or "qwen-image" in name
+                   else .80)
         reliability, cost, speed, privacy = .88, .62, .62, .10
-        if "flare" in name:
+        if "flare" in name or "nano-banana" in name:
             speed = .88
         available = provider_configured(model.provider)
     else:

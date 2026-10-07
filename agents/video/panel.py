@@ -477,6 +477,25 @@ class VideoPanel(QWidget):
             return
 
         topic = self.video_topic_input.text().strip()
+        if (selection is not None and selection.kind == "scene_images"
+                and selection.provider != "OpenAI"):
+            # The script and narration still run on OpenAI (the guard checks
+            # that below); the scene images are this provider's, billed in
+            # the same estimate, so they need its key and permission too.
+            from services.recommendations.catalog import provider_configured
+            key = selection.provider.lower()
+            if not provider_configured(key):
+                QMessageBox.information(
+                    self, f"{selection.provider} Key Needed",
+                    f"{selection.label} needs a {selection.provider} key in "
+                    "Imprint's private .env file.")
+                return
+            if not self.host._provider_permission(key):
+                QMessageBox.warning(
+                    self, f"{selection.provider} Not Enabled",
+                    f"Enable {selection.provider} in the API permissions row "
+                    "first.")
+                return
         cost_eur = round(estimate["total"] * eur_per_usd(), 4)
         assessment = self._assessment(selection, topic, cost_eur)
         # Keep the token: the Social clip flow also authorizes under

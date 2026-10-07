@@ -31,6 +31,10 @@ WAN_VIDEO_MODELS = (
     "wan3.0-video-prime",
     "wan2.7-t2v",
 )
+# Gemini's and Alibaba's image models (Nano Banana and Qwen Image), on the
+# keys Imprint already holds; generated through services/image_generation.py.
+GEMINI_IMAGE_MODELS = ("gemini-nano-banana-2.1", "gemini-3-pro-image")
+QWEN_IMAGE_MODELS = ("qwen-image-3.0", "qwen-image-3.0-pro")
 RETIRED_DALLE_MODELS = ("dall-e-2", "dall-e-3")
 
 # 720p international list prices. Gemini Omni is token-billed at roughly this
@@ -79,6 +83,12 @@ MODELS = (
                "Faster scene-image generation."),
     MediaModel("OpenAI", "gpt-image-2", "GPT Image 2", "scene_images",
                "Current general image model."),
+    MediaModel("Gemini", "gemini-nano-banana-2.1", "Nano Banana 2.1",
+               "scene_images", "Gemini's general image model; about $0.034 "
+               "an image at 1K."),
+    MediaModel("Gemini", "gemini-3-pro-image", "Nano Banana Pro",
+               "scene_images", "Gemini's best for legible text in the image "
+               "and brand consistency; about $0.134 an image."),
     MediaModel("Gemini", "gemini-omni-1.1-flash", "Gemini Omni 1.1 Flash",
                "direct_video", "Fast text-to-video with generated audio. "
                "The requested length is expressed in the prompt.",
@@ -98,6 +108,11 @@ MODELS = (
                "direct_video", "Lowest-cost Veo preview at 720p with audio. "
                + VEO_SHUTDOWN_NOTE,
                (4, 6, 8), (LANDSCAPE, VERTICAL), retires=VEO_SHUTDOWN),
+    MediaModel("Qwen", "qwen-image-3.0", "Qwen Image 3.0", "scene_images",
+               "Alibaba's general image model; about $0.03 an image."),
+    MediaModel("Qwen", "qwen-image-3.0-pro", "Qwen Image 3.0 Pro",
+               "scene_images", "Alibaba's higher-fidelity image model; about "
+               "$0.04 an image at 1K."),
     MediaModel("Qwen", "wan3.0-video", "Wan 3.0 Video",
                "direct_video", "Current all-in-one Wan preview; text-to-video "
                "at 720p with audio.", tuple(range(2, 31))),
@@ -163,10 +178,24 @@ def direct_video_rate_usd(model: str) -> float | None:
     return override if override is not None else DIRECT_VIDEO_USD_PER_SECOND.get(model)
 
 
-def openai_image_reserve_usd(model: str) -> float:
+# Where each provider's per-image reserve lives in pricing.json's per_unit_usd.
+IMAGE_RATE_TABLES = {"OpenAI": "openai_image", "Gemini": "gemini_image",
+                     "Qwen": "qwen_image"}
+
+
+def image_reserve_usd(model: str) -> float:
+    """The per-image budget reserve for any image model, from its provider's
+    table. Raises when there is none: 0 means unknown, never free."""
     from services.per_unit_pricing import rate_usd
 
-    value = rate_usd("openai_image", model)
+    provider = next((m.provider for m in MODELS
+                     if m.kind == "scene_images" and m.model_id == model), None)
+    table = IMAGE_RATE_TABLES.get(provider or "")
+    value = rate_usd(table, model) if table else None
     if value is None:
         raise ValueError(f"No budget reserve is configured for {model}")
     return value
+
+
+# The name the video pipeline's estimate has always called.
+openai_image_reserve_usd = image_reserve_usd

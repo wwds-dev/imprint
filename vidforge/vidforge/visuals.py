@@ -40,17 +40,37 @@ def _openai():
 # --------------------------------------------------------------------------
 
 
+def _other_provider_image(model: str, prompt: str, size: str) -> bytes | None:
+    """A Gemini or Qwen image model goes through Imprint's shared image module
+    (services/image_generation.py); None means "an OpenAI model, or not
+    running inside Imprint" — the OpenAI path below handles it."""
+    try:
+        from services.image_generation import (
+            aspect_for_size, generate_image, provider_for)
+    except ImportError:
+        return None
+    if provider_for(model) in (None, "OpenAI"):
+        return None
+    return generate_image(model, prompt, aspect=aspect_for_size(size))
+
+
 def _generate_ai(cfg: Config, prompt: str, dst: Path) -> None:
     suffix = " ".join(str(cfg.get("visuals.style_suffix", "")).split())
     full = f"{prompt}. {suffix}".strip()
+    model = cfg.get("visuals.image_model", "gpt-image-2.5-flare")
+    size = cfg.get("visuals.image_size", "1536x1024")
 
     last: Exception | None = None
     for attempt in range(1, RETRIES + 1):
         try:
+            other = _other_provider_image(model, full, size)
+            if other is not None:
+                dst.write_bytes(other)
+                return
             result = _openai().images.generate(
-                model=cfg.get("visuals.image_model", "gpt-image-2.5-flare"),
+                model=model,
                 prompt=full,
-                size=cfg.get("visuals.image_size", "1536x1024"),
+                size=size,
                 quality=cfg.get("visuals.image_quality", "medium"),
                 n=1,
             )
