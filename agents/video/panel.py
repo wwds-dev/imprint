@@ -273,8 +273,10 @@ class VideoPanel(QWidget):
             return
         direct = selection.kind == "direct_video"
         if direct:
-            self.video_format_box.setCurrentText("Social clip")
-            self.video_format_box.setEnabled(False)
+            # Lengths and shape first, format last: the format change re-runs
+            # the estimate, and with a stale length still in the box (30s from
+            # long-form) it priced a clip the model cannot make and raised
+            # inside the slot.
             durations = selection.durations or (4, 8, 12)
             preferred = 8 if 8 in durations else durations[0]
             self._set_lengths(durations, preferred)
@@ -282,6 +284,8 @@ class VideoPanel(QWidget):
                 wanted = ("Vertical 9:16" if "Vertical 9:16" in selection.aspects
                           else selection.aspects[0])
                 self.video_aspect_box.setCurrentText(wanted)
+            self.video_format_box.setCurrentText("Social clip")
+            self.video_format_box.setEnabled(False)
         else:
             self.video_format_box.setEnabled(True)
             self._set_lengths(video_studio.CLIP_SECONDS, 30)
@@ -308,9 +312,10 @@ class VideoPanel(QWidget):
         self.update_estimate()
 
     # ── estimates ───────────────────────────────────────────────────────
-    def _overrides(self) -> dict:
+    def _overrides(self, selection=None) -> dict:
         from agents.video import video_studio
-        selection = self._media_selection()
+        if selection is None:
+            selection = self._media_selection()
         overrides = {}
         if self.video_format_box.currentText() == "Social clip":
             seconds = int(self.video_length_box.currentText().rstrip("s") or 30)
@@ -378,6 +383,80 @@ class VideoPanel(QWidget):
                 f"{estimate['scenes']} scenes · ~{estimate['words']} words · "
                 f"budget reserve ≈ €{eur:.2f}")
 
+    # ── per-request assessment ──────────────────────────────────────────
+    def _assessment(self, selection, topic: str, selected_cost_eur=None):
+        """Price this render on every route that could make it, and rank them.
+
+        Each route is costed at the length and shape that was asked for —
+        a direct model at its per-second rate, a scene/stock/local route by
+        the pipeline's own pre-estimate with that route's visuals — so the
+        comparison is like for like. A route that cannot make the requested
+        length (a 30s clip on an 8s-max model, or an 8s clip on the scene
+        pipeline, whose clips come in fixed lengths) is left out rather than
+        quietly compared at a different length. Higgsfield prices only after
+        an estimate call, so it is ranked with its cost marked as quoted.
+        """
+        from agents.video import video_studio
+        from services.media_catalog import MODELS, direct_video_cost_usd
+        from services.per_unit_pricing import eur_per_usd
+
+        if selection is None:
+            return None
+        clip = self.video_format_box.currentText() == "Social clip"
+        aspect = self.video_aspect_box.currentText() if clip else None
+        seconds = None
+        if clip:
+            text = self.video_length_box.currentText().rstrip("s")
+            seconds = int(text) if text.isdigit() else None
+        rate = eur_per_usd()
+        options = []
+        for model in MODELS:
+            direct = model.kind == "direct_video"
+            if direct and not clip:
+                continue
+            if not direct and clip and seconds not in video_studio.CLIP_SECONDS:
+                continue
+            if model.model_id == selection.model_id and selected_cost_eur is not None:
+                cost = selected_cost_eur
+            elif direct and model.provider == "Higgsfield":
+                cost = None
+            elif direct:
+                try:
+                    cost = direct_video_cost_usd(model.model_id, seconds) * rate
+                except ValueError:
+                    continue
+            else:
+                try:
+                    cost = video_studio.pre_estimate(video_studio.load_config(
+                        self._overrides(model)))["total"] * rate
+                except Exception:
+                    continue
+            options.append(self.host.media_option(
+                model, cost, duration=seconds if direct else None,
+                apply=lambda m=model: self._apply_media(m, aspect, seconds)))
+        return self.host.assess_media_request(
+            "video", options, selection.model_id,
+            task=f"{self.video_format_box.currentText()} {topic}",
+            aspect=aspect, duration=seconds)
+
+    def _apply_media(self, model, aspect, seconds) -> None:
+        """Point the visual selectors at `model`, keeping length and shape."""
+        self.video_visual_provider_box.setCurrentText(model.provider)
+        for i in range(self.video_visual_model_box.count()):
+            data = self.video_visual_model_box.itemData(i)
+            if getattr(data, "model_id", None) == model.model_id:
+                self.video_visual_model_box.setCurrentIndex(i)
+                break
+        if aspect:
+            self.video_aspect_box.setCurrentText(aspect)
+        if seconds:
+            self.video_length_box.setCurrentText(f"{seconds}s")
+
+    def _applied(self, assessment) -> bool:
+        """True when this refusal was the user pressing Apply on `assessment`."""
+        return (assessment is not None
+                and self.host.last_applied_assessment is assessment)
+
     # ── rendering ───────────────────────────────────────────────────────
     def render(self):
         from agents.video import video_studio
@@ -398,14 +477,17 @@ class VideoPanel(QWidget):
 
         topic = self.video_topic_input.text().strip()
         cost_eur = round(estimate["total"] * eur_per_usd(), 4)
+        assessment = self._assessment(selection, topic, cost_eur)
         # Keep the token: the Social clip flow also authorizes under
         # "video", and resolving by name pops whichever request is oldest.
         token = self.host.authorize_request(
             "video", "openai", "vidforge-pipeline",
             topic or "next topic from topics.txt",
             label=self.video_format_box.currentText().lower(),
-            flat_cost_eur=cost_eur)
+            flat_cost_eur=cost_eur, assessment=assessment)
         if not token:
+            if self._applied(assessment):
+                self.render()      # the new route, with its own estimate
             return
         self._request_token = token
         self._render_project_id = self.host.pending_request_snapshot(token).get(
@@ -499,10 +581,14 @@ class VideoPanel(QWidget):
                 return
             cost_usd = direct_video_cost_usd(selection.model_id, seconds)
             cost_eur = round(cost_usd * eur_per_usd(), 6)
+            assessment = self._assessment(selection, topic, cost_eur)
             token = self.host.authorize_request(
                 "video", provider_key, selection.model_id, topic,
-                label="direct video", flat_cost_eur=cost_eur)
+                label="direct video", flat_cost_eur=cost_eur,
+                assessment=assessment)
             if not token:
+                if self._applied(assessment):
+                    self.render()
                 return
             self._request_token = token
             self._render_project_id = self.host.pending_request_snapshot(token).get(
@@ -576,11 +662,17 @@ class VideoPanel(QWidget):
             self._reset("Estimate cancelled.")
             return
         cost_eur = round(estimate.usd * eur_per_usd(), 6)
+        from services.media_catalog import find_model
+        assessment = self._assessment(
+            find_model("Higgsfield", context.get("model", "")) or self._media_selection(),
+            context["topic"], cost_eur)
         token = self.host.authorize_request(
             "video", "higgsfield", request.endpoint, context["topic"],
-            label="direct video", flat_cost_eur=cost_eur)
+            label="direct video", flat_cost_eur=cost_eur, assessment=assessment)
         if not token:
             self._reset("Render not approved.")
+            if self._applied(assessment):
+                self.render()
             return
         self._request_token = token
         self._render_project_id = self.host.pending_request_snapshot(token).get(

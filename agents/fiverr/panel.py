@@ -358,6 +358,24 @@ class FiverrPanel(QWidget):
         worker.error_signal.connect(self._on_text_error)
         worker.start()
 
+    def _image_assessment(self, selected: str, count: int, image_prompt: str):
+        """Price these logos on every image model Stamp can run, and rank them."""
+        from services.media_catalog import find_model
+        from services.per_unit_pricing import image_cost_eur
+        options = []
+        for i in range(self.fiverr_image_model_box.count()):
+            model_id = self.fiverr_image_model_box.itemText(i)
+            model = find_model("OpenAI", model_id)
+            cost = image_cost_eur(model_id, count)
+            if model is None or cost is None:
+                continue
+            options.append(self.host.media_option(
+                model, cost,
+                apply=lambda m=model_id: self.fiverr_image_model_box.setCurrentText(m)))
+        return self.host.assess_media_request(
+            "fiverr", options, selected,
+            task=f"client image logo {image_prompt[:120]}")
+
     def _on_prompt_ready(self, image_prompt: str) -> None:
         from services.per_unit_pricing import image_cost_eur
         from ui.workers import FiverrImageWorker
@@ -387,12 +405,20 @@ class FiverrPanel(QWidget):
                 "Add a rate (0 means unknown) before generating.")
             self._reset_buttons()
             return
+        assessment = self._image_assessment(image_model, count, image_prompt)
         image_token = self.host.authorize_request(
             "fiverr", "openai", image_model,
             f"{count} logo concepts: {image_prompt[:200]}",
             label="logo images",
-            flat_cost_eur=image_cost)
+            flat_cost_eur=image_cost, assessment=assessment)
         if not image_token:
+            if (assessment is not None
+                    and self.host.last_applied_assessment is assessment):
+                # Apply switched the image model. The prompt is already
+                # written and paid for, so ask again for the images on the
+                # new model — a fresh estimate and a fresh confirmation.
+                self._on_prompt_ready(image_prompt)
+                return
             self._reset_buttons()
             return
         self._image_token = image_token

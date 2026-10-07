@@ -90,7 +90,8 @@ from agents.catalog import (
 from agents.recommendation_profiles import profile_for
 from services.recommendations import RecommendationContext, RecommendationEngine
 from services.recommendations.catalog import (
-    known_text_models, media_candidate, text_candidates,
+    known_text_models, media_candidate, request_cost_efficiency,
+    speech_candidate, text_candidates,
 )
 from services.model_watch import WATCHED_PROVIDERS, ModelWatch
 from services.pricing_catalog import PROVIDER_LABELS, has_exact_price
@@ -125,6 +126,11 @@ WORKSPACE_LABELS = {
 WORKSPACE_STRIP_HEIGHT = 20
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
+
+# The least a better option must win by before the paid-request dialog offers
+# to switch: one point on the 0-100 scale it shows. Below that the two read as
+# the same number, and an Apply for an invisible difference is noise.
+MEANINGFUL_FIT_GAP = 0.01
 
 # How long after startup the Model updates check runs.
 MODEL_CHECK_DELAY_MS = 4000
@@ -247,6 +253,9 @@ class GodAI(QWidget):
         # announced, marked NEW in the menus and ranked.
         self.model_watch = ModelWatch(DATA_DIR / "model_watch.json")
         self.model_scan_worker: Optional[ModelScanWorker] = None
+        # The assessment whose Apply the user pressed at the last paid-request
+        # confirmation, so a panel can redo its step on the new choice.
+        self.last_applied_assessment = None
         self._model_scan_skipped: list[str] = []
         self._model_scan_failed: dict[str, str] = {}
 
@@ -1081,13 +1090,16 @@ class GodAI(QWidget):
             best_cost_eur=best_cost,
             selected_score=selected_score,
             selected_is_best=same or (selected_score is not None
-                                      and selected_score >= best_score),
+                                      and best_score - selected_score
+                                      < MEANINGFUL_FIT_GAP),
             reason=provider_result.reason,
         )
 
     def _assessment_text(self, assessment, estimated_cost: float) -> str:
         if assessment is None:
             return ""
+        if getattr(assessment, "kind", "text") == "media":
+            return self._media_assessment_text(assessment)
         who = AGENT_PRETTY_NAMES.get(assessment.agent, assessment.agent)
         if assessment.selected_is_best:
             return (f"\n\nAssessment for this request ({who}): your selection is "
@@ -1101,6 +1113,156 @@ class GodAI(QWidget):
             f"{round(assessment.best_score * 100)}/100, ~€{assessment.best_cost_eur:.2f}\n"
             f"  Your selection: {mine}, ~€{estimated_cost:.2f}\n\n"
             f"Apply switches to the best fit; you then send again.")
+
+    # ── Image, video and speech: assessed per request ──────────────────────
+    def media_option(self, model, cost_eur, apply=None, duration=None,
+                     quoted=False):
+        """One route a render could take, priced for *this* request.
+
+        `model` is a services.media_catalog.MediaModel. `cost_eur` is what
+        this request would cost on it (None when the provider only quotes
+        after an estimate call — Higgsfield). `apply` switches the panel to
+        it. Paid routes are runnable only with a key and the user's
+        permission, exactly as the request guard will demand.
+        """
+        candidate = media_candidate(model, duration)
+        if model.provider.casefold() not in {"local", "pexels"}:
+            candidate = replace(candidate, available=bool(
+                candidate.available and self._provider_permission(model.provider)))
+        if cost_eur is not None:
+            # estimated_cost in euros, so a route dearer than what is left
+            # of the session budget is not offered as the better choice.
+            candidate = replace(candidate,
+                                cost_efficiency=request_cost_efficiency(cost_eur),
+                                estimated_cost=cost_eur)
+        return types.SimpleNamespace(candidate=candidate, cost_eur=cost_eur,
+                                     apply=apply, quoted=quoted)
+
+    def speech_option(self, provider, model_id, label, cost_eur, apply=None):
+        candidate = speech_candidate(provider, model_id, label, cost_eur)
+        if provider.casefold() not in {"system"}:
+            candidate = replace(candidate, available=bool(
+                candidate.available and (
+                    provider.casefold() == "elevenlabs"
+                    or self._provider_permission(provider))))
+        return types.SimpleNamespace(candidate=candidate, cost_eur=cost_eur,
+                                     apply=apply, quoted=False)
+
+    def assess_media_request(self, agent_key, options, selected_model_id, *,
+                             task="", modality="visual", aspect=None,
+                             duration=None, single_route_note=""):
+        """Rank every route this render could take; compare the selection.
+
+        Images, video and speech are the most expensive requests in the app,
+        so they are assessed exactly like text: the agent's profile, the task,
+        and the real cost of *this* request on each route. Only routes that
+        can run are ranked — the others are named, so the user knows what was
+        not compared and why. Never raises: an assessment must not be the
+        reason a render cannot start.
+        """
+        try:
+            profile = profile_for(agent_key)
+            context = RecommendationContext(
+                agent=agent_key, modality=modality, task=task,
+                aspect=aspect, duration=duration,
+                budget_remaining=max(0.0, self.session_budget_eur
+                                     - self.session_cost_total))
+            # Cost is scored relative to this request's other routes: the
+            # cheapest that can make it scores 1.0, one at twice the price
+            # 0.5, a €0.30 voice against a free one about 0.03. On an absolute
+            # scale, halving the price of a clip moved its score by under a
+            # point; relative to the alternatives is the comparison the user
+            # is actually making. A route priced only by a later provider
+            # quote keeps its catalogue estimate.
+            known = [o.cost_eur for o in options if o.cost_eur is not None]
+            if known:
+                floor = min(known)
+                for o in options:
+                    if o.cost_eur is not None:
+                        o.candidate = replace(
+                            o.candidate,
+                            cost_efficiency=(floor + 0.01) / (o.cost_eur + 0.01))
+            by_candidate = {id(o.candidate): o for o in options}
+            ranked = [(score, by_candidate[id(c)]) for score, c in
+                      self.recommendation_engine.rank(
+                          profile, [o.candidate for o in options], context)]
+            selected = next((o for o in options
+                             if o.candidate.model_id == selected_model_id), None)
+            # The selection is always scored, even when the eligibility rules
+            # would drop it (dearer than what is left of the session budget):
+            # the user must see their own choice beside the alternatives. The
+            # request guard, not the assessment, decides whether it may run.
+            if selected is not None and all(o is not selected for _s, o in ranked):
+                ranked.append((self.recommendation_engine.score(
+                    profile, selected.candidate, context), selected))
+                ranked.sort(key=lambda pair: pair[0], reverse=True)
+            runnable = [(score, o) for score, o in ranked
+                        if o.candidate.available or o is selected]
+            skipped = [o.candidate.label for o in options
+                       if not o.candidate.available and o is not selected]
+            if selected is None or not runnable:
+                return None
+            selected_score = next((score for score, o in runnable if o is selected),
+                                  None)
+            best_score, best = runnable[0]
+            # A tie is not a win: the selection stands unless something
+            # scores strictly higher.
+            selected_is_best = (best is selected or selected_score is None
+                                or best_score - selected_score
+                                < MEANINGFUL_FIT_GAP)
+            if selected_is_best:
+                best_score, best = selected_score or best_score, selected
+            return types.SimpleNamespace(
+                kind="media", agent=agent_key, ranked=runnable, skipped=skipped,
+                selected=selected, selected_score=selected_score,
+                best=best, best_score=best_score,
+                best_provider=best.candidate.provider,
+                best_model=best.candidate.model_id,
+                best_cost_eur=best.cost_eur,
+                selected_is_best=selected_is_best,
+                single_route=len(runnable) == 1,
+                single_route_note=single_route_note,
+                apply=None if selected_is_best else best.apply,
+            )
+        except Exception as exc:
+            self._note_failure("assessment: media", exc)
+            return None
+
+    @staticmethod
+    def _media_cost_text(option) -> str:
+        if option.cost_eur is None:
+            return "quoted by provider before approval"
+        return "free" if option.cost_eur <= 0 else f"~€{option.cost_eur:.2f}"
+
+    def _media_assessment_text(self, a) -> str:
+        who = AGENT_PRETTY_NAMES.get(a.agent, a.agent)
+        if a.single_route:
+            note = a.single_route_note or (
+                "it is the only route that can run with your keys and "
+                "permissions, so there is nothing to compare.")
+            lines = [f"\n\nAssessment for this request ({who}): "
+                     f"{a.selected.candidate.label} — {note}"]
+        else:
+            lines = [f"\n\nAssessment for this request ({who}) — fit · cost:"]
+            for score, option in a.ranked[:5]:
+                marks = []
+                if option is a.best:
+                    marks.append("best fit")
+                if option is a.selected:
+                    marks.append("your selection")
+                tag = f"  ← {', '.join(marks)}" if marks else ""
+                lines.append(
+                    f"  {option.candidate.label} ({option.candidate.provider}): "
+                    f"{round(score * 100)}/100 · {self._media_cost_text(option)}{tag}")
+            if len(a.ranked) > 5:
+                lines.append(f"  …and {len(a.ranked) - 5} more")
+        if a.skipped:
+            lines.append("Not compared (no key, or not permitted): "
+                         + ", ".join(dict.fromkeys(a.skipped)))
+        if not a.selected_is_best and a.apply is not None:
+            lines.append("\nApply switches to the best fit; you then confirm "
+                         "again with its own estimate.")
+        return "\n".join(lines)
 
     def _switch_agent_setup(self, agent_key: str, provider: str, model: str) -> bool:
         """Point one agent's provider/model pair at `provider · model`."""
@@ -3181,7 +3343,9 @@ class GodAI(QWidget):
             f"Continue?"
         )
         buttons = QMessageBox.Yes | QMessageBox.No
-        offer = assessment is not None and not assessment.selected_is_best
+        offer = (assessment is not None and not assessment.selected_is_best
+                 and (getattr(assessment, "kind", "text") == "text"
+                      or assessment.apply is not None))
         if offer:
             buttons |= QMessageBox.Apply
 
@@ -3192,8 +3356,16 @@ class GodAI(QWidget):
             buttons,
         )
         if offer and result == QMessageBox.Apply:
-            self._switch_agent_setup(assessment.agent, assessment.best_provider,
-                                     assessment.best_model)
+            if getattr(assessment, "kind", "text") == "media":
+                if assessment.apply is not None:
+                    assessment.apply()
+            else:
+                self._switch_agent_setup(assessment.agent, assessment.best_provider,
+                                         assessment.best_model)
+            # A panel that can redo its step at once (Stamp's images, Herald's
+            # clip) reads this and asks again — with a new estimate and a new
+            # confirmation, never a silent send.
+            self.last_applied_assessment = assessment
             return False
 
         return result == QMessageBox.Yes
@@ -3254,7 +3426,8 @@ class GodAI(QWidget):
         }
 
     def authorize_request(self, agent, provider, model, prompt, tool=None,
-                          label=None, flat_cost_eur=None) -> bool:
+                          label=None, flat_cost_eur=None,
+                          assessment=None) -> bool:
         """Budget-check and confirm one request. False means: do not send it.
 
         `tool` is a registry tool name and is validated as one — pass it only
@@ -3304,11 +3477,14 @@ class GodAI(QWidget):
             QMessageBox.warning(self, "Request Blocked", validation.reason)
             return False
 
-        # Every paid text request is assessed for itself: is this provider and
-        # model the best fit for *this* request among what can run? Per-unit
-        # work (renders, speech) has no text alternative to compare.
-        assessment = (self._assess_safely(agent, provider, model, prompt)
-                      if flat_cost_eur is None else None)
+        # Every paid request is assessed for itself: is this provider and
+        # model the best fit for *this* request among what can run? A text
+        # request is assessed here; image, video and speech requests arrive
+        # with their own assessment from the panel that knows the routes
+        # (assess_media_request), because only it can price each one.
+        self.last_applied_assessment = None
+        if assessment is None and flat_cost_eur is None:
+            assessment = self._assess_safely(agent, provider, model, prompt)
         if not self.confirm_external_api_request(
                 provider, model, estimated_cost, approx_tokens, assessment):
             return False
@@ -4850,9 +5026,10 @@ if __name__ == "__main__":
     # the abort happens inside AppKit with nothing of ours on the stack to
     # point at. See ui/appkit_guard.py; the same copy is in Lab Hub and SONAR.
     #
-    # The name goes in before QApplication() too: the launcher execs the venv's
-    # python, which sits outside any bundle, and AppKit reads the name it titles
-    # the application menu with when Qt creates the application object.
+    # The name goes in before QApplication() too, for a terminal run: that
+    # process is the venv's python, outside any bundle, and AppKit reads the
+    # name it titles the application menu with when Qt creates the application
+    # object. Imprint.app already carries its own (scripts/app_launcher.c).
     app_identity.name_in_menu_bar("Imprint")
     appkit_guard.install()
 
@@ -4862,8 +5039,8 @@ if __name__ == "__main__":
     # asked directly, now that QApplication has made NSApp exist.
     app_identity.set_dock_icon(RESOURCE_DIR / "assets" / "icon.icns")
 
-    # Second launch: focus the window that is already open and leave. Each
-    # launch through Imprint.app starts a fresh python, so this is the dedupe.
+    # Second launch: focus the window that is already open and leave. Launch
+    # Services dedupes Imprint.app itself; this covers a terminal run beside it.
     if _hand_off_to_running_instance():
         sys.exit(0)
 

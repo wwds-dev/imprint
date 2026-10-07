@@ -544,10 +544,23 @@ class AudiobookPanel(QWidget):
         fraction = (1.0 if fresh_start
                     else conversions.remaining_fraction(open_row))
         remaining_eur = round(estimate["eur"] * fraction, 6)
+        # Assessed like every paid request. Booth's converter is wired to one
+        # narration route, and the dialog says so plainly instead of
+        # inventing a comparison; see TODO.md for wiring a second.
+        assessment = self.host.assess_media_request(
+            "audiobook", [self.host.speech_option(
+                "OpenAI", "gpt-4o-mini-tts", "OpenAI gpt-4o-mini-tts",
+                remaining_eur)],
+            "gpt-4o-mini-tts", modality="speech", task="audiobook narration",
+            single_route_note=(
+                "the only narration route Booth's converter is wired to, so "
+                "there is nothing to compare. ElevenLabs is wired only for "
+                "Press Shorts."))
         token = self.host.authorize_request(
             "audiobook", "openai", "gpt-4o-mini-tts",
             f"{Path(book_path).name} · {estimate['characters']} characters",
-            label="audiobook", flat_cost_eur=remaining_eur)
+            label="audiobook", flat_cost_eur=remaining_eur,
+            assessment=assessment)
         if not token:
             return
         self._request_token = token

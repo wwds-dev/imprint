@@ -459,15 +459,38 @@ neither falls back to a name-based guess ("mini" cheap, "opus" dear).
 
 ### Every paid request is assessed
 
-The confirmation shown before any paid text request now carries an assessment
-of **that request**: the agent's context plus the request's own text, ranked
-across every provider you have a key for and have permitted. Either it says
-your selection is the best fit, or it names the better provider and model with
-both fit scores and both cost estimates. **Apply** switches the agent to it and
-does not send — you send again on the new choice, deliberately; a paid request
-is never re-routed behind your back. Per-unit work (renders, speech) has no
-text alternative to compare and is not assessed. When nothing else is
-permitted there is nothing to compare, and the dialog is unchanged.
+The confirmation shown before **any** paid request — text, image, video or
+speech — carries an assessment of **that request**, ranked on the agent's
+profile across every route you have a key for and have permitted. Either it
+says your selection is the best fit, or it names the better option with fit
+scores and cost estimates side by side. **Apply** switches to it and does not
+send; the panel asks again with the new route's own estimate, so a paid
+request is never re-routed behind your back. A switch is offered only when the
+better option wins by at least one point on the 0–100 scale shown — below that
+the two read as the same number. Routes that cannot run are listed as *Not
+compared (no key, or not permitted)*.
+
+**Text** is assessed on the agent's context plus the request's own text, with
+cost from the pricing table (see *Cost in the ranking*).
+
+**Image, video and speech** are the most expensive requests, so every route is
+priced for *this* request — the same length, the same shape — and cost is
+scored **relative to the other routes**: the cheapest scores 1.0, one at twice
+the price 0.5, a €0.30 voice against a free one about 0.03. On an absolute
+scale, halving the price of a clip moved its score by under a point.
+
+| Request | Routes compared |
+|---|---|
+| Reel, social clip | every direct-video model that can make the requested length and shape (Veo 3.1 / Fast / Lite, Gemini Omni, Wan 3.0 / Prime / 2.7, Seedance — its cost marked *quoted by provider*), plus the scene pipeline (GPT Image ×3, Pexels, local cards) when the length is one of its clip lengths |
+| Reel, long-form | the scene pipeline routes, each priced by the pipeline's own pre-estimate |
+| Herald clip | the scene pipeline routes at the clip's shape; Apply sets Herald's visuals |
+| Stamp logos | GPT Image 2.5 Sunburst / 2.5 Flare / 2, for the number of concepts asked |
+| Press Short narration | ElevenLabs against the free on-device voice; Apply switches to the free voice and stops, so no ElevenLabs voice id reaches a request nobody approved |
+| Booth audiobook | one route — OpenAI `gpt-4o-mini-tts` is the only narration Booth's converter is wired to; the dialog says so rather than inventing a comparison |
+| Muse teaser | one route — Higgsfield Seedance is the only one that takes the persona's reference images |
+
+A route that cannot make what was asked (a 30 s clip on a model that stops at
+10 s) is left out rather than compared at a different length.
 
 ---
 
@@ -2555,10 +2578,11 @@ running it replaces the live app with a snapshot and puts you back to
 rebuilding after every edit.
 
 Both install to `/Applications/Imprint.app`, so **the last one you ran wins**.
-To tell which produced the bundle you have:
+Both executables are called `Imprint`, so tell them apart by what sits beside
+them:
 
 ```bash
-ls /Applications/Imprint.app/Contents/MacOS/
+ls /Applications/Imprint.app/Contents/Resources/project_root.txt
 ```
 
 `Imprint` is the frozen build. `ImprintLauncher` is the live launcher — a

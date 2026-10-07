@@ -56,6 +56,23 @@ class RecommendationEngine:
             margin=gap if len(ranked) > 1 else 1.0,
         )
 
+    def rank(self, profile: AgentProfile,
+             candidates: list[Candidate] | tuple[Candidate, ...],
+             context: RecommendationContext) -> list[tuple[float, Candidate]]:
+        """Every eligible candidate with its score, best first.
+
+        Eligibility (modality, kind, aspect, duration, budget) applies;
+        availability does not — the caller decides what can run. Ties keep a
+        deterministic order, but a caller must not read a tie as a win.
+        """
+        eligible = [item for item in candidates if self._eligible(item, context)]
+        return sorted(
+            ((self._score(profile, item, context), item) for item in eligible),
+            key=lambda pair: (pair[0], pair[1].provider.casefold(),
+                              pair[1].model_id.casefold()),
+            reverse=True,
+        )
+
     def score(self, profile: AgentProfile, item: Candidate,
               context: RecommendationContext) -> float:
         """The same fit score `recommend` ranks by, for any one candidate.

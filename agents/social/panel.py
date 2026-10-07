@@ -61,6 +61,9 @@ class SocialPanel(QWidget):
         self._brief_token = None
         self._clip_video_token = None
         self._pending_clip = ("tiktok", 30)
+        # Visual route chosen through the paid-request assessment (Apply);
+        # empty means vidforge's configured visuals.
+        self._clip_visuals: dict = {}
         self.setObjectName("SocialPanel")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -567,8 +570,10 @@ class SocialPanel(QWidget):
 
         aspect = ("Square 1:1" if platform_key == "pinterest"
                   else "Vertical 9:16")
-        overrides = video_studio.clip_overrides(aspect, seconds)
-        estimate = video_studio.pre_estimate(video_studio.load_config(overrides))
+        overrides = {**video_studio.clip_overrides(aspect, seconds),
+                     **self._clip_visuals}
+        cfg = video_studio.load_config(overrides)
+        estimate = video_studio.pre_estimate(cfg)
         cost_eur = round(estimate["total"] * eur_per_usd(), 4)
 
         confirm = QMessageBox.question(
@@ -584,10 +589,18 @@ class SocialPanel(QWidget):
         # A "video"-keyed request from Social: keeping the token is what
         # stops a concurrent Video-tab failure from popping this render's
         # pending context (and vice versa).
+        assessment = self._clip_assessment(cfg, aspect, seconds, topic, cost_eur)
         video_token = self.host.authorize_request(
             "video", "openai", "vidforge-pipeline", topic,
-            label=f"{platform_key} clip", flat_cost_eur=cost_eur)
+            label=f"{platform_key} clip", flat_cost_eur=cost_eur,
+            assessment=assessment)
         if not video_token:
+            if (assessment is not None
+                    and self.host.last_applied_assessment is assessment):
+                # The brief is written and paid for; ask again on the route
+                # Apply chose, with its own estimate.
+                self._on_clip_brief(brief)
+                return
             self._clip_done()
             return
         self._clip_video_token = video_token
@@ -602,6 +615,51 @@ class SocialPanel(QWidget):
         clip_worker.done_signal.connect(self._on_clip_rendered)
         clip_worker.error_signal.connect(self._on_clip_error)
         clip_worker.start()
+
+    @staticmethod
+    def _visuals_for(model) -> dict:
+        if model.kind == "scene_images":
+            return {"visuals.source": "ai", "visuals.image_model": model.model_id}
+        if model.kind == "stock":
+            return {"visuals.source": "pexels"}
+        return {"visuals.source": "gradient"}
+
+    def _clip_assessment(self, cfg, aspect, seconds, topic, selected_cost_eur):
+        """Price this clip on every visual route the pipeline can use.
+
+        Herald renders through the scene pipeline, so its routes are the scene
+        image models, stock and local cards — each priced by the pipeline's
+        own pre-estimate at this clip's shape and length. Direct-video models
+        are Reel's, and are not offered here as something Herald could do.
+        """
+        from agents.video import video_studio
+        from services.media_catalog import MODELS
+        from services.per_unit_pricing import eur_per_usd
+
+        source = cfg.get("visuals.source")
+        selected = (str(cfg.get("visuals.image_model", "gpt-image-2"))
+                    if source == "ai" else
+                    "pexels-stock" if source == "pexels" else "gradient-cards")
+        base = video_studio.clip_overrides(aspect, seconds)
+        options = []
+        for model in MODELS:
+            if model.kind == "direct_video":
+                continue
+            if model.model_id == selected:
+                cost = selected_cost_eur
+            else:
+                try:
+                    cost = video_studio.pre_estimate(video_studio.load_config(
+                        {**base, **self._visuals_for(model)}))["total"] * eur_per_usd()
+                except Exception:
+                    continue
+            options.append(self.host.media_option(
+                model, cost,
+                apply=lambda m=model: setattr(self, "_clip_visuals",
+                                              self._visuals_for(m))))
+        return self.host.assess_media_request(
+            "social", options, selected, task=f"social clip {topic}",
+            aspect=aspect)
 
     def _on_clip_rendered(self, slug: str, path: str):
         from agents.social import store

@@ -1078,9 +1078,24 @@ class CreatorPanel(QWidget):
             f"Estimated by Higgsfield: ${estimate.usd:.2f} "
             f"({estimate.credits:g} credits). Awaiting approval…")
 
+        from services.higgsfield_client import DEFAULT_SEEDANCE_MODEL
+        from services.media_catalog import find_model
+        seedance = next((find_model("Higgsfield", m) for m in
+                         ("seedance-2.5", "seedance-2.0", DEFAULT_SEEDANCE_MODEL)
+                         if m in request.endpoint), None) \
+            or find_model("Higgsfield", DEFAULT_SEEDANCE_MODEL)
+        assessment = None if seedance is None else self.host.assess_media_request(
+            "creator", [self.host.media_option(seedance, cost_eur)],
+            seedance.model_id, task="promo teaser",
+            single_route_note=(
+                "Muse builds the teaser from your persona's reference images, "
+                "and Higgsfield Seedance is the only route here that takes "
+                "one, so there is nothing to compare. Veo and Wan make "
+                "text-only clips in Reel."))
         token = self.host.authorize_request(
             "creator", "higgsfield", request.endpoint,
-            context["prompt"], label="promo teaser", flat_cost_eur=cost_eur)
+            context["prompt"], label="promo teaser", flat_cost_eur=cost_eur,
+            assessment=assessment)
         if not token:
             self._video_reset("Render not approved.")
             return

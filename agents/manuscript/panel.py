@@ -909,10 +909,25 @@ class ManuscriptPanel(QWidget):
                 "Add a rate, or switch the voice source to the free "
                 "on-device narrator.")
             return False
+        from providers.voice.registry import SYSTEM_SOURCE
+        # The free on-device voice is a real alternative for a Short, so the
+        # paid voice is assessed against it for this quote. Apply switches the
+        # source and refuses: the flow restarts on the free voice rather than
+        # carrying an ElevenLabs voice id into a request nobody approved.
+        assessment = self.host.assess_media_request(
+            "manuscript", [
+                self.host.speech_option(
+                    "ElevenLabs", "elevenlabs-tts", "ElevenLabs voice", cost),
+                self.host.speech_option(
+                    "System", "system-voice", "On-device voice (free)", 0.0,
+                    apply=lambda: self.shorts_voice_source_box.setCurrentText(
+                        SYSTEM_SOURCE)),
+            ], "elevenlabs-tts", modality="speech",
+            task=f"social short narration {quote[:120]}")
         token = self.host.authorize_request(
             "manuscript", "elevenlabs", "elevenlabs-tts",
             f"short narration · {len(quote)} characters: {quote[:200]}",
-            label="short narration", flat_cost_eur=cost)
+            label="short narration", flat_cost_eur=cost, assessment=assessment)
         if not token:
             return False
         self._shorts_token = token

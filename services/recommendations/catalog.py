@@ -37,6 +37,7 @@ _KEY_ENV = {
     "qwen": ("DASHSCOPE_API_KEY",),
     "higgsfield": (("HF_API_KEY_ID", "HF_API_KEY_SECRET"),),
     "pexels": ("PEXELS_API_KEY",),
+    "elevenlabs": ("ELEVENLABS_API_KEY",),
 }
 
 
@@ -249,4 +250,61 @@ def media_candidate(model, duration: int | None = None) -> Candidate:
         aspects=tuple(model.aspects),
         durations=tuple(model.durations),
         estimated_cost=estimated,
+    )
+
+
+# ── Per-request media assessment ────────────────────────────────────────────
+# Images, video and speech are the most expensive things Imprint does, and a
+# render is billed per image, per second or per character — so they are
+# compared on what *this* request would cost on each route, not on a rate.
+# €0.01 scores 1.0 and €20 scores 0.05, on a log scale for the same reason as
+# price_efficiency: €0.50 against €5 matters as much as €5 against €50.
+CHEAP_REQUEST_EUR = 0.01
+DEAR_REQUEST_EUR = 20.0
+
+
+def request_cost_efficiency(cost_eur: float) -> float:
+    if cost_eur <= 0:
+        return 1.0
+    span = math.log10(DEAR_REQUEST_EUR) - math.log10(CHEAP_REQUEST_EUR)
+    position = (math.log10(max(cost_eur, CHEAP_REQUEST_EUR))
+                - math.log10(CHEAP_REQUEST_EUR)) / span
+    return max(0.05, min(1.0, 1.0 - 0.95 * position))
+
+
+# Stable characteristics of each implemented speech route, in the same spirit
+# as media_candidate's visual numbers: (quality, reliability, speed, privacy).
+# The on-device voice is free and private and sounds like a system voice;
+# ElevenLabs is the most natural; OpenAI's TTS sits between them.
+_SPEECH_ROUTES = {
+    "system": (0.45, 0.97, 0.92, 1.0),
+    "elevenlabs": (0.93, 0.86, 0.70, 0.10),
+    "openai": (0.84, 0.90, 0.75, 0.10),
+}
+
+
+def speech_candidate(provider: str, model_id: str, label: str,
+                     cost_eur: float | None,
+                     available: bool | None = None) -> Candidate:
+    key = provider.casefold()
+    quality, reliability, speed, privacy = _SPEECH_ROUTES.get(
+        key, (0.70, 0.80, 0.70, 0.10))
+    cost = (request_cost_efficiency(cost_eur) if cost_eur is not None
+            else 0.40)
+    return Candidate(
+        provider=provider,
+        model_id=model_id,
+        label=label,
+        modality="speech",
+        kind="speech",
+        task_fit={"general": .80, "narration": quality, "social": quality},
+        quality=quality,
+        reliability=reliability,
+        cost_efficiency=cost,
+        speed=speed,
+        context=.60,
+        privacy=privacy,
+        available=(True if key == "system" else provider_configured(key))
+        if available is None else available,
+        estimated_cost=cost_eur,
     )
