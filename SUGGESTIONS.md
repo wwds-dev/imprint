@@ -13,6 +13,9 @@ Ideas not yet committed to. Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DON
 | 5 | DONE — Budget card layout. Both caps are progress bars now, and the four spend figures are stat blocks rather than nine lines of prose. The bar turns red at 100%. | design | S | DONE |
 | 6 | Per-agent cost breakdown in the cost dialog, so it's visible which agent is eating the daily cap | feature | M | IDEA |
 | 13 | DONE — mode tabs, now in the header bar rather than centred over the canvas. | design | L | DONE |
+| 56 | **Add a model id by hand**, per provider, in the Model updates tile. For an id the provider's `/models` does not list (a gated preview, or no key yet so only the offline list shows). Validate against the live list when there is a key; store beside `model_watch.json`; merge into the dropdowns with the same NEW mark; refuse to send until it has a price or the user accepts the provider default. Low risk — the client, guard and pricing already exist. | feature | S | CONSIDERING |
+| 57 | **Add a provider from the app** — but only as an *OpenAI-compatible* provider with explicit fields (name, base URL, key variable, prices), not a free-text box. A provider name alone cannot become working code: it needs a client, an auth scheme, a key, prices for the budget guard, an `allow_*` permission and registry rows. Most newcomers (Mistral, Groq, Together, xAI, OpenRouter) do speak the OpenAI shape, which is what makes this tractable; anything else stays a code change. Needs the request guard to treat a user-defined provider as paid and unknown-priced by default. | feature | L | IDEA |
+| 58 | **Remember the last live model lists across launches**, so the startup BEST FIT pre-selection can pick a new model before the four-second check has run. Today the first pass ranks the offline lists and the marks move when the check lands; the selection itself is left alone mid-session on purpose. | feature | S | IDEA |
 
 ## Creator agent — next arc
 

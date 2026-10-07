@@ -122,6 +122,27 @@ the window is short, which is the vertical half of the same problem.
 The window always opens fullscreen. Its minimum is 1000 × 600, and the layout
 tests run every panel down to that size.
 
+### Text that does not fit
+
+A layout that is short of width takes the room from whichever widget has the
+smallest minimum, and a `QLineEdit`'s is one character. That is how Quill's
+Title field showed "P…" at a 1440 px window while each dropdown beside it kept
+177 px. Three guards, app-wide (`ui/text_fit.py`, `ui/forms.py`):
+
+- **A floor.** Every single-line field that did not set its own width limits is
+  at least ten average characters wide, re-measured when its font or style
+  changes. A field with a deliberate fixed or capped width keeps it.
+- **Grids fold instead of squeezing.** `form_grid()` keeps equal columns and
+  drops to fewer of them (6 → 3 → 2 → 1) rather than narrowing a column below
+  136 px.
+- **Hover shows the whole value.** When a field or dropdown cannot show all of
+  its text (or its placeholder, when empty), hovering shows it, with the
+  control's explanatory tooltip underneath. The full value shows even with
+  *Tooltips: Off* — it is content, not help. Password fields are never revealed.
+
+`tests/test_panel_layout.py` fails the build when any visible field in any
+panel or sub-page is below the floor at any tested window size.
+
 ### The menu bar item
 
 A fullscreen window covers the macOS menu bar, so while Imprint is frontmost
@@ -318,9 +339,10 @@ whether it is a paid API, the provider, model and rough token count.
 **Cost History · Run Log · Learning Centre** — utilities that open a window and
 change nothing, so they read as links rather than buttons.
 
-**System · Routing · API keys** — collapsed by default. Each opens a compact
-status card with separate values and state badges instead of a paragraph of
-diagnostic text.
+**System · Routing · API keys · Model updates** — collapsed by default. Each
+opens a compact status card with separate values and state badges instead of a
+paragraph of diagnostic text. Model updates puts its count in its own title
+(*Model updates · 2 new*), so news is visible without opening it.
 
 ### Resource Monitor
 
@@ -369,10 +391,50 @@ duplicated.
 ### API Key Status
 
 Under **API keys**, collapsed by default. One row per provider — OpenAI,
-DeepSeek, Kimi, Gemini, Anthropic — with a **Configured**, **Not configured**
-or **Check failed** badge depending on whether the key is present in the
-environment. Presence is not reachability: `scripts/check_keys.py` asks each
-provider (see §19).
+DeepSeek, Kimi, Gemini, Anthropic, Qwen — with a **Configured**, **Not
+configured** or **Check failed** badge depending on whether the key is present
+in the environment. Presence is not reachability: `scripts/check_keys.py` asks
+each provider (see §19).
+
+### Model updates
+
+Directly under **API keys**: which models the providers behind those keys have
+released since Imprint last looked (`services/model_watch.py`).
+
+**How it looks.** Each provider with a key is asked for its model list — the
+same `/models` call the model dropdowns already make. It is free: model lists
+are not billed. Imprint remembers every id each provider has listed before, in
+`data/model_watch.json` (Application Support when packaged), and an id it has
+never seen is announced. It runs **a few seconds after startup** (turn it off
+with **Check when Imprint starts**) and on **Check now**. Any panel's own model
+fetch also counts as a look, so news arrives with the startup check off.
+
+**What counts as new.**
+- The first list from a provider is a **baseline**, recorded silently —
+  otherwise the first launch would announce the whole catalogue.
+- Only a **live** answer counts. A provider without a key is listed as *No key,
+  not checked*; its offline fallback list is never recorded.
+- **Chat models only.** Embedding, speech, image and video ids are not options
+  for a text dropdown and are not announced (or offered as candidates).
+- A **dated snapshot** of a known model (`gpt-5-2026-10-01` beside `gpt-5`) is
+  not a release.
+
+**What happens to a new model.**
+- It is **in the model dropdowns** of every panel that offers its provider,
+  marked with a quiet **NEW** badge. A panel still showing the offline list
+  for that provider is switched to the live one.
+- It is **ranked like every other model**: the recommendation engine re-runs
+  and the **BEST FIT** badge moves if it wins. Within a provider, the newest
+  generation of a family (`qwen4-max` over `qwen3.8-max`, `claude-opus-5-5`
+  over `claude-opus-4-6`) gets a small quality edge, so a successor is assessed
+  as one rather than tied with what it replaced. The tile says which agents it
+  is now the best pick for in that provider's menu — computed by the same
+  engine, profile and task context as the badge, so the two cannot disagree.
+- If it has **no price of its own** in Settings → Pricing, the tile says it is
+  estimated at the provider's `default` rate until a real one is added.
+
+**Dismiss** clears the notices and the NEW badges. The models stay in the menus
+and are not announced again.
 
 ---
 
@@ -412,7 +474,7 @@ Changing the tool updates the live cost estimate and the recommendation label in
 
 ### 6.2 Control Bar — Row 2: Provider & Model
 
-**Provider** (combo box) — Selects the AI provider: `ollama`, `openai`, `deepseek`, or `gemini`. Changing the provider triggers `load_provider_models()` which repopulates the Model combo.
+**Provider** (combo box) — Selects the AI provider: `ollama`, `openai`, `deepseek`, `kimi`, `gemini`, `anthropic` or `qwen`. Changing the provider triggers `load_provider_models()` which repopulates the Model combo.
 
 **Model** (combo box) — Selects the specific model for the chosen provider. The list is populated dynamically:
 
@@ -740,6 +802,11 @@ Switching **Type** also swaps the **Task** dropdown: fiction gets Write Scene / 
 #### Panel Layout
 
 ##### Project Bar (top strip — shared across all modes)
+
+Six equal columns on a wide window; below six columns of 136px each it folds to
+two rows of three, then three of two, then one per row — never a row of five
+over a lone sixth, and never a field squeezed until its text is unreadable
+(see *Text that does not fit* in §2).
 
 | Field | Description |
 |-------|-------------|

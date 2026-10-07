@@ -155,9 +155,13 @@ class FieldGridLayout(QLayout):
         return QSize(width, self.heightForWidth(width))
 
     def minimumSize(self):
+        # Height as one spread-out row, like FlowLayout's: the real height at
+        # any given width comes from heightForWidth, which box layouts ask
+        # for. Reporting the one-column height here instead added ~300px to
+        # the whole panel's minimum for a fold that only happens when narrow.
         margins = self.contentsMargins()
         width = self.min_column_width + margins.left() + margins.right()
-        return QSize(width, self.heightForWidth(width))
+        return QSize(width, self.heightForWidth(self.sizeHint().width()))
 
     # ── geometry ────────────────────────────────────────────────────────
     def _visible(self):
