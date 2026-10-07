@@ -1040,12 +1040,34 @@ class GodAI(QWidget):
         self._price_index_cache = (now, index)
         return index
 
+    def _remaining_budget_eur(self) -> float:
+        """What the request guard would still allow one request to cost.
+
+        The same caps Validator.validate applies, in the same way: session
+        and daily spend count the estimates of requests authorized but not yet
+        recorded, and the active project's daily cap applies when it has one.
+        Ranking against the session cap alone let the assessment name a
+        "better" route the guard then refused.
+        """
+        reserved = self._reserved_in_flight_eur() if hasattr(
+            self, "_pending_requests") else 0.0
+        left = [self.session_budget_eur - self.session_cost_total - reserved]
+        try:
+            left.append(self.daily_budget_eur
+                        - self.usage_tracker.get_today_total() - reserved)
+            project = self._project_budget_fields()
+            if project.get("project_budget") is not None:
+                left.append(project["project_budget"] - project["project_cost"])
+        except Exception as exc:
+            self._note_failure("recommendations: remaining budget", exc)
+        return max(0.0, min(left))
+
     def _recommendation_context(self, agent_key: str,
                                 task: str | None = None) -> RecommendationContext:
         return RecommendationContext(
             agent=agent_key,
             task=self._recommendation_task(agent_key) if task is None else task,
-            budget_remaining=max(0.0, self.session_budget_eur - self.session_cost_total),
+            budget_remaining=self._remaining_budget_eur(),
             priority=("privacy" if agent_key == "chat"
                       and getattr(self, "execution_mode_box", None) is not None
                       and self.execution_mode_box.currentText() == "Local only"
@@ -1069,7 +1091,9 @@ class GodAI(QWidget):
         task = " ".join(part for part in (
             self._recommendation_task(agent_key), (task_text or "")[:240])
             if part).strip()
-        provider_result, _model_result = self._text_recommendations(agent_key, task)
+        prompt = billable_prompt if billable_prompt is not None else task_text
+        provider_result, _model_result = self._text_recommendations(
+            agent_key, task, prompt_for_cost=prompt)
         if provider_result is None or provider_result.fallback:
             return None
         best = provider_result.candidate
@@ -1077,7 +1101,6 @@ class GodAI(QWidget):
         context = self._recommendation_context(agent_key, task)
         selected = text_candidates([provider], {provider: [model]},
                                    self._price_index())
-        prompt = billable_prompt if billable_prompt is not None else task_text
         best_cost, _tokens = self.estimate_chat_cost(best.provider, best.model_id, prompt)
         selected_score = (self.recommendation_engine.score(profile, selected[0], context)
                           if selected else None)
@@ -1103,9 +1126,12 @@ class GodAI(QWidget):
             return self._media_assessment_text(assessment)
         who = AGENT_PRETTY_NAMES.get(assessment.agent, assessment.agent)
         if assessment.selected_is_best:
+            score = (assessment.selected_score
+                     if assessment.selected_score is not None
+                     else assessment.best_score)
             return (f"\n\nAssessment for this request ({who}): your selection is "
                     f"the best fit among the providers you have permitted "
-                    f"({round(assessment.best_score * 100)}/100).")
+                    f"({round(score * 100)}/100).")
         mine = ("unrated" if assessment.selected_score is None
                 else f"{round(assessment.selected_score * 100)}/100")
         return (
@@ -1166,8 +1192,7 @@ class GodAI(QWidget):
             context = RecommendationContext(
                 agent=agent_key, modality=modality, task=task,
                 aspect=aspect, duration=duration,
-                budget_remaining=max(0.0, self.session_budget_eur
-                                     - self.session_cost_total))
+                budget_remaining=self._remaining_budget_eur())
             # Cost is scored relative to this request's other routes: the
             # cheapest that can make it scores 1.0, one at twice the price
             # 0.5, a €0.30 voice against a free one about 0.03. On an absolute
@@ -1183,6 +1208,15 @@ class GodAI(QWidget):
                         o.candidate = replace(
                             o.candidate,
                             cost_efficiency=(floor + 0.01) / (o.cost_eur + 0.01))
+                # An unpriced route (Higgsfield before its quote) is scored as
+                # if it were as dear as the dearest priced one. Left on the
+                # catalogue's absolute scale it ranked above routes with a
+                # real, lower price.
+                worst = min(o.candidate.cost_efficiency for o in options
+                            if o.cost_eur is not None)
+                for o in options:
+                    if o.cost_eur is None:
+                        o.candidate = replace(o.candidate, cost_efficiency=worst)
             by_candidate = {id(o.candidate): o for o in options}
             ranked = [(score, by_candidate[id(c)]) for score, c in
                       self.recommendation_engine.rank(
@@ -1282,6 +1316,13 @@ class GodAI(QWidget):
         provider_index = self._find_provider_index(provider_box, provider)
         if provider_index < 0:
             return False
+        offered = (self._best_known_models(provider)
+                   or list(known_text_models(provider)))
+        if (provider_box.currentText() != provider and model not in offered):
+            # Never leave the agent on a new provider with some other model:
+            # the dialog named this model, not the provider's first one.
+            return False
+        previous = (provider_box.currentIndex(), model_box.currentText())
         if provider_box.currentIndex() != provider_index:
             provider_box.setCurrentIndex(provider_index)
         index = model_box.findText(model)
@@ -1292,6 +1333,10 @@ class GodAI(QWidget):
                 panel.load_models()
                 index = model_box.findText(model)
         if index < 0:
+            provider_box.setCurrentIndex(previous[0])
+            restored = model_box.findText(previous[1])
+            if restored >= 0:
+                model_box.setCurrentIndex(restored)
             return False
         model_box.setCurrentIndex(index)
         return True
@@ -1305,7 +1350,32 @@ class GodAI(QWidget):
         watch = getattr(self, "model_watch", None)
         return watch.last_live(provider) if watch is not None else []
 
-    def _text_recommendations(self, agent_key: str, task: str | None = None):
+    def _priced_for_request(self, candidates, prompt: str):
+        """Give each text candidate this request's estimated cost in euros,
+        so the engine's budget rule can drop what the guard would refuse."""
+        from services.pricing_catalog import resolve_price_row
+        approx_in = max(1, len(prompt) // 4)
+        approx_out = max(250, int(approx_in * 1.2))
+        from services.per_unit_pricing import eur_per_usd
+        eur = eur_per_usd()
+        priced = []
+        conn = get_connection()
+        try:
+            for item in candidates:
+                if item.provider.casefold() == "ollama":
+                    priced.append(replace(item, estimated_cost=0.0))
+                    continue
+                row, _source = resolve_price_row(conn, item.provider, item.model_id)
+                cost = None if row is None else eur * (
+                    approx_in * row["input_per_1m_usd"]
+                    + approx_out * row["output_per_1m_usd"]) / 1_000_000
+                priced.append(replace(item, estimated_cost=cost))
+        finally:
+            conn.close()
+        return priced
+
+    def _text_recommendations(self, agent_key: str, task: str | None = None,
+                              prompt_for_cost: str | None = None):
         widgets = AGENT_SETUP_WIDGETS.get(agent_key)
         if not widgets:
             return None, None
@@ -1348,6 +1418,8 @@ class GodAI(QWidget):
             ))
             for item in candidates
         ]
+        if prompt_for_cost is not None:
+            candidates = self._priced_for_request(candidates, prompt_for_cost)
         profile = profile_for(agent_key)
         base = self._recommendation_context(agent_key, task)
         provider_result = self.recommendation_engine.recommend(profile, candidates, base)
@@ -1527,7 +1599,7 @@ class GodAI(QWidget):
             agent="video", modality="visual",
             task=format_box.currentText(),
             aspect=aspect_box.currentText(), duration=duration,
-            budget_remaining=max(0.0, self.session_budget_eur - self.session_cost_total),
+            budget_remaining=self._remaining_budget_eur(),
         )
         profile = profile_for("video")
         overall = self.recommendation_engine.recommend(profile, candidates, context)
@@ -3421,9 +3493,14 @@ class GodAI(QWidget):
             if getattr(assessment, "kind", "text") == "media":
                 if assessment.apply is not None:
                     assessment.apply()
-            else:
-                self._switch_agent_setup(assessment.agent, assessment.best_provider,
-                                         assessment.best_model)
+            elif not self._switch_agent_setup(
+                    assessment.agent, assessment.best_provider,
+                    assessment.best_model):
+                QMessageBox.information(
+                    self, "Could not switch",
+                    f"{assessment.best_provider} · {assessment.best_model} "
+                    "is not in that agent's model menu yet. Nothing was "
+                    "changed and nothing was sent.")
             # A panel that can redo its step at once (Stamp's images, Herald's
             # clip) reads this and asks again — with a new estimate and a new
             # confirmation, never a silent send.
@@ -3619,6 +3696,11 @@ class GodAI(QWidget):
         key_check = getattr(client, "key_available", None)
         if key_check is None or not key_check():
             return False
+        # A wrapper built before the key was set (or without its SDK) has no
+        # API client, and answers with its offline KNOWN_MODELS even though
+        # the key now reads as present.
+        if hasattr(client, "client") and getattr(client, "client") is None:
+            return False
         try:
             return bool(self.model_watch.observe(provider, models))
         except OSError as exc:
@@ -3662,13 +3744,42 @@ class GodAI(QWidget):
             return
         self.model_list_cache[provider] = list(models)
         self._observe_live_models(provider, models)
-        # A panel still showing this provider's offline list gets the live
-        # one now, so a new model is selectable without switching away.
-        for agent_key in AGENT_SETUP_WIDGETS:
+        self._refresh_model_menus(provider, models)
+
+    def _refresh_model_menus(self, provider: str, models: list) -> None:
+        """Put a provider's newest list into every menu showing that provider.
+
+        Every menu, not only those still on the offline list: a model found
+        by a later Check now must be selectable (and marked NEW) in a menu
+        that already held an earlier live list, or the tile names a best
+        fit the menu does not contain. The user's selection is kept.
+        """
+        wanted = list(models)
+        for agent_key, (provider_attr, model_attr) in AGENT_SETUP_WIDGETS.items():
+            provider_box = self._find_control(provider_attr)
+            model_box = self._find_control(model_attr)
+            if (provider_box is None or model_box is None
+                    or provider_box.currentText() != provider):
+                continue
+            shown = [model_box.itemText(i) for i in range(model_box.count())]
+            if shown == wanted:
+                continue
             panel = self._find_control(f"{agent_key}_panel_base")
-            if (panel is not None and panel.provider == provider
-                    and not panel.model_box.property("imprintModelsLive")):
-                panel.load_models()
+            if panel is not None:
+                panel.load_models()          # reads the cache just updated
+                continue
+            # Chat's own box: refill it from the list, keeping the choice.
+            keep = model_box.currentText()
+            model_box.blockSignals(True)
+            model_box.clear()
+            model_box.addItems(wanted)
+            index = model_box.findText(keep)
+            if index < 0 and keep:
+                model_box.addItem(keep)      # never drop what the user picked
+                index = model_box.count() - 1
+            model_box.setCurrentIndex(max(0, index))
+            model_box.blockSignals(False)
+            model_box.setProperty("imprintModelsLive", True)
 
     def _on_model_scan_finished(self) -> None:
         self.model_updates_card.set_checking(False)
@@ -3714,19 +3825,22 @@ class GodAI(QWidget):
             if provider_box is None or model_box is None:
                 continue
             provider_result, model_result = self._text_recommendations(agent_key)
+            current = (provider_box.currentText(), model_box.currentText())
             target = None
-            # A tie is not a win: only a strictly higher score moves anyone.
-            if (provider_result is not None and not provider_result.fallback
-                    and provider_result.margin > 0):
-                pick = (provider_result.candidate.provider,
-                        provider_result.candidate.model_id)
-                if pick in wanted:
+            # Only a visible win moves anyone: a lead of at least a point
+            # (MEANINGFUL_FIT_GAP) over the runner-up and over what the agent
+            # is on now — the confirmation dialog's rule. A lead of 0.004
+            # moved four agents across providers before.
+            for result, overall in ((provider_result, True), (model_result, False)):
+                if (result is None or result.margin < MEANINGFUL_FIT_GAP
+                        or (overall and result.fallback)):
+                    continue
+                pick = ((result.candidate.provider if overall else current[0]),
+                        result.candidate.model_id)
+                if pick in wanted and not self._selection_holds(
+                        agent_key, result, current[0], current[1], model_box):
                     target = pick
-            if (target is None and model_result is not None
-                    and model_result.margin > 0):
-                pick = (provider_box.currentText(), model_result.candidate.model_id)
-                if pick in wanted:
-                    target = pick
+                    break
             if target is None:
                 continue
             label = AGENT_PRETTY_NAMES.get(agent_key, agent_key)
@@ -3780,7 +3894,7 @@ class GodAI(QWidget):
                 RecommendationContext(
                     agent=agent_key, selected_provider=provider,
                     task=self._recommendation_task(agent_key)))
-            if (result is not None and result.margin > 0
+            if (result is not None and result.margin >= MEANINGFUL_FIT_GAP
                     and result.candidate.model_id == model_id):
                 labels.append(AGENT_PRETTY_NAMES.get(agent_key, agent_key))
         return tuple(labels)
@@ -3791,7 +3905,7 @@ class GodAI(QWidget):
         for agent_key in AGENT_SETUP_WIDGETS:
             result, _model_result = self._text_recommendations(agent_key)
             if (result is not None and not result.fallback
-                    and result.margin > 0
+                    and result.margin >= MEANINGFUL_FIT_GAP
                     and result.candidate.provider == provider
                     and result.candidate.model_id == model_id):
                 labels.append(AGENT_PRETTY_NAMES.get(agent_key, agent_key))

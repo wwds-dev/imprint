@@ -9,7 +9,9 @@ import subprocess
 import time
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
+import threading
+
+from PySide6.QtCore import QObject, QThread, Signal
 
 from services.openai_client import DEFAULT_IMAGE_MODEL
 from services.chat_projects import with_project_instructions
@@ -115,7 +117,60 @@ class ChatWorker(QThread):
 # nowhere since the security verticals were stripped.
 
 
-class ModelListWorker(QThread):
+class DaemonWorker(QObject):
+    """Network work on a Python daemon thread, behind QThread's surface.
+
+    A model-list request can take two minutes (the client timeout, plus a
+    retry), and these start by themselves at launch. A QThread still running
+    when the app quits is destroyed under it, and Qt aborts the process
+    (SIGABRT) — closeEvent waits two seconds, not two minutes. A daemon thread
+    is simply abandoned at interpreter exit. Only for work that holds no Qt
+    objects and writes nothing: a model list qualifies, a paid render does not.
+
+    start / isRunning / wait / finished behave like QThread's, so callers and
+    tests did not change. Signals emitted from the thread reach slots on the
+    GUI thread by queued connection, as QThread's did.
+    """
+
+    finished = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if self.isRunning():
+            return
+        self._thread = threading.Thread(
+            target=self._run_guarded, name=type(self).__name__, daemon=True)
+        self._thread.start()
+
+    def _run_guarded(self) -> None:
+        try:
+            self.run()
+        finally:
+            self._emit(self.finished)
+
+    @staticmethod
+    def _emit(signal, *args) -> None:
+        try:
+            signal.emit(*args)
+        except RuntimeError:
+            pass            # the receiving window was destroyed during quit
+
+    def isRunning(self) -> bool:  # noqa: N802 - QThread's name
+        return self._thread is not None and self._thread.is_alive()
+
+    def wait(self, msecs: int | None = None) -> bool:
+        if self._thread is not None:
+            self._thread.join(None if msecs is None else msecs / 1000.0)
+        return not self.isRunning()
+
+    def run(self) -> None:  # pragma: no cover - overridden
+        raise NotImplementedError
+
+
+class ModelListWorker(DaemonWorker):
     """Fetch a provider's live model list off the GUI thread.
 
     list_models() can block for two REQUEST_TIMEOUT_SECONDS windows on a
@@ -140,9 +195,9 @@ class ModelListWorker(QThread):
             fetch = getattr(self.client, "list_models_live", None) \
                 or self.client.list_models
             models = list(fetch() or [])
-            self.models_signal.emit(self.provider, models, "")
+            self._emit(self.models_signal, self.provider, models, "")
         except Exception as exc:
-            self.models_signal.emit(self.provider, [], str(exc))
+            self._emit(self.models_signal, self.provider, [], str(exc))
 
 
 class ModelPullWorker(QThread):
@@ -513,7 +568,7 @@ class VideoWorker(QThread):
                 self.error_signal.emit(f"{type(exc).__name__}: {exc}")
 
 
-class ModelScanWorker(QThread):
+class ModelScanWorker(DaemonWorker):
     """Ask every configured cloud provider for its live model list.
 
     The Model updates check. One GET per provider to the same `/models`
@@ -539,6 +594,7 @@ class ModelScanWorker(QThread):
             try:
                 fetch = getattr(client, "list_models_live", None) \
                     or client.list_models
-                self.provider_listed.emit(provider, list(fetch() or []), "")
+                self._emit(self.provider_listed, provider,
+                           list(fetch() or []), "")
             except Exception as exc:
-                self.provider_listed.emit(provider, [], str(exc))
+                self._emit(self.provider_listed, provider, [], str(exc))

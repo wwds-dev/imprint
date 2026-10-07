@@ -55,6 +55,19 @@ def window(app):
         QMessageBox.warning, QMessageBox.question, QMessageBox.information = saved
 
 
+@pytest.fixture(autouse=True)
+def generous_budget(request, monkeypatch):
+    """The assessment honours the session, daily and project caps (as the
+    guard does), and spend logged by earlier test modules lands in the shared
+    test database's daily total. Tests here are about ranking, not caps, so
+    they run with room to spare; the budget tests set their own."""
+    if "window" not in request.fixturenames:
+        return
+    window = request.getfixturevalue("window")
+    monkeypatch.setattr(window, "session_budget_eur", 1000.0)
+    monkeypatch.setattr(window, "daily_budget_eur", 1000.0)
+
+
 @pytest.fixture
 def recorder(window, monkeypatch):
     """Capture authorize_request calls; refuse them, like a declined dialog."""
@@ -208,41 +221,71 @@ def test_long_form_compares_only_routes_that_make_long_form(app, window,
 
 # ── Stamp ───────────────────────────────────────────────────────────────────
 
-def test_stamp_assesses_its_images_and_apply_asks_again(app, window, recorder,
-                                                        monkeypatch):
+def _answer_in_turn(monkeypatch, *answers):
+    """QMessageBox.question returns these in order; records each text shown."""
+    from PySide6.QtWidgets import QMessageBox
+    shown = []
+    queue = list(answers)
+
+    def question(parent, title, text, *rest, **kw):
+        shown.append(text)
+        return queue.pop(0) if queue else QMessageBox.No
+
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(question))
+    return shown
+
+
+def test_stamp_apply_switches_the_model_and_asks_again_end_to_end(
+        app, window, monkeypatch):
+    """Through the real guard and dialog: Sunburst priced ten times the
+    others loses clearly; Apply switches the image model and Stamp asks for
+    the images again on it — a second confirmation, not a send. (The first
+    version of this test returned early: the two models were 0.07 points
+    apart, so its Apply branch never ran.)"""
+    from PySide6.QtWidgets import QMessageBox
+    import services.per_unit_pricing as pricing
     monkeypatch.setenv("OPENAI_API_KEY", "test-not-a-real-key")
+    monkeypatch.setattr(pricing, "image_cost_eur", lambda model, count: (
+        2.40 if model == "gpt-image-2.5-sunburst" else 0.24))
+    monkeypatch.setattr(window, "session_budget_eur", 50.0)
     window.allow_openai_checkbox.setChecked(True)
+    started = []
+    monkeypatch.setattr("ui.workers.FiverrImageWorker.start",
+                        lambda self: started.append(self.image_model))
+    shown = _answer_in_turn(monkeypatch, QMessageBox.Apply, QMessageBox.No)
     try:
         panel = window.fiverr_panel
         panel._pending_count = 4
         panel._pending_brief = {}
         panel.fiverr_image_model_box.setCurrentText("gpt-image-2.5-sunburst")
         panel._on_prompt_ready("a fox mark for a bakery")
-        a = recorder[-1]["assessment"]
-        assert a is not None
-        assert {o.candidate.model_id for _s, o in a.ranked} >= {
-            "gpt-image-2.5-sunburst", "gpt-image-2"}
-        assert all(o.cost_eur is not None for _s, o in a.ranked)
-        if a.selected_is_best:
-            # Within a point of the best: nothing to offer, and that is the
-            # rule, not a gap in the test (see the test below).
-            return
-        # Apply: the model switches and the images are asked for again on it.
-        calls_before = len(recorder)
-
-        def applied(agent, provider, model, prompt, **kwargs):
-            recorder.append({"model": model, **kwargs})
-            if len(recorder) == calls_before + 1:
-                kwargs["assessment"].apply()
-                window.last_applied_assessment = kwargs["assessment"]
-            return False
-
-        monkeypatch.setattr(window, "authorize_request", applied)
-        panel.fiverr_image_model_box.setCurrentText("gpt-image-2.5-sunburst")
-        panel._on_prompt_ready("a fox mark for a bakery")
-        assert recorder[-1]["model"] == a.best.candidate.model_id
+        assert len(shown) == 2, "Apply did not lead to a second confirmation"
+        assert "Best fit" not in shown[0] or "your selection" in shown[0]
+        assert panel.fiverr_image_model_box.currentText() != "gpt-image-2.5-sunburst"
+        assert "gpt-image-2.5-sunburst" not in shown[1].split("Model:")[1].split("\n")[0]
+        assert started == []                      # the user said No the second time
     finally:
         window.allow_openai_checkbox.setChecked(False)
+
+
+def test_reel_apply_end_to_end_through_the_guard(app, window, monkeypatch,
+                                                 video_permitted):
+    """Render → confirmation offers Lite → Apply → Reel re-renders on Lite
+    and asks again; the second answer is No, so nothing is submitted."""
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(window, "session_budget_eur", 50.0)
+    shown = _answer_in_turn(monkeypatch, QMessageBox.Apply, QMessageBox.No)
+    submitted = []
+    monkeypatch.setattr("ui.workers.VideoGenerationWorker.start",
+                        lambda self: submitted.append(self))
+    panel = _select_video(app, window, "Gemini", "veo-3.1-fast-generate-preview", 8)
+    panel.render()
+    assert len(shown) == 2
+    assert "Veo 3.1 Lite (Gemini)" in shown[0] and "← best fit" in shown[0]
+    assert "veo-3.1-lite-generate-preview" in shown[1]
+    assert panel._media_selection().model_id == "veo-3.1-lite-generate-preview"
+    assert panel.video_length_box.currentText() == "8s"
+    assert submitted == []
 
 
 # ── Press, Booth, Muse ──────────────────────────────────────────────────────

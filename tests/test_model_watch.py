@@ -13,6 +13,7 @@ Run with:  pytest tests/test_model_watch.py -v
 """
 
 import json
+from pathlib import Path
 import os
 import sys
 import types
@@ -182,6 +183,19 @@ def window(app):
         yield w
     finally:
         QMessageBox.warning, QMessageBox.question, QMessageBox.information = saved
+
+
+@pytest.fixture(autouse=True)
+def generous_budget(request, monkeypatch):
+    """The assessment honours the session, daily and project caps (as the
+    guard does), and spend logged by earlier test modules lands in the shared
+    test database's daily total. Tests here are about ranking, not caps, so
+    they run with room to spare; the budget tests set their own."""
+    if "window" not in request.fixturenames:
+        return
+    window = request.getfixturevalue("window")
+    monkeypatch.setattr(window, "session_budget_eur", 1000.0)
+    monkeypatch.setattr(window, "daily_budget_eur", 1000.0)
 
 
 class _FakeQwen:
@@ -422,7 +436,12 @@ def test_a_marked_model_that_is_the_best_fit_is_switched_to(
 
 
 def test_update_never_moves_to_a_provider_that_is_not_permitted(
-        app, watched_window, priced):
+        app, watched_window, priced, monkeypatch):
+    """Qwen has a key here, so the only thing keeping the agent off it is
+    the missing permission. (The first version of this test passed only
+    because the suite blanks every key — a review proved the permission rule
+    could be deleted with no test failing.)"""
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-not-a-real-key")
     window = watched_window
     window.qwen = _FakeQwen(["qwen3.8-max"])
     _run_check(app, window)
@@ -436,6 +455,14 @@ def test_update_never_moves_to_a_provider_that_is_not_permitted(
     window.update_selected_models()
     assert panel.provider_box.currentText() == "anthropic"
     assert panel.model_box.currentText() == before
+    # The same ranking with the permission given does pick Qwen — so it was
+    # the permission, not some other rule, that kept the agent where it was.
+    window.allow_qwen_checkbox.setChecked(True)
+    try:
+        overall, _within = window._text_recommendations("author")
+        assert overall.candidate.provider == "qwen"
+    finally:
+        window.allow_qwen_checkbox.setChecked(False)
 
 
 # ── Every paid request is assessed ─────────────────────────────────────────
@@ -500,9 +527,15 @@ def test_a_request_already_on_the_best_choice_says_so(
     assert "your selection is the best fit" in window._assessment_text(assessment, 0.01)
 
 
-def test_no_assessment_offer_when_nothing_is_permitted(app, watched_window):
+def test_no_assessment_offer_when_nothing_is_permitted(app, watched_window,
+                                                      monkeypatch):
+    """Keys present, permissions absent: nothing can run, so nothing is
+    offered. With the keys blanked this passed for the wrong reason."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-a-real-key")
+    monkeypatch.setenv("DASHSCOPE_API_KEY", "test-not-a-real-key")
     window = watched_window
     assert not window.allow_qwen_checkbox.isChecked()
+    assert not window.allow_anthropic_checkbox.isChecked()
     assert window.assess_request("author", "anthropic", "claude-sonnet-4-6",
                                  "chapter") is None
 
@@ -565,3 +598,127 @@ def test_the_badge_stays_on_a_selection_within_a_point_of_the_top(
               if box.itemData(i, RECOMMENDED_ROLE)]
     assert marked == ["qwen3.8-max"]
     assert "within a point" in box.toolTip()
+
+
+
+# ── Review of 2026-10-07: findings pinned ───────────────────────────────────
+
+def test_a_lead_too_small_to_see_moves_nobody(app, watched_window, priced,
+                                              qwen_permitted):
+    """qwen4-max one cent per 1M cheaper than qwen3.8-max: a lead of a few
+    thousandths of a point. Update selected moved four agents on that."""
+    window = watched_window
+    window.qwen = _FakeQwen(["qwen3.8-max", "qwen-plus"])
+    _run_check(app, window)
+    author = _select(app, window, "author", "qwen", "qwen3.8-max")
+    window.qwen.models += ["qwen4-max"]
+    _run_check(app, window)
+    priced("qwen", "qwen4-max", 1.99, 6.0)            # vs 2.00 / 6.00
+    assert window._agents_preferring("qwen", "qwen4-max") == ()
+    assert window._agents_choosing_overall("qwen", "qwen4-max") == ()
+    _row(window, "qwen4-max").mark.setChecked(True)
+    window.update_selected_models()
+    assert author.model_box.currentText() == "qwen3.8-max"
+
+
+def test_a_model_found_later_reaches_a_menu_already_on_a_live_list(
+        app, watched_window):
+    window = watched_window
+    window.qwen = _FakeQwen(["qwen3.8-max", "qwen-plus"])
+    _run_check(app, window)
+    author = _select(app, window, "author", "qwen", "qwen-plus")
+    author.load_models()
+    for _ in range(4):
+        app.processEvents()
+    assert author.model_box.property("imprintModelsLive")
+    window.qwen.models += ["qwen4-max"]
+    _run_check(app, window)
+    items = [author.model_box.itemText(i) for i in range(author.model_box.count())]
+    assert "qwen4-max" in items, items
+    assert author.model_box.currentText() == "qwen-plus"   # the choice is kept
+
+
+def test_apply_never_leaves_an_agent_on_another_providers_wrong_model(
+        app, watched_window):
+    window = watched_window
+    panel = _select(app, window, "author", "anthropic")
+    before = (panel.provider_box.currentText(), panel.model_box.currentText())
+    assert window._switch_agent_setup("author", "qwen", "qwen-nonexistent") is False
+    assert (panel.provider_box.currentText(), panel.model_box.currentText()) == before
+
+
+def test_the_dialog_reports_the_selections_own_score(window):
+    import types as _types
+    text = window._assessment_text(_types.SimpleNamespace(
+        kind="text", agent="author", selected_is_best=True,
+        selected_score=0.801, best_score=0.809, best_provider="qwen",
+        best_model="x", best_cost_eur=0.01), 0.02)
+    assert "(80/100)" in text
+
+
+def test_an_offline_list_is_never_recorded_as_the_providers(app, watched_window):
+    """A wrapper built before its key was set answers with KNOWN_MODELS while
+    the key now reads as present; that list must not become the baseline."""
+    window = watched_window
+    stale = _FakeQwen(["qwen3.8-max"])
+    stale.client = None
+    window.qwen = stale
+    assert window._observe_live_models("qwen", ["qwen3.8-max"]) is False
+    assert not window.model_watch.has_baseline("qwen")
+
+
+def test_quitting_during_a_model_check_does_not_abort(tmp_path):
+    """A QThread still running at quit is destroyed under it and Qt aborts
+    (SIGABRT, exit 134). The check starts by itself and a provider can take
+    two minutes; the workers are daemon threads now."""
+    import subprocess
+    import sys as _sys
+    script = tmp_path / "quit.py"
+    script.write_text(
+        "import os, sys, time\n"
+        f"sys.path.insert(0, {str(Path(__file__).resolve().parent.parent)!r})\n"
+        "os.environ['QT_QPA_PLATFORM'] = 'offscreen'\n"
+        "from PySide6.QtWidgets import QApplication\n"
+        "app = QApplication([])\n"
+        "from ui.workers import ModelScanWorker\n"
+        "class Slow:\n"
+        "    def list_models_live(self):\n"
+        "        time.sleep(30); return ['x']\n"
+        "worker = ModelScanWorker({'qwen': Slow()})\n"
+        "worker.start()\n"
+        "time.sleep(0.2)\n"
+        "assert not worker.wait(100)\n"
+        "del worker\n"
+        "app.quit()\n"
+        "sys.exit(0)\n")
+    result = subprocess.run([_sys.executable, str(script)], capture_output=True,
+                            text=True, timeout=20)
+    assert result.returncode == 0, (result.returncode, result.stderr[-800:])
+
+
+def test_the_text_assessment_never_offers_what_the_guard_would_refuse(
+        app, watched_window, monkeypatch):
+    """Review finding: with €1 of session budget left, the dialog offered
+    claude-opus-4-6 at €2.42 for a long chapter, and Apply switched to a
+    request the guard then refused. Candidates now carry this request's cost
+    and the engine's budget rule drops what the caps would refuse."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-not-a-real-key")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-not-a-real-key")
+    window = watched_window
+    window.allow_anthropic_checkbox.setChecked(True)
+    window.allow_deepseek_checkbox.setChecked(True)
+    monkeypatch.setattr(window, "session_budget_eur", 0.10)
+    monkeypatch.setattr(window, "session_cost_total", 0.0)
+    try:
+        chapter = "The storm rolled in over the harbour. " * 4000   # ~150k chars
+        remaining = window._remaining_budget_eur()
+        assert remaining <= 0.10
+        assessment = window.assess_request(
+            "author", "deepseek", "deepseek-flash", chapter)
+        if assessment is not None and not assessment.selected_is_best:
+            assert assessment.best_cost_eur <= remaining, (
+                assessment.best_provider, assessment.best_model,
+                assessment.best_cost_eur)
+    finally:
+        window.allow_anthropic_checkbox.setChecked(False)
+        window.allow_deepseek_checkbox.setChecked(False)

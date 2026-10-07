@@ -946,17 +946,63 @@ def test_audiobook_conversion_entries_delegate_to_owned_panel(window, monkeypatc
 # in every panel, not just the one that was reported.
 
 def _squeezed_fields(root):
-    from PySide6.QtWidgets import QLineEdit
+    """Fields below the floor, or cut off by a container too narrow for them.
+
+    Width alone could not fail once the floor pinned every edit at 104px —
+    two such edits forced into a 120px container passed (review of
+    9777f0c). So each field is also walked up its containers, up to the
+    nearest scroll viewport, and must lie inside every one of them: a field
+    sticking out of its container is drawn clipped or over its neighbour.
+    The viewport itself is not a limit — content wider than it scrolls, which
+    test_no_control_is_unreachable already holds to account.
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import (
+        QAbstractScrollArea, QAbstractSpinBox, QComboBox, QLineEdit)
     from ui.text_fit import floor_width
     found = []
     for edit in root.findChildren(QLineEdit):
-        if not edit.isVisible() or edit.maximumWidth() < floor_width(edit):
-            continue   # deliberately capped (a chunk size, a budget box)
-        if edit.width() < floor_width(edit) - 1:
-            label = edit.text() or edit.placeholderText() or edit.objectName()
+        if not edit.isVisible() or isinstance(
+                edit.parent(), (QAbstractSpinBox, QComboBox)):
+            continue
+        label = edit.text() or edit.placeholderText() or edit.objectName()
+        if (edit.maximumWidth() >= floor_width(edit)
+                and edit.width() < floor_width(edit) - 1):
             found.append(f"{label[:30]!r} is {edit.width()}px "
                          f"(floor {floor_width(edit)}px)")
+            continue
+        ancestor = edit.parentWidget()
+        while ancestor is not None:
+            outer = ancestor.parentWidget()
+            if isinstance(outer, QAbstractScrollArea) and ancestor is outer.viewport():
+                break       # scrolled content can be scrolled into view
+            x = edit.mapTo(ancestor, QPoint(0, 0)).x()
+            if x < -1 or x + edit.width() > ancestor.width() + 1:
+                found.append(f"{label[:30]!r} ({edit.width()}px at x={x}) sticks "
+                             f"out of a {ancestor.width()}px "
+                             f"{type(ancestor).__name__}")
+                break
+            if ancestor is root:
+                break
+            ancestor = outer
     return found
+
+
+def test_the_squeeze_check_can_fail(app):
+    """The helper above must catch the case the old one passed."""
+    from PySide6.QtWidgets import QHBoxLayout, QLineEdit, QWidget
+    host = QWidget()
+    row = QHBoxLayout(host)
+    row.setContentsMargins(0, 0, 0, 0)
+    for _ in range(2):
+        edit = QLineEdit("value")
+        edit.setMinimumWidth(104)
+        row.addWidget(edit)
+    host.setFixedWidth(120)
+    host.show()
+    for _ in range(4):
+        app.processEvents()
+    assert _squeezed_fields(host), "two 104px fields in a 120px host went unnoticed"
 
 
 @pytest.mark.parametrize("size", SIZES, ids=lambda s: f"{s[0]}x{s[1]}")
