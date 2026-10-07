@@ -762,3 +762,80 @@ def test_a_route_without_its_key_sends_nothing(tmp_path, monkeypatch, route, cap
     assert converter.convert(input=str(book), output=str(tmp_path / "out"),
                              provider="elevenlabs") is False
     assert "needs ELEVENLABS_API_KEY" in capsys.readouterr().out
+
+
+def _wav(seconds=0.2, rate=24000):
+    import io
+    import wave
+    buffer = io.BytesIO()
+    with wave.open(buffer, "wb") as out:
+        out.setnchannels(1)
+        out.setsampwidth(2)
+        out.setframerate(rate)
+        out.writeframes(b"\0\0" * int(rate * seconds))
+    return buffer.getvalue()
+
+
+def test_gemini_narrates_a_chunk_as_mp3_with_one_request(tmp_path, monkeypatch, route):
+    """Through the real google-genai SDK against a mock transport: the request
+    carries the documented fields, a 5xx is not retried (the Interactions
+    layer retried once by default — a second bill), and the WAV it returns
+    lands as MP3 under the chunk's final name."""
+    import base64
+    import json
+    import shutil as _shutil
+    import httpx
+    if not _shutil.which("ffmpeg"):
+        pytest.skip("ffmpeg is not installed")
+    route("gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-not-a-real-key")
+    monkeypatch.setattr(converter, "_GEMINI_CLIENT", None)
+    sent = []
+    replies = [httpx.Response(503, json={"error": {"code": 503, "message": "busy",
+                                                   "status": "UNAVAILABLE"}}),
+               httpx.Response(200, json={
+                   "id": "i1", "status": "completed",
+                   "steps": [{"type": "model_output", "content": [
+                       {"type": "audio", "mime_type": "audio/wav",
+                        "data": base64.b64encode(_wav()).decode()}]}]})]
+
+    def handler(request):
+        sent.append(json.loads(request.content))
+        return replies.pop(0)
+
+    build = converter.gemini_client
+    mock = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(converter, "gemini_client",
+                        lambda httpx_client=None: build(httpx_client=mock))
+    monkeypatch.setattr(converter.time, "sleep", lambda s: None)
+    target = tmp_path / "chunk_0.mp3"
+    assert converter.generate_tts_chunk("Call me Ishmael.", target, retries=2)
+    assert len(sent) == 2               # one per attempt: the SDK added none
+    body = sent[0]
+    assert body["model"] == "gemini-3.8-flash-tts"
+    assert body["response_format"] == {"type": "audio", "mime_type": "audio/wav",
+                                       "sample_rate": 24000}
+    assert body["generation_config"] == {"speech_config": [{"voice": "Kore"}]}
+    data = target.read_bytes()
+    assert data[:3] == b"ID3" or data[:2] == b"\xff\xfb" or data[:2] == b"\xff\xf3"
+    assert not list(tmp_path.glob("*.wav")) and not list(tmp_path.glob("*.part*"))
+
+
+def test_gemini_quota_stops_the_run(tmp_path, monkeypatch, route):
+    import httpx
+    route("gemini")
+    monkeypatch.setenv("GEMINI_API_KEY", "test-not-a-real-key")
+    calls = []
+
+    def handler(request):
+        calls.append(1)
+        return httpx.Response(429, json={"error": {"code": "quota_exceeded",
+                                                   "message": "daily quota"}})
+
+    build = converter.gemini_client
+    mock = httpx.Client(transport=httpx.MockTransport(handler))
+    monkeypatch.setattr(converter, "gemini_client",
+                        lambda httpx_client=None: build(httpx_client=mock))
+    assert converter.generate_tts_chunk("Text.", tmp_path / "chunk_0.mp3",
+                                        retries=3) is False
+    assert len(calls) == 1
