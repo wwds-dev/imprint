@@ -2630,21 +2630,31 @@ them:
 ls /Applications/Imprint.app/Contents/Resources/project_root.txt
 ```
 
-`Imprint` is the frozen build. `ImprintLauncher` is the live launcher — a
-small C program (`scripts/thin_launcher.c`) that `install_app.sh` compiles. It
-starts the checkout's `python main.py` as a detached process and exits at once,
-so once the window is up, the only Imprint process is Python itself. If you
-see `applet` instead, that is the AppleScript launcher it replaced on
-2026-10-07. That launcher stayed blocked for as long as the app ran, which is
-why Activity Monitor always listed Imprint as *Not Responding*. Re-run
-`install_app.sh` to replace it.
+If that file exists, you have the live launcher, and it names the checkout it
+runs. If it doesn't, you have the frozen build.
 
-Because the running process is the venv's `python`, which sits outside any
-bundle, `ui/app_identity.py` sets the menu-bar name and the Dock icon at
-startup. The name under the Dock icon and in the app switcher still comes from
-the executable, so it can read *Python* — only the frozen build fixes that. If
-the launcher cannot find the checkout or its `.venv`, nothing opens and the
-reason is in `/tmp/imprint_launch.log`.
+The live launcher is `scripts/app_launcher.c`, which `install_app.sh` compiles
+against the libpython the `.venv` was made from. Python runs **inside**
+`Contents/MacOS/Imprint`, with the venv's packages, rather than being handed
+off to `.venv/bin/python`. macOS names a process after the executable it is
+running, so this is what makes the app *Imprint* in Activity Monitor, the Dock,
+Cmd-Tab and Force Quit. Workers Imprint starts with `sys.executable` (the
+narrator converter) go through the same executable, so they are named Imprint
+too. The two launchers it replaced both got this wrong:
+
+- **AppleScript applet**, until 2026-10-07. It blocked for the app's whole
+  lifetime, so Activity Monitor always showed *Not Responding*.
+- **Fork-and-exec shim**, for one day. It showed as `python`.
+
+Re-run `install_app.sh` after rebuilding the `.venv` on a new Python minor
+version (3.11 → 3.12). Patch upgrades need nothing. The script quits a running
+Imprint before replacing it, through the app's own Quit, so the manuscript is
+saved. It never kills the app. If the launcher cannot find the checkout or its
+`.venv`, nothing opens and the reason is in `/tmp/imprint_launch.log`.
+
+`ui/app_identity.py` is only for a terminal run of `python main.py`. It sets
+the menu-bar name and the Dock icon there. The installed app already carries
+its own.
 
 ### 18.1 Versioning
 
