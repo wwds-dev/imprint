@@ -340,10 +340,11 @@ class VideoGenerationWorker(QThread):
 
     def __init__(self, client, prompt: str, output_path, *, provider: str,
                  model: str, seconds: int, aspect_ratio: str,
-                 timeout: int = 900):
+                 timeout: int = 900, reference_images=()):
         super().__init__()
         self.client = client
         self.prompt = prompt
+        self.reference_images = list(reference_images or ())
         self.output_path = Path(output_path)
         self.provider = provider
         self.model = model
@@ -366,9 +367,11 @@ class VideoGenerationWorker(QThread):
     def run(self):
         try:
             self.status_signal.emit(f"Submitting to {self.provider}…")
+            kwargs = ({"reference_images": self.reference_images}
+                      if self.reference_images else {})
             job = self.client.create_video(
                 self.prompt, model=self.model, seconds=self.seconds,
-                aspect_ratio=self.aspect_ratio)
+                aspect_ratio=self.aspect_ratio, **kwargs)
             self.job_signal.emit(job)
 
             def progress(current):

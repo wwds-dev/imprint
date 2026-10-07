@@ -46,6 +46,21 @@ class WanVideoJob:
         return self.status in {"completed", "failed", "cancelled"}
 
 
+WAN_MAX_REFERENCES = 10
+
+
+def _data_uri(path) -> str:
+    import base64
+    import mimetypes
+    from pathlib import Path
+
+    data = Path(path).read_bytes()
+    if len(data) > 20 * 1024 * 1024:
+        raise ValueError(f"{Path(path).name} is over Wan's 20 MB image limit.")
+    mime = mimetypes.guess_type(str(path))[0] or "image/png"
+    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
 class QwenClientWrapper:
     # Qwen3.8-Max — 2.4T-parameter MoE (95B active per token), released
     # 2026-08-03. 1M-token context, up to 131,072 output tokens, multimodal in
@@ -208,16 +223,34 @@ class QwenClientWrapper:
         )
 
     def create_video(self, prompt: str, *, model: str, seconds: int,
-                     aspect_ratio: str = "9:16") -> WanVideoJob:
+                     aspect_ratio: str = "9:16",
+                     reference_images=()) -> WanVideoJob:
+        """Submit a Wan render (async task). `reference_images` (paths,
+        Wan 3.0 only) go in input.media as base64 data URIs — the API takes
+        those for images — and the prompt refers to them as Image 1, 2…
+        (alibabacloud.com wan3-video-generation-api-reference, 2026-10-07)."""
         if not self.video_session or not self.api_key:
             raise RuntimeError("DASHSCOPE_API_KEY is not set.")
         self._validate_video(model, seconds, aspect_ratio)
+        references = list(reference_images or ())
+        if references and not model.startswith("wan3.0"):
+            raise ValueError(f"{model} does not take reference images here.")
+        payload_input: dict = {"prompt": prompt}
+        if references:
+            payload_input["media"] = [
+                {"type": "reference_image", "url": _data_uri(path)}
+                for path in references[:WAN_MAX_REFERENCES]]
+            names = ", ".join(f"Image {i + 1}" for i in
+                              range(len(payload_input["media"])))
+            payload_input["prompt"] = (
+                f"{prompt}\n\nFeature the subject shown in {names}, keeping "
+                "their appearance consistent.")
         response = self.video_session.post(
             f"{self.video_base_url}/services/aigc/video-generation/video-synthesis",
             headers=self._video_headers(create=True),
             json={
                 "model": model,
-                "input": {"prompt": prompt},
+                "input": payload_input,
                 "parameters": {
                     "resolution": "720P", "ratio": aspect_ratio,
                     "duration": int(seconds), "prompt_extend": True,

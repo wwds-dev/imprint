@@ -68,6 +68,29 @@ def one_attempt_client(api_key: str, timeout_ms: int | None = None,
     return client
 
 
+# Inline image data rides inside one request, capped by the API at 20 MB.
+OMNI_MAX_REFERENCES = 3
+INLINE_REQUEST_LIMIT_BYTES = 18 * 1024 * 1024
+
+
+def _inline_images(paths) -> list[dict]:
+    """Image parts for an Interactions request, base64 inline."""
+    import mimetypes
+    from pathlib import Path
+
+    parts, total = [], 0
+    for path in paths:
+        data = Path(path).read_bytes()
+        total += len(data)
+        if total > INLINE_REQUEST_LIMIT_BYTES:
+            raise ValueError("Reference images are too large to send inline "
+                             "(the request limit is 20 MB).")
+        mime = mimetypes.guess_type(str(path))[0] or "image/png"
+        parts.append({"type": "image", "mime_type": mime,
+                      "data": base64.b64encode(data).decode("ascii")})
+    return parts
+
+
 class GeminiClientWrapper:
     # Offline fallback, checked against the provider's model list on 2026-10-07.
     # Every id here needs its own row in config/pricing.json
@@ -218,22 +241,45 @@ class GeminiClientWrapper:
         )
 
     def create_video(self, prompt: str, *, model: str, seconds: int,
-                     aspect_ratio: str = "9:16") -> GeminiVideoJob:
-        """Create a Gemini video without retrying its paid generation call."""
+                     aspect_ratio: str = "9:16",
+                     reference_images=()) -> GeminiVideoJob:
+        """Create a Gemini video without retrying its paid generation call.
+
+        `reference_images` (paths, Omni only) keep a subject consistent:
+        they are sent inline and named <IMAGE_REF_0>, <IMAGE_REF_1>… in the
+        prompt, with the reference_to_video task (ai.google.dev/gemini-api/
+        docs/omni, checked 2026-10-07).
+        """
         self._validate_video(model, seconds, aspect_ratio)
+        references = list(reference_images or ())
+        if references and model != "gemini-omni-1.1-flash":
+            raise ValueError(f"{model} does not take reference images here.")
         client = self._media()
         if model == "gemini-omni-1.1-flash":
             timed_prompt = (
                 f"{prompt}\n\nGenerate an exactly {int(seconds)}-second video "
                 "with a complete beginning, middle and end."
             )
+            kwargs = {}
+            if references:
+                parts = _inline_images(references[:OMNI_MAX_REFERENCES])
+                tags = ", ".join(f"<IMAGE_REF_{i}>" for i in range(len(parts)))
+                parts.append({"type": "text", "text": (
+                    f"{timed_prompt}\n\nFeature the subject shown in {tags}, "
+                    "keeping their appearance consistent throughout.")})
+                kwargs["generation_config"] = {
+                    "video_config": {"task": "reference_to_video"}}
+                content = parts
+            else:
+                content = timed_prompt
             interaction = client.interactions.create(
                 model=model,
-                input=timed_prompt,
+                input=content,
                 response_format={
                     "type": "video", "aspect_ratio": aspect_ratio,
                     "resolution": "720p",
                 },
+                **kwargs,
             )
             output = getattr(interaction, "output_video", None)
             encoded = getattr(output, "data", None)

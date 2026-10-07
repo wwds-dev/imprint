@@ -12,6 +12,7 @@ drafting flow and the Higgsfield teaser (whose token rides in its own
 job context), so nothing here resolves a request by agent name.
 """
 
+import types
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -34,6 +35,21 @@ from services.higgsfield_client import (
     ContentPolicyError, HiggsfieldClient, check_prompt,
 )
 from services.runtime_paths import user_data_base
+
+# Teaser routes. Each takes the persona's reference images: Higgsfield
+# Seedance as image-to-video, Gemini Omni and Wan 3.0 as reference-to-video.
+# Every teaser is assessed across the routes that can run before approval.
+TEASER_ROUTES = {
+    "higgsfield": {"label": "Higgsfield · Seedance 2.5", "provider": "Higgsfield",
+                   "model": "seedance-2.5"},
+    "gemini": {"label": "Gemini · Omni 1.1 Flash", "provider": "Gemini",
+               "model": "gemini-omni-1.1-flash"},
+    "qwen": {"label": "Qwen · Wan 3.0", "provider": "Qwen",
+             "model": "wan3.0-video"},
+}
+TEASER_SECONDS = 5          # the length Higgsfield's teaser has always been
+TEASER_ASPECT = "9:16"      # vertical: teasers go to social feeds
+TEASER_ROUTE_KEY = "creator_teaser_route"
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
 from ui.panels.base import AgentPanel
 from ui.widgets import scrollable
@@ -178,9 +194,26 @@ class CreatorPanel(QWidget):
         self.creator_schedule_btn.clicked.connect(self.schedule)
         actions.addWidget(self.creator_schedule_btn)
 
+        self.creator_video_route_box = QComboBox()
+        self.creator_video_route_box.setObjectName("CompactCombo")
+        for key, route in TEASER_ROUTES.items():
+            self.creator_video_route_box.addItem(route["label"], key)
+        self.creator_video_route_box.setToolTip(
+            "Who renders the teaser from the persona's reference images. Each "
+            "teaser is assessed across the routes you have a key for and "
+            "have permitted before it is approved.")
+        from services.database import get_setting
+        saved = get_setting(TEASER_ROUTE_KEY, "higgsfield")
+        index = self.creator_video_route_box.findData(saved)
+        if index >= 0:
+            self.creator_video_route_box.setCurrentIndex(index)
+        self.creator_video_route_box.currentIndexChanged.connect(
+            self._teaser_route_changed)
+        actions.addWidget(self.creator_video_route_box)
+
         self.creator_video_btn = QPushButton("Generate Teaser")
         self.creator_video_btn.setToolTip(
-            "Render a promo teaser with Higgsfield. Paid, and subject to their "
+            "Render a promo teaser. Paid, and subject to the provider's "
             "content rules.")
         self.creator_video_btn.clicked.connect(self.generate_video)
         actions.addWidget(self.creator_video_btn)
@@ -987,6 +1020,54 @@ class CreatorPanel(QWidget):
         self.creator_status_label.setText(note)
 
     # ── promo video ─────────────────────────────────────────────────────
+    def _teaser_route(self) -> str:
+        return self.creator_video_route_box.currentData() or "higgsfield"
+
+    def _teaser_route_changed(self, *_args) -> None:
+        from services.database import save_setting
+        try:
+            save_setting(TEASER_ROUTE_KEY, self._teaser_route())
+        except Exception as exc:
+            self.host._note_failure("creator: save teaser route", exc)
+
+    def _switch_teaser_route(self, route: str) -> None:
+        index = self.creator_video_route_box.findData(route)
+        if index >= 0:
+            self.creator_video_route_box.setCurrentIndex(index)
+
+    def _teaser_assessment(self, selected_route: str, selected_cost_eur,
+                           prompt: str):
+        """Every teaser route priced for this teaser. Higgsfield prices only
+        through its estimate call, so unless it is the selection it is listed
+        without a price and is never recommended on a guess."""
+        from services.media_catalog import VERTICAL, direct_video_cost_usd, find_model
+        from services.per_unit_pricing import eur_per_usd
+        options = []
+        for key, route in TEASER_ROUTES.items():
+            model = find_model(route["provider"], route["model"])
+            if model is None:
+                continue
+            if key == selected_route:
+                cost = selected_cost_eur
+            elif key == "higgsfield":
+                cost = None
+            else:
+                try:
+                    cost = direct_video_cost_usd(route["model"], TEASER_SECONDS) \
+                        * eur_per_usd()
+                except ValueError:
+                    continue
+            options.append(self.host.media_option(
+                model, cost, duration=TEASER_SECONDS,
+                apply=lambda r=key: self._switch_teaser_route(r)))
+        return self.host.assess_media_request(
+            "creator", options, TEASER_ROUTES[selected_route]["model"],
+            # The catalogue's own label for the shape ("Vertical 9:16"): the
+            # bare ratio matched no route's aspects, so every route but the
+            # selected one was silently ruled out.
+            task=f"promo teaser {prompt[:120]}", aspect=VERTICAL,
+            duration=TEASER_SECONDS)
+
     def generate_video(self):
         from ui.workers import HiggsfieldEstimateWorker
 
@@ -997,6 +1078,9 @@ class CreatorPanel(QWidget):
         agent = self.host.agent_instances["creator"]
         prompt = agent.build_video_prompt(
             account, self.creator_brief_input.toPlainText().strip())
+        if self._teaser_route() != "higgsfield":
+            self._generate_direct_teaser(account, prompt)
+            return
 
         client = HiggsfieldClient()
         if not client.configured:
@@ -1078,26 +1162,18 @@ class CreatorPanel(QWidget):
             f"Estimated by Higgsfield: ${estimate.usd:.2f} "
             f"({estimate.credits:g} credits). Awaiting approval…")
 
-        from services.higgsfield_client import DEFAULT_SEEDANCE_MODEL
-        from services.media_catalog import find_model
-        seedance = next((find_model("Higgsfield", m) for m in
-                         ("seedance-2.5", "seedance-2.0", DEFAULT_SEEDANCE_MODEL)
-                         if m in request.endpoint), None) \
-            or find_model("Higgsfield", DEFAULT_SEEDANCE_MODEL)
-        assessment = None if seedance is None else self.host.assess_media_request(
-            "creator", [self.host.media_option(seedance, cost_eur)],
-            seedance.model_id, task="promo teaser",
-            single_route_note=(
-                "Muse builds the teaser from your persona's reference images, "
-                "and Higgsfield Seedance is the only route here that takes "
-                "one, so there is nothing to compare. Veo and Wan make "
-                "text-only clips in Reel."))
+        # Assessed across every teaser route, this one at Higgsfield's own quote.
+        assessment = self._teaser_assessment("higgsfield", cost_eur,
+                                             context["prompt"])
         token = self.host.authorize_request(
             "creator", "higgsfield", request.endpoint,
             context["prompt"], label="promo teaser", flat_cost_eur=cost_eur,
             assessment=assessment)
         if not token:
             self._video_reset("Render not approved.")
+            if (assessment is not None
+                    and self.host.last_applied_assessment is assessment):
+                self.generate_video()      # the route Apply chose, asked again
             return
         context["request_token"] = token
         snapshot = self.host.pending_request_snapshot(token)
@@ -1115,6 +1191,108 @@ class CreatorPanel(QWidget):
             self._video_done(aid, path))
         render_worker.error_signal.connect(self._video_error)
         render_worker.start()
+
+    def _generate_direct_teaser(self, account: dict, prompt: str) -> None:
+        """A teaser from Gemini Omni or Wan 3.0, with the reference images.
+
+        The job row is written under a local id *before* the paid request,
+        and the provider's own job id is stored beside it when it arrives. A
+        render the app died during is then never invisible: a Wan task is
+        resumed from its id on the next launch, and an Omni render (one
+        synchronous call, no job to look up) is marked lost and surfaced —
+        never silently billed, the Video workspace's rule.
+        """
+        import uuid
+        from services.gemini_client import GeminiClientWrapper
+        from services.media_catalog import direct_video_cost_usd
+        from services.per_unit_pricing import eur_per_usd
+        from services.qwen_client import QwenClientWrapper
+        from services.recommendations.catalog import provider_configured
+        from ui.workers import VideoGenerationWorker
+
+        route = self._teaser_route()
+        spec = TEASER_ROUTES[route]
+        if not provider_configured(route):
+            QMessageBox.information(
+                self, f"{spec['provider']} Key Needed",
+                f"{spec['label']} needs a {spec['provider']} key in Imprint's "
+                "private .env file.")
+            return
+        if not self.host._provider_permission(route):
+            QMessageBox.warning(
+                self, f"{spec['provider']} Not Enabled",
+                f"Enable {spec['provider']} in the API permissions row before "
+                "sending a prompt or reference image to the service.")
+            return
+        references = reference_images(account["id"])
+        usd = direct_video_cost_usd(spec["model"], TEASER_SECONDS)
+        cost_eur = round(usd * eur_per_usd(), 6)
+        assessment = self._teaser_assessment(route, cost_eur, prompt)
+        token = self.host.authorize_request(
+            "creator", route, spec["model"], prompt, label="promo teaser",
+            flat_cost_eur=cost_eur, assessment=assessment)
+        if not token:
+            if (assessment is not None
+                    and self.host.last_applied_assessment is assessment):
+                self.generate_video()
+            return
+
+        output_dir = user_data_base() / "output" / "creator" / str(account["id"])
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        output_path = output_dir / f"teaser-{stamp}.mp4"
+        local_id = f"{route}-{uuid.uuid4().hex[:16]}"
+        snapshot = self.host.pending_request_snapshot(token)
+        self._video_context = {
+            "account_id": account["id"],
+            "content_id": self.selected_content_id(),
+            "project_id": snapshot.get("project"),
+            "run_id": snapshot.get("run_id", ""),
+            "prompt": prompt,
+            "output_path": str(output_path),
+            "request_token": token,
+            "job_id": local_id,
+            "fixed_request_id": local_id,
+            "route": route,
+            "endpoint": f"{route}:{spec['model']}",
+            "estimated_usd": usd,
+            "estimated_eur": cost_eur,
+            "provider_completed": False,
+            "cancel_requested": False,
+        }
+        # Before the paid request: a submission that never comes back is
+        # still a row the next launch reconciles.
+        self._video_job_update(types.SimpleNamespace(
+            job_id=local_id, status="submitted", error="",
+            endpoint=self._video_context["endpoint"], correlation_id=""))
+
+        self.creator_video_btn.setEnabled(False)
+        self.creator_video_cancel_btn.setEnabled(False)
+        self.creator_video_status.setText(f"Submitting to {spec['provider']}…")
+        client = (GeminiClientWrapper() if route == "gemini"
+                  else QwenClientWrapper())
+        worker = VideoGenerationWorker(
+            client, prompt, output_path, provider=spec["provider"],
+            model=spec["model"], seconds=TEASER_SECONDS,
+            aspect_ratio=TEASER_ASPECT, reference_images=references)
+        self.host.creator_video_worker = worker
+        worker.status_signal.connect(self.creator_video_status.setText)
+        worker.job_signal.connect(self._direct_teaser_update)
+        worker.done_signal.connect(
+            lambda path, aid=account["id"]: self._video_done(aid, path))
+        worker.error_signal.connect(self._video_error)
+        worker.start()
+
+    def _direct_teaser_update(self, job) -> None:
+        """A Gemini/Wan job update, filed under the local id; the provider's
+        job id is kept as the correlation id the resume reads."""
+        context = self._video_context
+        if not context:
+            return
+        self._video_job_update(types.SimpleNamespace(
+            job_id=context["fixed_request_id"], status=job.status,
+            error=getattr(job, "error", "") or "",
+            endpoint=context["endpoint"],
+            correlation_id=getattr(job, "job_id", "") or ""))
 
     def cancel_video(self):
         """Cancel preparation, or ask Higgsfield to cancel a queued render."""
@@ -1177,11 +1355,13 @@ class CreatorPanel(QWidget):
                 """, (
                     job.job_id, context["account_id"], context.get("content_id"),
                     context.get("project_id"),
-                    now, now, job.endpoint or context.get("endpoint", ""),
+                    now, now,
+                    getattr(job, "endpoint", "") or context.get("endpoint", ""),
                     context["prompt"], "creator-video-v1",
                     context.get("estimated_credits", 0.0),
                     context.get("estimated_usd", 0.0), actual_usd, cost_basis,
-                    job.status, policy_result, job.error, job.correlation_id,
+                    job.status, policy_result, job.error,
+                    getattr(job, "correlation_id", "") or "",
                     context.get("estimated_eur", 0.0),
                     context.get("output_path", ""),
                     context.get("run_id", ""),
@@ -1197,9 +1377,10 @@ class CreatorPanel(QWidget):
         # Only ever by the token this flow authorized — never by the shared
         # "creator" name, which the drafting flow also uses.
         token = context.get("request_token")
-        self._store_media(account_id, path, source="higgsfield",
+        route = context.get("route", "higgsfield")
+        self._store_media(account_id, path, source=route,
                           job_id=context.get("job_id", ""),
-                          caption="Higgsfield teaser")
+                          caption=f"{TEASER_ROUTES[route]['provider']} teaser")
         self._link_project_media(context.get("project_id"), path, "creator_video")
         # Settle before billing: a crash between the two must resolve as a
         # one-time undercount (the row still carries actual_usd), never as
@@ -1306,8 +1487,10 @@ class CreatorPanel(QWidget):
                 self._settle_teaser_job(context.get("job_id", ""), "released")
         self._video_reset(f"[Error] {error}")
         if keep_open:
+            provider = TEASER_ROUTES[(context or {}).get(
+                "route", "higgsfield")]["provider"]
             self.creator_video_status.setText(
-                "Higgsfield may still finish this render — the next launch "
+                f"{provider} may still finish this render — the next launch "
                 "checks and saves the result.")
 
     def _video_reset(self, status: str):
@@ -1350,6 +1533,10 @@ class CreatorPanel(QWidget):
         # sibling agents (the social publishers already lean on video).
         from agents.video.workers import VideoResumeWorker
 
+        endpoint = row.get("endpoint") or ""
+        if endpoint.startswith(("gemini:", "qwen:")):
+            self._resume_direct_teaser(row)
+            return
         client = HiggsfieldClient()
         if not client.configured:
             # The render may still be live at the provider; without keys
@@ -1390,6 +1577,67 @@ class CreatorPanel(QWidget):
             self.creator_video_status.setText(
                 "Resuming a teaser render from the previous session…")
 
+    def _resume_direct_teaser(self, row: dict) -> None:
+        """Reconcile a Gemini/Wan teaser a previous process left reserved.
+
+        Wan is a task with an id: watch it again and save the result, as the
+        Video workspace does. Omni is one synchronous call with nothing to
+        look up afterwards, and a Wan submission that never got its id back
+        is in the same position: marked lost, released, and surfaced —
+        never billed on a guess.
+        """
+        from agents.video.workers import VideoResumeWorker
+        from services.qwen_client import QwenClientWrapper
+
+        route, _sep, model = (row.get("endpoint") or "").partition(":")
+        task_id = row.get("correlation_id") or ""
+        if route != "qwen" or not task_id:
+            self._settle_teaser_job(row["request_id"], "released")
+            try:
+                with get_connection() as conn:
+                    conn.execute(
+                        "UPDATE creator_video_jobs SET status = 'lost', "
+                        "error = ? WHERE request_id = ?",
+                        ("interrupted before the result came back",
+                         row["request_id"]))
+                    conn.commit()
+            except Exception as exc:
+                self.host._note_failure("creator: mark lost teaser", exc)
+            provider = TEASER_ROUTES.get(route, {}).get("provider", route)
+            self.host._note_failure("creator: resume teaser", RuntimeError(
+                f"a {provider} teaser was interrupted before its result came "
+                "back; it was not billed here. Check the provider's usage "
+                "page if it may have run."))
+            if not self._video_context:
+                self.creator_video_status.setText(
+                    f"A {provider} teaser from the last session was "
+                    "interrupted and could not be recovered; it was not "
+                    "billed here.")
+            return
+        client = QwenClientWrapper()
+        if not client.key_available():
+            self.host._note_failure("creator: resume teaser", RuntimeError(
+                f"Wan teaser {task_id} is waiting, but DASHSCOPE_API_KEY is "
+                "not configured"))
+            return
+        token = self.host.restore_request(
+            "creator", "qwen", model, row.get("prompt", ""),
+            label="promo teaser (resumed)",
+            flat_cost_eur=row.get("flat_cost_eur") or 0.0,
+            project=row.get("project_id"), run_id=row.get("run_id", ""))
+        worker = VideoResumeWorker(
+            client, "qwen", job_id=task_id, model=model,
+            seconds=TEASER_SECONDS, aspect_ratio=TEASER_ASPECT, status_url="",
+            output_path=row["output_path"])
+        self.host.creator_resume_workers.append(worker)
+        worker.done_signal.connect(
+            lambda path, r=row, t=token, w=worker:
+            self._resume_teaser_done(r, t, w, path))
+        worker.error_signal.connect(
+            lambda err, r=row, t=token, w=worker:
+            self._resume_teaser_error(r, t, w, err))
+        worker.start()
+
     def _resume_teaser_update(self, request_id: str, job) -> None:
         try:
             with get_connection() as conn:
@@ -1411,9 +1659,11 @@ class CreatorPanel(QWidget):
             self.host._note_failure("creator: track resumed teaser", exc)
 
     def _resume_teaser_done(self, row: dict, token, worker, path: str) -> None:
-        self._store_media(row["account_id"], path, source="higgsfield",
+        route = (row.get("endpoint") or "").partition(":")[0]
+        route = route if route in TEASER_ROUTES else "higgsfield"
+        self._store_media(row["account_id"], path, source=route,
                           job_id=row["request_id"],
-                          caption="Higgsfield teaser")
+                          caption=f"{TEASER_ROUTES[route]['provider']} teaser")
         self._link_project_media(row.get("project_id"), path, "creator_video")
         # Settle before billing (see _video_done for why).
         self._settle_teaser_job(row["request_id"], "billed")
