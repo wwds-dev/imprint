@@ -207,3 +207,24 @@ def test_reel_will_not_render_gemini_scenes_without_gemini_permission(
         app.processEvents()
     panel.render()
     assert asked == []
+
+
+def test_a_gemini_scene_is_sent_once_even_when_it_fails(monkeypatch, tmp_path):
+    """vidforge retries an OpenAI scene image up to three times; a Gemini or
+    Qwen image is paid per request and must not be replayed."""
+    from agents.video import video_studio
+    if not video_studio.available():
+        pytest.skip(video_studio.unavailable_reason())
+    from vidforge import visuals
+    calls = []
+
+    def refuse(model, prompt, aspect="1:1", **kw):
+        calls.append(model)
+        raise ig.ImageRefused("Gemini refused the request")
+
+    monkeypatch.setattr(ig, "generate_image", refuse)
+    cfg = video_studio.load_config({"visuals.source": "ai",
+                                    "visuals.image_model": "gemini-nano-banana-2.1"})
+    with pytest.raises(ig.ImageRefused):
+        visuals._generate_ai(cfg, "a lighthouse", tmp_path / "scene.png")
+    assert calls == ["gemini-nano-banana-2.1"]

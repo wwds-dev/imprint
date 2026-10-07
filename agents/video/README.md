@@ -3,9 +3,10 @@
 Owns Imprint's video workflow: idea and script, visual-provider selection,
 narration, direct generation, assembly, job status and output library.
 
-Vidforge remains a separately versioned companion repository.  This package is
-the ownership boundary for Imprint orchestration; `studio.py` is its adapter to
-Vidforge.  User guidance: `docs/agents/video.md`.
+Vidforge is ordinary Imprint source at `imprint/vidforge/` since 2026-09-30
+(see `studio.py` below).  This package is the ownership boundary for Imprint
+orchestration; `studio.py` is its adapter to Vidforge.  User guidance:
+`docs/agents/video.md`.
 
 Successful pipeline and direct renders also link their local clip to the
 Project captured at request authorization; resumed provider jobs use the
@@ -24,7 +25,20 @@ and `pytest tests/test_video_jobs.py` (job persistence, resume and the Stop cont
 - `panel.py` — owns the Render/Library workspace, provider/model constraints,
   preflight estimates, exact request tokens, pipeline and direct-provider
   lifecycles, safe cancellation semantics, progress, errors and the shared
-  vidforge output library. It also owns `resume_pending_jobs()`/
+  vidforge output library. The model menu lists `offered_models()`, so the
+  three Veo 3.1 previews (`retires="2026-10-22"`) leave the menu and the
+  assessment on Google's shutdown date while a job already in flight is
+  still collected. Since 2026-10-07 a scene route can be Gemini (Nano
+  Banana 2.1 / Pro) or Qwen (Qwen Image 3.0 / Pro) as well as GPT Image;
+  `render()` then checks that provider's key and permission itself, because
+  the guard authorizes the pipeline under OpenAI, which still writes and
+  narrates the script. `_assessment()` prices every route that can make the
+  requested length and shape — direct models at their per-second rate,
+  scene/stock/local routes through the pipeline's own pre-estimate —
+  leaves out a route that cannot make the length, and lists Higgsfield
+  without a price (it quotes only after its estimate call), so it is never
+  recommended on a guess. Apply re-points the selectors and asks again.
+  It also owns `resume_pending_jobs()`/
   `_spawn_resume()`: run once per launch (a `_resume_started` guard blocks
   a second pass, which would double-reserve and double-bill), it restores
   each pending job's budget reservation via `host.restore_request()`
@@ -120,8 +134,10 @@ and `pytest tests/test_video_jobs.py` (job persistence, resume and the Stop cont
     (word budget from target seconds and words-per-minute, scene count from
     scene length, then script/TTS/image/caption cost) so the panel can show
     a cost figure *before* a script exists, using
-    `services/media_catalog.openai_image_reserve_usd()` for per-image
-    pricing when `visuals.source == "ai"`.
+    `services/media_catalog.openai_image_reserve_usd()` (now an alias of
+    `image_reserve_usd()`, which reads the image model's own provider table
+    in `config/pricing.json`) for per-image pricing when
+    `visuals.source == "ai"`.
   - `stages()`, `reporter_base()`, `cancelled_error()`,
     `overall_fraction()` — expose vidforge's progress-reporting contract
     (stage list, `Reporter` base class, `Cancelled` exception, overall

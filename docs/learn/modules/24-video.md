@@ -12,8 +12,13 @@
 - Script/narration/visual/stock keys required by the chosen route are eligible.
 - The output directory is writable and ffmpeg is available for assembly routes.
 - Sora and its adapter are removed ahead of its 24 September 2026 API
-  shutdown. Choose Gemini, Qwen or Higgsfield for direct video, or GPT Image
-  for an assembled video.
+  shutdown. Choose Gemini, Qwen or Higgsfield for direct video, or a
+  scene-image model — GPT Image, Nano Banana or Qwen Image — for an assembled
+  video. A Gemini or Qwen scene route needs that provider's key and
+  permission as well as OpenAI's, which still writes and narrates the script.
+- Google shuts the Veo 3.1 previews down on 22 October 2026 and names Gemini
+  Omni as the replacement; from that day Veo leaves the menus and the
+  assessment, though a job already in flight is still collected.
 
 ## Control atlas
 
@@ -64,12 +69,17 @@ prove copyright, likeness, disclosure, platform compliance, or marketing value.
 ## Cost, cancellation, and gates
 
 Images/video may bill by asset or duration; narration and script may add costs.
-Stop works for every direct provider, but it only cancels at the provider
-where that is possible before rendering starts (a queued Wan or Higgsfield
-job). For an accepted Veo/Gemini job, or one already rendering, Stop stops
-watching: the budget reservation stays, the provider may still bill, and the
-next launch saves the result and bills it once.
-Humans approve paid submission and public release.
+Before approval every render is assessed across the routes that can make the
+requested length and shape, each priced at that length; Higgsfield, priced only
+by its later quote, is listed but never recommended on a guess, and a switch is
+offered only when another route wins by at least a point. The assessment
+respects the same session, daily, project and per-agent caps as the guard. Stop
+works for every direct provider, but it only cancels at the provider where that
+is possible before rendering starts (a queued Wan or Higgsfield job). For an
+accepted Veo/Gemini job, or one already rendering, Stop stops watching: the
+budget reservation stays, the provider may still bill, and the next launch
+saves the result and bills it once. Humans approve paid submission and public
+release.
 
 ## Verification
 
@@ -104,11 +114,12 @@ rings it; **Back to lesson** in the callout brings you back to that step.
 
 **Time:** about 10 minutes, most of it the provider's render wait. **Cost:**
 one direct video render — you see its flat estimate and approve it before
-anything is sent. This example (Veo 3.1 Fast at Imprint's listed $0.10 per
-720p second, 8 seconds) reserves $0.80, with the euro conversion shown live.
-No text request is involved, so there is no free local route: every direct
-render is a paid provider job. Failed Veo and Wan generations are not billed
-by their APIs; Higgsfield quotes its exact price before you approve.
+anything is sent. This example (Gemini Omni 1.1 Flash at Imprint's budget
+reserve of $0.10 per 720p second, 8 seconds) reserves $0.80, with the euro
+conversion shown live. No text request is involved, so there is no free local
+route: every direct render is a paid provider job. Failed Veo and Wan
+generations are not billed by their APIs; Higgsfield quotes its exact price
+before you approve.
 
 ### Step 1 — Write the ad as the Topic
 
@@ -129,8 +140,9 @@ NIGHT BUS — OUT NOW. No real people's faces, no logos, no spoken words.
 ### Step 2 — Choose a direct video provider
 
 Open **Visual provider**. Gemini, Qwen and Higgsfield carry direct
-text-to-video models; OpenAI now supplies only scene images for assembled
-videos, since Sora is gone. **BEST FIT** marks the provider the
+text-to-video models; Gemini and Qwen also list scene-image models for
+assembled videos, and OpenAI now supplies only those, since Sora is gone.
+**BEST FIT** marks the provider the
 recommendation engine ranks best for your current format, aspect, length,
 remaining budget and enabled API permissions — hover it for the reason. It is
 capability-and-cost guidance, not evidence anyone will watch the ad. Pick
@@ -140,16 +152,19 @@ capability-and-cost guidance, not evidence anyone will watch the ad. Pick
 
 ### Step 3 — Pick the model and let it set the rules
 
-Choose **Veo 3.1 Fast**. The moment a direct model is selected, **Format**
-locks itself to *Social clip*, and the note under the dropdowns says what
-this model actually does — here, 720p with generated audio. BEST FIT in this
-list is scoped to the provider you just chose.
+Choose **Gemini Omni 1.1 Flash**. The moment a direct model is selected,
+**Format** locks itself to *Social clip*, and the note under the dropdowns
+says what this model actually does — here, fast text-to-video with generated
+audio, with the length expressed in the prompt. BEST FIT in this list is
+scoped to the provider you just chose. Until 22 October 2026 the list also
+shows the Veo 3.1 previews, each with its shutdown note; Omni is the model
+Google names as their replacement, which is why this recipe uses it.
 
 [Show me](show:video_visual_model_box)
 
 ### Step 4 — Set length and aspect
 
-**Clip length** now offers only what Veo 3.1 Fast accepts — 4s, 6s or 8s.
+**Clip length** now offers only what Gemini Omni accepts — 3 to 10 seconds.
 Choose **8s**. Check that **Aspect** reads *Vertical 9:16*; a social clip
 left on Landscape is switched to vertical for you. Every change here
 re-prices the run.
@@ -158,11 +173,12 @@ re-prices the run.
 
 ### Step 5 — Read the estimate before you spend
 
-The line beside the buttons now reads `Direct clip · $0.80 · ≈ €…`. The
-dollar figure is Imprint's configured 720p list rate, not a provider invoice.
-Two labels mean something different: *Budget reserve* (Gemini Omni is
-token-billed, so the number is a cap, not a quote) and *Exact provider quote
-before approval* (Higgsfield prices the job itself before you approve).
+The line beside the buttons now reads `Budget reserve · $0.80 · ≈ €…`. The
+dollar figure is Imprint's configured rate, not a provider invoice: Gemini
+Omni is token-billed, so the number is a cap, not a quote. Two other labels
+mean something different: *Direct clip* (Veo and Wan, priced from their 720p
+per-second list rate) and *Exact provider quote before approval* (Higgsfield
+prices the job itself before you approve).
 
 [Show me](show:video_cost_label)
 
@@ -171,7 +187,12 @@ before approval* (Higgsfield prices the job itself before you approve).
 Press **Render Video** once. Gemini needs its key in Imprint's private .env
 (GOOGLE_API_KEY or GEMINI_API_KEY) and must be enabled in the API permissions
 row — the panel tells you which is missing. Then the approval dialog shows
-the flat cost; nothing is sent until you approve it.
+the flat cost; nothing is sent until you approve it. The same dialog ranks
+every route that can make an 8-second vertical clip, each with its price; if
+another wins by at least a point, **Apply** switches the selectors to it and
+asks again — it never submits on its own. The request is posted exactly
+once: Imprint switches off the Gemini client's own hidden retry, so a slow
+answer cannot become a second paid render.
 
 **Good result:** the status line reports the submission, then progress, then
 `Done — <file>.mp4`, and Library gains a Ready row. **Weak result:** an

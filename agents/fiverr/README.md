@@ -18,6 +18,18 @@ and `pytest tests/test_fiverr_orders.py`.
 - **`panel.py`** — owns the complete Client Gigs workspace: brief and model
   controls, price estimate, guarded prompt/image/delivery/gig request
   lifecycles with exact tokens, result tabs, order log, save, clear and Stop.
+  Since 2026-10-07 (`140ec2b`) the Image model menu lists every
+  `scene_images` model in `services/media_catalog.py` — three GPT Image
+  models, Gemini's Nano Banana 2.1 and Nano Banana Pro, and Qwen Image 3.0
+  and 3.0 Pro — and `FiverrImageWorker` generates through
+  `services/image_generation.generate_image()`, which sends each paid image
+  exactly once. `generate_logos()` checks the image model's own provider key
+  before the paid prompt step (it used to demand `OPENAI_API_KEY` whatever
+  the model), and `_on_prompt_ready()` authorizes that provider, not OpenAI.
+  `_image_assessment()` prices the logos on every image model for the
+  requested concept count and passes the ranking to the approval; Apply
+  switches the model and asks again for the images only, since the prompt is
+  already paid for.
   Since 2026-10-05 the brief carries a **brand kit** row (Brand fonts / Brand
   voice / Brand rules), and the Orders tab is a view over `orders.py` rather
   than an in-memory table: **Generate Logos** opens (or reuses) the client's

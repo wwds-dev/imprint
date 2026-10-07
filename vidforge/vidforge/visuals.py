@@ -60,13 +60,18 @@ def _generate_ai(cfg: Config, prompt: str, dst: Path) -> None:
     model = cfg.get("visuals.image_model", "gpt-image-2.5-flare")
     size = cfg.get("visuals.image_size", "1536x1024")
 
+    # A Gemini or Qwen scene is sent once, outside the retry loop below: a
+    # retried paid image can bill twice, and a refused key or account will
+    # refuse three times over. On failure the scene falls back to a gradient
+    # card (render_scenes), as for every source.
+    other = _other_provider_image(model, full, size)
+    if other is not None:
+        dst.write_bytes(other)
+        return
+
     last: Exception | None = None
     for attempt in range(1, RETRIES + 1):
         try:
-            other = _other_provider_image(model, full, size)
-            if other is not None:
-                dst.write_bytes(other)
-                return
             result = _openai().images.generate(
                 model=model,
                 prompt=full,

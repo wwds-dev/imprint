@@ -41,7 +41,7 @@ absorbed have no Imprint Project link.
 | Visual provider | OpenAI, Gemini, Qwen, Higgsfield, Pexels or Local. |
 | Visual model | Only implemented models for that provider. See the routes below. |
 | Aspect | Clips only: vertical 9:16, square 1:1, or landscape. |
-| Clip length | Pipeline clips: 15–90 seconds. Direct choices follow the selected model: Omni 3–10s, Veo 4/6/8s, Wan 2–30s, Higgsfield 4/8/12s. |
+| Clip length | Pipeline clips: 15–90 seconds. Direct choices follow the selected model: Omni 3–10s, Veo 4/6/8s (until 22 October 2026), Wan 3.0 2–30s, Wan 2.7 2–15s, Seedance 2.5 4–30s, Seedance 2.0 4–15s. |
 | Render Video / Stop | Run, or cancel at the next stage boundary. |
 | Open Output Folder | The shared vidforge output directory. |
 
@@ -53,13 +53,27 @@ mixed into this list.
 | Provider | Selectable models | What Imprint does |
 |---|---|---|
 | OpenAI | GPT Image 2.5 Sunburst, GPT Image 2.5 Flare, GPT Image 2 | Generates one scene image at a time, then vidforge assembles the narrated video. |
+| Gemini | Nano Banana 2.1, Nano Banana Pro | Scene images for the narrated pipeline, as above. |
 | Gemini | Gemini Omni 1.1 Flash | Generates a direct 3–10-second 720p clip with audio through the Interactions API. |
-| Gemini | Veo 3.1, Veo 3.1 Fast, Veo 3.1 Lite | Creates and polls a 4/6/8-second 720p Veo operation, then downloads the result before Google's temporary file expires. |
+| Gemini | Veo 3.1, Veo 3.1 Fast, Veo 3.1 Lite | Creates and polls a 4/6/8-second 720p Veo operation, then downloads the result before Google's temporary file expires. Google shuts these previews down on **22 October 2026** and names Gemini Omni as the replacement. |
+| Qwen | Qwen Image 3.0, Qwen Image 3.0 Pro | Scene images for the narrated pipeline, as above. |
 | Qwen | Wan 3.0 Video, Wan 3.0 Video Prime | Creates a 2–30-second 720p text-to-video task with audio through Alibaba Model Studio. |
 | Qwen | Wan 2.7 Text to Video | Creates a 2–15-second 720p task and saves the temporary result locally. |
-| Higgsfield | Seedance 1.0 Lite | Gets the provider's exact quote, asks for approval, renders, downloads, and files the clip. |
+| Higgsfield | Seedance 2.5, Seedance 2.0 | Gets the provider's exact quote, asks for approval, renders, downloads, and files the clip. 2.5 is the default; 2.0 is the verified fallback. |
 | Pexels | Pexels stock photography | Uses stock visuals. Requires `PEXELS_API_KEY`; script and narration still use the pipeline providers. |
 | Local | Local gradient cards | Creates visuals locally with no image-generation charge; script and narration still use the pipeline providers. |
+
+A Gemini or Qwen scene route still runs the script and narration on OpenAI, so
+it needs that provider's key and permission **in addition to** OpenAI's: the
+panel checks the scene provider before approval, and the guard checks OpenAI.
+The pipeline's estimate prices the scenes at that provider's per-image rate.
+The scene images go through `services/image_generation.py`, the module
+Stamp's logos use.
+
+The Veo entries carry their shutdown note and leave the menus and the
+assessment on 22 October 2026 (`MediaModel.retires`, filtered by
+`offered_models()`). A Veo job already in flight on that day is still
+collected, because resume goes through the client, not the catalogue.
 
 DALL·E 2 and DALL·E 3 are intentionally absent: OpenAI retired and removed
 their APIs. The GPT Image entries are the supported replacements.
@@ -88,6 +102,10 @@ Pipeline video is billed per image, per character of narration and per audio min
 
 Veo and Wan are reserved from the selected 720p per-second list rate before submission. Gemini Omni is token-billed, so its roughly $0.10-per-second figure is explicitly labelled a budget reserve rather than an exact quote. Higgsfield supplies an exact request-specific quote before approval.
 
+Every render is **assessed before approval** across the routes that can make the requested length and shape, each priced at that length — a direct model at its per-second rate, a scene/stock/local route by the pipeline's own pre-estimate with that route's visuals. A route that cannot make the length is left out rather than compared at a different one. Higgsfield, priced only by its later quote, is listed but never recommended on a guess. A switch is offered only when another route wins by at least one point; **Apply** switches the selectors and asks again. Fit is scored on Reel's profile, cost relative to the request's other routes, and the assessment honours the session, daily, project and per-agent caps exactly as the guard does.
+
+A direct render is posted exactly once. Gemini Omni (like every Gemini image or speech request) goes through a client whose Interactions-layer retry is switched off. Higgsfield submissions carry an `Idempotency-Key`, so a resubmission is not charged twice; they send `resolution: "720p"` (the API rejects the bare `"720"` it used to get), omit a blank prompt, and never send `aspect_ratio` to image-to-video, which takes its shape from the image.
+
 Roughly: a long-form video €1–2, a 30-second clip about €0.25. Images dominate.
 
 ## Cancellation
@@ -100,12 +118,17 @@ Pipeline cancellation is cooperative, through the reporter. Higgsfield uses its 
 | `agents/video/panel.py` | Owns the Render/Library UI and every guarded pipeline/direct-provider request, progress, result and Stop lifecycle. |
 | `ui/workers.py → VideoWorker` | Runs `produce()` on a thread; bridges vidforge's `Reporter` to Qt signals. |
 | `services/media_catalog.py` | Explicit visual provider/model capabilities, durations, aspects and 720p pricing. |
+| `services/image_generation.py` | Scene images from Gemini and Qwen; OpenAI's go through vidforge's own call. |
 | `services/openai_client.py` | GPT Image generation; the discontinued Sora adapter is removed. |
-| `services/gemini_client.py` | Gemini Omni interaction plus Veo create/poll/download. |
+| `services/gemini_client.py` | Gemini Omni interaction plus Veo create/poll/download, on a client with the Interactions retry switched off. |
 | `services/qwen_client.py` | Wan asynchronous create/poll/download through DashScope. |
+| `services/higgsfield_client.py` | Seedance prepare/estimate/submit/poll/cancel, the request schema and the content-policy guard. |
 | `ui/workers.py → VideoGenerationWorker` | Runs supported direct jobs off the UI thread and preserves completed output. |
 | `agents/video/jobs.py` | Durable `video_jobs` rows: written before the create POST, updated per provider transition, settled `billed`/`released` with the guard. |
 | `agents/video/workers.py → VideoResumeWorker` | Startup reconciliation: re-polls a job that outlived the process, downloads and bills the paid result. |
+| `vidforge/vidforge/pipeline.py` | `produce()` — the eight stages. |
+| `vidforge/vidforge/progress.py` | `Reporter`, `STAGES`, `overall_fraction`, `Cancelled`. |
+| `main.py` compatibility entries | Delegate older umbrella call sites to `VideoPanel`; no Video implementation remains there. |
 
 Reconciliation honesty rules: a local poll deadline or local exception (network,
 key) never counts as a provider verdict — the row stays pending for the next
@@ -113,11 +136,8 @@ launch and only that session's budget reservation is released. Known limit: a
 Wan task id that ages out of DashScope's task store comes back `UNKNOWN`, which
 the client maps to `failed` — if the render actually finished, the charge shows
 on the provider console but cannot be confirmed here.
-| `vidforge/vidforge/pipeline.py` | `produce()` — the eight stages. |
-| `vidforge/vidforge/progress.py` | `Reporter`, `STAGES`, `overall_fraction`, `Cancelled`. |
-| `main.py` compatibility entries | Delegate older umbrella call sites to `VideoPanel`; no Video implementation remains there. |
 
 ## Requirements
-`OPENAI_API_KEY` for the default script/narration pipeline and GPT Image. `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) for Gemini Omni and Veo. `DASHSCOPE_API_KEY` for Wan; `DASHSCOPE_VIDEO_BASE_URL` can select a workspace-scoped regional endpoint. `HF_API_KEY_ID` plus `HF_API_KEY_SECRET` for Higgsfield. `PEXELS_API_KEY` for Pexels. `ffmpeg` on PATH. YouTube upload additionally needs `google-api-python-client`, `google-auth-oauthlib` and an OAuth client secret in vidforge's `.secrets/`.
+`OPENAI_API_KEY` for the default script/narration pipeline and GPT Image. `GOOGLE_API_KEY` (or `GEMINI_API_KEY`) for Nano Banana, Gemini Omni and Veo. `DASHSCOPE_API_KEY` for Qwen Image and Wan; `DASHSCOPE_VIDEO_BASE_URL` can select a workspace-scoped regional endpoint. Each paid provider also needs its box in the API permissions row. `HF_API_KEY_ID` plus `HF_API_KEY_SECRET` for Higgsfield. `PEXELS_API_KEY` for Pexels. `ffmpeg` on PATH. YouTube upload additionally needs `google-api-python-client`, `google-auth-oauthlib` and an OAuth client secret in vidforge's `.secrets/`.
 
 DeepSeek, Anthropic, Kimi and Ollama remain useful for prompts, scripts and shot planning, but their official APIs do not return generated video. They are therefore not shown as visual providers; a selectable renderer must have an implemented, callable video-output route.

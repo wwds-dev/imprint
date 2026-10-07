@@ -7,15 +7,15 @@
 
 - PDF, EPUB, TXT, MOBI, or AZW3 source you are authorised to process
   (MOBI and AZW3 also need Calibre's `ebook-convert` installed).
-- OpenAI TTS access; audiobook narration uses it independently of text choices
-  elsewhere.
+- A key and API permission for one narrator — OpenAI, Gemini or ElevenLabs.
+  Narration uses it independently of text choices elsewhere.
 - Writable input/output folders and sufficient cap for the estimated length.
 
 ## Control atlas
 
 | Tab | Controls | Meaning |
 |---|---|---|
-| Convert | Book list, input folder, output folder, Voice, Chunk tokens, Start, Refresh List, Stop, progress/log | Extract, chunk, narrate, and assemble; completed chunks may survive a stop |
+| Convert | Book list, input folder, output folder, Narrator, Voice, Chunk tokens, Start, Refresh List, Stop, progress/log | Extract, chunk, narrate, and assemble; completed chunks may survive a stop |
 | Listen | Rescan, library, Listen, Start Over, Show in Finder | Play completed audio and persist progress keyed to its full path |
 | Player | Chapters & marks, Add mark, Speed, Sleep, ±30s | Jump to embedded chapters or saved marks, adjust speed, and pause after 15–60 minutes |
 
@@ -23,8 +23,8 @@
 
 1. Put one short authorised sample in the input folder and press **Refresh List**.
 2. Select the book and explicitly verify the output folder.
-3. Choose Voice. Treat Chunk tokens as a stability/context trade-off: larger
-   chunks reduce joins but increase the impact of one failure.
+3. Choose Narrator, then Voice. Treat Chunk tokens as a stability/context
+   trade-off: larger chunks reduce joins but increase the impact of one failure.
 4. Read the automatic cost state. If price or extracted length is unknown, do
    not infer zero cost.
 5. Press **Start** once and follow extraction, chunks, narration, assembly, and
@@ -53,9 +53,14 @@ the assembled MP3 is absent.
 
 ## Cost, cancellation, and gates
 
-Speech can be billed by characters/tokens. Stop requests the subprocess to end;
-it does not reverse completed chunks or charges. Human approval is required
-before full conversion and distribution.
+Imprint prices speech by tokens (OpenAI), minutes of audio (Gemini) or
+characters (ElevenLabs). Before approval each conversion is assessed across the
+narrators you can run, priced for this book; a switch is offered only when
+another wins by at least a point, and Apply asks again rather than starting the
+run. Booth's own daily cap ships at €10, which a whole book on ElevenLabs
+exceeds: the guard refuses it until you raise the cap in Settings → Agents.
+Stop requests the subprocess to end; it does not reverse completed chunks or
+charges. Human approval is required before full conversion and distribution.
 
 ## Verification
 
@@ -78,7 +83,9 @@ conversion has a reviewed budget and recovery plan.
 ## Next action
 
 For a catalogue, connect the accepted audiobook to [Publish](21-publish.md) and
-measure the release as a cohort rather than an output count.
+measure the release as a cohort rather than an output count. Check each
+retailer's narration rules first: ACX/Audible's audio submission requirements
+prohibit unauthorised text-to-speech narration.
 
 ## Recipe: convert one book and keep your place
 
@@ -90,12 +97,13 @@ opens the control it names and rings it; **Back to lesson** in the callout
 brings you back to that step.
 
 **Time:** about 15 minutes of your attention; the narration itself runs
-unattended. **Cost:** one OpenAI text-to-speech job — the estimate line under
-the Convert button shows the expected audio length and price in euros, and you
-approve exactly that amount before anything is sent. There is no free local
-option for narration: every narrated chunk bills your OpenAI account, so start
-with a short text. On a resume, only the chapters still missing are put up for
-approval — chapters already cached are not re-paid.
+unattended. **Cost:** one text-to-speech job on the narrator you pick in
+Step 4 — the estimate line under the Convert button shows the expected audio
+length and price in euros, and you approve exactly that amount before anything
+is sent. There is no free local option for narration: every narrated chunk
+bills that provider's account, so start with a short text. On a resume, only
+the chapters still missing are put up for approval — chapters already cached
+are not re-paid.
 
 ### Step 1 — Put one short book in the input folder
 
@@ -118,10 +126,12 @@ a plain .txt removes extraction surprises on the first try.
 
 Click **Refresh List**. Your file appears in the book list; with a single book
 it is selected automatically. The moment a book is selected the estimate line
-fills in, in the form `~12 min audio · ≈ €0.35` — if it says the file could
-not be read, fix the source before going further rather than assuming the run
-is free. If your book is a draft or export from a Write Project, **Use Project
-Book** adds it to this list without changing your input folder.
+fills in, in the form `~12 min audio · ≈ €0.35`, priced for the narrator
+currently selected — it changes when you change narrator in Step 4. If it says
+the file could not be read, or that there is no price on file for this
+narrator, fix that before going further rather than assuming the run is free.
+If your book is a draft or export from a Write Project, **Use Project Book**
+adds it to this list without changing your input folder.
 
 [Show me](show:audiobook_book_list)
 
@@ -135,16 +145,27 @@ listening progress, so moving it later loses your place.
 
 [Show me](show:audiobook_output_mode)
 
-### Step 4 — Pick voice, chunk size and format
+### Step 4 — Pick narrator, voice, chunk size and format
 
-Set the three conversion options. Open the Voice menu to see Imprint's
-best-fit default before overriding it.
+Set the four conversion options. **Narrator** decides who reads the book and
+what it costs; Imprint remembers your choice.
 
 ```
+Narrator:             OpenAI · gpt-4o-mini-tts
 Voice:                marin
 Chunk size (tokens):  1400
 Format:               MP3
 ```
+
+The three narrators: **OpenAI** (about $0.016 per 1,000 characters; OpenAI
+removes this model on 6 January 2027), **Gemini · 3.8 Flash TTS** (about the
+same through 2026, double from 1 January 2027) and **ElevenLabs ·
+Multilingual v2** (the most natural voice, at about five times the price).
+Each needs its own key in Imprint's private .env and its box ticked in the
+API permissions row. The Voice menu follows the narrator — ElevenLabs lists
+your account's own voices — so open it to see Imprint's best-fit default
+before overriding it. Keep one narrator for the whole book: chunks are cached
+per narrator, so switching midway means starting over at full cost.
 
 1400 is a stable chunk default; smaller chunks recover more easily if one
 request fails, at the price of more joins. MP3 copies the narrated chunks
@@ -152,12 +173,16 @@ losslessly and plays anywhere; **M4B (chapters)** re-encodes to AAC and
 carries chapter marks taken from an EPUB's own sections — pointless for a
 .txt, worth it for a real EPUB.
 
-[Show me](show:audiobook_voice_box)
+[Show me](show:audiobook_route_box)
 
 ### Step 5 — Convert, and approve the cost first
 
-Click **Convert audiobook**. Imprint asks you to approve the estimated euro
-amount from Step 2 — nothing is sent until you do. Then watch the progress
+Click **Convert audiobook**. If the narrator has no key or no price on file,
+nothing starts and the message says which. Otherwise Imprint asks you to
+approve the estimated euro amount from Step 2 — nothing is sent until you do.
+The same dialog assesses this book on every narrator you can run, each with
+its price; if another wins by at least a point, **Apply** switches to it and
+asks again — it never starts the run by itself. Then watch the progress
 bar and the log walk through extraction, chunks, narration and assembly until
 the status reads `[Done] Audiobook created successfully.` A **Stop** button
 is visible while the run is live. Be clear about what Stop does: it ends the
@@ -170,15 +195,18 @@ convert it again and points you at Listen instead.
 
 ### Step 6 — Resume an interrupted run without paying twice
 
-If the run was stopped, the Mac slept, or your OpenAI quota ran out, the
-status line tells you on your next visit: `[Interrupted] … 3 of 11 chapters
-are already generated and cached — you only pay for the rest.` Select the same
-book and click **Convert audiobook** again; the approval covers only the
-missing chapters. If you changed Voice or Chunk size in between, Imprint asks
-before starting: resume with the original settings and reuse the paid
-chapters, or start fresh with the new settings at full cost — never a silent
-restart. A quota stop shows `[Blocked]`; top up your OpenAI account, then
-convert the same book to resume.
+If the run was stopped, the Mac slept, or your provider's quota or credit ran
+out, the status line tells you on your next visit: `[Interrupted] … 3 of 11
+chapters are already generated and cached — you only pay for the rest.` Select
+the same book and click **Convert audiobook** again; the approval covers only
+the missing chapters. If you changed Narrator, Voice or Chunk size in between,
+Imprint asks before starting, naming the narrator the book was started with:
+resume with the original settings and reuse the paid chapters, or start fresh
+with the new settings at full cost — never a silent restart, and never a book
+finished by a second narrator. A chunk that fails stops the run at once rather
+than narrating, and paying for, the rest of the queue. A quota, credit or key
+refusal shows `[Blocked]`; fix it with that provider, then convert the same
+book to resume.
 
 [Show me](show:audiobook_status_label)
 

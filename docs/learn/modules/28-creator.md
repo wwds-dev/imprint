@@ -28,7 +28,7 @@
 | Channel | Appears for `promo` only — the off-platform funnel the post is written for |
 | Brief / Provider / Model / Draft | Bounded content request and local Best Fit route |
 | Add to Calendar | Saves reviewed output as a prepared schedule item |
-| Generate/Cancel Teaser | Paid Higgsfield SFW promotional render and provider-dependent cancellation |
+| Teaser route / Generate/Cancel Teaser | Paid SFW promotional render from Higgsfield Seedance 2.5, Gemini Omni 1.1 Flash or Qwen Wan 3.0; Cancel applies to Higgsfield only |
 | Stop | Stops active text generation locally where possible |
 
 ## Four output tabs
@@ -82,9 +82,12 @@ and their source and window.
 ## Cost, cancellation, and gates
 
 Include text and media generation, retries, production, moderation, promotion,
-and human time. Cancel Teaser can fail after provider acceptance; preserve and
-save a paid result rather than submitting duplicates. Imprint records its own
-generation cost in EUR against the calendar item.
+and human time. Every teaser is assessed across the three routes before
+approval; Higgsfield, priced only by its own estimate, is never recommended on
+a guess. Cancel Teaser can fail after Higgsfield accepts a render and is not
+offered for Omni or Wan; preserve and save a paid result rather than submitting
+duplicates. Imprint records its own generation cost in EUR against the calendar
+item.
 
 ## Common failures
 
@@ -112,13 +115,14 @@ exported `.ics`. Copy the example inputs exactly the first time, then swap in
 your own. Each **Show me** closes this lesson, opens the control it names and
 rings it; **Back to lesson** in the callout brings you back to that step.
 
-**Time:** about 25 minutes. **Cost:** one text request in Imprint — you see
-its estimate and approve it before anything is sent. The optional teaser in
-Step 8 is a separate paid Higgsfield render: the provider's exact price is
-shown first and nothing is generated until you approve it. Skip Step 8 and
-there is no teaser cost. Imprint records its own generation spend in EUR
-against the calendar item; receipts and revenue live in Backstage, and
-nothing in this recipe predicts what the post will earn.
+**Time:** about 25 minutes. **Cost:** one text request in Imprint — you see its
+estimate and approve it before anything is sent. The optional teaser in Step 8
+is a separate paid render on the route you choose: Higgsfield shows its exact
+price first, while Gemini Omni and Wan 3.0 are priced from Imprint's per-second
+rates — about $0.50 for the 5-second clip. Nothing is generated until you
+approve it. Skip Step 8 and there is no teaser cost. Imprint records its own
+generation spend in EUR against the calendar item; receipts and revenue live in
+Backstage, and nothing in this recipe predicts what the post will earn.
 
 ### Step 1 — Create the content profile
 
@@ -225,15 +229,26 @@ anything as live.
 ### Step 8 — Optional: render a teaser
 
 With the calendar item still selected — the finished render attaches to it —
-click **Generate Teaser**. This needs the Higgsfield keys in Imprint's
-private `.env`, the Higgsfield permission enabled in the API permissions
-row, rights to any likeness or reference image it uses, and a prompt that
-passes the SFW check. Imprint fetches Higgsfield's estimate and shows the
-exact price in dollars and credits; no paid generation starts until you
-approve it. The file is saved into the **Media** tab with its source and job
-id. **Cancel Teaser** is honest about its limits: during preparation it
-cancels cleanly, but once rendering has begun Higgsfield may finish and
-charge, and Imprint saves the paid result rather than inviting a duplicate.
-If you quit mid-render, the next launch resumes the job and saves it.
+pick a route in the menu beside **Generate Teaser**: Higgsfield · Seedance
+2.5, Gemini · Omni 1.1 Flash or Qwen · Wan 3.0. Each uses the character's
+reference images (Omni takes up to three, Wan up to ten); Omni and Wan make a
+5-second vertical clip. The route needs its provider's keys in Imprint's
+private `.env` and its permission enabled in the API permissions row, and
+you need rights to any likeness or reference image it uses. Then click
+**Generate Teaser**. On Higgsfield the prompt must pass the SFW check, and
+Imprint fetches Higgsfield's estimate and shows the exact price in dollars
+and credits. The approval also ranks the three routes for this teaser; if
+another wins by at least a point, **Apply** switches to it and asks again. No
+paid generation starts until you approve. The file is saved into the
+**Media** tab with its source and job id.
+
+**Cancel Teaser** is honest about its limits: on Higgsfield it cancels
+cleanly during preparation, but once rendering has begun Higgsfield may
+finish and charge, and Imprint saves the paid result rather than inviting a
+duplicate. An Omni or Wan teaser cannot be cancelled once submitted. If you
+quit mid-render, the next launch resumes a Higgsfield job or a Wan task and
+saves it; an Omni render has nothing to look up afterwards, so it is marked
+lost and shown to you rather than billed on a guess — check the provider's
+own dashboard for it.
 
 [Show me](show:creator_video_btn)

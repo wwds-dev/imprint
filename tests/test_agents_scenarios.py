@@ -447,8 +447,12 @@ class TestFiverrAgent:
         assert _roles(msgs) == ["system", "user"]
 
     def test_image_prompt_request_mentions_current_image_model(self):
+        # Stamp now renders with OpenAI, Gemini or Qwen, so the prompt names
+        # the selected image model rather than one provider's — and never a
+        # retired DALL·E id.
         msgs = self.agent.build_image_prompt_request(self.BRIEF)
-        assert "GPT Image" in _user(msgs)
+        assert "selected image model" in _user(msgs)
+        assert "DALL" not in _user(msgs)
 
     def test_image_prompt_request_includes_brief(self):
         msgs = self.agent.build_image_prompt_request(self.BRIEF)

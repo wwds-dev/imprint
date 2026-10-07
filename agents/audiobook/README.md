@@ -18,6 +18,20 @@ Convert lists PDF, EPUB, TXT, MOBI and AZW3 sources (`SUPPORTED_EBOOKS` in
 MOBI and AZW3 are turned into EPUB by Calibre first, so they also need
 `ebook-convert` installed on the machine. AZW3 was added 2026-10-06 (`703c111`).
 
+Narration has three routes since 2026-10-07 (`47c2434`), chosen in the
+**Narrator** menu (`audiobook_route_box`, remembered under the
+`audiobook_narration_route` setting) and defined in `NARRATION_ROUTES`, keyed
+like the converter's `TTS_PROVIDERS`: OpenAI `gpt-4o-mini-tts`, Gemini
+`gemini-3.8-flash-tts` and ElevenLabs `eleven_multilingual_v2`. OpenAI removes
+`gpt-4o-mini-tts` on 2027-01-06 with no drop-in successor, which is why there
+is a choice. The route is what the converter is told (`--provider`/`--model`),
+what the guard authorizes, what the conversion row records and what the usage
+log bills. Booth's seeded registry row names all three narrators; it used to
+allow only openai/qwen, and since the launch reconciliation adds a provider
+only when the seeded row names it, the guard would have refused both new
+narrators on every existing install. Booth's own daily cap ships at €10, which
+a whole ElevenLabs book exceeds; the assessment honours it as the guard does.
+
 ## Files
 
 - `__init__.py` — public interface; re-exports `AudiobookConnector` and lazily
@@ -30,7 +44,14 @@ MOBI and AZW3 are turned into EPUB by Calibre first, so they also need
   cost estimation, paid conversion authorization/process/result lifecycle,
   library scan, resume and playback actions, wiring `audiobook_library.scan()`
   into the Listen table and hosting one `audio_player.AudiobookPlayer` for
-  playback. Host-control aliases were retired 2026-09-21: the panel no longer
+  playback. Before approval, `start_conversion()` checks the route's key and
+  price (a route without either starts nothing) and assesses every narrator
+  through `host.assess_media_request(..., modality="speech")`: the selected
+  one at what this run still owes after cached chunks, the others at the
+  whole book, since a switch starts over. Apply switches the narrator and
+  asks again; it never starts a run. ElevenLabs voices are the account's
+  own, listed by a `VoiceListWorker` so a slow provider never freezes the
+  panel. Host-control aliases were retired 2026-09-21: the panel no longer
   mirrors its widgets onto the umbrella (`HOST_CONTROLS` stays only as the
   published contract of what it owns); shared consumers such as the
   voice-recommendation install now resolve controls through
@@ -63,13 +84,16 @@ MOBI and AZW3 are turned into EPUB by Calibre first, so they also need
   `delete_mark()` back the Chapters & marks menu.
 - `conversions.py` — the durable, Qt-free record of conversions in the
   `audiobook_conversions` table: one row per book (source + output path),
-  reused across runs, holding voice/chunk settings, live chunk progress,
+  reused across runs, holding provider/model/voice/chunk settings, live
+  chunk progress,
   `estimate_eur` (the whole-book estimate captured at first start),
   `billed_eur` (what has actually been logged) and `run_baseline` (where this
   run started). `find_open()` returns a book's unfinished row;
   `remaining_fraction()` is the unpaid share of it; `open_job()` reuses that
   row (or `reset_progress=True` for a confirmed fresh start after changed
-  settings) or creates one; `update_progress()`, `run_spend_eur()`,
+  settings — a different narrator counts as changed, so a book is never
+  resumed on another narrator's cache) or creates one; `update_progress()`,
+  `run_spend_eur()`,
   `settle()`, `get_job()` and `dead_runs()` complete the lifecycle. The panel
   uses it on Convert to authorize only the remaining fraction of the estimate,
   updates progress from the converter's stdout, settles before it bills on
@@ -84,7 +108,8 @@ MOBI and AZW3 are turned into EPUB by Calibre first, so they also need
   toward reliability (0.32) and quality (0.38), with a strong affinity for
   OpenAI (0.95). It is discovered dynamically by
   `agents.recommendation_profiles.profile_for("audiobook")` and scored by the
-  shared `RecommendationEngine` to recommend a provider/model for narration jobs.
+  shared `RecommendationEngine` to recommend a provider/model for narration jobs
+  and to assess each conversion across the narrators.
 
 User guidance: `docs/agents/audiobook.md`.  Run focused coverage with
 `pytest tests/test_audiobook_player.py tests/test_audiobook_conversions.py`

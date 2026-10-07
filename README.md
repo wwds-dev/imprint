@@ -88,7 +88,7 @@ local (Ollama) and cloud (Anthropic, OpenAI, DeepSeek, Gemini). It provides:
   rules, and cost budgets before any request is sent.
 - Real-time cost estimation and post-request cost logging.
 - A run log that records the full lifecycle of every AI request.
-- A **Narrator** agent that converts ebooks to MP3 using OpenAI TTS, with progress tracking and quota-failure detection.
+- A **Narrator** agent (Booth) that converts ebooks to MP3 or M4B, narrated by OpenAI, Gemini or ElevenLabs, with progress tracking, resume and quota-failure detection.
 - A full Settings panel for configuring pricing, budgets, agents, and tools without touching any file.
 
 The application is entirely self-contained: no server, no web interface, no external database. All data is stored in a local SQLite database (`data/imprint.db`).
@@ -455,6 +455,24 @@ stay, and the tile lists what moved.
 **Dismiss** clears every notice and the NEW badges without switching anything.
 The models stay in the menus and are not announced again.
 
+Rules that keep the tile, the menus and the badges in agreement:
+
+- **A visible lead or nothing.** Update selected, the tile's *Best choice for*
+  and the BEST FIT badge all need a lead of at least one point
+  (`MEANINGFUL_FIT_GAP`). When your current selection is within a point of the
+  top score, it keeps the badge, and the tooltip says why.
+- **Every menu showing the provider gets a new model,** including one already
+  on an earlier live list, with your selection kept. A model found by Check
+  now is therefore always selectable where the tile names it.
+- **Earlier sessions count.** `data/model_watch.json` keeps each provider's
+  last live list beside everything it has ever listed. The startup ranking
+  reads it before this session's check has answered, and a retired model drops
+  out of it.
+- **Quitting during a check is safe.** The model-list workers run on daemon
+  threads. A QThread still running at quit is destroyed under it, and Qt aborts
+  the app (SIGABRT), which is what a two-minute provider call did when you
+  quit early.
+
 ### Cost in the ranking
 
 The recommendation engine scores cost from the **pricing table** — the same
@@ -488,13 +506,13 @@ scale, halving the price of a clip moved its score by under a point.
 
 | Request | Routes compared |
 |---|---|
-| Reel, social clip | every direct-video model that can make the requested length and shape (Veo 3.1 / Fast / Lite, Gemini Omni, Wan 3.0 / Prime / 2.7, Seedance — its cost marked *quoted by provider*), plus the scene pipeline (GPT Image ×3, Pexels, local cards) when the length is one of its clip lengths |
-| Reel, long-form | the scene pipeline routes, each priced by the pipeline's own pre-estimate |
+| Reel, social clip | every direct-video model that can make the requested length and shape (Gemini Omni, Wan 3.0 / Prime / 2.7, Seedance — its cost marked *price only after the provider's quote*, Veo 3.1 until its 22 Oct shutdown), plus the scene pipeline when the length is one of its clip lengths |
+| Reel, long-form | the scene pipeline routes — GPT Image ×3, Nano Banana 2.1 / Pro, Qwen Image 3.0 / Pro, Pexels, local cards — each priced by the pipeline's own pre-estimate |
 | Herald clip | the scene pipeline routes at the clip's shape; Apply sets Herald's visuals |
-| Stamp logos | GPT Image 2.5 Sunburst / 2.5 Flare / 2, for the number of concepts asked |
+| Stamp logos | all seven image models (OpenAI, Gemini, Qwen), for the number of concepts asked |
 | Press Short narration | ElevenLabs against the free on-device voice; Apply switches to the free voice and stops, so no ElevenLabs voice id reaches a request nobody approved |
-| Booth audiobook | one route — OpenAI `gpt-4o-mini-tts` is the only narration Booth's converter is wired to; the dialog says so rather than inventing a comparison |
-| Muse teaser | one route — Higgsfield Seedance is the only one that takes the persona's reference images |
+| Booth audiobook | OpenAI gpt-4o-mini-tts, Gemini 3.8 Flash TTS, ElevenLabs Multilingual v2 — the selected one at what the run still owes after its cached chunks, the others at the whole book (a switch starts over) |
+| Muse teaser | Higgsfield Seedance 2.5, Gemini Omni 1.1 Flash, Wan 3.0 — each with the persona's reference images; Higgsfield is priced only when selected (it prices through its estimate call) |
 
 A route that cannot make what was asked (a 30 s clip on a model that stops at
 10 s) is left out rather than compared at a different length.
@@ -705,7 +723,7 @@ Chat uses the **standard `normal_panel`** described in Chapter 4 (no custom GUI)
 
 **Left-panel button:** Stamp  (category: **Gigs**)
 
-A logo-design freelancer assistant. The Fiverr agent generates **GPT Image logo concepts**, a polished **delivery message** for the client, and a complete **Fiverr gig description** — all from a single client brief form. Image generation runs through OpenAI's current Images API; the text deliverables can use any provider.
+A logo-design freelancer assistant. The Fiverr agent generates **logo concepts** (OpenAI GPT Image, Gemini Nano Banana or Qwen Image), a polished **delivery message** for the client, and a complete **Fiverr gig description** — all from a single client brief form. Images go through `services/image_generation.py`, one request per image; the text deliverables can use any provider.
 
 ---
 
@@ -713,7 +731,7 @@ A logo-design freelancer assistant. The Fiverr agent generates **GPT Image logo 
 
 Three distinct outputs, generated independently:
 
-1. **Logo concepts** — The agent first asks the text LLM to write a focused image prompt from the brief, then sends it to the selected **GPT Image** model to render 1–4 concepts. Outputs are PNGs saved under `data/fiverr_output/<timestamp>/`.
+1. **Logo concepts** — The agent first asks the text LLM to write a focused image prompt from the brief, then sends it to the selected **image model** to render 1–4 concepts: GPT Image 2.5 Sunburst / 2.5 Flare / 2, Nano Banana 2.1 or Nano Banana Pro (best for legible text in the image), Qwen Image 3.0 or 3.0 Pro. The request is assessed across every model that can run, priced for the number of concepts, before it is approved. Outputs are saved under `data/fiverr_output/<timestamp>/`.
 2. **Delivery message** — A friendly, professional, under-200-word note from freelancer to client. Structure: warm opening → what was delivered and why → revision offer → sign-off.
 3. **Gig description** — A complete Fiverr listing under 400 words: hook headline, what the buyer gets (bullets), why choose this gig, Basic/Standard/Premium package overview, call to action.
 
@@ -788,7 +806,7 @@ Live status appears as a line under the action row.
 
 #### External Requirements
 
-- **OpenAI API key** with billing enabled — GPT Image generation is OpenAI-only. Imprint shows and guards a conservative reserve because billing varies with image tokens.
+- **A key for the chosen image model's provider** — OPENAI_API_KEY, GOOGLE_API_KEY (or GEMINI_API_KEY) or DASHSCOPE_API_KEY — plus its permission box. Stamp checks it before the paid prompt step. Each image carries a conservative per-image reserve (GPT Image $0.06, Nano Banana 2.1 $0.04, Pro $0.14, Qwen Image $0.03 / Pro $0.04).
 - Optional: account on **Fiverr** (https://fiverr.com) to publish the gig and deliver to clients. No Fiverr API integration — copy/paste the generated content.
 - Optional: a vector tool (Illustrator, Affinity Designer, Vectorizer.AI) to convert the raster PNG concepts into final vector logos before delivery.
 
@@ -813,7 +831,7 @@ Live status appears as a line under the action row.
 | Agent name (DB) | `fiverr` |
 | Label | Atelier |
 | Default text provider | Anthropic |
-| Image provider | OpenAI GPT Image — selectable current model |
+| Image provider | OpenAI, Gemini or Qwen — any model in `services/image_generation.image_models()` |
 | External worker | `FiverrImageWorker` (in `ui/workers.py`) — threaded image generation |
 | System prompt | Three modes: delivery message, gig description, image-prompt builder |
 
@@ -1327,7 +1345,7 @@ For a selected ebook (PDF / EPUB / TXT / MOBI / AZW3 — MOBI and AZW3 are conve
 
 1. Extracts the book's text content.
 2. Chunks it (default 1400 tokens per chunk).
-3. Sends each chunk to OpenAI TTS (`alloy`, `verse`, `aria`, `coral`, or `sage` voice).
+3. Sends each chunk to the chosen **narrator** — OpenAI `gpt-4o-mini-tts` (voices alloy, marin, cedar, verse, coral, sage), Gemini `gemini-3.8-flash-tts` (Kore, Charon, Aoede, Puck, Leda, Orus, Fenrir, Zephyr) or ElevenLabs `eleven_multilingual_v2` (the account's own voices). OpenAI removes gpt-4o-mini-tts on 2027-01-06, which is why there is a choice.
 4. Concatenates the returned audio into a single MP3 (or per-chapter MP3s).
 5. Writes the output to the configured output folder.
 
@@ -1404,9 +1422,13 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 
 #### Tips & Limitations
 
-> The Audiobook agent has **no LLM provider selector** — the only AI involved is OpenAI TTS. Other Sentinel providers are irrelevant here.
+> The **Narrator** menu picks who narrates: OpenAI, Gemini 3.8 Flash TTS (about OpenAI's price through 2026, $0.0137 a minute, doubling on 2027-01-01) or ElevenLabs Multilingual v2 (the most natural voice, $0.08 per 1k characters — about five times OpenAI for a whole book). Each needs its key and its permission box. Every conversion is assessed across the narrators that can run, each priced for this book, before it is approved; **Apply** switches narrator and asks again.
 
-> If conversion is `[Blocked]`, top up OpenAI billing then click **Start** again — partial progress is preserved.
+> Cached chunks belong to the narrator that made them. A book interrupted under one narrator is never resumed on another — the settings-changed question names the narrator — and an OpenAI book paused before narrators existed resumes unchanged.
+
+> Booth's own daily cap ships at €10 (Settings → Agents). A whole ElevenLabs book exceeds it, and the guard refuses rather than overspend.
+
+> If conversion is `[Blocked]`, fix the key or top up that provider's credit, then click **Start** again — partial progress is preserved.
 
 > Resume trusts only finished chunks. Each chunk streams into `<chunk>.part` and is renamed into place only once complete, so a run stopped mid-stream (⛔ Stop, a crash, a quota cut) leaves nothing a resume can mistake for a finished chunk; partials are swept on the next run.
 
@@ -1423,7 +1445,7 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 | Engine | `services/narrator/converter.py` (subprocess worker) |
 | Agent name (DB) | `audiobook` |
 | Label | Narrator |
-| Provider | OpenAI TTS — hard-coded; no provider switching |
+| Provider | Narrator menu — OpenAI, Gemini or ElevenLabs (`NARRATION_ROUTES`, converter `--provider/--model`) |
 | System prompt | None — this is a process-runner, not an LLM agent |
 
 ---
@@ -1668,10 +1690,15 @@ standalone app was removed. `docs/agents/video.md` covers why it keeps its own
 directory (it is also the pipeline's data directory) and what the panel does
 when the pipeline is missing from an install.
 
-Choose a **Visual provider** and **Visual model** as well as the format. OpenAI
-offers the current GPT Image models for scene-by-scene assembly. Gemini adds Omni 1.1 Flash and the
-Veo 3.1 quality, Fast and Lite tiers. Qwen adds Wan 3.0, Wan 3.0 Prime and Wan
-2.7 text-to-video. Higgsfield's Seedance route also makes a direct clip after
+Choose a **Visual provider** and **Visual model** as well as the format. For
+scene-by-scene assembly OpenAI offers the GPT Image models, Gemini Nano Banana
+2.1 and Nano Banana Pro, and Qwen Qwen Image 3.0 and 3.0 Pro — a Gemini or Qwen
+scene route needs that provider's key and permission as well as OpenAI's, which
+still writes and narrates the script. For direct clips Gemini adds Omni 1.1
+Flash and the Veo 3.1 quality, Fast and Lite tiers — **Google shuts the Veo
+previews down on 22 October 2026**; they say so in their note and leave the
+menus on that date, while a render already in flight is still collected. Qwen
+adds Wan 3.0, Wan 3.0 Prime and Wan 2.7 text-to-video. Higgsfield's Seedance route also makes a direct clip after
 an exact provider quote. Pexels supplies stock visuals and Local makes gradient
 cards. Every visible model has an implemented route; DeepSeek, Anthropic, Kimi
 and Ollama stay available for writing but are not shown as video renderers
@@ -1687,8 +1714,8 @@ For scene visuals, `Long-form` uses `config.yaml` as-is and `Social clip`
 overrides width, height, image shape, target length and scene cadence — the same
 `produce()` call, not a second code path.
 
-The cost estimate is guarded before the run: a conservative reserve for the
-GPT Image pipeline, selected 720p per-second pricing for Veo and Wan,
+The cost estimate is guarded before the run: a conservative per-image reserve
+for the scene pipeline (whichever image model), selected 720p per-second pricing for Veo and Wan,
 a clearly labelled token-based reserve for Gemini Omni, and Higgsfield's exact
 request quote. Pexels and Local remove the image-generation portion, though the
 script and narration providers can still cost money.
@@ -2003,7 +2030,7 @@ The **Auto Route** button calls `auto_route_agent()`, which resolves the current
 
 | Signal in text / context | Recommendation |
 |--------------------------|---------------|
-| Audiobook agent | OpenAI TTS (forced) |
+| Audiobook agent | Its Narrator menu — OpenAI, Gemini or ElevenLabs TTS |
 | Keywords: `debug`, `code`, `function`, `refactor`, `traceback` | DeepSeek → OpenAI → Ollama |
 | Keywords: `write`, `email`, `cv`, `professional`, `polish` | OpenAI → Gemini → Ollama |
 | Tool has a `recommended_provider` | That provider (if API is enabled), else Ollama |
@@ -2769,9 +2796,10 @@ asynchronous `/api/v1` endpoint), `HIGGSFIELD_TEXT_VIDEO_ENDPOINT` and
 `HIGGSFIELD_API_KEY_ID` / `HIGGSFIELD_API_KEY_SECRET`.
 
 `ELEVENLABS_API_KEY` (elevenlabs.io → API Keys) is optional and used by one
-thing: the narration in Press's Shorts tab. Without it that tab falls back to a
-mock voice and the voice list reads "(ElevenLabs key not set)". Booth's
-audiobook narration is OpenAI TTS and does not touch it.
+two things: the narration in Press's Shorts tab, and Booth's ElevenLabs
+narrator. Without it the Shorts tab falls back to a mock voice and the voice
+list reads "(ElevenLabs key not set)", and Booth's ElevenLabs narrator does not
+start.
 
 **Herald publishing.** Only needed to post from the Social workspace; drafting
 and scheduling need none of it. `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`,
@@ -2960,7 +2988,7 @@ Service income is the **fastest path to revenue**: you sell a deliverable, you g
 
 1. Buyer places an order — read their brief carefully.
 2. Fill in the Fiverr panel: business name, industry, style, colours, notes.
-3. Choose a GPT Image model and click **Generate Logos**.
+3. Choose an image model (OpenAI, Gemini or Qwen) and click **Generate Logos**.
 4. Review the 2–3 logo variants Imprint saves locally.
 5. Refine in Figma / Illustrator / Photopea (free).
 6. Click **Generate Delivery Message**. Paste into the Fiverr order chat.
@@ -2972,7 +3000,7 @@ Service income is the **fastest path to revenue**: you sell a deliverable, you g
 - Month 3 (10+ five-star reviews): 15–30 orders/month at $25–$45 = **$375–$1,350**.
 - Top sellers: $3k–$10k/month doing volume logo work.
 
-**External costs:** Fiverr commission **20%** of gross. OpenAI GPT Image cost varies with image tokens; use Imprint's guarded estimate. Figma free tier sufficient.
+**External costs:** Fiverr commission **20%** of gross. Image cost depends on the model ($0.03–$0.14 a concept); use Imprint's guarded estimate. Figma free tier sufficient.
 
 ---
 
@@ -3120,7 +3148,7 @@ Recurring revenue compounds — once published, content keeps earning. These age
 1. Drop ebooks (`.pdf`, `.epub`, `.txt`, `.mobi`) into the configured input folder.
 2. Click **Audiobooks**, refresh the list, select a book.
 3. Pick a voice (`alloy`, `verse`, `aria`, `coral`, `sage`).
-4. Confirm the cost estimate (typically $2–$10 per book in OpenAI TTS).
+4. Confirm the cost estimate — the dialog compares the narrators for this book (roughly $10 with OpenAI or Gemini, $48 with ElevenLabs, for a 100,000-word novel).
 5. Click **Start**. Monitor progress in the output log.
 6. When finished, upload the MP3 files to ACX / Findaway / Google Play.
 
@@ -3130,7 +3158,7 @@ Recurring revenue compounds — once published, content keeps earning. These age
 - Findaway non-exclusive: 80% royalty across multiple platforms = compound revenue.
 - Service work: 5–10 books/month at $100/book = **$500–$1,000/month** with low effort (the agent does the conversion).
 
-**External costs:** OpenAI TTS — $15 per 1M characters input (≈ $2–$10 per book). No platform fees on ACX/Findaway (royalty share only).
+**External costs:** narration — about $0.016 per 1k characters with OpenAI, $0.0137 per minute with Gemini (doubling on 2027-01-01), $0.08 per 1k characters with ElevenLabs. No platform fees on ACX/Findaway (royalty share only) — but ACX/Audible prohibits unauthorized text-to-speech narration, so check a store's AI-audio rules before uploading.
 
 ---
 

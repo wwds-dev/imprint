@@ -53,8 +53,9 @@ Calendar and Media default to all work under the selected account; each has a
       a record exists: it used to be gated on an account type that no longer
       exists, and a recorded character is itself the signal to stay
       consistent.
-    - `build_video_prompt(account, brief)` — builds a Higgsfield
-      teaser-clip prompt. Deliberately safe-for-work only (Higgsfield
+    - `build_video_prompt(account, brief)` — builds the teaser-clip
+      prompt, written for Higgsfield and sent unchanged to whichever
+      teaser route is selected. Deliberately safe-for-work only (Higgsfield
       moderates prompts, references and output, and prohibits explicit
       material), and pulls the locked `appearance` via
       `agents.creator.profile.load_persona` so repeated renders stay the
@@ -73,9 +74,24 @@ Calendar and Media default to all work under the selected account; each has a
   form, the compose controls, and all four tabs (Draft, Calendar, Voice,
   Media) with every handler, moved here
   from `main.py` in the Phase 4 extraction. Request tokens live on the
-  panel — "creator" is shared by the text drafting flow and the Higgsfield
-  teaser (whose token rides in its own job context) — so nothing resolves a
-  request by agent name alone. The Voice/character tab reads and writes
+  panel — "creator" is shared by the text drafting flow and the teaser
+  (whose token rides in its own job context) — so nothing resolves a
+  request by agent name alone. Since 2026-10-07 (`fb3d67b`) the teaser has
+  three routes in `TEASER_ROUTES`, chosen in `creator_video_route_box` and
+  remembered under `creator_teaser_route`: Higgsfield Seedance 2.5
+  (image-to-video from the first reference image), Gemini Omni 1.1 Flash
+  (reference-to-video, up to three images inline) and Qwen Wan 3.0
+  (reference-to-video, up to ten). Omni and Wan make a 5-second vertical
+  clip, Higgsfield's length. `_teaser_assessment()` prices every route for
+  the teaser; Higgsfield is unpriced unless selected, since it prices only
+  through its estimate call, and is never recommended on a guess. Apply
+  switches the route and asks again. `_generate_direct_teaser()` writes the
+  Omni/Wan job row under a local id before the paid request and stores the
+  provider's job id beside it; on the next launch an interrupted Wan task
+  is watched again from that id, while an interrupted Omni render (nothing
+  to look up) or a Wan submission whose id never came back is marked
+  `lost`, released and surfaced — never billed on a guess.
+  The Voice/character tab reads and writes
   through `profile.py`. The old
   `setattr(host, name, ...)` alias loop that mirrored every `HOST_CONTROLS`
   widget onto the umbrella was retired 2026-09-21 (commit `8de6d7c`) — shared
@@ -110,7 +126,7 @@ Calendar and Media default to all work under the selected account; each has a
   writes rather than told to be "engaging." `load_persona`/`save_persona`/
   `persona_block(account_id)` hold a written character's appearance,
   backstory, personality and boundaries plus a locked `seed` and
-  `reference_images`, so repeated Higgsfield renders stay the same character
+  `reference_images`, so repeated teaser renders stay the same character
   rather than drifting between requests; `save_persona` explicitly preserves
   any field the caller doesn't pass (a past bug wiped `reference_images` on
   every save by defaulting every omitted field to `""`).

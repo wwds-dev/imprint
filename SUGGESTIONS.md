@@ -15,7 +15,8 @@ Ideas not yet committed to. Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DON
 | 13 | DONE — mode tabs, now in the header bar rather than centred over the canvas. | design | L | DONE |
 | 56 | **Add a model id by hand**, per provider, in the Model updates tile. For an id the provider's `/models` does not list (a gated preview, or no key yet so only the offline list shows). Validate against the live list when there is a key; store beside `model_watch.json`; merge into the dropdowns with the same NEW mark; refuse to send until it has a price or the user accepts the provider default. Low risk — the client, guard and pricing already exist. | feature | S | CONSIDERING |
 | 57 | **Add a provider from the app** — but only as an *OpenAI-compatible* provider with explicit fields (name, base URL, key variable, prices), not a free-text box. A provider name alone cannot become working code: it needs a client, an auth scheme, a key, prices for the budget guard, an `allow_*` permission and registry rows. Most newcomers (Mistral, Groq, Together, xAI, OpenRouter) do speak the OpenAI shape, which is what makes this tractable; anything else stays a code change. Needs the request guard to treat a user-defined provider as paid and unknown-priced by default. | feature | L | IDEA |
-| 58 | **Remember the last live model lists across launches**, so the startup BEST FIT pre-selection can pick a new model before the four-second check has run. Today the first pass ranks the offline lists and the marks move when the check lands; the selection itself is left alone mid-session on purpose. | feature | S | IDEA |
+| 59 | **Music and sound for clips and teasers.** Lyria 3.5 (Gemini key, $0.08 a song) and ElevenLabs Music ($0.15/min) and Sound Effects ($0.12/min) are API-available; vidforge's music stage and Muse's teasers could use them, assessed like every other paid route. | feature | M | IDEA |
+| 60 | **Announce new image, video and speech models too.** Model updates watches chat models only. Providers list media models in the same `/models` responses; they could be noted (as "not wired yet — price unknown") without being offered until a route and a rate exist. | feature | S | IDEA |
 
 ## Creator agent — next arc
 
@@ -68,6 +69,7 @@ consequences of what just landed rather than new ideas.
 
 | Suggestion | When |
 |---|---|
+| #58 Remember the last live model lists across launches — the startup ranking reads `ModelWatch.last_live` (`cc3c0a0`); pre-selection still waits for the live list | Oct 2026 |
 | Three colour themes — Green (Matrix), Red, Blue (Cyberpunk) — picked from three dots in the header or Settings → General → Appearance; only accent, phosphor and grey tint change, status colours never do; plus an underscore caret in editable text fields (`ui/theme.py`, `ui/vibe.py`, `aec5342`) | Oct 2026 |
 | #49 Audiobook player sleep timer and keyboard control (`4e0fdb6`) | Sep 2026 |
 | #42 Project as the shared production object — work identity and Write state, cross-agent output links and Project views, immutable approved manuscript versions, fingerprinted exports, and clearly self-reported retailer submission notes | Sep 2026 |

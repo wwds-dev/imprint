@@ -91,9 +91,10 @@ the callout brings you back to that step.
 **Cost:** up to three text requests — the image-prompt build, the delivery
 message and the gig description — each shows its estimate and you approve it
 before anything is sent (free with a local Ollama model); plus the logo
-images, a second paid request billed per image through your OpenAI key. The
-per-image price comes from `config/pricing.json`, sits beside **Generate
-Logos**, and is approved the same way before any image is made.
+images, a second paid request billed per image by the image model's provider
+— OpenAI, Gemini or Qwen. The per-image price comes from
+`config/pricing.json`, sits beside **Generate Logos**, and is approved the
+same way before any image is made.
 
 ### Step 1 — Write the client brief
 
@@ -135,20 +136,38 @@ into any field you left empty — anything you type yourself always wins.
 ### Step 3 — Choose the models
 
 Pick a text provider and model; choose Ollama if you want the text requests
-to stay on your Mac and cost nothing. The image model is a separate choice:
-logo images are always made through OpenAI and need `OPENAI_API_KEY`,
-whatever text provider you picked. Changing the image model or the concept
-count updates the per-image estimate beside **Generate Logos** — read it
-before the next step, because that is the number you will be approving.
+to stay on your Mac and cost nothing. The image model is a separate choice,
+and its provider is the one that makes and bills the images, whatever text
+provider you picked:
+
+```
+OpenAI:  gpt-image-2.5-sunburst, gpt-image-2.5-flare, gpt-image-2
+Gemini:  gemini-nano-banana-2.1   Nano Banana 2.1, about $0.034 an image
+         gemini-3-pro-image       Nano Banana Pro, about $0.134; Gemini's
+                                  model for legible text in the image
+Qwen:    qwen-image-3.0 ($0.03), qwen-image-3.0-pro ($0.04)
+```
+
+The chosen model needs its provider's key in Imprint's private .env and that
+provider ticked in the API permissions row; Imprint checks the key before the
+first paid request, so a missing one costs nothing. For a wordmark like this
+one, legible lettering matters more than a few cents. Changing the image model
+or the concept count updates the per-image estimate beside **Generate Logos**
+— read it before the next step, because that is the number you will be
+approving.
 
 [Show me](show:fiverr_image_model_box)
 
 ### Step 4 — Generate the concepts
 
 Click **Generate Logos**. You approve two requests in turn: first the text
-request that writes the image prompt, then the flat per-image cost for the
-set. The status line narrates progress, **Stop** appears while a run is
-active, and each concept lands in **Logo Preview** as it finishes. Imprint
+request that writes the image prompt, then the flat per-image cost for the set.
+The second approval also assesses the set on every image model you can run,
+each priced for two concepts; if another wins by at least a point, **Apply**
+switches to it and asks again for the images — the prompt is already written
+and is not paid for twice. Each image is sent once; a failed one is not retried
+automatically. The status line narrates progress, **Stop** appears while a run
+is active, and each concept lands in **Logo Preview** as it finishes. Imprint
 also opens an order for this client automatically and logs the run.
 
 **Good result:** the business name is spelled correctly, the mark reads at
