@@ -251,10 +251,16 @@
       "gpt-image-2.5-flare": 0.06,
       "gpt-image-2": 0.06
     },
-    "openai_tts_per_1k_chars": 0.015,
-    "_elevenlabs_comment": "ElevenLabs bills characters against the account's subscription quota rather than per dollar; the effective per-1k-character rate depends on the plan. 0 means UNKNOWN: the shorts narrator refuses the paid voice until a real rate is filled in.",
-    "elevenlabs_tts_per_1k_chars": 0.0,
+    "openai_tts_per_1k_chars": 0.016,
+    "_elevenlabs_comment": "ElevenLabs API pay-as-you-go rates per 1k characters, by model (elevenlabs.io/pricing/api, checked 2026-10-07). A subscription plan's included characters make the effective rate lower; the app estimates at the API rate, the safe side.",
+    "elevenlabs_tts_per_1k_chars": 0.04,
     "openai_whisper_per_minute": 0.006,
-    "higgsfield_render": 0.0
+    "higgsfield_render": 0.0,
+    "elevenlabs_tts": {
+      "eleven_flash_v2_5": 0.04,
+      "eleven_multilingual_v2": 0.08,
+      "eleven_v3": 0.08
+    },
+    "_openai_tts_comment": "gpt-4o-mini-tts bills $0.60 per 1M text tokens plus $12 per 1M audio tokens, about $0.016 per 1k characters of narration; tts-1 is $0.015. OpenAI removes gpt-4o-mini-tts and tts-1 on 2027-01-06 (developers.openai.com deprecations)."
   }
 }

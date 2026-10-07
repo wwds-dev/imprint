@@ -633,7 +633,7 @@ class SocialPanel(QWidget):
         are Reel's, and are not offered here as something Herald could do.
         """
         from agents.video import video_studio
-        from services.media_catalog import MODELS
+        from services.media_catalog import offered_models
         from services.per_unit_pricing import eur_per_usd
 
         source = cfg.get("visuals.source")
@@ -642,7 +642,7 @@ class SocialPanel(QWidget):
                     "pexels-stock" if source == "pexels" else "gradient-cards")
         base = video_studio.clip_overrides(aspect, seconds)
         options = []
-        for model in MODELS:
+        for model in offered_models():
             if model.kind == "direct_video":
                 continue
             if model.model_id == selected:

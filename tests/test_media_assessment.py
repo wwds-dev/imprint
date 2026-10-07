@@ -348,3 +348,17 @@ def test_a_difference_too_small_to_see_is_not_offered_as_a_switch(window,
             assert a.selected_is_best and a.apply is None
     finally:
         window.allow_openai_checkbox.setChecked(False)
+
+
+def test_a_shut_down_model_leaves_the_menus_and_the_ranking_on_its_date():
+    """Veo 3.1's previews shut down on 2026-10-22 (Google names Gemini Omni
+    as the replacement). Before that they are offered with a note; from that
+    day they are not offered, and never ranked."""
+    from services.media_catalog import VEO_SHUTDOWN, find_model, offered_models
+    veo = find_model("Gemini", "veo-3.1-lite-generate-preview")
+    assert veo.retires == VEO_SHUTDOWN == "2026-10-22"
+    assert "22 October 2026" in veo.note
+    assert veo in offered_models(today="2026-10-21")
+    after = offered_models(today="2026-10-22")
+    assert veo not in after
+    assert find_model("Gemini", "gemini-omni-1.1-flash") in after

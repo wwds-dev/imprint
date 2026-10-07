@@ -1510,11 +1510,11 @@ class GodAI(QWidget):
         aspect_box = self._find_control("video_aspect_box")
         if None in (provider_box, model_box, length_box, format_box, aspect_box):
             return
-        from services.media_catalog import MODELS
+        from services.media_catalog import offered_models
 
         duration_text = length_box.currentText().rstrip("s")
         duration = int(duration_text) if duration_text.isdigit() else None
-        candidates = [media_candidate(item, duration) for item in MODELS]
+        candidates = [media_candidate(item, duration) for item in offered_models()]
         candidates = [
             replace(item, available=bool(
                 item.available and self._provider_permission(item.provider)))

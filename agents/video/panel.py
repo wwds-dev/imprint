@@ -243,11 +243,11 @@ class VideoPanel(QWidget):
     # ── selection and constraints ───────────────────────────────────────
     def _visual_provider_changed(self, provider: str):
         """List only media models that have a real execution path."""
-        from services.media_catalog import MODELS
+        from services.media_catalog import offered_models
 
         self.video_visual_model_box.blockSignals(True)
         self.video_visual_model_box.clear()
-        for option in MODELS:
+        for option in offered_models():
             if option.provider == provider:
                 self.video_visual_model_box.addItem(option.label, option)
         self.video_visual_model_box.blockSignals(False)
@@ -397,7 +397,8 @@ class VideoPanel(QWidget):
         an estimate call, so it is ranked with its cost marked as quoted.
         """
         from agents.video import video_studio
-        from services.media_catalog import MODELS, direct_video_cost_usd
+        from services.media_catalog import direct_video_cost_usd
+        from services.media_catalog import offered_models
         from services.per_unit_pricing import eur_per_usd
 
         if selection is None:
@@ -410,7 +411,7 @@ class VideoPanel(QWidget):
             seconds = int(text) if text.isdigit() else None
         rate = eur_per_usd()
         options = []
-        for model in MODELS:
+        for model in offered_models():
             direct = model.kind == "direct_video"
             if direct and not clip:
                 continue

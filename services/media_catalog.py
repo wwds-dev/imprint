@@ -50,6 +50,11 @@ LANDSCAPE = "Landscape 16:9"
 VERTICAL = "Vertical 9:16"
 SQUARE = "Square 1:1"
 
+VEO_SHUTDOWN = "2026-10-22"
+VEO_SHUTDOWN_NOTE = ("Google shuts this preview down on 22 October 2026; "
+                     "Gemini Omni is its replacement.")
+
+
 @dataclass(frozen=True)
 class MediaModel:
     provider: str
@@ -59,6 +64,10 @@ class MediaModel:
     note: str = ""
     durations: tuple[int, ...] = ()
     aspects: tuple[str, ...] = (LANDSCAPE, VERTICAL, SQUARE)
+    # ISO date the provider shuts the model down. From that day it leaves the
+    # menus and the assessment (offered_models); a job already in flight is
+    # still collected, because resume goes through the client, not here.
+    retires: str = ""
 
 
 MODELS = (
@@ -74,15 +83,21 @@ MODELS = (
                "direct_video", "Fast text-to-video with generated audio. "
                "The requested length is expressed in the prompt.",
                tuple(range(3, 11)), (LANDSCAPE, VERTICAL)),
+    # Google shuts the three Veo 3.1 previews down on 2026-10-22 and names
+    # Gemini Omni as the replacement (ai.google.dev/gemini-api/docs/deprecations,
+    # checked 2026-10-07).
     MediaModel("Gemini", "veo-3.1-generate-preview", "Veo 3.1",
-               "direct_video", "Highest-quality Veo preview at 720p with audio.",
-               (4, 6, 8), (LANDSCAPE, VERTICAL)),
+               "direct_video", "Highest-quality Veo preview at 720p with audio. "
+               + VEO_SHUTDOWN_NOTE,
+               (4, 6, 8), (LANDSCAPE, VERTICAL), retires=VEO_SHUTDOWN),
     MediaModel("Gemini", "veo-3.1-fast-generate-preview", "Veo 3.1 Fast",
-               "direct_video", "Faster Veo preview at 720p with audio.",
-               (4, 6, 8), (LANDSCAPE, VERTICAL)),
+               "direct_video", "Faster Veo preview at 720p with audio. "
+               + VEO_SHUTDOWN_NOTE,
+               (4, 6, 8), (LANDSCAPE, VERTICAL), retires=VEO_SHUTDOWN),
     MediaModel("Gemini", "veo-3.1-lite-generate-preview", "Veo 3.1 Lite",
-               "direct_video", "Lowest-cost Veo preview at 720p with audio.",
-               (4, 6, 8), (LANDSCAPE, VERTICAL)),
+               "direct_video", "Lowest-cost Veo preview at 720p with audio. "
+               + VEO_SHUTDOWN_NOTE,
+               (4, 6, 8), (LANDSCAPE, VERTICAL), retires=VEO_SHUTDOWN),
     MediaModel("Qwen", "wan3.0-video", "Wan 3.0 Video",
                "direct_video", "Current all-in-one Wan preview; text-to-video "
                "at 720p with audio.", tuple(range(2, 31))),
@@ -109,6 +124,14 @@ MODELS = (
 )
 
 MEDIA_PROVIDERS = tuple(dict.fromkeys(model.provider for model in MODELS))
+
+
+def offered_models(today: str | None = None) -> tuple[MediaModel, ...]:
+    """The models a user may pick today: everything not yet shut down."""
+    from datetime import date
+    today = today or date.today().isoformat()
+    return tuple(model for model in MODELS
+                 if not model.retires or today < model.retires)
 
 
 def models_for(provider: str) -> tuple[MediaModel, ...]:

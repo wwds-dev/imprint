@@ -5,6 +5,12 @@ from typing import Optional
 from .base import VoiceProvider, VoiceConfig
 
 _BASE_URL = "https://api.elevenlabs.io/v1"
+# eleven_turbo_v2_5 is deprecated; eleven_flash_v2_5 replaces it at the same
+# price (elevenlabs.io/docs/overview/models, checked 2026-10-07).
+DEFAULT_MODEL = "eleven_flash_v2_5"
+# voice_settings.speed accepts 0.7-1.2 (1.0 is normal); the API rejects values
+# outside it rather than clamping.
+SPEED_RANGE = (0.7, 1.2)
 
 
 class ElevenLabsProvider(VoiceProvider):
@@ -14,8 +20,9 @@ class ElevenLabsProvider(VoiceProvider):
     Docs: https://docs.elevenlabs.io/api-reference
     """
 
-    def __init__(self, api_key: str | None = None):
+    def __init__(self, api_key: str | None = None, model: str = DEFAULT_MODEL):
         self._api_key = api_key or os.environ.get("ELEVENLABS_API_KEY", "")
+        self.model = model
         if not self._api_key:
             raise ValueError("ELEVENLABS_API_KEY not set")
 
@@ -43,18 +50,21 @@ class ElevenLabsProvider(VoiceProvider):
         cfg = config or VoiceConfig()
         voice_id = cfg.voice_id if cfg.voice_id != "default" else "21m00Tcm4TlvDq8ikWAM"  # Rachel
 
+        low, high = SPEED_RANGE
         payload = {
             "text": text,
-            "model_id": "eleven_turbo_v2_5",
+            "model_id": self.model,
             "voice_settings": {
                 "stability": cfg.stability,
                 "similarity_boost": cfg.similarity_boost,
-                "speaking_rate": cfg.speaking_rate,
+                # The field is `speed`; `speaking_rate` was never an API
+                # field, so every speed setting was silently ignored.
+                "speed": min(high, max(low, float(cfg.speaking_rate))),
             },
         }
 
         r = requests.post(
-            f"{_BASE_URL}/text-to-speech/{voice_id}",
+            f"{_BASE_URL}/text-to-speech/{voice_id}?output_format=mp3_44100_128",
             json=payload,
             headers={**self._headers(), "Accept": "audio/mpeg"},
             timeout=120,

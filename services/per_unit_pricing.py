@@ -32,14 +32,32 @@ CONFIG_PATH = resource_base() / "config" / "pricing.json"
 DEFAULT_EUR_PER_USD = 0.92
 
 
-def _table() -> dict:
+def _tables() -> list[dict]:
+    """The editable copy first, then the bundled file.
+
+    A frozen build seeds the editable copy once and never updates it, so a
+    rate added in a later release (a new image or speech route) exists only
+    in the bundled file. Reading the editable copy alone made every such
+    rate "unknown" and the route refused. Edits made in Settings live in
+    SQLite and win over both (rate_usd).
+    """
+    tables = []
+    seen = set()
     for path in (USER_CONFIG_PATH, CONFIG_PATH):
+        if path in seen:
+            continue
+        seen.add(path)
         try:
             with path.open("r", encoding="utf-8") as fh:
-                return json.load(fh)
+                tables.append(json.load(fh))
         except Exception:
             continue
-    return {}
+    return tables
+
+
+def _table() -> dict:
+    tables = _tables()
+    return tables[0] if tables else {}
 
 
 def eur_per_usd() -> float:
@@ -79,16 +97,22 @@ def rate_usd(*path: str) -> float | None:
             value = 0.0
         return value if value > 0 else None
 
-    node = _table().get("per_unit_usd") or {}
-    for part in path:
-        if not isinstance(node, dict) or part not in node:
+    for table in _tables():
+        node = table.get("per_unit_usd") or {}
+        found = True
+        for part in path:
+            if not isinstance(node, dict) or part not in node:
+                found = False
+                break
+            node = node[part]
+        if not found:
+            continue        # this copy predates the key; try the next
+        try:
+            value = float(node)
+        except (TypeError, ValueError):
             return None
-        node = node[part]
-    try:
-        value = float(node)
-    except (TypeError, ValueError):
-        return None
-    return value if value > 0 else None
+        return value if value > 0 else None
+    return None
 
 
 def to_eur(usd: float | None) -> float | None:
@@ -106,11 +130,28 @@ def tts_cost_eur(characters: int) -> float | None:
     return None if usd is None else to_eur(usd * max(0, characters) / 1000.0)
 
 
-def elevenlabs_tts_cost_eur(characters: int) -> float | None:
-    """ElevenLabs narration for the shorts pipeline. None until a real
-    per-1k-character rate is configured — the ships-as-0 placeholder means
-    unknown, and the caller must refuse rather than bill €0.00."""
-    usd = rate_usd("elevenlabs_tts_per_1k_chars")
+ELEVENLABS_SHORTS_MODEL = "eleven_flash_v2_5"
+
+
+def elevenlabs_rate_usd(model: str = ELEVENLABS_SHORTS_MODEL) -> float | None:
+    """USD per 1k characters for one ElevenLabs model, or None if unknown.
+
+    Per model, because they differ twofold (flash $0.04, multilingual_v2
+    and v3 $0.08 — elevenlabs.io/pricing/api, checked 2026-10-07). The old
+    single `elevenlabs_tts_per_1k_chars` key is still read for the Shorts
+    model, so a rate entered there before per-model rates existed counts.
+    """
+    rate = rate_usd("elevenlabs_tts", model)
+    if rate is None and model == ELEVENLABS_SHORTS_MODEL:
+        rate = rate_usd("elevenlabs_tts_per_1k_chars")
+    return rate
+
+
+def elevenlabs_tts_cost_eur(characters: int,
+                            model: str = ELEVENLABS_SHORTS_MODEL) -> float | None:
+    """ElevenLabs narration. None when the model has no rate — the caller
+    must refuse rather than bill €0.00."""
+    usd = elevenlabs_rate_usd(model)
     return None if usd is None else to_eur(usd * max(0, characters) / 1000.0)
 
 
