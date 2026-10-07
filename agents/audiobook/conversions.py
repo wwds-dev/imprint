@@ -46,7 +46,8 @@ def remaining_fraction(row) -> float:
 
 def open_job(*, source_path: str, output_path: str, voice: str,
              chunk_tokens: int, estimate_eur: float, project=None,
-             reset_progress: bool = False) -> dict:
+             reset_progress: bool = False, provider: str = "openai",
+             model: str = "gpt-4o-mini-tts") -> dict:
     """Reuse the book's unfinished row (keeping billed_eur) or create one.
 
     run_baseline records where this run starts, so its own spend can be
@@ -63,21 +64,23 @@ def open_job(*, source_path: str, output_path: str, voice: str,
                 conn.execute(
                     """UPDATE audiobook_conversions
                           SET voice = ?, chunk_tokens = ?, estimate_eur = ?,
+                              provider = ?, model = ?,
                               project = ?, status = 'running', error = '',
                               chunks_done = 0, chunks_total = 0,
                               run_baseline = 0, updated_at = ?
                         WHERE id = ?""",
-                    (voice, int(chunk_tokens), float(estimate_eur), project,
-                     now, existing["id"]))
+                    (voice, int(chunk_tokens), float(estimate_eur),
+                     provider, model, project, now, existing["id"]))
             else:
                 conn.execute(
                     """UPDATE audiobook_conversions
                           SET voice = ?, chunk_tokens = ?, estimate_eur = ?,
+                              provider = ?, model = ?,
                               project = ?, status = 'running', error = '',
                               run_baseline = chunks_done, updated_at = ?
                         WHERE id = ?""",
-                    (voice, int(chunk_tokens), float(estimate_eur), project,
-                     now, existing["id"]))
+                    (voice, int(chunk_tokens), float(estimate_eur),
+                     provider, model, project, now, existing["id"]))
             row = conn.execute(
                 "SELECT * FROM audiobook_conversions WHERE id = ?",
                 (existing["id"],)).fetchone()
@@ -85,12 +88,13 @@ def open_job(*, source_path: str, output_path: str, voice: str,
         cursor = conn.execute(
             """INSERT INTO audiobook_conversions
                  (source_path, output_path, voice, chunk_tokens,
+                  provider, model,
                   estimate_eur, billed_eur, chunks_done, chunks_total,
                   run_baseline, project, status, error,
                   created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, 0.0, 0, 0, 0, ?, 'running', '', ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0, 0, 0, ?, 'running', '', ?, ?)""",
             (source_path, output_path, voice, int(chunk_tokens),
-             float(estimate_eur), project, now, now))
+             provider, model, float(estimate_eur), project, now, now))
         row = conn.execute(
             "SELECT * FROM audiobook_conversions WHERE id = ?",
             (cursor.lastrowid,)).fetchone()

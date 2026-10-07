@@ -450,6 +450,10 @@ CREATE TABLE IF NOT EXISTS audiobook_conversions (
     output_path   TEXT NOT NULL,
     voice         TEXT NOT NULL DEFAULT '',
     chunk_tokens  INTEGER NOT NULL DEFAULT 0,
+    -- The narration route the cached chunks were made with. A row from
+    -- before routes existed was OpenAI's, which the defaults say.
+    provider      TEXT NOT NULL DEFAULT 'openai',
+    model         TEXT NOT NULL DEFAULT 'gpt-4o-mini-tts',
     estimate_eur  REAL NOT NULL DEFAULT 0.0,
     billed_eur    REAL NOT NULL DEFAULT 0.0,
     chunks_done   INTEGER NOT NULL DEFAULT 0,
@@ -695,6 +699,10 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
             ("brief", "TEXT NOT NULL DEFAULT ''"),
         ],
         "usage": [("project", "TEXT NOT NULL DEFAULT ''")],
+        "audiobook_conversions": [
+            ("provider", "TEXT NOT NULL DEFAULT 'openai'"),
+            ("model", "TEXT NOT NULL DEFAULT 'gpt-4o-mini-tts'"),
+        ],
         "pricing": [("cached_input_per_1m_usd", "REAL NOT NULL DEFAULT 0.0")],
         "creator_content": [
             ("project_id", "TEXT REFERENCES projects(id) ON DELETE SET NULL"),

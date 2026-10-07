@@ -588,3 +588,177 @@ def test_a_finished_book_leaves_no_lock_behind(tmp_path, monkeypatch):
 
     assert converter.convert(input=str(book), output=str(out)) is True
     assert not (out / "Book" / converter.LOCK_FILENAME).exists()
+
+
+# ── Narration routes ─────────────────────────────────────────────────────────
+# OpenAI removes gpt-4o-mini-tts on 2027-01-06, so Booth gained a second route.
+# The rules below are the ones that protect money already spent: a book paused
+# before routes existed must resume, and a change of route must not stitch two
+# voices together.
+
+@pytest.fixture
+def route(monkeypatch):
+    """Set the module's route the way convert() does, undone afterwards."""
+    def use(provider, voice=None):
+        spec = converter.TTS_PROVIDERS[provider]
+        monkeypatch.setattr(converter, "TTS_PROVIDER", provider)
+        monkeypatch.setattr(converter, "TTS_MODEL", spec["model"])
+        monkeypatch.setattr(converter, "TTS_VOICE", voice or spec["voice"])
+    use("openai")
+    return use
+
+
+def test_a_manifest_from_before_routes_still_resumes(tmp_path, route):
+    manifest_path = tmp_path / "manifest.json"
+    temp_dir = tmp_path / "temp_audio"
+    temp_dir.mkdir()
+    source = tmp_path / "b.epub"
+    chunks = ["one", "two"]
+    old = converter.build_manifest("Book", source, chunks)
+    del old["tts_provider"], old["max_chars_per_chunk"]        # written pre-routes
+    converter.json_dump(manifest_path, old)
+    kept = temp_dir / "chunk_0.mp3"
+    kept.write_bytes(b"paid audio")
+
+    converter.load_or_create_manifest(
+        manifest_path, "Book", source, chunks, temp_dir=temp_dir)
+    assert kept.exists(), "a paused OpenAI book lost its paid chunks to the upgrade"
+
+
+def test_a_change_of_route_does_not_resume_onto_the_other_voice(tmp_path, route):
+    manifest_path = tmp_path / "manifest.json"
+    temp_dir = tmp_path / "temp_audio"
+    temp_dir.mkdir()
+    source = tmp_path / "b.epub"
+    chunks = ["one", "two"]
+    converter.json_dump(manifest_path, converter.build_manifest("Book", source, chunks))
+    stale = temp_dir / "chunk_0.mp3"
+    stale.write_bytes(b"openai audio")
+    route("elevenlabs")
+    converter.load_or_create_manifest(
+        manifest_path, "Book", source, chunks, temp_dir=temp_dir)
+    assert not stale.exists()
+
+
+def test_a_character_cap_applies_only_to_routes_that_have_one(monkeypatch):
+    monkeypatch.setattr(converter, "get_token_encoder", _WordEncoder)
+    text = " ".join(["abcdefghij"] * 20)                       # 20 words, 219 chars
+    assert len(converter.chunk_text(text, 1000)) == 1          # no cap: one chunk
+    capped = converter.chunk_text(text, 1000, max_chars=50)
+    assert all(len(chunk) <= 50 for chunk in capped) and len(capped) == 5
+
+
+class _Response:
+    def __init__(self, payload=b"ID3 mp3 bytes"):
+        self._payload = payload
+        self._read = False
+
+    def read(self, size=-1):
+        if self._read:
+            return b""
+        self._read = True
+        return self._payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+
+def test_elevenlabs_receives_the_documented_request(tmp_path, monkeypatch, route):
+    import urllib.request
+    route("elevenlabs", voice="voice id/1")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-not-a-real-key")
+    seen = {}
+
+    def fake_urlopen(request, timeout=None):
+        seen["url"] = request.full_url
+        seen["headers"] = dict(request.header_items())
+        seen["body"] = __import__("json").loads(request.data)
+        return _Response()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    target = tmp_path / "chunk_3.mp3"
+    assert converter.generate_tts_chunk("Middle.", target, retries=1,
+                                        previous_text="Before.", next_text="After.")
+    assert target.read_bytes() == b"ID3 mp3 bytes"
+    assert seen["url"] == ("https://api.elevenlabs.io/v1/text-to-speech/voice%20id%2F1"
+                           "?output_format=mp3_44100_128")
+    assert seen["body"] == {"text": "Middle.", "model_id": "eleven_multilingual_v2",
+                            "previous_text": "Before.", "next_text": "After."}
+    assert seen["headers"]["Xi-api-key"] == "test-not-a-real-key"
+
+
+def test_a_refused_key_stops_without_retrying(tmp_path, monkeypatch, route):
+    import io
+    import urllib.error
+    import urllib.request
+    route("elevenlabs")
+    monkeypatch.setenv("ELEVENLABS_API_KEY", "test-not-a-real-key")
+    calls = []
+
+    def refuse(request, timeout=None):
+        calls.append(1)
+        raise urllib.error.HTTPError(request.full_url, 401, "Unauthorized", {},
+                                     io.BytesIO(b'{"detail":"invalid api key"}'))
+
+    monkeypatch.setattr(urllib.request, "urlopen", refuse)
+    monkeypatch.setattr(converter.time, "sleep", lambda s: None)
+    target = tmp_path / "chunk_0.mp3"
+    assert converter.generate_tts_chunk("Text.", target, retries=3) is False
+    assert len(calls) == 1
+    assert not target.exists()
+    assert not list(tmp_path.glob("*.part"))
+
+
+def test_the_worker_gives_elevenlabs_its_neighbours(tmp_path, monkeypatch, route):
+    route("elevenlabs")
+    monkeypatch.setattr(converter, "get_token_encoder", _WordEncoder)
+    monkeypatch.setattr(converter, "MAX_INPUT_TOKENS_PER_CHUNK", 2)
+    monkeypatch.setattr(converter, "MAX_WORKERS", 1)
+    calls = []
+
+    def fake_tts(text, path, retries=2, previous_text=None, next_text=None):
+        calls.append((text, previous_text, next_text))
+        path.write_bytes(b"x")
+        return True
+
+    monkeypatch.setattr(converter, "generate_tts_chunk", fake_tts)
+    monkeypatch.setattr(converter, "merge_chunks_with_ffmpeg", lambda *a, **k: None)
+    assert converter.text_to_audio(
+        [("Book", "a b c d e f")], tmp_path / "b.epub", "Book",
+        tmp_path / "Book.mp3", tmp_path / "temp_audio", tmp_path / "m.json")
+    assert sorted(calls) == [("a b", None, "c d"), ("c d", "a b", "e f"),
+                             ("e f", "c d", None)]
+
+
+def test_a_failed_chunk_stops_the_queue_instead_of_paying_for_the_rest(
+        tmp_path, monkeypatch, route):
+    monkeypatch.setattr(converter, "get_token_encoder", _WordEncoder)
+    monkeypatch.setattr(converter, "MAX_INPUT_TOKENS_PER_CHUNK", 1)
+    monkeypatch.setattr(converter, "MAX_WORKERS", 1)
+    attempted = []
+
+    def fake_tts(text, path, retries=2):
+        attempted.append(text)
+        return False                                     # first chunk fails
+
+    monkeypatch.setattr(converter, "generate_tts_chunk", fake_tts)
+    words = " ".join(f"w{i}" for i in range(30))
+    assert converter.text_to_audio(
+        [("Book", words)], tmp_path / "b.epub", "Book", tmp_path / "Book.mp3",
+        tmp_path / "temp_audio", tmp_path / "m.json") is False
+    assert len(attempted) < 5, f"kept generating after the failure: {len(attempted)}"
+
+
+def test_a_route_without_its_key_sends_nothing(tmp_path, monkeypatch, route, capsys):
+    monkeypatch.delenv("ELEVENLABS_API_KEY", raising=False)
+    monkeypatch.setattr(converter, "load_dotenv", lambda *a, **k: False)
+    monkeypatch.setattr(converter, "generate_tts_chunk",
+                        lambda *a, **k: pytest.fail("a request was sent"))
+    book = tmp_path / "b.txt"
+    book.write_text("Some text to narrate.")
+    assert converter.convert(input=str(book), output=str(tmp_path / "out"),
+                             provider="elevenlabs") is False
+    assert "needs ELEVENLABS_API_KEY" in capsys.readouterr().out
