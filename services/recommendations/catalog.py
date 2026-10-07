@@ -290,6 +290,9 @@ _SPEECH_ROUTES = {
     "system": (0.45, 0.97, 0.92, 1.0),
     "elevenlabs": (0.93, 0.86, 0.70, 0.10),
     "openai": (0.84, 0.90, 0.75, 0.10),
+    # Gemini 3.8 Flash TTS: GA, documented for long-form narration with a
+    # consistent voice across multi-minute passages.
+    "gemini": (0.86, 0.88, 0.80, 0.10),
 }
 
 

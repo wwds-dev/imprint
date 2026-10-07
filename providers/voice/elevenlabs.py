@@ -33,13 +33,32 @@ class ElevenLabsProvider(VoiceProvider):
     def _headers(self) -> dict:
         return {"xi-api-key": self._api_key, "Content-Type": "application/json"}
 
-    def list_voices(self) -> list[dict]:
-        r = requests.get(f"{_BASE_URL}/voices", headers=self._headers(), timeout=30)
-        r.raise_for_status()
-        return [
-            {"id": v["voice_id"], "name": v["name"], "preview_url": v.get("preview_url")}
-            for v in r.json().get("voices", [])
-        ]
+    def list_voices(self, max_pages: int = 10) -> list[dict]:
+        """Every voice on the account, from the current paginated endpoint.
+
+        GET /v1/voices is legacy and stops working once a workspace holds more
+        than 500 voices (elevenlabs.io/docs, checked 2026-10-07); /v2/voices
+        pages 100 at a time.
+        """
+        voices: list[dict] = []
+        token = None
+        for _page in range(max_pages):
+            params = {"page_size": 100, "include_total_count": "false"}
+            if token:
+                params["next_page_token"] = token
+            r = requests.get("https://api.elevenlabs.io/v2/voices",
+                             headers=self._headers(), params=params, timeout=30)
+            r.raise_for_status()
+            data = r.json()
+            voices += [
+                {"id": v["voice_id"], "name": v["name"],
+                 "preview_url": v.get("preview_url")}
+                for v in data.get("voices", [])
+            ]
+            token = data.get("next_page_token")
+            if not data.get("has_more") or not token:
+                break
+        return voices
 
     def synthesize(
         self,

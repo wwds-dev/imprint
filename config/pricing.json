@@ -261,6 +261,11 @@
       "eleven_multilingual_v2": 0.08,
       "eleven_v3": 0.08
     },
-    "_openai_tts_comment": "gpt-4o-mini-tts bills $0.60 per 1M text tokens plus $12 per 1M audio tokens, about $0.016 per 1k characters of narration; tts-1 is $0.015. OpenAI removes gpt-4o-mini-tts and tts-1 on 2027-01-06 (developers.openai.com deprecations)."
+    "_openai_tts_comment": "gpt-4o-mini-tts bills $0.60 per 1M text tokens plus $12 per 1M audio tokens, about $0.016 per 1k characters of narration; tts-1 is $0.015. OpenAI removes gpt-4o-mini-tts and tts-1 on 2027-01-06 (developers.openai.com deprecations).",
+    "_gemini_tts_comment": "Gemini TTS per minute of narration: 25 audio tokens per second at $9 per 1M output tokens plus ~$0.0002 of text input (ai.google.dev/gemini-api/docs/pricing, checked 2026-10-07). Google doubles Flash TTS on 2027-01-01; a key 'model@YYYY-MM-DD' is the rate from that date, applied by services/per_unit_pricing.dated_rate_usd.",
+    "gemini_tts_per_minute": {
+      "gemini-3.8-flash-tts": 0.0137,
+      "gemini-3.8-flash-tts@2027-01-01": 0.0272
+    }
   }
 }

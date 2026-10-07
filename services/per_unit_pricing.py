@@ -155,6 +155,37 @@ def elevenlabs_tts_cost_eur(characters: int,
     return None if usd is None else to_eur(usd * max(0, characters) / 1000.0)
 
 
+def dated_rate_usd(table: str, model: str, today: str | None = None) -> float | None:
+    """A per-unit rate that changes on announced dates.
+
+    `table.model` is the rate now; `table.model@YYYY-MM-DD` is the rate from
+    that date. The latest dated key on or before today wins — so a price rise
+    Google has announced applies itself on the day, without a release.
+    """
+    from datetime import date
+    today = today or date.today().isoformat()
+    rate = rate_usd(table, model)
+    best = ""
+    for source in _tables():
+        node = (source.get("per_unit_usd") or {}).get(table) or {}
+        if not isinstance(node, dict):
+            continue
+        for key in node:
+            if key.startswith(model + "@"):
+                effective = key.split("@", 1)[1]
+                if best < effective <= today:
+                    candidate = rate_usd(table, key)
+                    if candidate is not None:
+                        best, rate = effective, candidate
+    return rate
+
+
+def gemini_tts_cost_eur(minutes: float,
+                        model: str = "gemini-3.8-flash-tts") -> float | None:
+    usd = dated_rate_usd("gemini_tts_per_minute", model)
+    return None if usd is None else to_eur(usd * max(0.0, minutes))
+
+
 def whisper_cost_eur(minutes: float) -> float | None:
     usd = rate_usd("openai_whisper_per_minute")
     return None if usd is None else to_eur(usd * max(0.0, minutes))

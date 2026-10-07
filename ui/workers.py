@@ -598,3 +598,21 @@ class ModelScanWorker(DaemonWorker):
                            list(fetch() or []), "")
             except Exception as exc:
                 self._emit(self.provider_listed, provider, [], str(exc))
+
+
+class VoiceListWorker(DaemonWorker):
+    """List a speech provider's voices off the GUI thread (a network call)."""
+
+    voices_signal = Signal(str, list, str)   # provider, [(name, id)], error
+
+    def __init__(self, provider: str, lister):
+        super().__init__()
+        self.provider = provider
+        self.lister = lister
+
+    def run(self):
+        try:
+            voices = [(v["name"], v["id"]) for v in self.lister()]
+            self._emit(self.voices_signal, self.provider, voices, "")
+        except Exception as exc:
+            self._emit(self.voices_signal, self.provider, [], str(exc))

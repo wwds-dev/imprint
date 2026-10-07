@@ -19,13 +19,39 @@ from agents.audiobook.audiobook_library import (
     progress_storage, scan,
 )
 from services.database import get_setting, save_setting
-from services.openai_client import OpenAIClientWrapper
 from services.runtime_paths import is_frozen
 from agents.audiobook.audio_player import AudiobookPlayer
 from ui.forms import CONTROL_HEIGHT, LG, MD, SM, combo, field, line_edit, primary, rule, section
 from ui.widgets import FlowLayout, scrollable
 
 SUPPORTED_EBOOKS = {".pdf", ".epub", ".txt", ".mobi", ".azw3"}
+ROUTE_KEY = "audiobook_narration_route"
+
+# Narration routes, keyed like the converter's TTS_PROVIDERS. OpenAI removes
+# gpt-4o-mini-tts on 2027-01-06, which is why there is a choice at all; every
+# conversion is assessed across the routes that can run before it is approved.
+# `voices` None means the list is the user's own account, fetched live.
+NARRATION_ROUTES = {
+    "openai": {
+        "label": "OpenAI · gpt-4o-mini-tts", "model": "gpt-4o-mini-tts",
+        "speech": "OpenAI", "key": "OPENAI_API_KEY",
+        "voices": ("alloy", "marin", "cedar", "verse", "coral", "sage"),
+        "note": "OpenAI removes this model on 6 January 2027.",
+    },
+    "gemini": {
+        "label": "Gemini · 3.8 Flash TTS", "model": "gemini-3.8-flash-tts",
+        "speech": "Gemini", "key": "GOOGLE_API_KEY (or GEMINI_API_KEY)",
+        "voices": ("Kore", "Charon", "Aoede", "Puck", "Leda", "Orus",
+                   "Fenrir", "Zephyr"),
+        "note": "About OpenAI's price through 2026; doubles on 1 January 2027.",
+    },
+    "elevenlabs": {
+        "label": "ElevenLabs · Multilingual v2", "model": "eleven_multilingual_v2",
+        "speech": "ElevenLabs", "key": "ELEVENLABS_API_KEY",
+        "voices": None,
+        "note": "The most natural voice, at about five times the price.",
+    },
+}
 OUTPUT_MODE_KEY = "audiobook_output_mode"
 LOCAL_OUTPUT_KEY = "audiobook_local_output_folder"
 DRIVE_OUTPUT_KEY = "audiobook_drive_output_folder"
@@ -155,10 +181,25 @@ class AudiobookPanel(QWidget):
         folders.setColumnStretch(0, 1)
         page.addLayout(folders)
 
-        self.audiobook_voice_box = combo(
-            ["alloy", "verse", "marin", "coral", "sage"])
+        self.audiobook_route_box = QComboBox()
+        for key, route in NARRATION_ROUTES.items():
+            self.audiobook_route_box.addItem(route["label"], key)
+            self.audiobook_route_box.setItemData(
+                self.audiobook_route_box.count() - 1, route["note"], Qt.ToolTipRole)
+        self.audiobook_route_box.setToolTip(
+            "Who narrates. Every conversion is assessed across the routes you "
+            "have a key for and have permitted, with this book's cost on each, "
+            "before it is approved.")
+        self.audiobook_voice_box = combo(list(NARRATION_ROUTES["openai"]["voices"]))
         self.audiobook_voice_box.setToolTip(
             "Narration voice. Open the menu to see Imprint's best-fit default.")
+        self._voice_worker = None
+        saved_route = get_setting(ROUTE_KEY, "openai")
+        if saved_route in NARRATION_ROUTES and saved_route != "openai":
+            self.audiobook_route_box.setCurrentIndex(
+                self.audiobook_route_box.findData(saved_route))
+            self._load_route_voices(saved_route)
+        self.audiobook_route_box.currentIndexChanged.connect(self._route_changed)
         self.audiobook_chunk_input = line_edit("1400", "1400")
         self.audiobook_chunk_input.setToolTip(
             "Approximate text sent per narration request. 1400 is a stable default; "
@@ -176,15 +217,17 @@ class AudiobookPanel(QWidget):
         options = QGridLayout()
         options.setHorizontalSpacing(MD)
         options.setVerticalSpacing(MD)
-        options.addWidget(field("Voice", self.audiobook_voice_box),
-                          0, 0, Qt.AlignTop)
-        options.addWidget(field("Chunk size (tokens)", self.audiobook_chunk_input),
-                          0, 1, Qt.AlignTop)
-        # Its own row, not a third column: at 1100x700 three controls across
-        # needed 563px in a 562px pane, and the narrow pane is the one where a
+        # Two columns, never three: at 1100x700 three controls across needed
+        # 563px in a 562px pane, and the narrow pane is the one where a
         # clipped control is unreachable.
-        options.addWidget(field("Format", self.audiobook_format_box),
+        options.addWidget(field("Narrator", self.audiobook_route_box),
+                          0, 0, Qt.AlignTop)
+        options.addWidget(field("Voice", self.audiobook_voice_box),
+                          0, 1, Qt.AlignTop)
+        options.addWidget(field("Chunk size (tokens)", self.audiobook_chunk_input),
                           1, 0, Qt.AlignTop)
+        options.addWidget(field("Format", self.audiobook_format_box),
+                          1, 1, Qt.AlignTop)
         for column in range(3):
             options.setColumnStretch(column, 1)
         page.addLayout(options)
@@ -422,6 +465,104 @@ class AudiobookPanel(QWidget):
         self.audiobook_output_path.setText(folder)
         self.refresh_library()
 
+    # ── narration route ──────────────────────────────────────────────────
+    def _route(self) -> str:
+        return self.audiobook_route_box.currentData() or "openai"
+
+    def _route_model(self, route: str | None = None) -> str:
+        return NARRATION_ROUTES[route or self._route()]["model"]
+
+    def _voice(self) -> str:
+        """The voice id to send: an ElevenLabs id is item data behind its name."""
+        data = self.audiobook_voice_box.currentData()
+        return str(data) if data else self.audiobook_voice_box.currentText().strip()
+
+    def _select_voice(self, voice: str) -> None:
+        index = self.audiobook_voice_box.findData(voice)
+        if index < 0:
+            index = self.audiobook_voice_box.findText(voice)
+        if index < 0 and voice:
+            self.audiobook_voice_box.addItem(voice, voice)
+            index = self.audiobook_voice_box.count() - 1
+        if index >= 0:
+            self.audiobook_voice_box.setCurrentIndex(index)
+
+    def _switch_route(self, route: str) -> None:
+        index = self.audiobook_route_box.findData(route)
+        if index >= 0:
+            self.audiobook_route_box.setCurrentIndex(index)
+
+    def _route_changed(self, *_args) -> None:
+        route = self._route()
+        try:
+            save_setting(ROUTE_KEY, route)
+        except Exception as exc:
+            self.host._note_failure("audiobook: save route", exc)
+        self._load_route_voices(route)
+        self.estimate_cost_from_selection()
+
+    def _load_route_voices(self, route: str) -> None:
+        """Fill the voice menu for `route`; an account's own list loads in
+        the background so a slow provider never freezes the panel."""
+        voices = NARRATION_ROUTES[route]["voices"]
+        self.audiobook_voice_box.clear()
+        if voices is not None:
+            for name in voices:
+                self.audiobook_voice_box.addItem(name, name)
+            return
+        from services.narrator.converter import TTS_PROVIDERS
+        default_id = TTS_PROVIDERS[route]["voice"]
+        self.audiobook_voice_box.addItem("Default voice", default_id)
+        if not self._route_key_available(route):
+            return
+        from providers.voice.elevenlabs import ElevenLabsProvider
+        from ui.workers import VoiceListWorker
+        worker = VoiceListWorker(route, lambda: ElevenLabsProvider().list_voices())
+        worker.voices_signal.connect(self._on_voices)
+        self._voice_worker = worker
+        worker.start()
+
+    def _on_voices(self, route: str, voices: list, error: str) -> None:
+        if route != self._route():
+            return          # the user moved on before the list arrived
+        if error:
+            self.host._note_failure(f"audiobook: list {route} voices",
+                                    RuntimeError(error), self.audiobook_voice_box)
+            return
+        keep = self._voice()
+        self.audiobook_voice_box.clear()
+        for name, voice_id in voices:
+            self.audiobook_voice_box.addItem(name, voice_id)
+        if self.audiobook_voice_box.count() == 0:
+            from services.narrator.converter import TTS_PROVIDERS
+            self.audiobook_voice_box.addItem(
+                "Default voice", TTS_PROVIDERS[route]["voice"])
+        self._select_voice(keep)
+
+    @staticmethod
+    def _route_key_available(route: str) -> bool:
+        from services.recommendations.catalog import provider_configured
+        return bool(provider_configured(route))
+
+    def _route_cost_eur(self, route: str, text: str, seconds: float):
+        """What narrating `text` costs on `route`, in euros — or None when
+        the route has no price on file (unknown is never free)."""
+        from services.per_unit_pricing import (
+            elevenlabs_tts_cost_eur, eur_per_usd, gemini_tts_cost_eur)
+        if route == "openai":
+            from services.narrator.converter import (
+                count_text_tokens, estimate_audio_tokens_from_seconds,
+                estimate_costs_usd)
+            usd = estimate_costs_usd(
+                count_text_tokens(text),
+                estimate_audio_tokens_from_seconds(seconds))["total_usd"]
+            return round(usd * eur_per_usd(), 4)
+        if route == "elevenlabs":
+            return elevenlabs_tts_cost_eur(len(text), self._route_model(route))
+        if route == "gemini":
+            return gemini_tts_cost_eur(seconds / 60.0, self._route_model(route))
+        return None
+
     def _text(self, path: Path) -> str:
         from services.narrator.converter import load_text
 
@@ -431,28 +572,23 @@ class AudiobookPanel(QWidget):
             self._text_cache[key] = load_text(path)
         return self._text_cache[key]
 
-    def _estimate(self, path: Path) -> dict | None:
-        from services.narrator.converter import (
-            count_text_tokens, estimate_audio_seconds_from_text,
-            estimate_audio_tokens_from_seconds, estimate_costs_usd,
-        )
-        from services.per_unit_pricing import eur_per_usd
+    def _estimate(self, path: Path, route: str | None = None) -> dict | None:
+        """Characters, minutes and the cost on `route` (the selected one by
+        default). `eur` is None when that route has no price on file."""
+        from services.narrator.converter import estimate_audio_seconds_from_text
 
+        route = route or self._route()
         try:
             text = self._text(path)
             if not text.strip():
                 return None
-            text_tokens = count_text_tokens(text)
             seconds = estimate_audio_seconds_from_text(text)
-            audio_tokens = estimate_audio_tokens_from_seconds(seconds)
-            usd = estimate_costs_usd(text_tokens, audio_tokens)["total_usd"]
+            eur = self._route_cost_eur(route, text, seconds)
         except Exception as exc:
             self.host._note_failure("audiobook: estimate conversion", exc)
             return None
-        return {
-            "characters": len(text), "seconds": seconds,
-            "eur": round(usd * eur_per_usd(), 4),
-        }
+        return {"characters": len(text), "seconds": seconds,
+                "eur": eur, "route": route}
 
     def estimate_cost_from_selection(self):
         item = self.audiobook_book_list.currentItem()
@@ -463,9 +599,10 @@ class AudiobookPanel(QWidget):
         if estimate is None:
             self.audiobook_cost_label.setText("Cost: could not read this file")
             return
+        price = ("no price on file for this narrator" if estimate["eur"] is None
+                 else f"≈ €{estimate['eur']:.2f}")
         self.audiobook_cost_label.setText(
-            f"~{estimate['seconds'] / 60:.0f} min audio · "
-            f"≈ €{estimate['eur']:.2f}")
+            f"~{estimate['seconds'] / 60:.0f} min audio · {price}")
 
     def start_conversion(self):
         item = self.audiobook_book_list.currentItem()
@@ -482,7 +619,9 @@ class AudiobookPanel(QWidget):
                 "Reconnect or choose your Google Drive audiobook folder "
                 "before converting this book.")
             return
-        voice = self.audiobook_voice_box.currentText().strip()
+        route = self._route()
+        model = self._route_model(route)
+        voice = self._voice()
         audio_format = self.audiobook_format_box.currentData()
         expected_output = self._converted_output(
             Path(book_path), Path(output_path).expanduser(), audio_format)
@@ -492,14 +631,15 @@ class AudiobookPanel(QWidget):
                 f"{expected_output.name} is already in the output folder. "
                 "Use Listen to open it; no new conversion was submitted.")
             return
-        if not OpenAIClientWrapper.key_available():
+        if not self._route_key_available(route):
+            spec = NARRATION_ROUTES[route]
             self.audiobook_status_label.setText(
-                "[Error] OPENAI_API_KEY not set.")
+                f"[Error] {spec['key']} not set.")
             QMessageBox.critical(
-                self, "OpenAI API Key Required",
-                "Audiobook conversion uses OpenAI's text-to-speech API, but "
-                "OPENAI_API_KEY is not set.\n\nAdd your key in Settings, then "
-                "restart Imprint and try again.")
+                self, f"{spec['speech']} API Key Required",
+                f"The {spec['label']} narrator needs {spec['key']}, which is "
+                "not set.\n\nAdd your key in Settings, then restart Imprint "
+                "and try again — or pick another narrator.")
             return
         try:
             chunk_tokens = int(self.audiobook_chunk_input.text().strip())
@@ -507,12 +647,20 @@ class AudiobookPanel(QWidget):
             QMessageBox.warning(
                 self, "Invalid Value", "Chunk tokens must be a number.")
             return
-        estimate = self._estimate(Path(book_path))
+        estimate = self._estimate(Path(book_path), route)
         if estimate is None:
             QMessageBox.warning(
                 self, "Unreadable Book",
                 f"No text could be extracted from {Path(book_path).name}, so "
                 "the conversion cost cannot be estimated.")
+            return
+        if estimate["eur"] is None:
+            QMessageBox.warning(
+                self, "No Price Configured",
+                f"{NARRATION_ROUTES[route]['label']} has no rate in "
+                "config/pricing.json, so this book cannot be counted against "
+                "the budget caps (0 means unknown, not free). Add a rate in "
+                "Settings → Pricing, or pick another narrator.")
             return
         # Chunks cached by earlier runs are already paid for: authorize
         # (and reserve) only what this run can still spend — but the
@@ -524,13 +672,16 @@ class AudiobookPanel(QWidget):
         fresh_start = False
         if open_row and (open_row.get("voice", "") != voice
                          or int(open_row.get("chunk_tokens") or 0)
-                         != chunk_tokens):
+                         != chunk_tokens
+                         or (open_row.get("provider") or "openai") != route
+                         or (open_row.get("model") or "gpt-4o-mini-tts") != model):
             done = open_row.get("chunks_done", 0)
             total = open_row.get("chunks_total", 0)
             choice = QMessageBox.question(
                 self, "Settings changed since the interrupted run",
                 f"{Path(book_path).name} was interrupted with "
-                f"{done} of {total} chapters cached under voice "
+                f"{done} of {total} chapters cached by "
+                f"{open_row.get('provider') or 'openai'} under voice "
                 f"'{open_row.get('voice')}' and chunk size "
                 f"{open_row.get('chunk_tokens')}.\n\n"
                 "Resume with those original settings to reuse the paid "
@@ -538,34 +689,60 @@ class AudiobookPanel(QWidget):
                 "No — start fresh with the new settings (the cache is "
                 "discarded and the whole book is generated at full cost).")
             if choice == QMessageBox.Yes:
+                route = open_row.get("provider") or "openai"
+                if route not in NARRATION_ROUTES:
+                    route = "openai"
+                model = open_row.get("model") or self._route_model(route)
                 voice = open_row.get("voice") or voice
                 chunk_tokens = int(open_row.get("chunk_tokens")
                                    or chunk_tokens)
-                self.audiobook_voice_box.setCurrentText(voice)
+                if route != self._route():
+                    self._switch_route(route)
+                self._select_voice(voice)
                 self.audiobook_chunk_input.setText(str(chunk_tokens))
+                estimate = self._estimate(Path(book_path), route) or estimate
+                if estimate.get("eur") is None:
+                    QMessageBox.warning(
+                        self, "No Price Configured",
+                        f"The interrupted run used {route}, which has no rate "
+                        "on file. Add one in Settings → Pricing to resume it.")
+                    return
             else:
                 fresh_start = True
         fraction = (1.0 if fresh_start
                     else conversions.remaining_fraction(open_row))
         remaining_eur = round(estimate["eur"] * fraction, 6)
-        # Assessed like every paid request. Booth's converter is wired to one
-        # narration route, and the dialog says so plainly instead of
-        # inventing a comparison; see TODO.md for wiring a second.
+        # Assessed like every paid request, across every narrator: this
+        # route at what this run still has to pay (cached chunks were paid
+        # for), the others at the whole book, since a switch starts over.
+        options = []
+        text = self._text(Path(book_path))
+        for key, spec in NARRATION_ROUTES.items():
+            if key == route:
+                cost = remaining_eur
+            else:
+                try:
+                    cost = self._route_cost_eur(key, text, estimate["seconds"])
+                except Exception as exc:
+                    self.host._note_failure(f"audiobook: price {key}", exc)
+                    cost = None
+            options.append(self.host.speech_option(
+                spec["speech"], spec["model"], spec["label"], cost,
+                apply=lambda r=key: self._switch_route(r)))
         assessment = self.host.assess_media_request(
-            "audiobook", [self.host.speech_option(
-                "OpenAI", "gpt-4o-mini-tts", "OpenAI gpt-4o-mini-tts",
-                remaining_eur)],
-            "gpt-4o-mini-tts", modality="speech", task="audiobook narration",
-            single_route_note=(
-                "the only narration route Booth's converter is wired to, so "
-                "there is nothing to compare. ElevenLabs is wired only for "
-                "Press Shorts."))
+            "audiobook", options, model, modality="speech",
+            task="audiobook narration long-form")
         token = self.host.authorize_request(
-            "audiobook", "openai", "gpt-4o-mini-tts",
+            "audiobook", route, model,
             f"{Path(book_path).name} · {estimate['characters']} characters",
             label="audiobook", flat_cost_eur=remaining_eur,
             assessment=assessment)
         if not token:
+            if (assessment is not None
+                    and self.host.last_applied_assessment is assessment):
+                # Apply switched the narrator; ask again on it, with its own
+                # estimate and confirmation.
+                self.start_conversion()
             return
         self._request_token = token
         self.host._audiobook_request_token = token
@@ -579,7 +756,7 @@ class AudiobookPanel(QWidget):
                 voice=voice, chunk_tokens=chunk_tokens,
                 estimate_eur=estimate["eur"],
                 project=self._conversion_project_id,
-                reset_progress=fresh_start)
+                reset_progress=fresh_start, provider=route, model=model)
             self._conversion_job_id = job["id"]
         except Exception as exc:
             self._conversion_job_id = None
@@ -587,9 +764,11 @@ class AudiobookPanel(QWidget):
         config = {
             "input": book_path, "output": output_path, "voice": voice,
             "chunk_tokens": chunk_tokens, "audio_format": audio_format,
+            "provider": route, "model": model,
         }
         self.host.output_box.setPlainText(
             f"[Starting]\nBook: {Path(book_path).name}\nOutput: {output_path}"
+            f"\nNarrator: {NARRATION_ROUTES[route]['label']}"
             f"\nVoice: {voice}\nChunk tokens: {chunk_tokens}\n\n")
         self.audiobook_status_label.setText(
             f"[Running] {Path(book_path).name}")
@@ -612,6 +791,8 @@ class AudiobookPanel(QWidget):
             "--voice", config["voice"], "--chunk-tokens",
             str(config["chunk_tokens"]),
             "--format", config.get("audio_format", "mp3"),
+            "--provider", config.get("provider", "openai"),
+            "--model", config.get("model", "gpt-4o-mini-tts"),
         ]
         arguments = (["--narrator-worker"] + conv_args if is_frozen() else
                      ["-u", "-m", tool.get(
@@ -679,6 +860,11 @@ class AudiobookPanel(QWidget):
         quota_hit = any(marker in output_text for marker in (
             "insufficient_quota", "exceeded your current quota",
             "Billing hard limit"))
+        # The other routes stop with "<Provider> refused the request" (key,
+        # credit or quota), or say which key they need before spending.
+        refused = next((line.strip(" ❌") for line in output_text.splitlines()
+                        if "refused the request" in line
+                        or "route needs" in line), "")
         paused = ("Conversion paused" in output_text or
                   "⏸️" in output_text)
         self._close_request(success)
@@ -695,6 +881,14 @@ class AudiobookPanel(QWidget):
                 self, "OpenAI Quota Exceeded",
                 "Your OpenAI account has run out of quota. Top up at "
                 "platform.openai.com/settings/billing, then click Start to resume.")
+        elif refused:
+            self.tool_progress.setValue(0)
+            self.audiobook_status_label.setText(f"[Blocked] {refused[:120]}")
+            self.host.output_box.append(
+                f"\n[Blocked] {refused}\nFix the key or the account's credit, "
+                "then click Start on the same book to resume — cached chunks "
+                "are not paid for again.")
+            QMessageBox.warning(self, "Narrator Refused the Request", refused)
         elif paused and exit_code != 0:
             self.tool_progress.setValue(0)
             self.audiobook_status_label.setText(
@@ -808,8 +1002,9 @@ class AudiobookPanel(QWidget):
             if row is not None and spend > 0:
                 try:
                     self.host.usage_tracker.log_request(
-                        agent="audiobook", backend="openai",
-                        model="gpt-4o-mini-tts",
+                        agent="audiobook",
+                        backend=row.get("provider") or "openai",
+                        model=row.get("model") or "gpt-4o-mini-tts",
                         prompt_text=f"partial conversion: "
                         f"{Path(row['source_path']).name}",
                         response_text=f"{row['chunks_done']}/"
@@ -847,8 +1042,9 @@ class AudiobookPanel(QWidget):
                                    billed_add=spend)
                 if spend > 0:
                     self.host.usage_tracker.log_request(
-                        agent="audiobook", backend="openai",
-                        model="gpt-4o-mini-tts",
+                        agent="audiobook",
+                        backend=row.get("provider") or "openai",
+                        model=row.get("model") or "gpt-4o-mini-tts",
                         prompt_text=f"partial conversion (previous "
                         f"session): {Path(row['source_path']).name}",
                         response_text=f"{row['chunks_done']}/"
@@ -861,8 +1057,11 @@ class AudiobookPanel(QWidget):
                     "audiobook: settle dead conversion", exc)
         if rows:
             last = rows[-1]
+            if (last.get("provider") in NARRATION_ROUTES
+                    and last["provider"] != self._route()):
+                self._switch_route(last["provider"])
             if last.get("voice"):
-                self.audiobook_voice_box.setCurrentText(last["voice"])
+                self._select_voice(last["voice"])
             if last.get("chunk_tokens"):
                 self.audiobook_chunk_input.setText(
                     str(last["chunk_tokens"]))

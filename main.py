@@ -1040,7 +1040,7 @@ class GodAI(QWidget):
         self._price_index_cache = (now, index)
         return index
 
-    def _remaining_budget_eur(self) -> float:
+    def _remaining_budget_eur(self, agent: str | None = None) -> float:
         """What the request guard would still allow one request to cost.
 
         The same caps Validator.validate applies, in the same way: session
@@ -1058,6 +1058,12 @@ class GodAI(QWidget):
             project = self._project_budget_fields()
             if project.get("project_budget") is not None:
                 left.append(project["project_budget"] - project["project_cost"])
+            # The agent's own daily cap (Settings → Agents), as the guard
+            # applies it: Booth ships with €10, which a whole ElevenLabs
+            # book exceeds.
+            cap = self.registry.get_agent_budget(agent) if agent else None
+            if cap is not None:
+                left.append(cap - self.usage_tracker.get_agent_today_total(agent))
         except Exception as exc:
             self._note_failure("recommendations: remaining budget", exc)
         return max(0.0, min(left))
@@ -1067,7 +1073,7 @@ class GodAI(QWidget):
         return RecommendationContext(
             agent=agent_key,
             task=self._recommendation_task(agent_key) if task is None else task,
-            budget_remaining=self._remaining_budget_eur(),
+            budget_remaining=self._remaining_budget_eur(agent_key),
             priority=("privacy" if agent_key == "chat"
                       and getattr(self, "execution_mode_box", None) is not None
                       and self.execution_mode_box.currentText() == "Local only"
@@ -1168,10 +1174,10 @@ class GodAI(QWidget):
     def speech_option(self, provider, model_id, label, cost_eur, apply=None):
         candidate = speech_candidate(provider, model_id, label, cost_eur)
         if provider.casefold() not in {"system"}:
+            # Every paid voice needs the user's permission, ElevenLabs
+            # included: the guard checks allow_elevenlabs like any other.
             candidate = replace(candidate, available=bool(
-                candidate.available and (
-                    provider.casefold() == "elevenlabs"
-                    or self._provider_permission(provider))))
+                candidate.available and self._provider_permission(provider)))
         return types.SimpleNamespace(candidate=candidate, cost_eur=cost_eur,
                                      apply=apply, quoted=False)
 
@@ -1192,7 +1198,7 @@ class GodAI(QWidget):
             context = RecommendationContext(
                 agent=agent_key, modality=modality, task=task,
                 aspect=aspect, duration=duration,
-                budget_remaining=self._remaining_budget_eur())
+                budget_remaining=self._remaining_budget_eur(agent_key))
             # Cost is scored relative to this request's other routes: the
             # cheapest that can make it scores 1.0, one at twice the price
             # 0.5, a €0.30 voice against a free one about 0.03. On an absolute
@@ -1599,7 +1605,7 @@ class GodAI(QWidget):
             agent="video", modality="visual",
             task=format_box.currentText(),
             aspect=aspect_box.currentText(), duration=duration,
-            budget_remaining=self._remaining_budget_eur(),
+            budget_remaining=self._remaining_budget_eur("video"),
         )
         profile = profile_for("video")
         overall = self.recommendation_engine.recommend(profile, candidates, context)

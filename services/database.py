@@ -1144,8 +1144,13 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         {
             "name": "audiobook",
             "label": "Booth",
-            "description": "Turn PDF, EPUB, TXT and MOBI books into MP3 audiobooks with OpenAI text-to-speech, and play them back with resume.",
-            "allowed_providers": json.dumps([]),
+            "description": "Turn PDF, EPUB, TXT and MOBI books into MP3 or M4B audiobooks narrated by OpenAI, Gemini or ElevenLabs, and play them back with resume.",
+            # Named, not empty: _reconcile_agent_providers adds a provider
+            # to an existing row only when this list names it, and rows made
+            # from registry.json allowed only openai/qwen — so the Gemini and
+            # ElevenLabs narrators were refused by the guard on every
+            # install older than them.
+            "allowed_providers": json.dumps(["openai", "gemini", "elevenlabs"]),
             "allowed_tools": None,
             "budget_limit_eur": None,
             "requires_approval": 0,

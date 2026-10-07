@@ -67,3 +67,33 @@ def test_a_rate_missing_from_an_old_editable_copy_comes_from_the_bundle(
     assert pricing.rate_usd("openai_tts_per_1k_chars") == 0.5      # copy wins
     assert pricing.rate_usd("elevenlabs_tts", "eleven_flash_v2_5") == 0.04
     assert pricing.rate_usd("nothing_like_this") is None
+
+
+def test_elevenlabs_voices_come_from_the_paginated_endpoint(monkeypatch):
+    import providers.voice.elevenlabs as el
+    pages = [
+        {"voices": [{"voice_id": "a", "name": "Ana"}], "has_more": True,
+         "next_page_token": "p2"},
+        {"voices": [{"voice_id": "b", "name": "Ben"}], "has_more": False},
+    ]
+    asked = []
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        asked.append((url, dict(params)))
+        page = pages.pop(0)
+        return types.SimpleNamespace(raise_for_status=lambda: None,
+                                     json=lambda: page)
+
+    monkeypatch.setattr(el.requests, "get", fake_get)
+    voices = el.ElevenLabsProvider(api_key="test-not-a-real-key").list_voices()
+    assert [v["id"] for v in voices] == ["a", "b"]
+    assert all(url == "https://api.elevenlabs.io/v2/voices" for url, _ in asked)
+    assert asked[1][1]["next_page_token"] == "p2"
+
+
+def test_a_dated_rate_applies_from_its_date():
+    from services.per_unit_pricing import dated_rate_usd
+    rate = lambda day: dated_rate_usd("gemini_tts_per_minute",
+                                      "gemini-3.8-flash-tts", day)
+    assert rate("2026-12-31") == 0.0137
+    assert rate("2027-01-01") == 0.0272

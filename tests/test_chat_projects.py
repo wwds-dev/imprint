@@ -367,7 +367,6 @@ def test_audiobook_uses_project_export_and_links_result_to_start_project(
     import main
     from PySide6.QtCore import Qt
     from PySide6.QtWidgets import QMessageBox
-    from agents.audiobook.panel import OpenAIClientWrapper
     from services.project_artifacts import list_for_project, record
 
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "imprint.db")
@@ -394,8 +393,8 @@ def test_audiobook_uses_project_export_and_links_result_to_start_project(
 
         output_folder = tmp_path / "audio"
         panel.audiobook_output_path.setText(str(output_folder))
-        monkeypatch.setattr(OpenAIClientWrapper, "key_available",
-                            staticmethod(lambda: True))
+        # Booth checks the selected narrator's key (OpenAI by default).
+        monkeypatch.setenv("OPENAI_API_KEY", "test-not-a-real-key")
         authorizations = []
         monkeypatch.setattr(
             window, "authorize_request",
