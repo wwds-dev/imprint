@@ -28,8 +28,8 @@ from typing import Callable
 
 from PySide6.QtCore import QEvent, QObject
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QLineEdit, QStyle, QStyleOptionComboBox,
-    QStyleOptionFrame, QToolTip, QWidget,
+    QAbstractSpinBox, QApplication, QComboBox, QLineEdit, QStyle,
+    QStyleOptionComboBox, QStyleOptionFrame, QToolTip, QWidget,
 )
 
 # Average characters a single-line field always has room for. Ten is
@@ -58,6 +58,11 @@ def apply_floor(edit: QLineEdit) -> None:
     app stylesheet sets its real font size, and a floor measured then is a
     character or two short.
     """
+    if isinstance(edit.parent(), (QAbstractSpinBox, QComboBox)):
+        # The edit inside a spin box, date edit or editable combo is sized
+        # by its owner. A floor on it grew it over the owner's arrow
+        # buttons — Press's calendar date picker stopped opening.
+        return
     mine = edit.property("imprintTextFloor")
     current = edit.minimumWidth()
     if current not in (0, mine):

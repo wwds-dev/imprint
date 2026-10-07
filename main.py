@@ -2685,6 +2685,11 @@ class GodAI(QWidget):
         self.session_budget_input.setAlignment(Qt.AlignRight)
         self.daily_budget_input = line_edit("5", str(int(self.daily_budget_eur)))
         self.daily_budget_input.setAlignment(Qt.AlignRight)
+        # A few digits each, side by side in a 244px rail: their own minimum,
+        # so the app-wide ten-character floor (ui/text_fit.py) does not push
+        # the row — and Save Limits under it — past the rail's edge.
+        for budget_input in (self.session_budget_input, self.daily_budget_input):
+            budget_input.setMinimumWidth(56)
         limits_row.addWidget(field("Session €", self.session_budget_input))
         limits_row.addWidget(field("Daily €", self.daily_budget_input))
         layout.addLayout(limits_row)

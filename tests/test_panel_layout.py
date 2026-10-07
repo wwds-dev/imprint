@@ -979,3 +979,65 @@ def test_form_grid_folds_into_balanced_rows():
     assert grid.columns_for(332) == 3
     assert grid.columns_for(250) == 2
     assert grid.columns_for(90) == 1
+
+
+@pytest.mark.parametrize("size", SIZES, ids=lambda s: f"{s[0]}x{s[1]}")
+def test_every_rail_control_fits_inside_the_rail(app, window, size):
+    """The policy test above only says no scrollbar appears — so content wider
+    than the rail was simply cut off. The text floor did exactly that to the
+    Session € / Daily € row and Save Limits (review of 9777f0c). Every control
+    must end inside the rail's viewport, with every section open."""
+    from PySide6.QtWidgets import (
+        QAbstractButton, QComboBox, QLineEdit, QScrollArea, QWidget)
+    from ui.widgets import CollapsibleSection
+    _settle(app, window, size, "author")
+    rail = window.findChild(QWidget, "RailRight")
+    area = rail.findChild(QScrollArea)
+    opened = [sec for sec in rail.findChildren(CollapsibleSection)
+              if not sec._expanded]
+    for sec in opened:
+        sec._toggle()
+    try:
+        for _ in range(6):
+            app.processEvents()
+        viewport = area.viewport()
+        clipped = []
+        for child in area.widget().findChildren(QWidget):
+            if not isinstance(child, (QLineEdit, QComboBox, QAbstractButton)):
+                continue
+            if not child.isVisible():
+                continue
+            right = child.mapTo(viewport, child.rect().topRight()).x()
+            if right > viewport.width():
+                clipped.append(f"{_describe(child)} ends at {right}px "
+                               f"in a {viewport.width()}px rail")
+        assert not clipped, "; ".join(clipped[:5])
+    finally:
+        for sec in opened:
+            sec._toggle()
+
+
+def test_the_text_floor_leaves_spin_box_and_date_edits_alone(app):
+    """The floor grew the edit inside a QDateEdit over its arrow button, so
+    Press's calendar picker stopped opening (review of 9777f0c)."""
+    from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtTest import QTest
+    from PySide6.QtWidgets import QDateEdit, QLineEdit, QSpinBox, QWidget
+    from ui.text_fit import apply_floor, floor_width
+    host = QWidget()
+    spin = QSpinBox(host)
+    spin.setRange(0, 10)
+    spin.setGeometry(0, 0, 64, 30)
+    date = QDateEdit(host)
+    host.show()
+    for _ in range(4):
+        app.processEvents()
+    for owner in (spin, date):
+        inner = owner.findChild(QLineEdit)
+        apply_floor(inner)
+        assert inner.minimumWidth() < floor_width(inner), type(owner).__name__
+    # And the arrows still work on a narrow spin box.
+    value = spin.value()
+    QTest.mouseClick(spin, Qt.MouseButton.LeftButton,
+                     pos=QPoint(spin.width() - 6, 6))
+    assert spin.value() == value + 1
