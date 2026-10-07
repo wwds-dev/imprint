@@ -14,7 +14,7 @@ def seed_tooltips(app):
     app._set_tooltips({
         "tool_box":                "System prompt frame applied to the conversation (General Chat, Writing, Coding, Summarize, Rewrite).",
         "command_box":             "Pre-built prompt scaffold from config/commands.json. Pick one or type your own message.",
-        "provider_box":            "AI provider that will run this request. Ollama is local & free; Anthropic / OpenAI / DeepSeek / Gemini are cloud (pay-as-you-go).",
+        "provider_box":            "AI provider that will run this request. Ollama is local & free; Anthropic / OpenAI / DeepSeek / Kimi / Gemini / Qwen are cloud (pay-as-you-go).",
         "model_box":               "Specific model under the chosen provider. Larger models cost more but produce stronger output.",
         "refresh_models_btn":      "Re-fetch the model list from the selected provider.",
         "model_guide_btn":         "Open the in-app Model Guide with current models, pricing, and recommendations.",
@@ -27,6 +27,7 @@ def seed_tooltips(app):
         "allow_kimi_checkbox": "Allow this request to use the Kimi API (paid, strong at coding/agentic tasks).",
         "allow_gemini_checkbox":   "Allow this request to use Google Gemini (free tier available).",
         "allow_anthropic_checkbox":"Allow this request to use Anthropic Claude (paid).",
+        "allow_qwen_checkbox":     "Allow this request to use Alibaba Qwen through Model Studio (paid).",
         "input_box":               "Type your prompt here. Long prompts cost more on paid providers.",
         "send_btn":                "Send the prompt to the selected provider and model.",
         "stop_chat_btn":           "Cancel the in-flight request.",
@@ -95,6 +96,7 @@ def seed_tooltips(app):
         "kimi_key_label":           "Whether a Kimi (Moonshot AI) API key is configured. Set KIMI_API_KEY in .env or ~/.zshrc.",
         "gemini_key_label":         "Whether a Google Gemini API key is configured. Set GOOGLE_API_KEY in .env or ~/.zshrc.",
         "anthropic_key_label":      "Whether an Anthropic API key is configured. Set ANTHROPIC_API_KEY in .env or ~/.zshrc.",
+        "qwen_key_label":           "Whether an Alibaba Model Studio (Qwen) key is configured. Set DASHSCOPE_API_KEY in .env or ~/.zshrc; DASHSCOPE_BASE_URL switches region.",
     })
 
     # ── Per-agent panel tooltips ─────────────────────────────────────

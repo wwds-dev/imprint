@@ -127,6 +127,7 @@ def ensure_seeded() -> None:
                 "DEEPSEEK_API_KEY=\n"
                 "KIMI_API_KEY=\n"
                 "GOOGLE_API_KEY=\n"
-                "ANTHROPIC_API_KEY=\n",
+                "ANTHROPIC_API_KEY=\n"
+                "DASHSCOPE_API_KEY=\n",
                 encoding="utf-8",
             )

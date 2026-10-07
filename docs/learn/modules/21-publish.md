@@ -15,7 +15,7 @@
 
 | Tab/area | What it does | Required interpretation |
 |---|---|---|
-| Overview | Connections, reporting period, owned sales summary, Ask, publishing todos | Imported/refreshed rows are observations only for their source/window |
+| Overview | Sync strip, reporting period, royalties-by-marketplace chart, metrics box, Ask, publishing todos, Connections | Imported/refreshed rows are observations only for their source/window |
 | Quote Finder | Load File, candidate count, voice, Suggest Quotes | Suggestions require source-text verification |
 | Quote Graphics | Quote, attribution, theme, size, Generate Graphic, Open Folder | A generated asset is not licensed proof or performance evidence |
 | Shorts | Quote/narration, attribution, theme, voice source/narrator, Generate, Play, Folder | Review audio, claims, timing, and platform rules |
@@ -168,9 +168,13 @@ Read it as the last outcome, not as freshness — an import from March stays
 The chart now shows royalties per marketplace, largest first, with units as
 the thin second bar. It re-reads every CSV in `data/kdp_reports/` each time,
 so it shows exactly what is in that folder — including any overlap you left
-there. Two cautions: the bars format with a dollar sign but the numbers are
-summed straight from the Royalty column with no currency conversion, so a
-marketplace that pays in pounds or euro shows its raw figure; and everything
+there. Two cautions. First, the numbers are summed straight from the Royalty
+column with no currency conversion: the bars carry a `$` only when every row
+in your reports says USD, and otherwise show plain figures — hover the chart
+to see whether the reports are in one named currency, mixed (summed as
+reported, not converted) or state no currency at all. If a report file cannot
+be read, or rows have numbers it cannot parse (a decimal comma, say), the
+status line warns that they are missing from the chart. Second, everything
 here is a past observation for the windows your reports cover. Nothing on
 this chart predicts next month.
 

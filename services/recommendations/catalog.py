@@ -8,21 +8,35 @@ receive conservative provider-family defaults and are still rankable.
 from __future__ import annotations
 
 import os
+import re
+from dataclasses import replace
 from datetime import date
+
+from services.model_watch import canonical, is_chat_model
 
 from .models import Candidate
 
 
+# Each provider's key, as alternatives: any one entry counts, and an entry
+# that is a tuple needs every variable in it. Gemini's client accepts either
+# GOOGLE_API_KEY (what .env.example ships) or GEMINI_API_KEY; reading only
+# the second ranked a configured Gemini as "setup needed". Higgsfield retired
+# its single bearer token for an id + secret pair.
 _KEY_ENV = {
-    "openai": "OPENAI_API_KEY",
-    "deepseek": "DEEPSEEK_API_KEY",
-    "kimi": "KIMI_API_KEY",
-    "gemini": "GEMINI_API_KEY",
-    "anthropic": "ANTHROPIC_API_KEY",
-    "qwen": "DASHSCOPE_API_KEY",
-    "higgsfield": "HIGGSFIELD_API_KEY",
-    "pexels": "PEXELS_API_KEY",
+    "openai": ("OPENAI_API_KEY",),
+    "deepseek": ("DEEPSEEK_API_KEY",),
+    "kimi": ("KIMI_API_KEY",),
+    "gemini": ("GEMINI_API_KEY", "GOOGLE_API_KEY"),
+    "anthropic": ("ANTHROPIC_API_KEY",),
+    "qwen": ("DASHSCOPE_API_KEY",),
+    "higgsfield": (("HF_API_KEY_ID", "HF_API_KEY_SECRET"),),
+    "pexels": ("PEXELS_API_KEY",),
 }
+
+# A newer generation in the same family/tier gets this much extra quality.
+# Small on purpose: enough to rank qwen4-max over qwen3.8-max, never enough
+# to lift a "mini" over a full model or override the agent's task fit.
+NEWEST_GENERATION_BONUS = 0.04
 
 _PROVIDER_DEFAULTS = {
     "openai":       (0.84, 0.86, 0.55, 0.72, 0.78),
@@ -62,8 +76,34 @@ def provider_configured(provider: str) -> bool | None:
         # because they need no API key.  The GUI can promote Ollama candidates
         # to available when its live list contains them.
         return False
-    env = _KEY_ENV.get(provider)
-    return bool(os.getenv(env, "")) if env else None
+    options = _KEY_ENV.get(provider)
+    if options is None:
+        return None
+    for option in options:
+        names = option if isinstance(option, tuple) else (option,)
+        if all(os.getenv(name, "").strip() for name in names):
+            return True
+    return False
+
+
+def generation(model_id: str) -> tuple[float, ...]:
+    """The version numbers in an id, for ordering releases of one family.
+
+    "claude-opus-5-5" -> (5, 5) and "claude-opus-4-6" -> (4, 6), so the
+    tuple order is release order. A trailing release date is dropped first:
+    it orders snapshots, not generations.
+    """
+    return tuple(float(n) for n in re.findall(r"\d+(?:\.\d+)?",
+                                               canonical(model_id)))
+
+
+def family(model_id: str) -> str:
+    """The id with its version numbers removed: the tier a release replaces.
+
+    "qwen3.8-max" and "qwen4-max" are both "qwen-max"; "qwen-plus" is not.
+    """
+    bare = re.sub(r"\d+(?:\.\d+)?", "", canonical(model_id).casefold())
+    return re.sub(r"[-_.]+", "-", bare).strip("-")
 
 
 def text_candidate(provider: str, model_id: str,
@@ -130,11 +170,33 @@ def known_text_models(provider: str) -> tuple[str, ...]:
 def text_candidates(providers: list[str] | tuple[str, ...],
                     live_models: dict[str, list[str]] | None = None
                     ) -> list[Candidate]:
+    """Every selectable text model, ranked-ready.
+
+    Live lists can carry embedding, speech and image ids beside the chat
+    models; those are not candidates. Within one provider, the newest
+    generation of each family gets `NEWEST_GENERATION_BONUS`, so a model
+    released after this catalogue was written is assessed as the successor
+    it is rather than tied with what it replaced.
+    """
     live_models = live_models or {}
     result: list[Candidate] = []
     for provider in providers:
         models = live_models.get(provider, []) or list(known_text_models(provider))
-        result.extend(text_candidate(provider, model) for model in models)
+        models = [m for m in models if is_chat_model(m)]
+        newest: dict[str, tuple[float, ...]] = {}
+        generations: dict[str, set[tuple[float, ...]]] = {}
+        for model in models:
+            tier, gen = family(model), generation(model)
+            generations.setdefault(tier, set()).add(gen)
+            newest[tier] = max(newest.get(tier, gen), gen)
+        for model in models:
+            candidate = text_candidate(provider, model)
+            tier = family(model)
+            if (len(generations[tier]) > 1
+                    and generation(model) == newest[tier]):
+                candidate = replace(candidate, quality=min(
+                    1.0, candidate.quality + NEWEST_GENERATION_BONUS))
+            result.append(candidate)
     return result
 
 

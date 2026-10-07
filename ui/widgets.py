@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton, QScrollArea, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget,
 )
 
-from ui.style import ACCENT, ELEVATED, TEXT, TEXT_MUTE
+from ui.style import ACCENT, ELEVATED, TEXT, TEXT_DIM, TEXT_MUTE
 from ui import theme
 
 
@@ -34,6 +34,11 @@ RECOMMENDATION_REASON_ROLE = int(Qt.ItemDataRole.UserRole) + 102
 RECOMMENDATION_SCORE_ROLE = int(Qt.ItemDataRole.UserRole) + 103
 RECOMMENDATION_CONFIDENCE_ROLE = int(Qt.ItemDataRole.UserRole) + 104
 RECOMMENDATION_BADGE_ROLE = int(Qt.ItemDataRole.UserRole) + 105
+# A model the provider listed for the first time since Imprint last looked
+# (services/model_watch.py). Painted as a quiet NEW badge in the same slot as
+# BEST FIT; when a model is both, BEST FIT wins the slot and the tooltip says
+# it is new.
+NEW_MODEL_ROLE = int(Qt.ItemDataRole.UserRole) + 106
 
 
 class DropdownProxyStyle(QProxyStyle):
@@ -68,7 +73,7 @@ class DropdownItemDelegate(QStyledItemDelegate):
         text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
         width = option.fontMetrics.horizontalAdvance(text)
         badge_space = self.BADGE_SPACE \
-            if index.data(RECOMMENDED_ROLE) else 0
+            if index.data(RECOMMENDED_ROLE) or index.data(NEW_MODEL_ROLE) else 0
         # QStyledItemDelegate's width can be the popup viewport's current width
         # (640px before layout on macOS). Only the content should influence the
         # horizontal hint; retain the base hint solely for row height.
@@ -124,7 +129,8 @@ class DropdownItemDelegate(QStyledItemDelegate):
         text_color = (recommendation_color if recommended else
                       foreground if isinstance(foreground, QColor) else _c(TEXT))
         painter.setPen(text_color if enabled else _c(TEXT_MUTE))
-        badge_space = self.BADGE_SPACE if recommended else 0
+        is_new = bool(index.data(NEW_MODEL_ROLE)) and not recommended
+        badge_space = self.BADGE_SPACE if recommended or is_new else 0
         text_rect = QRect(
             text_left,
             row.top(),
@@ -152,6 +158,21 @@ class DropdownItemDelegate(QStyledItemDelegate):
             painter.setPen(_c(ACCENT))
             badge_text = str(index.data(RECOMMENDATION_BADGE_ROLE) or "BEST FIT")
             painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, badge_text)
+
+        if is_new:
+            # Muted rather than accent: news, not advice. BEST FIT keeps the
+            # accent so the two never read as the same claim.
+            badge = QRect(row.right() - self.CHECK_SPACE - 66,
+                          row.center().y() - 9, 60, 18)
+            painter.setPen(QPen(_c(TEXT_MUTE), 1))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(badge, 8, 8)
+            badge_font = QFont(option.font)
+            badge_font.setPointSizeF(max(8.0, badge_font.pointSizeF() - 2.0))
+            badge_font.setWeight(QFont.Weight.DemiBold)
+            painter.setFont(badge_font)
+            painter.setPen(_c(TEXT_DIM))
+            painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, "NEW")
 
         if selected:
             centre = QPoint(row.right() - 17, row.center().y())
@@ -392,6 +413,12 @@ class CollapsibleSection(QWidget):
 
     def addWidget(self, widget):
         self.content_layout.addWidget(widget)
+
+    def set_title(self, title: str) -> None:
+        """Rename the section in place — a count in the title, for one."""
+        self._title = title
+        self.header_btn.setAccessibleName(title)
+        self._update_header()
 
     def _toggle(self):
         self._expanded = not self._expanded

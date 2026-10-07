@@ -369,7 +369,6 @@ class AuthorPanel(QWidget):
 
         self.author_export_author_input = QLineEdit()
         self.author_export_author_input.setPlaceholderText("Author name")
-        self.author_export_author_input.setMinimumWidth(100)
         self.author_export_author_input.setSizePolicy(
             QSizePolicy.Expanding, QSizePolicy.Fixed)
         document_actions.addWidget(self.author_export_author_input, 1)

@@ -17,17 +17,18 @@ rules structural rather than something to remember:
   border and a title bar for every four fields.
 * **One control height**, so a row of mixed inputs and buttons sits on a line.
 
-`form_grid()` is the reason the project bar stops looking ragged: a real grid
-with equal column stretch, rather than a FlowLayout that wraps to wherever the
-previous widget ended.
+`form_grid()` is the reason the project bar stops looking ragged: equal
+columns, rather than a FlowLayout that wraps to wherever the previous widget
+ended — and, when the row is short of width, fewer equal columns rather than
+one field squeezed to a single character.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QRect, QSize, Qt
 
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+    QComboBox, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit,
     QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -80,21 +81,143 @@ def field(label: str, widget: QWidget, *, stretch_label: bool = False) -> QWidge
     return box
 
 
-def form_grid(pairs: list[tuple[str, QWidget]], *, columns: int = 3) -> QGridLayout:
-    """A grid of `field()`s with equal columns.
+# The narrowest a form_grid column may become before the grid folds into more
+# rows. Sixteen average characters plus the field's chrome: wide enough for a
+# placeholder like "Project title…" or a dropdown's current value.
+FIELD_MIN_WIDTH = 136
 
-    Equal stretch is the point: it is what makes the second row's labels sit
-    directly under the first row's, instead of each row packing to its own
-    content width.
+
+class FieldGridLayout(QLayout):
+    """Equal columns that fold into more rows instead of squeezing a field.
+
+    `form_grid` used to be a QGridLayout with equal stretch. Stretch decides
+    how *spare* width is shared; when a row is short of width, Qt takes it
+    from whichever widget has the smallest minimum, and a QLineEdit's minimum
+    is about one character. The Quill project bar showed "P…" in Title while
+    each dropdown beside it kept 177px. This layout never draws a column
+    narrower than `min_column_width`: it drops to fewer columns first.
+
+    Column counts stay balanced — six fields fold 6 → 3 → 2 → 1, never into
+    a row of five over a lone sixth — so the labels of every row still line
+    up under the first row's.
     """
-    grid = QGridLayout()
-    grid.setHorizontalSpacing(MD)
-    grid.setVerticalSpacing(MD)
-    for index, (label, widget) in enumerate(pairs):
-        grid.addWidget(field(label, widget), index // columns, index % columns,
-                       Qt.AlignTop)
-    for column in range(columns):
-        grid.setColumnStretch(column, 1)
+
+    def __init__(self, columns: int = 3, min_column_width: int = FIELD_MIN_WIDTH,
+                 parent=None):
+        super().__init__(parent)
+        self.max_columns = max(1, columns)
+        self.min_column_width = min_column_width
+        self._items = []
+        self._hspace = MD
+        self._vspace = MD
+        self.setContentsMargins(0, 0, 0, 0)
+
+    # ── QLayout plumbing ────────────────────────────────────────────────
+    def addItem(self, item):
+        self._items.append(item)
+
+    def count(self):
+        return len(self._items)
+
+    def itemAt(self, index):
+        return self._items[index] if 0 <= index < len(self._items) else None
+
+    def takeAt(self, index):
+        return self._items.pop(index) if 0 <= index < len(self._items) else None
+
+    def setHorizontalSpacing(self, spacing: int) -> None:
+        self._hspace = spacing
+        self.invalidate()
+
+    def setVerticalSpacing(self, spacing: int) -> None:
+        self._vspace = spacing
+        self.invalidate()
+
+    def expandingDirections(self):
+        return Qt.Orientation.Horizontal
+
+    def hasHeightForWidth(self):
+        return True
+
+    def heightForWidth(self, width):
+        return self._arrange(QRect(0, 0, width, 0), apply=False)
+
+    def setGeometry(self, rect):
+        super().setGeometry(rect)
+        self._arrange(rect, apply=True)
+
+    def sizeHint(self):
+        margins = self.contentsMargins()
+        columns = min(self.max_columns, len(self._visible()) or 1)
+        width = (columns * self.min_column_width
+                 + (columns - 1) * self._hspace
+                 + margins.left() + margins.right())
+        return QSize(width, self.heightForWidth(width))
+
+    def minimumSize(self):
+        margins = self.contentsMargins()
+        width = self.min_column_width + margins.left() + margins.right()
+        return QSize(width, self.heightForWidth(width))
+
+    # ── geometry ────────────────────────────────────────────────────────
+    def _visible(self):
+        return [item for item in self._items
+                if item.widget() is None or not item.widget().isHidden()]
+
+    def columns_for(self, inner_width: int) -> int:
+        """How many columns fit `inner_width`, balanced across the rows."""
+        count = len(self._visible())
+        if count == 0:
+            return 1
+        fit = (inner_width + self._hspace) // (self.min_column_width + self._hspace)
+        columns = max(1, min(self.max_columns, count, fit))
+        rows = -(-count // columns)
+        # The fewest columns that still need only that many rows: a row of
+        # five over a lone sixth becomes two rows of three.
+        while columns > 1 and -(-count // (columns - 1)) == rows:
+            columns -= 1
+        return columns
+
+    def _arrange(self, rect: QRect, apply: bool) -> int:
+        margins = self.contentsMargins()
+        inner = rect.adjusted(margins.left(), margins.top(),
+                              -margins.right(), -margins.bottom())
+        items = self._visible()
+        if not items:
+            return margins.top() + margins.bottom()
+        columns = self.columns_for(inner.width())
+        spare = max(0, inner.width() - (columns - 1) * self._hspace)
+        y = inner.y()
+        for start in range(0, len(items), columns):
+            row_items = items[start:start + columns]
+            row_height = max(item.sizeHint().height() for item in row_items)
+            if apply:
+                x = inner.x()
+                for column, item in enumerate(row_items):
+                    # Spread the remainder pixel by pixel so every column
+                    # edge lands on the same x in every row.
+                    width = (spare * (column + 1)) // columns \
+                        - (spare * column) // columns
+                    height = item.sizeHint().height()
+                    item.setGeometry(QRect(x, y, width, height))
+                    x += width + self._hspace
+            y += row_height + self._vspace
+        return y - self._vspace - rect.y() + margins.bottom()
+
+
+def form_grid(pairs: list[tuple[str, QWidget]], *,
+              columns: int = 3,
+              min_column_width: int = FIELD_MIN_WIDTH) -> FieldGridLayout:
+    """A grid of `field()`s with equal columns that fold when narrow.
+
+    Equal columns are the point: they are what make the second row's labels
+    sit directly under the first row's. `columns` is the most it will use;
+    below `columns × min_column_width` it folds into more rows instead of
+    narrowing a field until its text no longer fits.
+    """
+    grid = FieldGridLayout(columns, min_column_width)
+    for label, widget in pairs:
+        grid.addWidget(field(label, widget))
     return grid
 
 

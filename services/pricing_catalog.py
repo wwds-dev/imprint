@@ -119,3 +119,19 @@ def build_token_price_catalog(conn) -> list[TokenPriceEntry]:
             catalog.append(TokenPriceEntry(provider, model, *values, source))
     return catalog
 
+
+
+def has_exact_price(conn, provider: str, model: str) -> bool:
+    """Whether `model` has its own positive rates, not the provider default.
+
+    Mirrors UsageTracker.calculate_cost_eur, which bills the exact row when
+    there is one and otherwise falls back to the provider's `default` row. A
+    model the provider has only just released lands in the second case, and
+    the Model updates tile says so.
+    """
+    row = conn.execute(
+        "SELECT 1 FROM pricing WHERE backend = ? AND model = ? "
+        "AND input_per_1m_usd > 0 AND output_per_1m_usd > 0 LIMIT 1",
+        (provider, model),
+    ).fetchone()
+    return row is not None

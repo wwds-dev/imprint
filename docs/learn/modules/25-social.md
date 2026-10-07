@@ -22,7 +22,7 @@
 | Draft | Editable generated variants; Save to Schedule | Review length, links, claims, tone, and platform fit |
 | Schedule | Copy Text, Mark Posted, Post Now | Direct posting exists only for configured supported accounts |
 | Analytics | Record metrics for a selected posted item; compare observed reach, clicks, and click rate | Source and measurement window are required; clicks do not prove sales |
-| Accounts | Shows connection/readiness and platform limits | Status is not a guarantee that current rules permit content |
+| Accounts | Shows readiness per platform; for connectable ones, what connecting grants, then setup steps and credential keys; Re-check | Status is not a guarantee that current rules permit content; read the grants before pasting a secret |
 
 ## Worked run
 

@@ -24,6 +24,8 @@ env/
 *.zip
 output/
 data/cache/
+# Model updates memory (services/model_watch.py) — per machine, not source.
+data/model_watch.json
 screenshots/
 .claude/
 

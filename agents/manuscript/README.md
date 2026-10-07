@@ -19,7 +19,7 @@ version and saves a file fingerprint. **Submission Ledger…** records a manual,
 self-reported retailer submission against a matching export, with a reference
 or evidence file; it never submits to or verifies a retailer.
 
-Run focused coverage with `pytest tests/test_book_pipeline.py`.
+Run focused coverage with `pytest tests/test_book_pipeline.py tests/test_manuscript_charts.py`.
 
 ## Files
 
@@ -77,7 +77,8 @@ Run focused coverage with `pytest tests/test_book_pipeline.py`.
   Anthropic (.92), DeepSeek (.90), Gemini (.88), Qwen (.84) and Kimi (.83).
 
 - **`panel.py`** — owns the complete Press workspace: Overview
-  (metrics, Ask, publishing todos, Connections status), Quote Finder, Quote
+  (sync strip, royalty chart, metrics, Ask, publishing todos, Connections
+  status), Quote Finder, Quote
   Graphics, Shorts and Calendar tabs, moved here from `main.py` in the Phase 4
   extraction. Request tokens live on this panel — "manuscript" is shared by
   four paid flows (Ask, quote suggestions, calendar captions, ElevenLabs
@@ -92,6 +93,25 @@ Run focused coverage with `pytest tests/test_book_pipeline.py`.
   calendar generation in their own tabs) and the Quote Finder's Project-draft/
   approved-version/export/submission-ledger flow described above.
 
+  Overview details: a **sync strip** under the toolbar
+  (`manuscript_sync_label`) shows each integration's last outcome —
+  `PublishDrive` and `KDP reports`, each `ok`/`FAILED` with timestamp and
+  note, or `never synced`. `refresh_data()` and `ingest_kdp()` record success
+  and failure through `_record_sync()` into settings
+  (`manuscript_sync_<integration>`), so a failure survives a restart; KDP
+  ingest exceptions are caught and recorded rather than escaping. Notes
+  elide at 90 characters on the strip, with the full text in its tooltip.
+  Beside the Ask column, **Royalties by marketplace** is a `ui.charts.BarChart`
+  (`manuscript_royalty_chart`, royalties largest first, units as the thin
+  second series) rebuilt by `refresh_royalty_chart()` at construction and
+  after every ingest from `marketplace_summary()`. The `$` format is used only
+  when every contributing row states USD; otherwise plain numbers with a
+  tooltip naming the single currency, the mixed (unconverted) currencies, or
+  that the reports state none. Unreadable report files and rows with
+  unparseable numbers are reported as a `[Warning]` in the status line. The
+  metrics text box below the chart stays for PublishDrive payloads and as
+  the Ask context.
+
   The rest of the package supports `panel.py` and splits into four groups:
 
   **KDP / PublishDrive data** — the two publishing-platform adapters neither
@@ -101,7 +121,13 @@ Run focused coverage with `pytest tests/test_book_pipeline.py`.
     KDP dashboard, `parse_kdp_csv`/`summarise_kdp_rows` turn a report into
     per-marketplace units/royalties/KENP-pages-read totals, and
     `ingest_new_reports()` stores each newly-seen file into
-    `manuscript_kdp_ingested`, deduplicated by filename. Also defines
+    `manuscript_kdp_ingested`, deduplicated by filename. The summary also
+    tracks each marketplace's currencies (`unstated` when a report has no
+    Currency column — never presumed USD), a top-level `currencies` list and
+    a `skipped_rows` count for malformed money rows; `total_royalties_usd`
+    keeps its name for the DB schema. `marketplace_summary()` re-reads every
+    CSV in the folder for the Overview chart and lists unreadable files in
+    `skipped_files` instead of failing. Also defines
     `INITIAL_TODOS` — the ~24-item standard publishing checklist (KDP/
     Draft2Digital/IngramSpark accounts, cover specs, ARC/BookBub/BookTok
     outreach, and a batch of "(Dev)" engineering-backlog items) that

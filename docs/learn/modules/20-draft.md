@@ -18,7 +18,7 @@
 | Project bar | Title, Author, Type, Genre, Tone, Point of View | Stable identity and creative constraints; Type changes available tasks |
 | Book Profile | Hook, Target reader, Comp titles, Publishing path, Save Profile | Reusable authoritative context for Write, Publish, and Market |
 | Compose | Task, Direction, Provider, Model, Write, Continue, Stop | One bounded generation; Continue extends current draft context |
-| Working tabs | Draft, Outline, Characters, World Notes, Chapters | Editable manuscript/context plus a derived heading navigator |
+| Working tabs | Draft, Outline, Characters, World Notes, Chapters; Sources (Non-Fiction only) | Editable manuscript/context plus a derived heading navigator; listed sources switch on citation rules and `[UNSOURCED]` marks |
 | Document actions | Save Draft, Author name, export format, Export Book | Persist current text and produce EPUB/DOCX/PDF from recognised chapters |
 | Mode switch | Write, Publish & Market; Publish/Market sub-tabs | Draft prose versus packaging and launch-copy tasks |
 

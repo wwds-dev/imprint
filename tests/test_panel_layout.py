@@ -849,3 +849,133 @@ def test_audiobook_conversion_entries_delegate_to_owned_panel(window, monkeypatc
     window.stop_current_task()
 
     assert calls == ["start", "stop"]
+
+
+# ── Text that fits ──────────────────────────────────────────────────────────
+# The Quill project bar drew "P…" in Title and "Pe…" in Author at a 1440px
+# window while each dropdown beside them kept 177px: a short-of-width grid
+# takes the room from the widget with the smallest minimum, and a QLineEdit's
+# is one character. ui/text_fit.py puts a floor under every field, and
+# form_grid folds into more rows instead of squeezing. These keep it that way
+# in every panel, not just the one that was reported.
+
+def _squeezed_fields(root):
+    from PySide6.QtWidgets import QLineEdit
+    from ui.text_fit import floor_width
+    found = []
+    for edit in root.findChildren(QLineEdit):
+        if not edit.isVisible() or edit.maximumWidth() < floor_width(edit):
+            continue   # deliberately capped (a chunk size, a budget box)
+        if edit.width() < floor_width(edit) - 1:
+            label = edit.text() or edit.placeholderText() or edit.objectName()
+            found.append(f"{label[:30]!r} is {edit.width()}px "
+                         f"(floor {floor_width(edit)}px)")
+    return found
+
+
+@pytest.mark.parametrize("size", SIZES, ids=lambda s: f"{s[0]}x{s[1]}")
+@pytest.mark.parametrize("agent", AGENTS)
+def test_no_text_field_is_squeezed_below_readable(app, window, agent, size):
+    _settle(app, window, size, agent)
+    squeezed = _squeezed_fields(getattr(window, f"{agent}_panel"))
+    assert not squeezed, f"[{agent}] " + "; ".join(squeezed[:6])
+
+
+@pytest.mark.parametrize("size", SIZES, ids=lambda s: f"{s[0]}x{s[1]}")
+@pytest.mark.parametrize(
+    "agent,mode",
+    [(a, m) for a, modes in SUB_MODES.items() for m, _ in modes],
+)
+def test_sub_mode_text_fields_are_not_squeezed(app, window, agent, mode, size):
+    _settle(app, window, size, agent)
+    dict(SUB_MODES[agent])[mode](window)
+    for _ in range(6):
+        app.processEvents()
+    squeezed = _squeezed_fields(getattr(window, f"{agent}_panel"))
+    assert not squeezed, f"[{agent}/{mode}] " + "; ".join(squeezed[:6])
+
+
+@pytest.mark.parametrize("size", SIZES, ids=lambda s: f"{s[0]}x{s[1]}")
+def test_quill_project_bar_columns_are_equal_and_never_squeezed(app, window, size):
+    """The reported screen: every column the same width, none below the
+    grid's minimum, and the placeholders whole wherever there is room."""
+    from ui.forms import FIELD_MIN_WIDTH
+    from ui.text_fit import clipped_text
+    _settle(app, window, size, "author")
+    window._author_set_mode("write")
+    for _ in range(6):
+        app.processEvents()
+    panel = window.author_panel
+    fields = (panel.author_title_input, panel.author_name_input,
+              panel.author_content_type_box, panel.author_genre_box,
+              panel.author_tone_box, panel.author_pov_box)
+    widths = {f.width() for f in fields}
+    assert max(widths) - min(widths) <= 1, widths
+    assert min(widths) >= FIELD_MIN_WIDTH - 1, widths
+    for edit in fields[:2]:
+        edit.clear()
+        assert not clipped_text(edit), (
+            f"{edit.placeholderText()!r} cut off at {edit.width()}px")
+
+
+def test_a_clipped_field_shows_its_full_text_on_hover(app, window):
+    from PySide6.QtCore import QEvent, QPoint
+    from PySide6.QtGui import QHelpEvent
+    from PySide6.QtWidgets import QLineEdit, QToolTip
+    from ui.text_fit import clipped_text
+    _settle(app, window, (1000, 600), "author")
+    edit = window.author_panel.author_title_input
+    long_title = "The Unbearable Persistence of Very Long Working Titles"
+    edit.setText(long_title)
+    try:
+        assert clipped_text(edit) == long_title
+        event = QHelpEvent(QEvent.Type.ToolTip, QPoint(4, 4),
+                           edit.mapToGlobal(QPoint(4, 4)))
+        app.sendEvent(edit, event)
+        assert QToolTip.isVisible()
+        assert QToolTip.text().startswith(long_title)
+    finally:
+        QToolTip.hideText()
+        edit.clear()
+    password = QLineEdit()
+    password.setEchoMode(QLineEdit.EchoMode.Password)
+    password.setText("x" * 200)
+    password.resize(60, 30)
+    assert clipped_text(password) == ""
+
+
+def test_the_full_text_shows_even_with_explanatory_tooltips_off(app, window):
+    from PySide6.QtCore import QEvent, QPoint
+    from PySide6.QtGui import QHelpEvent
+    from PySide6.QtWidgets import QToolTip
+    _settle(app, window, (1000, 600), "author")
+    edit = window.author_panel.author_title_input
+    edit.setToolTip("Explanation that the toggle hides")
+    edit.setText("A title far too long for the box it has been given to live in")
+    window.tooltips_enabled = False
+    try:
+        app.sendEvent(edit, QHelpEvent(QEvent.Type.ToolTip, QPoint(4, 4),
+                                       edit.mapToGlobal(QPoint(4, 4))))
+        assert QToolTip.isVisible()
+        assert "Explanation" not in QToolTip.text()
+    finally:
+        window.tooltips_enabled = True
+        QToolTip.hideText()
+        edit.clear()
+        edit.setToolTip("")
+
+
+def test_form_grid_folds_into_balanced_rows():
+    from ui.forms import FieldGridLayout
+    from PySide6.QtWidgets import QLabel, QWidget
+    host = QWidget()
+    grid = FieldGridLayout(columns=6, min_column_width=100)
+    host.setLayout(grid)
+    for _ in range(6):
+        grid.addWidget(QLabel("x"))
+    # 16px gaps: six columns need 680, five 564, three 332.
+    assert grid.columns_for(680) == 6
+    assert grid.columns_for(600) == 3     # never five over a lone sixth
+    assert grid.columns_for(332) == 3
+    assert grid.columns_for(250) == 2
+    assert grid.columns_for(90) == 1

@@ -511,3 +511,34 @@ class VideoWorker(QThread):
                 self.error_signal.emit("Cancelled.")
             else:
                 self.error_signal.emit(f"{type(exc).__name__}: {exc}")
+
+
+class ModelScanWorker(QThread):
+    """Ask every configured cloud provider for its live model list.
+
+    The Model updates check. One GET per provider to the same `/models`
+    endpoint the dropdowns already use — free, and nothing is billed. Runs
+    the providers one after another so a slow one delays the rest rather
+    than racing them; each answer is emitted as it arrives.
+    """
+
+    provider_listed = Signal(str, list, str)   # provider, models, error
+
+    def __init__(self, clients: dict):
+        super().__init__()
+        self.clients = dict(clients)
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def run(self):
+        for provider, client in self.clients.items():
+            if self._cancelled:
+                return
+            try:
+                fetch = getattr(client, "list_models_live", None) \
+                    or client.list_models
+                self.provider_listed.emit(provider, list(fetch() or []), "")
+            except Exception as exc:
+                self.provider_listed.emit(provider, [], str(exc))

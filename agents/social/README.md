@@ -8,7 +8,8 @@ public functions are exported by `agents.social`.
 
 Platform clients, queue state and storage live in this package; credentials
 remain in the app environment and are never persisted. User guidance:
-`docs/agents/social.md`.  Run focused coverage with `pytest tests/test_social.py`.
+`docs/agents/social.md`.  Run focused coverage with `pytest tests/test_social.py
+tests/test_social_onboarding.py` (the second pins the scopes-and-steps contract).
 
 ## Files
 
@@ -51,5 +52,15 @@ remain in the app environment and are never persisted. User guidance:
 - `queue.py` — one durable delivery job per post, atomic claim, local
   idempotency, safe/uncertain retry states and restart reconciliation.
 - `publishing.py` — direct Reddit, Pinterest and YouTube adapters plus the
-  readiness explanations for drafting-only platforms.
+  readiness explanations for drafting-only platforms. Each `Publisher`
+  declares `scopes` (what connecting grants, in the user's words — e.g.
+  Reddit: submit posts only, and the script-app flow keeps the account
+  password in the `.env`; YouTube: uploads arrive private) and numbered
+  `setup_steps`. `connection_guide(platform_key)` renders them grants first,
+  then the steps and the required credential keys, and returns an empty
+  string for drafting-only platforms so no steps are invented. Reddit's token
+  request sends `scope=submit`, so the minted token matches the stated grant.
 - `panel.py` — the complete Social workspace and guarded request lifecycles.
+  Its Accounts tab lists every platform as ready or drafting only and, for
+  each connectable platform (ready ones included, so what was consented to
+  stays visible), shows the connection guide beneath its status.

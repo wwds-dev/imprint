@@ -36,11 +36,26 @@ remain at the location chosen by the user, including after Project deletion.
     `PUBLISH_SYSTEM_PROMPT` / `MARKET_SYSTEM_PROMPT`.
 - `panel.py` — `AuthorPanel`, the manuscript workbench: the project bar and
   Book Profile, the Write page (compose deck, manuscript/outline/characters/
-  world tabs, chapters tab, document bar), and the Publish & Market sub-pages,
+  world tabs, chapters tab, a Sources tab in Non-Fiction mode only, document
+  bar), and the Publish & Market sub-pages,
   each of the three flows (write/continue, publish, market) keeping its own
   request token and running-worker guard so Stop only ever cancels its own
   flow. Save Draft and EPUB/DOCX/PDF export record project artifact links
-  without taking ownership of the files on disk. Host-control aliases were
+  without taking ownership of the files on disk. Non-fiction evidence
+  controls: the **Sources** tab (one source per line) is added when Type
+  switches to Non-Fiction and removed otherwise; when it holds anything,
+  `_build_evidence_block()` appends an EVIDENCE RULES block to the
+  consistency context sent with Write/Continue — assert only what the
+  declared sources support, cite the source inline, never invent sources,
+  mark every other factual claim `[UNSOURCED]`. An empty tab (or fiction
+  mode) adds no rules. The finish status counts `[UNSOURCED]` marks across
+  the whole draft, not just the new chunk ("N claim(s) marked [UNSOURCED]:
+  verify or cut before publishing"). Sources travel with the project
+  workspace state (and with the unscoped Book Profile setting when no
+  Project is selected), schedule the workspace autosave when edited and are
+  cleared with the other editors, so one book's bibliography never reaches
+  another's prompt. The chapter-stats and status labels are styled through
+  `ui.theme.themed()` so they re-colour on a theme switch. Host-control aliases were
   retired 2026-09-21: the panel no longer mirrors its widgets onto the
   umbrella (`HOST_CONTROLS` stays only as the published contract of what it
   owns); the next-step advisor now reads this panel directly, with a `None`
@@ -56,4 +71,5 @@ remain at the location chosen by the user, including after Project deletion.
 
 User guidance: `docs/agents/author.md`.
 
-Run focused coverage with `pytest tests/test_agents_scenarios.py tests/test_book_pipeline.py`.
+Run focused coverage with `pytest tests/test_agents_scenarios.py tests/test_book_pipeline.py tests/test_author_continuity.py`
+(the last pins multi-chapter continuity context and the Sources/evidence rules).

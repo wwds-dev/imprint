@@ -66,7 +66,7 @@ from services.chat_projects import (
 from services.report_exporter import ReportExporter
 from services.usage_tracker import UsageTracker
 from services.tool_runner import ToolRunner
-from services.database import init_db, save_setting
+from services.database import get_connection, init_db, save_setting
 from services.registry import Registry
 from services.validator import Validator
 from services.run_logger import RunLogger
@@ -89,8 +89,10 @@ from agents.catalog import (
 from agents.recommendation_profiles import profile_for
 from services.recommendations import RecommendationContext, RecommendationEngine
 from services.recommendations.catalog import (
-    media_candidate, text_candidates,
+    known_text_models, media_candidate, text_candidates,
 )
+from services.model_watch import WATCHED_PROVIDERS, ModelWatch
+from services.pricing_catalog import PROVIDER_LABELS, has_exact_price
 
 
 # Writable base = project root in dev, ~/Library/Application Support/Imprint when frozen.
@@ -122,6 +124,9 @@ WORKSPACE_LABELS = {
 WORKSPACE_STRIP_HEIGHT = 20
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
+
+# How long after startup the Model updates check runs.
+MODEL_CHECK_DELAY_MS = 4000
 AGENTS_FILE = CONFIG_DIR / "agents.json"
 COMMANDS_FILE = CONFIG_DIR / "commands.json"
 TOOL_PROMPTS_FILE = CONFIG_DIR / "tool_prompts.json"
@@ -153,21 +158,24 @@ AGENT_PRETTY_NAMES = {spec.key: spec.label for spec in AGENT_SPECS}
 
 
 from ui.panels.base import AgentPanel
-from ui.workers import ChatWorker, ModelPullWorker, FiverrImageWorker
+from ui.workers import (
+    ChatWorker, ModelPullWorker, ModelScanWorker, FiverrImageWorker,
+)
 from ui.forms import (
     CONTENT_MAX_WIDTH, CONTROL_HEIGHT, HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH,
     RAIL_RIGHT_WIDTH, SM, XS, Meter, StatBlock, combo, field, form_grid,
     line_edit, micro, nav_tab, primary, quiet, rail, rule, section, stat,
 )
+from ui.text_fit import install_text_fit
 from ui.widgets import (
     FlowLayout, CollapsibleSection, ThemeDots, install_dropdown_system, scrollable,
     let_combos_shrink, RECOMMENDED_ROLE, RECOMMENDATION_REASON_ROLE,
     RECOMMENDATION_SCORE_ROLE, RECOMMENDATION_CONFIDENCE_ROLE,
-    RECOMMENDATION_BADGE_ROLE,
+    RECOMMENDATION_BADGE_ROLE, NEW_MODEL_ROLE,
 )
 from ui.status_cards import (
-    ApiKeysStatusCard, ResourceStatusCard, RoutingStatusCard,
-    STATUS_CARD_STYLES,
+    ApiKeysStatusCard, ModelNotice, ModelUpdatesCard, ResourceStatusCard,
+    RoutingStatusCard, STATUS_CARD_STYLES,
 )
 from agents.social import SocialPanel
 from ui.tooltips import seed_tooltips
@@ -232,6 +240,14 @@ class GodAI(QWidget):
         # fetched. Must exist before build_ui constructs the panels.
         self.model_list_workers: dict = {}
         self.model_list_cache: dict = {}
+
+        # Model updates (the rail tile under API keys): which ids each
+        # provider listed before, so one it lists for the first time can be
+        # announced, marked NEW in the menus and ranked.
+        self.model_watch = ModelWatch(DATA_DIR / "model_watch.json")
+        self.model_scan_worker: Optional[ModelScanWorker] = None
+        self._model_scan_skipped: list[str] = []
+        self._model_scan_failed: dict[str, str] = {}
 
         self.author_worker: Optional[ChatWorker] = None
         self._author_export_done: bool = False
@@ -298,6 +314,9 @@ class GodAI(QWidget):
         # Install global event filter so we can suppress ToolTip events when disabled
         from PySide6.QtWidgets import QApplication as _QApp
         _QApp.instance().installEventFilter(self)
+        # After the filter above: the one installed last runs first, and a
+        # cut-off field's full value must still show with the toggle off.
+        install_text_fit(_QApp.instance(), lambda: self.tooltips_enabled)
         self.load_models()
         # Pre-select each agent's recommended provider/model and paint those
         # entries red in their dropdowns. Runs after every panel is built.
@@ -314,6 +333,12 @@ class GodAI(QWidget):
         # real money may be in flight. One event-loop turn later so the
         # first paint is not blocked by job bookkeeping.
         QTimer.singleShot(0, self._resume_provider_jobs)
+        # Model updates: what earlier sessions found and nobody dismissed,
+        # then a fresh check a few seconds in — after the first paint and
+        # the panels' own model fetches, which matter more.
+        self.refresh_model_updates()
+        if self.settings.get("model_check_on_startup", True):
+            QTimer.singleShot(MODEL_CHECK_DELAY_MS, self.check_for_new_models)
 
     def _polish_tab_widgets(self):
         """Disable text elision and enable scroll buttons on every QTabWidget
@@ -1002,7 +1027,12 @@ class GodAI(QWidget):
                 providers = [p for p in providers
                              if p == "ollama" or p in allowed_cloud]
         selected = provider_box.currentText()
-        live = {selected: [model_box.itemText(i) for i in range(model_box.count())]}
+        # Every provider's live list this session, not just the selected
+        # one's: a model a provider released after KNOWN_MODELS was written
+        # must be able to win the provider-level BEST FIT too.
+        cache = getattr(self, "model_list_cache", {})
+        live = {p: list(cache[p]) for p in providers if cache.get(p)}
+        live[selected] = [model_box.itemText(i) for i in range(model_box.count())]
         candidates = text_candidates(providers, live)
         candidates = [
             replace(item, available=(
@@ -1068,6 +1098,9 @@ class GodAI(QWidget):
             if provider_box is not None and \
                     provider_box.currentText() == "ollama":
                 self.mark_oversized_models(model_box)
+        if model_box is not None and provider_box is not None \
+                and hasattr(self, "model_watch"):
+            self._mark_new_models(model_box, provider_box.currentText())
 
     def _on_recommended_provider_changed(self, agent_key: str) -> None:
         """Select the best model inside a newly chosen provider, then annotate."""
@@ -1788,6 +1821,9 @@ class GodAI(QWidget):
         self.allow_anthropic_checkbox.stateChanged.connect(self.update_live_cost_estimate)
         self.allow_anthropic_checkbox.stateChanged.connect(self.update_recommendation_label)
 
+        self.allow_qwen_checkbox.stateChanged.connect(self.update_live_cost_estimate)
+        self.allow_qwen_checkbox.stateChanged.connect(self.update_recommendation_label)
+
         self.chat_progress = QProgressBar()
         self.chat_progress.setMinimum(0)
         self.chat_progress.setMaximum(0)
@@ -2380,12 +2416,12 @@ class GodAI(QWidget):
         keys_layout.setContentsMargins(SM, XS, SM, SM)
         keys_layout.setSpacing(XS)
         self.api_keys_status_card = ApiKeysStatusCard(
-            ("OpenAI", "DeepSeek", "Kimi", "Gemini", "Anthropic"))
+            ("OpenAI", "DeepSeek", "Kimi", "Gemini", "Anthropic", "Qwen"))
         theme.themed(self.api_keys_status_card, STATUS_CARD_STYLES)
         key_classes = {
             "OpenAI": OpenAIClientWrapper, "DeepSeek": DeepSeekClientWrapper,
             "Kimi": KimiClientWrapper, "Gemini": GeminiClientWrapper,
-            "Anthropic": AnthropicClientWrapper,
+            "Anthropic": AnthropicClientWrapper, "Qwen": QwenClientWrapper,
         }
         for provider, wrapper in key_classes.items():
             self.api_keys_status_card.set_status(
@@ -2395,9 +2431,34 @@ class GodAI(QWidget):
         self.kimi_key_label = self.api_keys_status_card.status_labels["kimi"]
         self.gemini_key_label = self.api_keys_status_card.status_labels["gemini"]
         self.anthropic_key_label = self.api_keys_status_card.status_labels["anthropic"]
+        self.qwen_key_label = self.api_keys_status_card.status_labels["qwen"]
         keys_layout.addWidget(self.api_keys_status_card)
         keys_card.addWidget(keys_body)
         reference.addWidget(keys_card)
+
+        # Beside the keys: what the providers behind them have shipped since
+        # Imprint last looked. The title carries the count, so news shows
+        # while the section is collapsed like its neighbours.
+        self.model_updates_section = CollapsibleSection(
+            "Model updates", expanded=False)
+        updates_body = QWidget()
+        updates_body.setObjectName("Transparent")
+        updates_layout = QVBoxLayout(updates_body)
+        updates_layout.setContentsMargins(SM, XS, SM, SM)
+        updates_layout.setSpacing(XS)
+        self.model_updates_card = ModelUpdatesCard()
+        theme.themed(self.model_updates_card, STATUS_CARD_STYLES)
+        self.model_updates_card.check_btn.clicked.connect(
+            lambda: self.check_for_new_models())
+        self.model_updates_card.dismiss_btn.clicked.connect(
+            self.dismiss_new_models)
+        self.model_updates_card.startup_checkbox.setChecked(
+            bool(self.settings.get("model_check_on_startup", True)))
+        self.model_updates_card.startup_checkbox.toggled.connect(
+            self._save_model_check_preference)
+        updates_layout.addWidget(self.model_updates_card)
+        self.model_updates_section.addWidget(updates_body)
+        reference.addWidget(self.model_updates_section)
 
         layout.addLayout(reference)
         layout.addStretch()
@@ -3141,9 +3202,193 @@ class GodAI(QWidget):
         """
         if models:
             self.model_list_cache[provider] = list(models)
+            # A panel's fetch is as good a look as the Model updates check,
+            # so news reaches the tile with the startup check switched off.
+            if self._observe_live_models(provider, models):
+                self.refresh_model_updates()
         elif error:
             self.model_list_workers.pop(provider, None)
             self._note_failure(f"models: {provider}", RuntimeError(error))
+
+    # ── Model updates ───────────────────────────────────────────────────────
+    def _observe_live_models(self, provider: str, models: list) -> bool:
+        """Feed one live list to the watch; True if it announced something.
+
+        Only a keyed client's answer is live — without a key, list_models_live
+        returns the offline KNOWN_MODELS, and baselining that would record a
+        list the provider never sent.
+        """
+        if provider not in WATCHED_PROVIDERS:
+            return False
+        client = getattr(self, provider, None)
+        key_check = getattr(client, "key_available", None)
+        if key_check is None or not key_check():
+            return False
+        try:
+            return bool(self.model_watch.observe(provider, models))
+        except OSError as exc:
+            self._note_failure("model updates: save", exc)
+            return False
+
+    def check_for_new_models(self) -> None:
+        """Ask every keyed cloud provider for its model list, off the GUI thread.
+
+        Free: `/models` is not a billed endpoint, and it is the same call the
+        dropdowns make. Providers without a key are listed as not checked
+        rather than guessed at.
+        """
+        worker = self.model_scan_worker
+        if worker is not None and worker.isRunning():
+            return
+        clients, skipped = {}, []
+        for provider in WATCHED_PROVIDERS:
+            client = getattr(self, provider, None)
+            key_check = getattr(client, "key_available", None)
+            if key_check is not None and key_check():
+                clients[provider] = client
+            else:
+                skipped.append(provider)
+        self._model_scan_skipped = skipped
+        self._model_scan_failed = {}
+        if not clients:
+            self.refresh_model_updates()
+            return
+        worker = ModelScanWorker(clients)
+        worker.provider_listed.connect(self._on_model_scan_listed)
+        worker.finished.connect(self._on_model_scan_finished)
+        self.model_scan_worker = worker
+        self.model_updates_card.set_checking(True)
+        worker.start()
+
+    def _on_model_scan_listed(self, provider: str, models: list,
+                              error: str) -> None:
+        if not models:
+            self._model_scan_failed[provider] = error or "returned no models"
+            return
+        self.model_list_cache[provider] = list(models)
+        self._observe_live_models(provider, models)
+        # A panel still showing this provider's offline list gets the live
+        # one now, so a new model is selectable without switching away.
+        for agent_key in AGENT_SETUP_WIDGETS:
+            panel = self._find_control(f"{agent_key}_panel_base")
+            if (panel is not None and panel.provider == provider
+                    and not panel.model_box.property("imprintModelsLive")):
+                panel.load_models()
+
+    def _on_model_scan_finished(self) -> None:
+        self.model_updates_card.set_checking(False)
+        try:
+            self.model_watch.mark_checked()
+        except OSError as exc:
+            self._note_failure("model updates: save", exc)
+        # Re-rank with the live lists in hand: a new model is assessed like
+        # every other candidate, and the BEST FIT marks move if it wins.
+        self.refresh_all_recommendations()
+        self.refresh_model_updates()
+
+    def dismiss_new_models(self) -> None:
+        self.model_watch.acknowledge()
+        self.refresh_model_updates()
+
+    def _save_model_check_preference(self, checked: bool) -> None:
+        self.settings["model_check_on_startup"] = bool(checked)
+        try:
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.settings, f, indent=2)
+        except OSError as exc:
+            self._note_failure("settings: model check", exc)
+
+    def _agents_preferring(self, provider: str, model_id: str) -> tuple[str, ...]:
+        """Agents whose BEST FIT within `provider` is now `model_id`.
+
+        Ranked exactly as the model dropdown ranks it — same engine, same
+        agent profile, same task context — so the tile and the badge in the
+        menu can never disagree.
+        """
+        models = (self.model_list_cache.get(provider)
+                  or list(known_text_models(provider)))
+        candidates = text_candidates([provider], {provider: models})
+        labels = []
+        for agent_key, (provider_attr, _model_attr) in AGENT_SETUP_WIDGETS.items():
+            provider_box = self._find_control(provider_attr)
+            if (provider_box is None
+                    or self._find_provider_index(provider_box, provider) < 0):
+                continue
+            result = self.recommendation_engine.recommend(
+                profile_for(agent_key), candidates,
+                RecommendationContext(
+                    agent=agent_key, selected_provider=provider,
+                    task=self._recommendation_task(agent_key)))
+            if result is not None and result.candidate.model_id == model_id:
+                labels.append(AGENT_PRETTY_NAMES.get(agent_key, agent_key))
+        return tuple(labels)
+
+    @staticmethod
+    def _has_exact_price(provider: str, model_id: str) -> bool:
+        try:
+            conn = get_connection()
+            try:
+                return has_exact_price(conn, provider, model_id)
+            finally:
+                conn.close()
+        except Exception:
+            return False
+
+    def _mark_new_models(self, combo, provider: str) -> None:
+        """Set or clear the NEW badge on each item of one model dropdown."""
+        if combo is None:
+            return
+        for i in range(combo.count()):
+            is_new = self.model_watch.is_pending(provider, combo.itemText(i))
+            combo.setItemData(i, True if is_new else None, NEW_MODEL_ROLE)
+
+    def refresh_model_updates(self) -> None:
+        """Repaint the tile, its section title and the NEW marks."""
+        card = getattr(self, "model_updates_card", None)
+        if card is None:
+            return
+        pending = self.model_watch.pending()
+        card.set_notices([
+            ModelNotice(
+                PROVIDER_LABELS.get(n.provider, n.provider.title()),
+                n.model_id,
+                best_for=self._agents_preferring(n.provider, n.model_id),
+                exact_price=self._has_exact_price(n.provider, n.model_id),
+            )
+            for n in pending
+        ])
+        self.model_updates_section.set_title(
+            f"Model updates · {len(pending)} new" if pending else "Model updates")
+
+        checked = self.model_watch.last_checked
+        if checked:
+            try:
+                when = datetime.fromisoformat(checked).astimezone()
+                checked_text = f"Checked {when:%-d %b, %H:%M}"
+            except ValueError:
+                checked_text = "Checked"
+        else:
+            checked_text = "Not checked yet"
+        notes = []
+        names = lambda keys: ", ".join(
+            PROVIDER_LABELS.get(k, k.title()) for k in keys)
+        if self._model_scan_skipped:
+            if len(self._model_scan_skipped) == len(WATCHED_PROVIDERS):
+                notes.append("Add a provider key to check for new models.")
+            else:
+                notes.append(f"No key, not checked: {names(self._model_scan_skipped)}")
+        if self._model_scan_failed:
+            notes.append(f"Could not reach: {names(self._model_scan_failed)}")
+        card.set_footer(checked_text, "\n".join(notes))
+        card.skipped_label.setToolTip("\n".join(
+            f"{PROVIDER_LABELS.get(k, k)}: {v}"
+            for k, v in self._model_scan_failed.items()))
+
+        for agent_key, (provider_attr, model_attr) in AGENT_SETUP_WIDGETS.items():
+            provider_box = self._find_control(provider_attr)
+            if provider_box is not None:
+                self._mark_new_models(self._find_control(model_attr),
+                                      provider_box.currentText())
 
     def _offer_local_fallback(self, agent: str, provider: str,
                               validation, flat_cost_eur) -> bool:
@@ -4224,7 +4469,7 @@ class GodAI(QWidget):
                     "creator_video_estimate_worker", "creator_video_worker",
                     "fiverr_text_worker", "fiverr_image_worker",
                     "video_worker", "video_estimate_worker",
-                    "muse_pull_worker"):
+                    "muse_pull_worker", "model_scan_worker"):
                 worker = getattr(self, attr, None)
                 if worker is not None and worker.isRunning():
                     if hasattr(worker, "cancel"):

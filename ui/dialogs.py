@@ -22,6 +22,7 @@ from services.kimi_client import KimiClientWrapper
 from services.media_catalog import DIRECT_VIDEO_USD_PER_SECOND, MODELS as MEDIA_MODELS
 from services.openai_client import OpenAIClientWrapper
 from services.per_unit_pricing import rate_usd
+from services.qwen_client import QwenClientWrapper
 from services.pricing_catalog import (
     PROVIDER_LABELS, build_token_price_catalog,
 )
@@ -860,6 +861,7 @@ def show_model_guide(app):
     kimi_status = "✅ Available" if KimiClientWrapper.key_available() else "❌ Not set"
     gemini_status = "✅ Available" if GeminiClientWrapper.key_available() else "❌ Not set"
     anthropic_status = "✅ Available" if AnthropicClientWrapper.key_available() else "❌ Not set"
+    qwen_status = "✅ Available" if QwenClientWrapper.key_available() else "❌ Not set"
 
     current_mode = app.execution_mode_box.currentText() if hasattr(app, "execution_mode_box") else "Unknown"
     current_provider = app.provider_box.currentText() if hasattr(app, "provider_box") else "Unknown"
@@ -965,6 +967,18 @@ def show_model_guide(app):
     </ul>
     <p><b>Use when:</b> you need very long context or a cost-effective alternative to OpenAI/Claude.</p>
 
+    <h3>Qwen API (Alibaba Model Studio)</h3>
+    <p><b>Best for:</b> long-context drafting and analysis, structured output, coding; Wan direct video clips in Reel.</p>
+    <p><b>Key:</b> DASHSCOPE_API_KEY — get it at bailian.console.alibabacloud.com. The international endpoint is the default; set DASHSCOPE_BASE_URL for a mainland-China account.</p>
+    <p><b>Models:</b></p>
+    <ul>
+        <li><b>qwen3.8-max</b> — Flagship. 1M-token context, function calling and structured output. Default Qwen model here.</li>
+        <li><b>qwen3-max</b> — Previous flagship.</li>
+        <li><b>qwen-plus</b> — Balanced quality and cost.</li>
+        <li><b>qwen-flash</b> — Fastest and cheapest.</li>
+    </ul>
+    <p><b>Use when:</b> you want a strong long-context model at a lower per-token price than the Western flagships.</p>
+
     <h3>Audiobook Mode</h3>
     <p>Uses OpenAI TTS only. Provider/model selection in the main panel is ignored for audiobook conversion.</p>
     """)
@@ -1049,6 +1063,7 @@ def show_model_guide(app):
     <p><b>Kimi:</b> {kimi_status}</p>
     <p><b>Gemini:</b> {gemini_status}</p>
     <p><b>Anthropic:</b> {anthropic_status}</p>
+    <p><b>Qwen:</b> {qwen_status}</p>
 
     <h3>Installed Ollama Models</h3>
     <p>{ollama_html}</p>
