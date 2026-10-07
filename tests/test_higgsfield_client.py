@@ -195,3 +195,49 @@ def test_wait_without_provider_cancel_only_stops_watching():
     assert result is job
     assert result.status == "queued"
     assert session.calls == []       # no cancel POST, no further polls
+
+
+# ── Schema conformance (docs.higgsfield.ai, checked 2026-10-07) ─────────────
+# Every Seedance schema sets additionalProperties:false, so a field it does not
+# list, or a value outside its enum, is a rejected request.
+
+def test_resolution_uses_the_apis_enum():
+    """The client sent "720", which the schema rejects: every Seedance render
+    from Reel was an invalid request."""
+    client = client_with(Session())
+    for given, sent in (("720", "720p"), ("720p", "720p"), ("1080", "1080p")):
+        request = client.prepare_video("a calm sea", duration=5, resolution=given)
+        assert request.payload["resolution"] == sent
+    with pytest.raises(ValueError):
+        client.prepare_video("a calm sea", duration=5, resolution="4k")   # 2.5: no 4k
+    assert client.prepare_video("a calm sea", duration=5, model="seedance-2.0",
+                                resolution="4k").payload["resolution"] == "4k"
+
+
+def test_image_to_video_sends_no_aspect_ratio_and_no_blank_prompt(monkeypatch, tmp_path):
+    source = tmp_path / "ref.png"
+    source.write_bytes(b"png")
+    session = Session(posts=[Response({
+        "upload_url": "https://storage.example.test/u",
+        "public_url": "https://cdn.example.test/ref.png", "upload_headers": {}})])
+    monkeypatch.setattr(requests, "put", lambda url, **kw: Response())
+    client = client_with(session)
+    request = client.prepare_video("  ", reference_image=str(source),
+                                   aspect_ratio="9:16", resolution="720p")
+    assert "aspect_ratio" not in request.payload
+    assert "prompt" not in request.payload
+    text = client.prepare_video("a calm sea", aspect_ratio="9:16")
+    assert text.payload["aspect_ratio"] == "9:16"
+
+
+def test_a_submission_carries_one_idempotency_key():
+    """A retried submission with the same key is not charged twice."""
+    session = Session(posts=[Response({"request_id": "r1", "status": "queued"}),
+                             Response({"request_id": "r1", "status": "queued"})])
+    client = client_with(session)
+    request = client.prepare_video("a calm sea", duration=5)
+    client.generate_prepared(request)
+    client.generate_prepared(request)
+    keys = [call[2]["headers"]["Idempotency-Key"] for call in session.calls]
+    assert keys[0] == keys[1] == request.idempotency_key and len(keys[0]) == 36
+    assert client.prepare_video("a calm sea").idempotency_key != request.idempotency_key

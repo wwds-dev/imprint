@@ -37,6 +37,37 @@ class GeminiVideoJob:
         return self.status in {"completed", "failed"}
 
 
+def one_attempt_client(api_key: str, timeout_ms: int | None = None,
+                       httpx_client=None):
+    """A google-genai client that sends each paid request exactly once.
+
+    `HttpRetryOptions(attempts=1)` holds for generate_content and Veo, but the
+    Interactions API (Omni video, and image and speech output) runs on a
+    separate generated layer that translates it into `max_retries=1`: a 408,
+    409, 429 or 5xx was posted twice, and a render billed twice. Verified on
+    google-genai 2.21.0 against a mock transport (2026-10-07). The
+    interactions layer's own retry config is set to "none" here. It lives on
+    a private module path, so if a later SDK moves it this fails loudly at
+    construction rather than silently retrying paid work.
+    """
+    options = {"timeout": timeout_ms or VIDEO_REQUEST_TIMEOUT_MS,
+               "retry_options": genai_types.HttpRetryOptions(attempts=1)}
+    if httpx_client is not None:
+        options["httpx_client"] = httpx_client
+    client = genai.Client(api_key=api_key,
+                          http_options=genai_types.HttpOptions(**options))
+    try:
+        from google.genai._gaos.utils.retries import RetryConfig
+    except ImportError as exc:      # pragma: no cover - depends on SDK layout
+        raise RuntimeError(
+            "This google-genai version moved the Interactions retry config; "
+            "Imprint will not send paid Gemini media requests that could be "
+            "retried automatically. Update services/gemini_client.py.") from exc
+    client.interactions.sdk_configuration.retry_config = RetryConfig(
+        "none", None, False)
+    return client
+
+
 class GeminiClientWrapper:
     # Offline fallback, checked against the provider's model list on 2026-10-07.
     # Every id here needs its own row in config/pricing.json
@@ -63,17 +94,8 @@ class GeminiClientWrapper:
         # A timed-out paid create must never be replayed automatically. Reads
         # can still use the normal client above; video generation uses this
         # one-attempt client for both Omni interactions and Veo operations.
-        self.media_client = (
-            genai.Client(
-                api_key=self.api_key,
-                http_options=genai_types.HttpOptions(
-                    timeout=VIDEO_REQUEST_TIMEOUT_MS,
-                    retry_options=genai_types.HttpRetryOptions(attempts=1),
-                ),
-            )
-            if self.api_key
-            else None
-        )
+        self.media_client = (one_attempt_client(self.api_key)
+                             if self.api_key else None)
 
     @staticmethod
     def key_available():

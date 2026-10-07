@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import os
 import math
+import uuid
 import mimetypes
 import random
 import re
@@ -110,6 +111,11 @@ class VideoJob:
 class PreparedVideoRequest:
     endpoint: str
     payload: dict
+    # Sent as Idempotency-Key on submission (docs.higgsfield.ai/docs/concepts/
+    # idempotency): a retry with the same key returns the original request and
+    # is not charged twice. Made once per prepared request, so every attempt
+    # to submit *this* request carries the same one.
+    idempotency_key: str = ""
 
 
 @dataclass(frozen=True)
@@ -333,20 +339,36 @@ class HiggsfieldClient:
         else:
             text_ep, image_ep = SEEDANCE_ENDPOINTS[model]
         endpoint = image_ep if reference_image else text_ep
-        payload: dict = {"prompt": prompt, "duration": int(duration)}
+        payload: dict = {"duration": int(duration)}
+        # Text-to-video requires a prompt; image-to-video makes it optional
+        # but rejects an empty one (minLength 1), so a blank one is omitted.
+        if prompt and prompt.strip():
+            payload["prompt"] = prompt
         if generate_audio is not None:
             payload["generate_audio"] = bool(generate_audio)
         if reference_image:
             payload["image_url"] = self.upload_file(reference_image)
-        if aspect_ratio is not None:
+        # Image-to-video takes its framing from the image: its schema has no
+        # aspect_ratio and, like every Seedance schema, rejects unknown fields.
+        if aspect_ratio is not None and not reference_image:
             if aspect_ratio not in {"16:9", "9:16", "4:3", "3:4", "1:1", "21:9"}:
                 raise ValueError(f"Unsupported Higgsfield aspect ratio: {aspect_ratio}")
             payload["aspect_ratio"] = aspect_ratio
         if resolution is not None:
-            if resolution not in {"480", "720", "1080"}:
+            # The API's enum is "480p"/"720p"/"1080p" (2.0 adds "4k"). This
+            # client used to send "720", which the schema rejects — every
+            # Seedance render from Reel was an invalid request. A bare
+            # number is still accepted from callers and normalised.
+            value = str(resolution).lower()
+            if value.isdigit():
+                value += "p"
+            allowed = {"480p", "720p", "1080p"} | (
+                {"4k"} if model == "seedance-2.0" else set())
+            if value not in allowed:
                 raise ValueError(f"Unsupported Higgsfield resolution: {resolution}")
-            payload["resolution"] = resolution
-        return PreparedVideoRequest(endpoint=endpoint, payload=payload)
+            payload["resolution"] = value
+        return PreparedVideoRequest(endpoint=endpoint, payload=payload,
+                                    idempotency_key=str(uuid.uuid4()))
 
     def estimate(self, request: PreparedVideoRequest) -> VideoEstimate:
         """Ask Higgsfield for the authenticated cost of this exact request."""
@@ -384,9 +406,11 @@ class HiggsfieldClient:
     def generate_prepared(self, request: PreparedVideoRequest) -> VideoJob:
         """Submit a prepared request exactly once."""
         self._require_key()
+        headers = ({"Idempotency-Key": request.idempotency_key}
+                   if request.idempotency_key else None)
         response = self._client().post(
             self._api_url(request.endpoint), json=request.payload,
-            timeout=REQUEST_TIMEOUT_SECONDS)
+            timeout=REQUEST_TIMEOUT_SECONDS, headers=headers)
         self._raise_for_status(response, "generation")
         data = response.json()
         request_id = data.get("request_id", "")

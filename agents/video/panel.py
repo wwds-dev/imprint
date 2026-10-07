@@ -641,7 +641,7 @@ class VideoPanel(QWidget):
             self.video_status_label.setText("Preparing Higgsfield estimate…")
             estimate_worker = HiggsfieldEstimateWorker(
                 client, topic, duration=seconds,
-                aspect_ratio=provider_aspect, resolution="720",
+                aspect_ratio=provider_aspect, resolution="720p",
                 model=selection.model_id)
             self.host.video_estimate_worker = estimate_worker
             self.host.video_worker = estimate_worker
