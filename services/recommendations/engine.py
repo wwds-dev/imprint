@@ -117,8 +117,9 @@ class RecommendationEngine:
         total = sum(weights.values()) or 1.0
         return {key: value / total for key, value in weights.items()}
 
-    def _score(self, profile: AgentProfile, item: Candidate,
-               context: RecommendationContext) -> float:
+    @staticmethod
+    def _tags(profile: AgentProfile, context: RecommendationContext) -> list[str]:
+        """The agent's task tags plus those the request's own words name."""
         tags = list(profile.task_tags)
         if context.task:
             normalized = context.task.casefold().replace("/", " ").replace("-", " ")
@@ -135,6 +136,20 @@ class RecommendationEngine:
             }
             tags.extend(tag for tag, words in synonyms.items()
                         if any(word in normalized for word in words))
+        return tags
+
+    @staticmethod
+    def _quality(item: Candidate, tags: list[str]) -> float:
+        """Quality for this request: each tag's rated figure where the
+        candidate has one, else its overall `quality`, averaged like task fit."""
+        if not item.task_quality or not tags:
+            return item.quality
+        values = [item.task_quality.get(tag, item.quality) for tag in tags]
+        return sum(values) / len(values)
+
+    def _score(self, profile: AgentProfile, item: Candidate,
+               context: RecommendationContext) -> float:
+        tags = self._tags(profile, context)
         tag_scores = [item.task_fit.get(tag, item.task_fit.get("general", 0.62))
                       for tag in tags]
         task_fit = sum(tag_scores) / len(tag_scores) if tag_scores else 0.62
@@ -143,7 +158,7 @@ class RecommendationEngine:
 
         weights = self._weights(profile, context.priority)
         preference = (
-            item.quality * weights["quality"]
+            self._quality(item, tags) * weights["quality"]
             + item.reliability * weights["reliability"]
             + item.cost_efficiency * weights["cost"]
             + item.speed * weights["speed"]
@@ -154,12 +169,12 @@ class RecommendationEngine:
         # to "cost" must not turn an unsuitable modality/model into the winner.
         return round(0.52 * fit + 0.48 * preference, 6)
 
-    @staticmethod
-    def _explain(profile: AgentProfile, item: Candidate,
+    def _explain(self, profile: AgentProfile, item: Candidate,
                  context: RecommendationContext, score: float,
                  fallback: bool) -> str:
+        tags = self._tags(profile, context)
         strengths = sorted(
-            ((item.quality, "output quality"),
+            ((self._quality(item, tags), "output quality"),
              (item.reliability, "reliability"),
              (item.cost_efficiency, "cost efficiency"),
              (item.speed, "speed"),
@@ -175,4 +190,23 @@ class RecommendationEngine:
         return (
             f"Best match for {profile.label} ({task}): {top}. "
             f"Fit score {round(score * 100)}/100.{setup}"
+            f"{self._evidence(item, tags)}"
         )
+
+    @staticmethod
+    def _evidence(item: Candidate, tags: list[str]) -> str:
+        """The ratings this request's quality rests on, credited, or nothing.
+
+        A tag rated on its own cites its own figure; every other tag was
+        scored on the overall one ("general"). Each figure is named once.
+        """
+        cited: list[str] = []
+        for tag in tags or ["general"]:
+            key = tag if tag in item.task_quality else "general"
+            line = item.quality_evidence.get(key)
+            if line and line not in cited:
+                cited.append(line)
+        if not cited:
+            return ""
+        credit = f" ({item.quality_credit})" if item.quality_credit else ""
+        return f" Quality ratings{credit}: {', '.join(cited)}."

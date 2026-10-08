@@ -605,6 +605,29 @@ class ModelScanWorker(DaemonWorker):
                 self._emit(self.provider_listed, provider, [], str(exc))
 
 
+class RatingsWorker(DaemonWorker):
+    """Refresh the public per-task model ratings (LMArena), at most daily.
+
+    Started beside the Model updates check. It pages through a Hugging Face
+    dataset a second apart — about a minute — and is never waited on: the
+    ranker keeps the cached or shipped ratings until this answers. It writes
+    one file, the cache, by write-then-rename, so a quit that abandons the
+    daemon thread mid-fetch leaves the previous cache intact; closeEvent
+    therefore does not wait for it.
+    """
+
+    ratings_ready = Signal(object, str)   # RatingTable or None, error
+
+    def run(self):
+        from services.recommendations import ratings
+        try:
+            table = ratings.refresh()
+        except Exception as exc:          # the service is often "loading"
+            self._emit(self.ratings_ready, None, str(exc))
+            return
+        self._emit(self.ratings_ready, table, "")
+
+
 class VoiceListWorker(DaemonWorker):
     """List a speech provider's voices off the GUI thread (a network call)."""
 

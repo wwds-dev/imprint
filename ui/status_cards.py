@@ -391,6 +391,11 @@ class ModelUpdatesCard(RailCard):
         self.skipped_label = _label("", "RailDetail")
         self.skipped_label.hide()
         layout.addWidget(self.skipped_label)
+        # Which public quality ratings the ranking uses, credited as their
+        # licence (CC BY 4.0) asks wherever they are shown.
+        self.ratings_label = _label("", "RailDetail")
+        self.ratings_label.hide()
+        layout.addWidget(self.ratings_label)
 
         buttons = QHBoxLayout()
         buttons.setContentsMargins(0, XS, 0, 0)
@@ -467,6 +472,12 @@ class ModelUpdatesCard(RailCard):
         self.checked_label.setText(checked)
         self.skipped_label.setText(skipped)
         self.skipped_label.setVisible(bool(skipped))
+
+    def set_ratings(self, text: str, tooltip: str = "") -> None:
+        """Which quality ratings rank the text models, with their credit."""
+        self.ratings_label.setText(text)
+        self.ratings_label.setToolTip(tooltip)
+        self.ratings_label.setVisible(bool(text))
 
 
 STATUS_CARD_STYLES = f"""

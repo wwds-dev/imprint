@@ -60,6 +60,12 @@ compares models inside the selected provider. A setup-target recommendation
 means the option fits the task but is not configured yet. It should not be read
 as ready to run.
 
+A text model's output quality in that ranking is its public **LMArena** rating
+for the kind of work (coding, creative writing, hard prompts, overall), against
+the best-rated model; a model not yet rated is estimated from its provider and
+name, never above its provider's best rating. The explanation names the
+ratings it used, credited (CC BY 4.0).
+
 Local Ollama work stays on the machine. Cloud providers require both a key and
 permission in the current execution mode. Image, video, voice, and text models
 are kept in separate capability catalogs so a text model cannot appear in a

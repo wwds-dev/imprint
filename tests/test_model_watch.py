@@ -269,9 +269,11 @@ def test_a_new_model_reaches_the_tile_the_menu_and_the_ranking(app, watched_wind
     # the same Qwen default, being new does not make it score any higher.
     from services.recommendations import RecommendationContext
     from agents.recommendation_profiles import profile_for
+    # With the window's own ratings too: qwen4-max is unrated, and is held
+    # at Qwen's best rating rather than credited with its name's estimate.
     candidates = {c.model_id: c for c in text_candidates(
         ["qwen"], {"qwen": window.model_list_cache["qwen"]},
-        window._price_index())}
+        window._price_index(), window.ratings)}
     context = RecommendationContext(agent="author", task="draft a chapter")
     score = lambda model: window.recommendation_engine.score(
         profile_for("author"), candidates[model], context)
@@ -722,3 +724,58 @@ def test_the_text_assessment_never_offers_what_the_guard_would_refuse(
     finally:
         window.allow_anthropic_checkbox.setChecked(False)
         window.allow_deepseek_checkbox.setChecked(False)
+
+
+# ── public quality ratings ──────────────────────────────────────────────────
+
+def test_the_window_ranks_on_the_shipped_ratings_and_credits_them(window):
+    """conftest keeps the cache empty, so the snapshot in config/ is what
+    loads; the tile names it, and its licence (CC BY 4.0) is credited."""
+    assert window.ratings and window.ratings.origin == "snapshot"
+    window.refresh_model_updates()
+    label = window.model_updates_card.ratings_label
+    assert label.text().startswith("Quality ratings: LMArena, published ")
+    assert "CC BY 4.0" in label.text()
+    assert "huggingface.co/datasets/lmarena-ai" in label.toolTip()
+
+
+def test_a_ratings_refresh_re_ranks_and_a_failed_one_keeps_the_last(
+        app, window, monkeypatch):
+    from services import benchmarks
+    from services.recommendations import ratings
+    fresh = benchmarks.RatingTable({
+        "published": "2026-10-08",
+        "categories": {"text_style_control/overall": [
+            ["claude-opus-5.5", 1500, 1495, 1505, 10_000, "anthropic"]]},
+    }, origin="live")
+    shipped = window.ratings
+    monkeypatch.setattr(benchmarks, "is_stale", lambda *a, **k: True)
+    try:
+        monkeypatch.setattr(ratings, "refresh", lambda: fresh)
+        window.refresh_model_ratings()
+        assert window.ratings_worker.wait(5000)
+        for _ in range(10):
+            app.processEvents()
+        assert window.ratings is fresh
+        assert "published 2026-10-08 (fetched now)" in \
+            window.model_updates_card.ratings_label.text()
+
+        def loading():
+            raise RuntimeError("the dataset index is loading")
+        monkeypatch.setattr(ratings, "refresh", loading)
+        window.refresh_model_ratings()
+        assert window.ratings_worker.wait(5000)
+        for _ in range(10):
+            app.processEvents()
+        assert window.ratings is fresh          # kept, not dropped to none
+    finally:
+        window.ratings = shipped
+        window.refresh_model_updates()
+
+
+def test_no_refresh_while_the_cached_ratings_are_fresh(window, monkeypatch):
+    from services import benchmarks
+    monkeypatch.setattr(benchmarks, "is_stale", lambda *a, **k: False)
+    before = window.ratings_worker
+    window.refresh_model_ratings()
+    assert window.ratings_worker is before

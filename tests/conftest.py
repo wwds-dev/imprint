@@ -104,3 +104,24 @@ for _name in _CREDENTIAL_ENV:
 # back. The clients all treat a missing key and an empty one the same way.
 for _name in _CREDENTIAL_ENV:
     os.environ[_name] = ""
+
+# ── Public model ratings: the shipped snapshot, and no network ────────────────
+# The window loads services/recommendations/ratings at startup and refreshes it
+# from Hugging Face beside the Model updates check — a minute of paced GETs.
+# The suite must neither fetch nor read a developer's cached copy (which would
+# make rankings depend on the day the tests run), so the cache points at an
+# empty temp folder, staleness reads as fresh, and the fetcher refuses. Every
+# test therefore ranks on config/lmarena_snapshot.json. A test of the refresh
+# itself undoes these with monkeypatch.
+from services import benchmarks as _benchmarks  # noqa: E402
+from services.recommendations import ratings as _ratings  # noqa: E402
+
+_ratings.CACHE_FILE = Path(tempfile.mkdtemp(prefix="imprint-ratings-")) / "lmarena_ratings.json"
+
+
+def _no_ratings_network(url):
+    raise RuntimeError(f"tests may not fetch model ratings: {url}")
+
+
+_benchmarks._get_json = _no_ratings_network
+_benchmarks.is_stale = lambda *args, **kwargs: False

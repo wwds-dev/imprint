@@ -9,6 +9,10 @@ automatically the better choice for a given task — it is often dearer, and
 "newer" says nothing about fit — so a model released yesterday is ranked on
 the same evidence as every other: task fit, the agent's weights and, where the
 pricing table has them, its real per-token rates.
+
+A text model's quality is its public LMArena rating for the kind of work
+where one exists (services/recommendations/ratings.py); the provider-and-name
+estimate below is only for a model the ratings do not cover.
 """
 
 from __future__ import annotations
@@ -16,11 +20,13 @@ from __future__ import annotations
 import math
 
 import os
+import re
 from datetime import date
 
 from services.model_watch import is_chat_model
 
 from .models import Candidate
+from .ratings import CREDIT as RATINGS_CREDIT, rated_quality
 
 
 # Each provider's key, as alternatives: any one entry counts, and an entry
@@ -104,30 +110,48 @@ def price_efficiency(input_per_1m: float, output_per_1m: float) -> float:
     position = (math.log10(blended) - math.log10(CHEAP_BLENDED_USD)) / span
     return max(0.05, min(1.0, 1.0 - 0.95 * position))
 
+def name_tokens(model_id: str) -> frozenset[str]:
+    """The words in a model id, for the name heuristics below.
+
+    Words, not substrings: every Gemini id contains "mini", so substring
+    matching gave gemini-3.1-pro-preview the small-model penalty and
+    cancelled its "pro". Split on - . _ : / and space; the same id split
+    without the dots is added too, so a size tag like Ollama's "1.5b" stays
+    one word.
+    """
+    name = model_id.casefold()
+    words = set(re.split(r"[-._:/\s]+", name)) | set(re.split(r"[-_:/\s]+", name))
+    words.discard("")
+    return frozenset(words)
+
+
 def text_candidate(provider: str, model_id: str,
                    *, available: bool | None = None,
-                   price: tuple[float, float] | None = None) -> Candidate:
+                   price: tuple[float, float] | None = None,
+                   ratings=None) -> Candidate:
     """One model as a candidate. `price` is (input, output) USD per 1M tokens
     from the pricing table; with it, cost efficiency is the real rate rather
-    than a guess from the model's name."""
+    than a guess from the model's name. `ratings` is a loaded
+    services.benchmarks.RatingTable; where it rates the model, quality is the
+    rating (services/recommendations/ratings.py), not a guess either."""
     key = provider.casefold()
-    name = model_id.casefold()
+    words = name_tokens(model_id)
     quality, reliability, cost, speed, context = _PROVIDER_DEFAULTS.get(
         key, (0.65, 0.65, 0.55, 0.60, 0.65))
     tasks = dict(_PROVIDER_TASKS.get(key, {"general": .65}))
 
-    if any(token in name for token in ("opus", "pro", "max", "reasoner", "k3")):
+    if words & {"opus", "pro", "max", "reasoner", "k3"}:
         quality, speed, cost = min(1.0, quality + .10), speed - .14, cost - .15
         tasks["analysis"] = max(tasks.get("analysis", 0), .94)
-    if any(token in name for token in ("mini", "flash", "haiku", "lite", "1.5b")):
+    if words & {"mini", "flash", "haiku", "lite", "1.5b"}:
         quality, speed, cost = quality - .10, min(1.0, speed + .17), min(1.0, cost + .18)
-    if any(token in name for token in ("sonnet", "4o", "plus", "chat")):
+    if words & {"sonnet", "4o", "plus", "chat"}:
         quality, speed = min(1.0, quality + .035), min(1.0, speed + .04)
-    if "fable" in name:
+    if "fable" in words:
         tasks["creative"], tasks["longform"] = 1.0, .98
-    if "coder" in name or "code" in name:
+    if words & {"code", "coder", "codex"}:
         tasks["code"] = .98
-    if "reasoner" in name or "r1" in name:
+    if words & {"reasoner", "r1"}:
         tasks["analysis"] = .97
     if key == "ollama":
         privacy = 1.0
@@ -135,6 +159,12 @@ def text_candidate(provider: str, model_id: str,
         privacy = 0.10
     if price is not None and key != "ollama":
         cost = price_efficiency(*price)
+
+    task_quality, evidence, credit = {}, {}, ""
+    rated = rated_quality(ratings, key, model_id, quality) if ratings else None
+    if rated is not None:
+        quality, task_quality, evidence = rated
+        credit = RATINGS_CREDIT if evidence else ""
 
     return Candidate(
         provider=provider,
@@ -148,6 +178,10 @@ def text_candidate(provider: str, model_id: str,
         context=max(0.0, min(1.0, context)),
         privacy=privacy,
         available=provider_configured(provider) if available is None else available,
+        task_quality={tag: max(0.0, min(1.0, value))
+                      for tag, value in task_quality.items()},
+        quality_evidence=evidence,
+        quality_credit=credit,
     )
 
 
@@ -182,6 +216,7 @@ def _alias_price(table: dict, model: str):
 def text_candidates(providers: list[str] | tuple[str, ...],
                     live_models: dict[str, list[str]] | None = None,
                     prices: dict[str, dict[str, tuple[float, float]]] | None = None,
+                    ratings=None,
                     ) -> list[Candidate]:
     """Every selectable text model, ranked-ready.
 
@@ -190,7 +225,9 @@ def text_candidates(providers: list[str] | tuple[str, ...],
     {provider: {model: (input, output)}} in USD per 1M tokens, with an
     optional "default" row per provider. A model is costed at its own rate,
     else at its provider's default — the same fallback the bill uses — and
-    only without either is the cost guessed from its name.
+    only without either is the cost guessed from its name. `ratings` is the
+    loaded rating table (see text_candidate); without it, quality is the
+    provider-and-name estimate throughout.
     """
     live_models = live_models or {}
     prices = prices or {}
@@ -203,7 +240,8 @@ def text_candidates(providers: list[str] | tuple[str, ...],
                 continue
             price = table.get(model) or _alias_price(table, model) \
                 or table.get("default")
-            result.append(text_candidate(provider, model, price=price))
+            result.append(text_candidate(provider, model, price=price,
+                                         ratings=ratings))
     return result
 
 

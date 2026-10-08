@@ -433,7 +433,9 @@ fetch also counts as a look, so news arrives with the startup check off.
 - It is **ranked like every other model — and only like every other model.**
   Being new earns nothing: a newer model is often dearer and says nothing
   about fit, so it is scored on the same evidence as the rest (the agent's
-  task fit and weights, and its real price). The BEST FIT badge moves only if
+  task fit and weights, its real price, and its public rating once it has
+  one — until then it is credited no higher than its provider's best-rated
+  model; see *Quality in the ranking*). The BEST FIT badge moves only if
   that assessment says so. The tile says **Best choice for …** when it is an
   agent's best option across every provider you have a key for and have
   permitted, or **Best Qwen model for …** when it wins only within its
@@ -481,6 +483,55 @@ rates the bill is calculated from — not from a model's name. The blended rate
 scale: $0.10 scores 1.0, $30 scores 0.05. A model without its own row is
 costed at its provider's `default`, as the bill would be; only a model with
 neither falls back to a name-based guess ("mini" cheap, "opus" dear).
+
+### Quality in the ranking
+
+A text model's **output quality** is its public **LMArena** rating for the
+kind of work being asked, not a guess from its provider and name. Until
+2026-10-08 it was the guess, and the guess could not tell models apart:
+gpt-5.5 and gpt-4.1 both scored 0.84, Claude Opus 5.5 and Opus 4.1 both 0.98,
+and gpt-6-luna — OpenAI's cheapest — got OpenAI's flagship number. With
+quality flat, price decided: Sitebuilder's BEST FIT for landing-page code was
+gpt-4o-mini, which LMArena rates 1348 for coding against Claude Opus 5.5's
+1538. Opus wins about three meetings in four.
+
+- **The scale.** Quality is the model's expected score against the best-rated
+  model for that kind of work, doubled: the best scores 1.0, 20 points below
+  it 0.94, 100 below 0.72, 200 below 0.48. That curve is what an Elo rating
+  means, and the reference is the table's best, so a model's quality does not
+  move when the models beside it in a menu change.
+- **The kind of work.** Each agent's task tags map onto leaderboard categories:
+  creative and longform → *creative writing*, code → *coding*, analysis →
+  *hard prompts*, general → *overall*. Tags with no category of their own
+  (editing, marketing, social, planning, structured) use *overall*. A request
+  that names several kinds of work averages them, as task fit does.
+- **Unrated models** keep the provider-and-name estimate, but never above the
+  best rating their own provider has for that kind of work — otherwise a
+  model would gain an edge for being too new to have been measured. Ollama
+  models are never rated: the leaderboard rates the full model, not the
+  quantised copy on this Mac.
+- **The words in a name are words.** The estimate's name rules match whole
+  words of the id (split on `- . _ : /`). They matched substrings, and every
+  Gemini id contains "mini", so gemini-3.1-pro-preview took the small-model
+  penalty, which cancelled its "pro".
+- **Where the ratings come from.** `services/benchmarks.py` — a copy of
+  Sentinel's, guarded by `tests/test_benchmarks_drift.py` — reads the
+  `lmarena-ai/leaderboard-dataset` on Hugging Face. The shipped snapshot is
+  `config/lmarena_snapshot.json`; a fresh copy is fetched at most once a day
+  beside the Model updates check (free, keyless, about a minute of paced
+  requests on a daemon thread) into `data/lmarena_ratings.json`, and the
+  ranking re-runs when it lands. Nothing waits on it, and a failed fetch keeps
+  the ratings already loaded. Refresh the snapshot with
+  `python -m services.benchmarks --snapshot`.
+- **Credit.** The ratings are CC BY 4.0. The Model updates tile names the
+  ratings in use, and a BEST FIT or paid-request explanation for a rated model
+  ends with the figures it rests on — *Quality ratings (LMArena leaderboard,
+  CC BY 4.0): coding 1538, overall 1504.*
+
+The rest of the score is unchanged: task fit and provider affinity (52%)
+against the agent's weighted quality, reliability, cost, speed, context and
+privacy (48%). Nothing switches by itself — the badge moves, and Apply at the
+paid-request confirmation is still the only way a selection changes.
 
 ### Every paid request is assessed
 
@@ -2268,6 +2319,8 @@ All business logic is separated from the GUI into dedicated service classes in `
 | `resource_monitor.py` | `ResourceMonitor` | `snapshot()` returns CPU, RAM, swap, and battery stats via `psutil` |
 | `tool_runner.py` | `ToolRunner` | Loads tool configuration (paths, venv, defaults) for the Audiobook tool |
 | `model_router.py` | `ModelRouter` | Stateless helper for provider/model selection logic |
+| `benchmarks.py` | `RatingTable` | LMArena per-task model ratings: daily fetch, cache, shipped snapshot. A copy of Sentinel's; `tests/test_benchmarks_drift.py` |
+| `recommendations/ratings.py` | — (module) | Turns a rating into the 0–1 quality the BEST FIT ranker weighs; holds unrated models at their provider's best |
 
 ### ChatWorker (main.py)
 
@@ -2482,6 +2535,7 @@ imprint/
 ├── config/                        # Seed JSON — the DB is the source of truth
 │   ├── registry.json  agents.json  tools.json
 │   ├── tool_prompts.json  pricing.json  settings.json  commands.json
+│   └── lmarena_snapshot.json      # Shipped model ratings (CC BY 4.0)
 │
 ├── scripts/                       # build_app.sh, install_app.sh, make_icon.py,
 │                                  #   make_tray_icon.py
@@ -2759,8 +2813,10 @@ two scripts. macOS also caches icons; if the Dock still shows the old one,
 
 It confirms the writable data directory is outside the bundle, that every agent
 in `CUSTOM_PANELS` has a registry row, that `vidforge` imported and its output
-root is writable, and that the read-only resources seeded from the bundle
-(`docs/agents`, `docs/learn`, `config`) are present. Three of those failure
+root is writable, that the read-only resources seeded from the bundle
+(`docs/agents`, `docs/learn`, `config`) are present, and that the shipped model
+ratings (`config/lmarena_snapshot.json`) load — without them every BEST FIT
+quietly falls back to estimating quality from names. Three of those failure
 modes do not exist until the app is frozen — see the packaging notes in the
 workspace `AGENTS.md`.
 

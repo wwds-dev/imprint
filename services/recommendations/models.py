@@ -44,6 +44,14 @@ class Candidate:
     aspects: tuple[str, ...] = ()
     durations: tuple[int, ...] = ()
     estimated_cost: float | None = None
+    # Quality per task tag where public ratings rate this kind of work on its
+    # own (coding, creative writing...); a tag not listed is scored on
+    # `quality`. `quality_evidence` says what each rated figure rests on, by
+    # tag ("general" for `quality` itself), and `quality_credit` is the credit
+    # the ratings' licence requires wherever one is shown.
+    task_quality: Mapping[str, float] = field(default_factory=dict)
+    quality_evidence: Mapping[str, str] = field(default_factory=dict)
+    quality_credit: str = ""
 
 
 @dataclass(frozen=True)

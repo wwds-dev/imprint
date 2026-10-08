@@ -26,6 +26,10 @@ output/
 data/cache/
 # Model updates memory (services/model_watch.py) — per machine, not source.
 data/model_watch.json
+# The daily LMArena ratings fetch (services/recommendations/ratings.py); the
+# shipped copy is config/lmarena_snapshot.json.
+data/lmarena_ratings.json
+data/lmarena_ratings.tmp
 screenshots/
 .claude/
 

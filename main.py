@@ -89,6 +89,7 @@ from agents.catalog import (
 )
 from agents.recommendation_profiles import profile_for
 from services.recommendations import RecommendationContext, RecommendationEngine
+from services.recommendations import ratings as model_ratings
 from services.recommendations.catalog import (
     known_text_models, media_candidate, provider_configured,
     request_cost_efficiency,
@@ -168,6 +169,7 @@ AGENT_PRETTY_NAMES = {spec.key: spec.label for spec in AGENT_SPECS}
 from ui.panels.base import AgentPanel
 from ui.workers import (
     ChatWorker, ModelPullWorker, ModelScanWorker, FiverrImageWorker,
+    RatingsWorker,
 )
 from ui.forms import (
     CONTENT_MAX_WIDTH, CONTROL_HEIGHT, HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH,
@@ -224,6 +226,11 @@ class GodAI(QWidget):
         self.anthropic = AnthropicClientWrapper()
         self.qwen = QwenClientWrapper()
         self.recommendation_engine = RecommendationEngine()
+        # Public per-task model ratings (LMArena): a text model's quality where
+        # one rates it. The cached daily fetch, else the snapshot shipped in
+        # config/; refreshed beside the Model updates check.
+        self.ratings = model_ratings.load()
+        self.ratings_worker: Optional[RatingsWorker] = None
         self.monitor = ResourceMonitor()
         self.history = HistoryStore()
         self.report_exporter = ReportExporter()
@@ -1106,7 +1113,7 @@ class GodAI(QWidget):
         profile = profile_for(agent_key)
         context = self._recommendation_context(agent_key, task)
         selected = text_candidates([provider], {provider: [model]},
-                                   self._price_index())
+                                   self._price_index(), self.ratings)
         best_cost, _tokens = self.estimate_chat_cost(best.provider, best.model_id, prompt)
         selected_score = (self.recommendation_engine.score(profile, selected[0], context)
                           if selected else None)
@@ -1414,7 +1421,8 @@ class GodAI(QWidget):
         live = {p: models for p in providers
                 if (models := self._best_known_models(p))}
         live[selected] = [model_box.itemText(i) for i in range(model_box.count())]
-        candidates = text_candidates(providers, live, self._price_index())
+        candidates = text_candidates(providers, live, self._price_index(),
+                                     self.ratings)
         candidates = [
             replace(item, available=(
                 bool(item.available and self._provider_permission(item.provider))
@@ -1458,7 +1466,8 @@ class GodAI(QWidget):
                             and self._provider_permission(provider))
         if not runnable and not result.fallback:
             return False
-        mine = text_candidates([provider], {provider: [model]}, self._price_index())
+        mine = text_candidates([provider], {provider: [model]},
+                               self._price_index(), self.ratings)
         if not mine:
             return False
         score = self.recommendation_engine.score(
@@ -3718,8 +3727,10 @@ class GodAI(QWidget):
 
         Free: `/models` is not a billed endpoint, and it is the same call the
         dropdowns make. Providers without a key are listed as not checked
-        rather than guessed at.
+        rather than guessed at. The public quality ratings are refreshed
+        beside it when the cached copy is a day old; that needs no key.
         """
+        self.refresh_model_ratings()
         worker = self.model_scan_worker
         if worker is not None and worker.isRunning():
             return
@@ -3742,6 +3753,39 @@ class GodAI(QWidget):
         self.model_scan_worker = worker
         self.model_updates_card.set_checking(True)
         worker.start()
+
+    def refresh_model_ratings(self) -> None:
+        """Fetch fresh LMArena ratings in the background if a day has passed.
+
+        Free and keyless, and never waited on: the ranking keeps the cached
+        or shipped ratings until the fetch lands, then re-ranks.
+        """
+        worker = self.ratings_worker
+        if worker is not None and worker.isRunning():
+            return
+        try:
+            stale = model_ratings.is_stale()
+        except Exception as exc:
+            self._note_failure("model ratings: read cache", exc)
+            return
+        if not stale:
+            return
+        worker = RatingsWorker()
+        worker.ratings_ready.connect(self._on_model_ratings_ready)
+        self.ratings_worker = worker
+        worker.start()
+
+    def _on_model_ratings_ready(self, table, error: str) -> None:
+        if table is None or not table:
+            # The service often answers "loading" for minutes; the ratings
+            # already in use stay, and the next check tries again.
+            self._note_failure("model ratings: refresh",
+                               RuntimeError(error or "no ratings returned"))
+            return
+        self.ratings = table
+        # A model's quality can have moved: re-rank, never re-select.
+        self.refresh_all_recommendations()
+        self.refresh_model_updates()
 
     def _on_model_scan_listed(self, provider: str, models: list,
                               error: str) -> None:
@@ -3888,7 +3932,7 @@ class GodAI(QWidget):
         models = (self._best_known_models(provider)
                   or list(known_text_models(provider)))
         candidates = text_candidates([provider], {provider: models},
-                                     self._price_index())
+                                     self._price_index(), self.ratings)
         labels = []
         for agent_key, (provider_attr, _model_attr) in AGENT_SETUP_WIDGETS.items():
             provider_box = self._find_control(provider_attr)
@@ -3980,6 +4024,17 @@ class GodAI(QWidget):
         card.skipped_label.setToolTip("\n".join(
             f"{PROVIDER_LABELS.get(k, k)}: {v}"
             for k, v in self._model_scan_failed.items()))
+        card.set_ratings(
+            model_ratings.describe(self.ratings),
+            "A text model's output quality in every BEST FIT and paid-request "
+            "assessment is its public rating for that kind of work (coding, "
+            "creative writing, hard prompts, overall), measured against the "
+            "best-rated model. A model the ratings do not cover is estimated "
+            "from its provider and name, never above its provider's best "
+            f"rating.\n{model_ratings.CREDIT}: {model_ratings.SOURCE_URL}"
+            if self.ratings else
+            "No ratings could be read; quality is estimated from each "
+            "model's provider and name until a check fetches them.")
 
         for agent_key, (provider_attr, model_attr) in AGENT_SETUP_WIDGETS.items():
             provider_box = self._find_control(provider_attr)
@@ -5183,6 +5238,17 @@ def _selftest() -> int:
     for name in ("agents", "docs/agents", "docs/learn", "config",
                  "assets/tray.png"):
         check(f"bundled resource: {name}", (_Path(RESOURCE_DIR) / name).exists())
+    # The shipped model ratings. Without them every BEST FIT silently falls
+    # back to guessing quality from provider and name until a fetch lands.
+    try:
+        from services import benchmarks as _benchmarks
+        shipped = _benchmarks.load(_Path("/nonexistent"),
+                                   model_ratings.snapshot_file())
+        check("model ratings snapshot loads", bool(shipped),
+              f"{model_ratings.snapshot_file()} — "
+              f"published {shipped.published or '?'}")
+    except Exception as exc:
+        check("model ratings snapshot loads", False, str(exc))
 
     # 6. The menu bar item, which has two silent ways to be useless: a glyph
     #    that did not ship (checked above) and the AppKit guard not installing.

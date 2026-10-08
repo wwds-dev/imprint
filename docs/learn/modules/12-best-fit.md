@@ -27,8 +27,16 @@ over-budget candidates. It then scores the remaining routes against the agent's
 maintained quality, reliability, cost, speed, context, and privacy priorities.
 The process is deterministic and local; opening a menu does not make a paid call.
 
-Three rules keep the ranking honest:
+Four rules keep the ranking honest:
 
+- **Quality is a public rating.** A text model's output quality is its
+  LMArena rating for the kind of work — coding, creative writing, hard
+  prompts, or overall — measured against the best-rated model: the best
+  scores 1.0, a model 100 points behind 0.72. A model the ratings do not cover
+  yet is estimated from its provider and name, and never credited above its
+  provider's best-rated model. The tooltip ends with the ratings it used,
+  credited to the LMArena leaderboard (CC BY 4.0); the **Model updates** tile
+  says which ratings are loaded.
 - **Cost is the real price.** Text routes are scored on the per-token rates in
   Settings → Pricing; a model without its own row is priced at the provider's
   dearest current rate, so it is never ranked as cheaper than it is.
@@ -137,7 +145,9 @@ budget, permission, duration, or aspect requirements change.
 **Apply did not send anything:** by design. Apply only switches the route;
 read the new estimate and confirm again.  
 **A NEW model has no BEST FIT badge:** it was assessed and did not lead by a
-point for this agent and task. That is the answer, not a fault.  
+point for this agent and task. That is the answer, not a fault. Until LMArena
+rates it, its quality is held at its provider's best-rated model, so being new
+cannot win it the badge.  
 **Update selected switched nothing:** none of the marked models won for any
 agent's current task; they stay selectable in the menus.  
 
