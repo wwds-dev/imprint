@@ -111,18 +111,20 @@ def quality_from_rating(score: float, best: float) -> float:
 
 def rated_quality(table: benchmarks.RatingTable, provider: str, model_id: str,
                   estimate: float,
-                  ) -> tuple[float, dict[str, float], dict[str, str]] | None:
-    """(quality, quality per tag, evidence per tag) for one model, or None.
+                  ) -> tuple[float, dict[str, float], dict[str, str],
+                             dict[str, float]] | None:
+    """(quality, quality per tag, evidence per tag, rating per tag), or None.
 
     `estimate` is the provider-and-name quality, used where the model has no
-    rating of its own and capped at its provider's best. None when the table
-    says nothing about this provider (Ollama, or no table loaded): the
-    estimate then stands unchanged.
+    rating of its own and capped at its provider's best. The last mapping
+    holds only ratings the model really has. None when the table says
+    nothing about this provider (Ollama, or no table loaded): the estimate
+    then stands unchanged.
     """
     key = provider.casefold()
     if not table or key == "ollama":
         return None
-    quality, per_tag, evidence = estimate, {}, {}
+    quality, per_tag, evidence, scores = estimate, {}, {}, {}
     said_anything = False
     for tag, task in RATED_TAGS.items():
         best = benchmarks.best_rating(table, task)
@@ -136,6 +138,7 @@ def rated_quality(table: benchmarks.RatingTable, provider: str, model_id: str,
         if rating is not None:
             value = quality_from_rating(rating.score, best)
             evidence[tag] = f"{label} {rating.score:.0f}"
+            scores[tag] = rating.score
         else:
             cap = quality_from_rating(ceiling, best)
             value = min(estimate, cap)
@@ -146,4 +149,4 @@ def rated_quality(table: benchmarks.RatingTable, provider: str, model_id: str,
             quality = value
         else:
             per_tag[tag] = value
-    return (quality, per_tag, evidence) if said_anything else None
+    return (quality, per_tag, evidence, scores) if said_anything else None

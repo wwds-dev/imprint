@@ -1136,9 +1136,12 @@ class GodAI(QWidget):
         selected = text_candidates([provider], {provider: [model]},
                                    self._price_index(), self.ratings)
         best_cost, _tokens = self.estimate_chat_cost(best.provider, best.model_id, prompt)
-        selected_score = (self.recommendation_engine.score(profile, selected[0], context)
+        # Scored against the same result, so a rating-decided assessment
+        # puts the selection on the same best rating and band as the winner.
+        engine = self.recommendation_engine
+        selected_score = (engine.score(profile, selected[0], context, provider_result)
                           if selected else None)
-        best_score = self.recommendation_engine.score(profile, best, context)
+        best_score = engine.score(profile, best, context, provider_result)
         same = best.provider == provider and best.model_id == model
         return types.SimpleNamespace(
             agent=agent_key,
@@ -1151,6 +1154,14 @@ class GodAI(QWidget):
                                       and best_score - selected_score
                                       < MEANINGFUL_FIT_GAP),
             reason=provider_result.reason,
+            basis=provider_result.basis,
+            band=provider_result.band,
+            reference=provider_result.reference,
+            best_rating=engine.request_rating(profile, best, context),
+            selected_rating=(engine.request_rating(profile, selected[0], context)
+                             if selected else None),
+            best_rate=best.price_per_1m,
+            selected_rate=selected[0].price_per_1m if selected else None,
         )
 
     def _assessment_text(self, assessment, estimated_cost: float) -> str:
@@ -1159,6 +1170,8 @@ class GodAI(QWidget):
         if getattr(assessment, "kind", "text") == "media":
             return self._media_assessment_text(assessment)
         who = AGENT_PRETTY_NAMES.get(assessment.agent, assessment.agent)
+        if getattr(assessment, "basis", "score") == "rating":
+            return self._rating_assessment_text(assessment, estimated_cost, who)
         if assessment.selected_is_best:
             score = (assessment.selected_score
                      if assessment.selected_score is not None
@@ -1174,6 +1187,59 @@ class GodAI(QWidget):
             f"{round(assessment.best_score * 100)}/100, ~€{assessment.best_cost_eur:.2f}\n"
             f"  Your selection: {mine}, ~€{estimated_cost:.2f}\n\n"
             f"Apply switches to the best fit; you then send again.")
+
+    @staticmethod
+    def _rating_assessment_text(assessment, estimated_cost: float,
+                                who: str) -> str:
+        """The text assessment when public ratings decided it.
+
+        Said in ratings and prices, because that is the rule: among the
+        models rated within the band of the best available for this work,
+        the cheapest is the best value. A fit score out of 100 would hide
+        that two models can be the same quality at very different prices.
+        """
+        band, best = assessment.band, assessment.reference
+        mine = assessment.selected_rating
+        credit = f"Ratings: {model_ratings.CREDIT}."
+        rated = lambda value: ("not rated" if value is None  # noqa: E731
+                               else f"rated {value:.0f}")
+        if assessment.selected_is_best:
+            standing = (f"rated {mine:.0f} for this work, within {band} points "
+                        f"of the best available ({best:.0f})" if mine is not None
+                        else "not rated")
+            return (f"\n\nAssessment for this request ({who}): your selection "
+                    f"is the best value among the providers you have permitted "
+                    f"— {standing}, and nothing as well rated has a "
+                    f"meaningfully lower rate. {credit}")
+        if mine is None:
+            why = ("No public rating covers your selection yet, so nothing "
+                   "shows it is good enough for this work.")
+            yours = "not rated"
+        elif mine < best - band:
+            why = (f"Your selection is rated more than {band} points below the "
+                   f"best available ({best:.0f}).")
+            yours = f"rated {mine:.0f}"
+        else:
+            # The rule compares per-token rates (three parts input to one
+            # part output), so say those: this request's estimates can order
+            # differently for an output-heavy request.
+            theirs = assessment.best_rate
+            ours = assessment.selected_rate
+            rates = (f"${theirs:.2f} against "
+                     + ("an unknown price" if ours is None else f"${ours:.2f}")
+                     + " per 1M tokens blended") if theirs is not None else ""
+            why = (f"Both are rated within {band} points of the best available "
+                   f"({best:.0f}) — about the same quality — and the best "
+                   f"value has the lower rate ({rates}).")
+            yours = f"rated {mine:.0f}"
+        return (
+            f"\n\nAssessment for this request ({who}):\n"
+            f"  Best value: {assessment.best_provider} · {assessment.best_model} — "
+            f"{rated(assessment.best_rating)} for this work, "
+            f"~€{assessment.best_cost_eur:.2f}\n"
+            f"  Your selection: {yours}, ~€{estimated_cost:.2f}\n"
+            f"  {why}\n  {credit}\n\n"
+            f"Apply switches to the best value; you then send again.")
 
     # ── Image, video and speech: assessed per request ──────────────────────
     def media_option(self, model, cost_eur, apply=None, duration=None,
@@ -1471,8 +1537,10 @@ class GodAI(QWidget):
         The badge follows the dialog's rule (MEANINGFUL_FIT_GAP): when the
         user's own choice scores within a point of the winner, the two read as
         the same number, and moving the BEST FIT badge off it would steer them
-        to a different model — often only because its id sorts later. The
-        selection must also be able to run, or it is not a choice at all.
+        to a different model — often only because its id sorts later. When
+        ratings decided, a point means about the same price inside the rating
+        band (see services/recommendations/engine.py). The selection must
+        also be able to run, or it is not a choice at all.
         """
         if result is None or not provider or not model:
             return False
@@ -1493,8 +1561,16 @@ class GodAI(QWidget):
             return False
         score = self.recommendation_engine.score(
             profile_for(agent_key), mine[0],
-            self._recommendation_context(agent_key))
+            self._recommendation_context(agent_key), result)
         return result.score - score < MEANINGFUL_FIT_GAP
+
+    @staticmethod
+    def _holds_because(result) -> str:
+        """Why a selection that is not the winner still keeps the badge."""
+        if result.basis == "rating":
+            return (f"is rated within {result.band} points of the best "
+                    "available and costs about the same as the best value")
+        return "is within a point of the top score"
 
     def refresh_recommendation_marks(self, agent_key: str) -> None:
         """Mark the best provider overall and best model within the selection."""
@@ -1515,8 +1591,8 @@ class GodAI(QWidget):
                 agent_key, provider_result, current_provider, current_model,
                 model_box) else provider_result.candidate.provider)
             if badged != provider_result.candidate.provider:
-                tooltip = (f"Your selection ({current_provider} · {current_model}) is "
-                           f"within a point of the top score "
+                tooltip = (f"Your selection ({current_provider} · {current_model}) "
+                           f"{self._holds_because(provider_result)} "
                            f"({provider_result.candidate.provider} · "
                            f"{provider_result.candidate.model_id}), so it keeps "
                            "the badge.\n" + tooltip)
@@ -1536,8 +1612,9 @@ class GodAI(QWidget):
                 agent_key, model_result, current_provider, current_model,
                 model_box) else model_result.candidate.model_id)
             if badged != model_result.candidate.model_id:
-                tooltip = (f"Your selection ({current_model}) is within a point "
-                           f"of the top score ({model_result.candidate.model_id}), "
+                tooltip = (f"Your selection ({current_model}) "
+                           f"{self._holds_because(model_result)} "
+                           f"({model_result.candidate.model_id}), "
                            "so it keeps the badge.\n" + tooltip)
             idx = self._find_model_index(model_box, badged)
             self._paint_recommended_item(
@@ -4020,6 +4097,14 @@ class GodAI(QWidget):
             is_new = self.model_watch.is_pending(provider, combo.itemText(i))
             combo.setItemData(i, True if is_new else None, NEW_MODEL_ROLE)
 
+    def _is_rated(self, provider: str, model_id: str) -> bool:
+        """False only when ratings are loaded and none covers this model."""
+        if not self.ratings:
+            return True
+        found = text_candidates([provider], {provider: [model_id]},
+                                None, self.ratings)
+        return bool(found and found[0].ratings)
+
     def refresh_model_updates(self) -> None:
         """Repaint the tile, its section title and the NEW marks."""
         card = getattr(self, "model_updates_card", None)
@@ -4035,6 +4120,7 @@ class GodAI(QWidget):
                     n.provider, n.model_id),
                 exact_price=self._has_exact_price(n.provider, n.model_id),
                 provider=n.provider,
+                rated=self._is_rated(n.provider, n.model_id),
             )
             for n in pending
         ])

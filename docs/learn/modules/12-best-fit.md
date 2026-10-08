@@ -29,14 +29,17 @@ The process is deterministic and local; opening a menu does not make a paid call
 
 Four rules keep the ranking honest:
 
-- **Quality is a public rating.** A text model's output quality is its
-  LMArena rating for the kind of work — coding, creative writing, hard
-  prompts, or overall — measured against the best-rated model: the best
-  scores 1.0, a model 100 points behind 0.72. A model the ratings do not cover
-  yet is estimated from its provider and name, and never credited above its
-  provider's best-rated model. The tooltip ends with the ratings it used,
-  credited to the LMArena leaderboard (CC BY 4.0); the **Model updates** tile
-  says which ratings are loaded.
+- **For text, the cheapest good-enough model wins.** Text models are judged
+  on their public LMArena rating for the kind of work — coding, creative
+  writing, hard prompts, or overall. Every model rated within **20 points of
+  the best available** counts as the same quality (20 points is about a
+  53/47 split head to head), and the cheapest of them is the best value. A
+  model further down is not good enough however cheap, and a model with no
+  rating is not chosen while a rated one can be. The tooltip says this in
+  ratings and prices and credits the LMArena leaderboard (CC BY 4.0); the
+  **Model updates** tile says which ratings are loaded. Images, video,
+  speech, unrated text models and Chat's Local only mode are still ranked on
+  the agent's own priorities.
 - **Cost is the real price.** Text routes are scored on the per-token rates in
   Settings → Pricing; a model without its own row is priced at the provider's
   dearest current rate, so it is never ranked as cheaper than it is.
@@ -75,7 +78,9 @@ have permitted, priced for exactly what you asked.
 
 - **Your route is the best fit:** the dialog says so and you confirm as usual.
 - **Another route fits better by at least one point:** it is named beside
-  yours with fit scores and cost estimates. **Apply** switches the agent to it
+  yours with fit scores and cost estimates — for text, with both ratings and
+  the reason: about the same quality for less, rated more than 20 points
+  below the best available, or not rated yet. **Apply** switches the agent to it
   and stops; the panel then asks again with the new route's estimate. A paid
   request is never re-routed behind your back.
 - **Not compared (no key, or not permitted):** a route that exists but cannot
@@ -145,9 +150,10 @@ budget, permission, duration, or aspect requirements change.
 **Apply did not send anything:** by design. Apply only switches the route;
 read the new estimate and confirm again.  
 **A NEW model has no BEST FIT badge:** it was assessed and did not lead by a
-point for this agent and task. That is the answer, not a fault. Until LMArena
-rates it, its quality is held at its provider's best-rated model, so being new
-cannot win it the badge.  
+point for this agent and task. That is the answer, not a fault. A text model
+LMArena has not rated yet is not chosen while a rated one can be; the tile
+marks it **Not rated yet**, and it competes once a daily ratings check finds
+it rated.  
 **Update selected switched nothing:** none of the marked models won for any
 agent's current task; they stay selectable in the menus.  
 

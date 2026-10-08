@@ -18,8 +18,11 @@ provider or model id as the universal answer.
 - `ratings.py` turns public LMArena ratings into a text model's quality (see
   *Quality* below).
 - `engine.py` first removes incompatible, retired, unavailable and over-budget
-  choices, then applies the agent's quality, reliability, cost, speed, context
-  and privacy weights.
+  choices, then decides by one of two rules (`RecommendationResult.basis`):
+  for a text request where any candidate is rated, the **rating rule** —
+  the cheapest model rated within `RATING_BAND` points of the best available
+  wins; otherwise the **blend** of the agent's quality, reliability, cost,
+  speed, context and privacy weights.
 
 The provider menu marks the provider containing the best eligible model. The
 model menu marks the best eligible model inside the provider the user currently
@@ -54,8 +57,36 @@ for code over Claude Opus 5.5 (rated 1348 against 1538 for coding).
   (`Candidate.quality_evidence`, `quality_credit`), because the ratings are
   CC BY 4.0 and must be credited wherever shown.
 
-The blend is unchanged: 0.52 × (task fit and provider affinity) + 0.48 ×
-(the agent's weighted quality, reliability, cost, speed, context, privacy).
+## The rating rule
+
+Chosen by the user on 2026-10-08, after quality from ratings alone still left
+most agents' top two text models under a point apart: Sentinel's rule. For a
+text request where any candidate in the compared pool is rated, the cheapest
+model rated within `RATING_BAND["balanced"]` = 20 points of the best-rated
+one in the pool wins (50 for a cost priority, 0 for quality; privacy keeps
+the blend). "Best available" is the pool's best, so the provider badge is
+measured across permitted providers and the model badge inside the selected
+provider.
+
+- A candidate's rating for a request is the mean of its ratings over the
+  request's tags (`Candidate.ratings`, real ratings only — never the capped
+  estimate). A model missing a rating the request needs is unrated for it.
+- Unrated models are not chosen while a rated one can be; an unknown price
+  (`Candidate.price_per_1m` None) is never the cheap one.
+- The rule is one score so every caller keeps comparing scores with
+  `MEANINGFUL_FIT_GAP`: in the band 0.50 + 0.50 × cost efficiency; rated
+  below it 0.10 + 0.35 × expected score against the band's edge; unrated
+  0.10 × the blend. Inside the band one point is about 13% cheaper.
+- That score depends on the pool's best, so `score(profile, item, context,
+  result)` takes the result being compared with and scores on its
+  `reference` and `band`; the paid-request assessment and the badge's
+  "selection holds" check both pass it.
+- The explanation says it in ratings and prices, Sentinel's wording, and
+  cites the ratings with their credit.
+
+Where the blend decides it is unchanged: 0.52 × (task fit and provider
+affinity) + 0.48 × (the agent's weighted quality, reliability, cost, speed,
+context, privacy).
 
 ## Explanation and UI data
 

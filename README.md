@@ -434,8 +434,10 @@ fetch also counts as a look, so news arrives with the startup check off.
   Being new earns nothing: a newer model is often dearer and says nothing
   about fit, so it is scored on the same evidence as the rest (the agent's
   task fit and weights, its real price, and its public rating once it has
-  one — until then it is credited no higher than its provider's best-rated
-  model; see *Quality in the ranking*). The BEST FIT badge moves only if
+  one). A text model is chosen on its rating, so a new one competes once
+  LMArena rates it — until then the tile marks it **Not rated yet** and it is
+  not chosen while a rated model can be (*Quality in the ranking*). The BEST
+  FIT badge moves only if
   that assessment says so. The tile says **Best choice for …** when it is an
   agent's best option across every provider you have a key for and have
   permitted, or **Best Qwen model for …** when it wins only within its
@@ -495,16 +497,47 @@ quality flat, price decided: Sitebuilder's BEST FIT for landing-page code was
 gpt-4o-mini, which LMArena rates 1348 for coding against Claude Opus 5.5's
 1538. Opus wins about three meetings in four.
 
-- **The scale.** Quality is the model's expected score against the best-rated
-  model for that kind of work, doubled: the best scores 1.0, 20 points below
-  it 0.94, 100 below 0.72, 200 below 0.48. That curve is what an Elo rating
-  means, and the reference is the table's best, so a model's quality does not
-  move when the models beside it in a menu change.
+**The rule (chosen 2026-10-08, the same as Sentinel's).** For a text request
+where any model on offer is rated, the **cheapest model rated within 20 points
+of the best available** for this kind of work is the best value. 20 points is
+about a 53/47 split when two models meet, so inside that band a dearer model
+buys nothing measurable; a model further down is not good enough, however
+cheap. The agent's weights and provider preferences no longer decide between
+rated text models — they still rank images, video and speech, text models
+when none is rated, and Chat's **Local only** mode, whose privacy priority is
+what prefers local models.
+
+- **What the explanation says.** *Best value for Sitebuilder (landing page
+  code): gemini-3.8-flash is rated 1513 for this work, within 20 points of the
+  best available (claude-opus-5-5, 1524, $8.00 per 1M tokens blended), and is
+  the cheapest of the 9 that are ($1.50 per 1M tokens blended).* The paid-request
+  dialog says the same in ratings, rates and euros: *about the same quality,
+  and the best value has the lower rate ($1.50 against $8.00 per 1M tokens
+  blended)*; or *rated more than 20 points below the best available*; or *no
+  public rating covers your selection yet*. The rule compares per-token rates;
+  the euro figures beside them are this request's estimates.
+- **"Best available"** is the best-rated model among those you can run —
+  across permitted providers for the provider badge, inside the selected
+  provider for the model badge — not the leaderboard's overall top.
+- **A visible lead** is still one point (`MEANINGFUL_FIT_GAP`). The rule is
+  expressed as one 0–1 score so the badge, the dialog and Update selected keep
+  that rule: inside the band, 0.5 plus half the price score (one point is
+  about 13% cheaper); below the band, 0.10–0.45 by rating; unrated, under
+  0.10. So a selection in the band at about the same price keeps its badge.
+- **Unrated and unknown.** A model no rating covers is not chosen while a
+  rated one can be — nothing shows it is good enough — and an unknown price is
+  never the cheap one. A new model therefore competes once LMArena rates it;
+  until then the Model updates tile marks it *Not rated yet*.
+
+- **Quality, where the blend still decides.** A rated model's quality is its
+  expected score against the best-rated model on the table, doubled: the best
+  scores 1.0, 20 points below it 0.94, 100 below 0.72, 200 below 0.48.
 - **The kind of work.** Each agent's task tags map onto leaderboard categories:
   creative and longform → *creative writing*, code → *coding*, analysis →
   *hard prompts*, general → *overall*. Tags with no category of their own
   (editing, marketing, social, planning, structured) use *overall*. A request
-  that names several kinds of work averages them, as task fit does.
+  that names several kinds of work averages its ratings over them —
+  Sitebuilder's landing-page code is coding, hard prompts and overall.
 - **Unrated models** keep the provider-and-name estimate, but never above the
   best rating their own provider has for that kind of work — otherwise a
   model would gain an edge for being too new to have been measured. Ollama
@@ -528,10 +561,11 @@ gpt-4o-mini, which LMArena rates 1348 for coding against Claude Opus 5.5's
   ends with the figures it rests on — *Quality ratings (LMArena leaderboard,
   CC BY 4.0): coding 1538, overall 1504.*
 
-The rest of the score is unchanged: task fit and provider affinity (52%)
+Where the blend decides, it is unchanged: task fit and provider affinity (52%)
 against the agent's weighted quality, reliability, cost, speed, context and
-privacy (48%). Nothing switches by itself — the badge moves, and Apply at the
-paid-request confirmation is still the only way a selection changes.
+privacy (48%). Either way nothing switches by itself — the badge moves, and
+Apply at the paid-request confirmation is still the only way a selection
+changes; the budget rule still drops what the caps would refuse.
 
 ### Every paid request is assessed
 
@@ -539,7 +573,9 @@ The confirmation shown before **any** paid request — text, image, video or
 speech — carries an assessment of **that request**, ranked on the agent's
 profile across every route you have a key for and have permitted. Either it
 says your selection is the best fit, or it names the better option with fit
-scores and cost estimates side by side. **Apply** switches to it and does not
+scores and cost estimates side by side — for a text request decided on
+ratings, with both ratings, both estimates and the reason in words (see
+*Quality in the ranking*). **Apply** switches to it and does not
 send; the panel asks again with the new route's own estimate, so a paid
 request is never re-routed behind your back. A switch is offered only when the
 better option wins by at least one point on the 0–100 scale shown — below that

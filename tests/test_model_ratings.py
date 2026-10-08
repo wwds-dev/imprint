@@ -14,11 +14,16 @@ Two findings from comparing Imprint's ranker with Sentinel's (2026-10-08):
    Opus 5.5, which LMArena rates 1348 against 1538 for coding.
 
 Quality now comes from LMArena's per-task ratings where they rate a model
-(services/recommendations/ratings.py). These tests pin the rule with small
-synthetic tables, and the two findings against the shipped snapshot.
+(services/recommendations/ratings.py), and — the user's choice the same day —
+a text request where any candidate is rated is decided by Sentinel's rule:
+the cheapest model rated within 20 points of the best available wins
+(services/recommendations/engine.py). These tests pin both with small
+synthetic tables, and the findings against the shipped snapshot.
 
 Run with:  pytest tests/test_model_ratings.py -v
 """
+
+from dataclasses import replace
 
 import pytest
 
@@ -192,14 +197,21 @@ def test_sitebuilder_no_longer_prefers_gpt_4o_mini_for_landing_page_code(shipped
     profile = profile_for("webdesign")
     context = RecommendationContext(agent="webdesign", task="landing page code")
     prices = snapshot_prices()
-    score = lambda provider, model, **kw: engine.score(  # noqa: E731
-        profile, text_candidates([provider], {provider: [model]}, prices,
-                                 **kw)[0], context)
+    pair = {"openai": ["gpt-4o-mini"], "anthropic": ["claude-opus-5-5"]}
     # Before: price decided, and gpt-4o-mini outranked Opus 5.5.
-    assert score("openai", "gpt-4o-mini") > score("anthropic", "claude-opus-5-5")
-    # With the ratings, the model rated 190 points better for coding wins.
-    assert score("anthropic", "claude-opus-5-5", ratings=shipped) > \
-        score("openai", "gpt-4o-mini", ratings=shipped) + .03
+    before = engine.recommend(profile, [
+        replace(c, available=True)
+        for c in text_candidates(["openai", "anthropic"], pair, prices)], context)
+    assert before.basis == "score"
+    assert before.candidate.model_id == "gpt-4o-mini"
+    # Rated 190 points apart for coding, gpt-4o-mini is not in the band.
+    after = engine.recommend(profile, [
+        replace(c, available=True)
+        for c in text_candidates(["openai", "anthropic"], pair, prices,
+                                 shipped)], context)
+    assert after.basis == "rating"
+    assert after.candidate.model_id == "claude-opus-5-5"
+    assert after.margin > .10
 
 
 def test_every_known_text_model_is_rated_or_deliberately_estimated(shipped):
@@ -216,3 +228,147 @@ def test_every_known_text_model_is_rated_or_deliberately_estimated(shipped):
         "kimi/kimi-k2.7-code", "kimi/kimi-k2.7-code-highspeed",
         "qwen/qwen-flash", "qwen/qwen3.8-flash",
     ]
+
+
+
+# ── 4. the rating rule: the cheapest model within 20 points of the best ─────
+
+def rated(provider, model, rating, price, **extra):
+    """A text candidate with one overall rating and a blended price."""
+    from services.recommendations import Candidate
+    values = dict(
+        provider=provider, model_id=model, label=model,
+        task_fit={"general": .8}, quality=.8, reliability=.8,
+        cost_efficiency=(ratings_price_efficiency(price) if price else .55),
+        speed=.7, context=.7, available=True,
+        ratings={"general": rating} if rating is not None else {},
+        price_per_1m=price)
+    values.update(extra)
+    return Candidate(**values)
+
+
+def ratings_price_efficiency(blended):
+    from services.recommendations.catalog import price_efficiency
+    return price_efficiency(blended, blended)
+
+
+CHAT = profile_for("chat")
+GENERAL = RecommendationContext(agent="chat")
+
+
+def test_the_cheapest_inside_the_band_wins_and_a_cheaper_one_outside_does_not():
+    engine = RecommendationEngine()
+    result = engine.recommend(CHAT, [
+        rated("a", "best", 1500, 10.0),
+        rated("b", "close", 1485, 2.0),       # 15 below: in the band
+        rated("c", "cheap", 1470, 0.2),       # 30 below: out
+    ], GENERAL)
+    assert result.basis == "rating" and result.band == 20
+    assert result.reference == 1500
+    assert result.candidate.model_id == "close"
+    assert "within 20 points of the best available (best, 1500" in result.reason
+    assert "cheapest of the 2 that are ($2.00 per 1M tokens blended)" in result.reason
+
+
+def test_the_best_rated_wins_when_nothing_else_is_close():
+    engine = RecommendationEngine()
+    result = engine.recommend(CHAT, [
+        rated("a", "best", 1500, 10.0),
+        rated("c", "cheap", 1400, 0.2),
+    ], GENERAL)
+    assert result.candidate.model_id == "best"
+    assert "rated highest for this work (1500" in result.reason
+    assert "nothing else is within 20 points" in result.reason
+    assert result.margin > .05               # a band member beats any outsider
+
+
+def test_an_unrated_model_is_not_chosen_while_a_rated_one_can_be():
+    engine = RecommendationEngine()
+    result = engine.recommend(CHAT, [
+        rated("a", "rated", 1300, 30.0),
+        rated("b", "unrated-and-free", None, 0.1, quality=1.0),
+    ], GENERAL)
+    assert result.candidate.model_id == "rated"
+    assert "1 unrated model was not considered" in result.reason
+
+
+def test_an_unknown_price_is_never_the_cheap_one():
+    engine = RecommendationEngine()
+    result = engine.recommend(CHAT, [
+        rated("a", "priced", 1490, 25.0),
+        rated("b", "unknown", 1500, None),
+    ], GENERAL)
+    assert result.candidate.model_id == "priced"
+
+
+def test_with_nothing_rated_the_blend_decides_as_before():
+    engine = RecommendationEngine()
+    result = engine.recommend(CHAT, [
+        rated("a", "one", None, 1.0, quality=.95),
+        rated("b", "two", None, 1.0, quality=.60),
+    ], GENERAL)
+    assert result.basis == "score" and result.reference is None
+    assert result.candidate.model_id == "one"
+    assert "Fit score" in result.reason
+
+
+def test_privacy_keeps_the_blend_and_media_never_uses_ratings():
+    engine = RecommendationEngine()
+    local = RecommendationContext(agent="chat", priority="privacy")
+    result = engine.recommend(CHAT, [
+        rated("a", "cloud", 1500, 1.0),
+        rated("ollama", "local", None, 0.0, privacy=1.0),
+    ], local)
+    assert result.basis == "score"
+    visual = RecommendationContext(agent="video", modality="visual")
+    result = engine.recommend(profile_for("video"), [
+        rated("a", "clip", 1500, 1.0, modality="visual"),
+        rated("b", "other", None, 1.0, modality="visual"),
+    ], visual)
+    assert result.basis == "score"
+
+
+def test_the_selection_is_scored_on_the_same_terms_as_the_winner():
+    """The dialog and the badge compare engine.score(selection, result) with
+    the winner's score: the same band, the same reference, one-point leads."""
+    engine = RecommendationEngine()
+    pool = [rated("a", "best", 1500, 10.0), rated("b", "close", 1485, 2.0)]
+    result = engine.recommend(CHAT, pool, GENERAL)
+    assert engine.score(CHAT, result.candidate, GENERAL, result) == result.score
+    # Same band, about 5% dearer: within a point — it keeps the badge.
+    near = rated("c", "near", 1490, 2.1)
+    assert result.score - engine.score(CHAT, near, GENERAL, result) < .01
+    # Same band, a third dearer: a visible lead.
+    dearer = rated("d", "dearer", 1490, 2.7)
+    assert result.score - engine.score(CHAT, dearer, GENERAL, result) >= .01
+    # Below the band or unrated: never within a point.
+    assert result.score - engine.score(
+        CHAT, rated("e", "weak", 1450, 0.2), GENERAL, result) > .05
+    assert result.score - engine.score(
+        CHAT, rated("f", "new", None, 0.2), GENERAL, result) > .40
+    # Without the result, score() is still the blend.
+    assert engine.score(CHAT, near, GENERAL) == engine._score(CHAT, near, GENERAL)
+
+
+def test_on_the_shipped_ratings_every_text_agent_gets_the_cheapest_good_enough_model(shipped):
+    """The rule's invariant, for every agent with a text menu, with every
+    provider available: the winner is rated within the band of the best, and
+    no other model in the band is cheaper."""
+    engine = RecommendationEngine()
+    prices = snapshot_prices()
+    candidates = [replace(c, available=True) for c in text_candidates(
+        ["openai", "anthropic", "gemini", "deepseek", "kimi", "qwen"],
+        None, prices, shipped)]
+    for agent in ("chat", "author", "manuscript", "music", "webdesign",
+                  "fiverr", "creator", "social"):
+        profile = profile_for(agent)
+        context = RecommendationContext(agent=agent)
+        result = engine.recommend(profile, candidates, context)
+        assert result.basis == "rating", agent
+        rating = lambda c: engine.request_rating(profile, c, context)  # noqa: E731
+        band = [c for c in candidates
+                if rating(c) is not None and rating(c) >= result.reference - 20]
+        assert result.candidate in band, agent
+        assert result.candidate.price_per_1m == min(
+            c.price_per_1m for c in band if c.price_per_1m is not None), agent
+        assert result.candidate.model_id != "gpt-4o-mini"

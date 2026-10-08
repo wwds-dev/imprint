@@ -60,11 +60,12 @@ compares models inside the selected provider. A setup-target recommendation
 means the option fits the task but is not configured yet. It should not be read
 as ready to run.
 
-A text model's output quality in that ranking is its public **LMArena** rating
-for the kind of work (coding, creative writing, hard prompts, overall), against
-the best-rated model; a model not yet rated is estimated from its provider and
-name, never above its provider's best rating. The explanation names the
-ratings it used, credited (CC BY 4.0).
+For text, the ranking uses public **LMArena** ratings for the kind of work
+(coding, creative writing, hard prompts, overall): the cheapest model rated
+within 20 points of the best available is the best value, and a model with no
+rating is not chosen while a rated one can be. The explanation names the
+ratings and prices it used, credited (CC BY 4.0). Media routes, unrated text
+models and Local only Chat are ranked on the agent's own priorities.
 
 Local Ollama work stays on the machine. Cloud providers require both a key and
 permission in the current execution mode. Image, video, voice, and text models

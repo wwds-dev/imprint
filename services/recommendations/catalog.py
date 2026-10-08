@@ -160,11 +160,18 @@ def text_candidate(provider: str, model_id: str,
     if price is not None and key != "ollama":
         cost = price_efficiency(*price)
 
-    task_quality, evidence, credit = {}, {}, ""
+    task_quality, evidence, credit, scores = {}, {}, "", {}
     rated = rated_quality(ratings, key, model_id, quality) if ratings else None
     if rated is not None:
-        quality, task_quality, evidence = rated
+        quality, task_quality, evidence, scores = rated
         credit = RATINGS_CREDIT if evidence else ""
+    # Blended like price_efficiency. Zero is no price at all for a cloud
+    # model (the table filters it out anyway); Ollama is free and unrated.
+    blended = (0.75 * price[0] + 0.25 * price[1]) if price is not None else None
+    if key == "ollama":
+        blended = 0.0
+    elif blended is not None and blended <= 0:
+        blended = None
 
     return Candidate(
         provider=provider,
@@ -182,6 +189,8 @@ def text_candidate(provider: str, model_id: str,
                       for tag, value in task_quality.items()},
         quality_evidence=evidence,
         quality_credit=credit,
+        ratings=scores,
+        price_per_1m=blended,
     )
 
 

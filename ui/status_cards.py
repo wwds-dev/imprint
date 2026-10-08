@@ -269,6 +269,9 @@ class ModelNotice:
     provider: str = ""               # the provider key, e.g. "qwen"
     # Agents whose best choice across every permitted provider it now is.
     best_overall_for: tuple[str, ...] = ()
+    # False while public ratings are loaded but none covers it yet: it then
+    # cannot be anyone's best value (an unrated model never beats rated ones).
+    rated: bool = True
 
 
 class ModelNoticeRow(QFrame):
@@ -314,6 +317,16 @@ class ModelNoticeRow(QFrame):
             fit = _label(f"Added to the {notice.provider_label} model menus",
                          "RailDetail")
         layout.addWidget(fit)
+        if not notice.rated:
+            unrated = _label("Not rated yet — ranked below rated models",
+                             "RailDetail")
+            unrated.setToolTip(
+                "Text models are chosen on their public LMArena rating for "
+                "the kind of work: the cheapest rated within 20 points of the "
+                "best wins. A model with no rating yet is not chosen while a "
+                "rated one can be, because nothing shows it is good enough. "
+                "It competes as soon as a daily ratings check finds it rated.")
+            layout.addWidget(unrated)
         if not notice.exact_price:
             price = _label(
                 f"No price on file — estimated at {notice.provider_label}'s "

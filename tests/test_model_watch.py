@@ -344,6 +344,37 @@ def _row(window, model_id):
 
 
 @pytest.fixture
+def rate(window):
+    """Rate a model as LMArena would once it has: the shipped ratings plus,
+    in every text category, a row for `model` copied from `like`.
+
+    Since 2026-10-08 a text model with no rating is never chosen while a rated
+    one can be, so a test about a new model *winning* must first have it
+    rated — which is also the only way it wins in the app.
+    """
+    import json
+    from services import benchmarks
+    from services.recommendations import ratings as ratings_module
+    saved = window.ratings
+    data = json.loads(ratings_module.snapshot_file().read_text(encoding="utf-8"))
+
+    def rate_as(model, like):
+        copied = 0
+        for table, rows in data["categories"].items():
+            if not table.startswith("text_style_control/"):
+                continue
+            source = next((row for row in rows if row[0] == like), None)
+            if source is not None:
+                rows.append([model, *source[1:]])
+                copied += 1
+        assert copied, f"{like} is not in the snapshot"
+        window.ratings = benchmarks.RatingTable(data, origin="snapshot")
+
+    yield rate_as
+    window.ratings = saved
+
+
+@pytest.fixture
 def priced(window):
     """Write pricing rows for the test, and drop them afterwards."""
     from services.database import get_connection
@@ -395,8 +426,8 @@ def test_clicking_a_row_marks_it_and_enables_update(app, watched_window):
 
 
 def test_a_marked_model_that_is_not_the_best_fit_switches_nothing(
-        app, watched_window, priced):
-    """New and marked is not enough: a dearer successor with the same fit
+        app, watched_window, priced, rate):
+    """New and marked is not enough: a dearer successor rated the same
     loses the assessment, and the agent stays where it is."""
     window = watched_window
     window.qwen = _FakeQwen(["qwen3.8-max", "qwen-plus", "qwen-flash"])
@@ -404,7 +435,8 @@ def test_a_marked_model_that_is_not_the_best_fit_switches_nothing(
     author = _select(app, window, "author", "qwen", "qwen3.8-max")
     window.qwen.models += ["qwen4-max"]
     _run_check(app, window)
-    priced("qwen", "qwen4-max", 30.0, 120.0)        # far dearer, same tier
+    rate("qwen4-max", like="qwen3.8-max")
+    priced("qwen", "qwen4-max", 30.0, 120.0)        # far dearer, same rating
 
     _row(window, "qwen4-max").mark.setChecked(True)
     window.update_selected_models()
@@ -414,14 +446,15 @@ def test_a_marked_model_that_is_not_the_best_fit_switches_nothing(
 
 
 def test_a_marked_model_that_is_the_best_fit_is_switched_to(
-        app, watched_window, priced):
+        app, watched_window, priced, rate):
     window = watched_window
     window.qwen = _FakeQwen(["qwen3.8-max", "qwen-plus", "qwen-flash"])
     _run_check(app, window)
     author = _select(app, window, "author", "qwen", "qwen3.8-max")
     window.qwen.models += ["qwen4-max", "qwen4-flash"]
     _run_check(app, window)
-    priced("qwen", "qwen4-max", 0.20, 0.60)         # same tier, a tenth the price
+    rate("qwen4-max", like="qwen3.8-max")           # rated the same...
+    priced("qwen", "qwen4-max", 0.20, 0.60)         # ...at a tenth the price
     assert "Quill" in window._agents_preferring("qwen", "qwen4-max")
 
     card = window.model_updates_card
@@ -478,10 +511,11 @@ def qwen_permitted(window, monkeypatch):
 
 
 def test_a_request_on_a_worse_choice_is_told_the_better_one(
-        app, watched_window, priced, qwen_permitted):
+        app, watched_window, priced, qwen_permitted, rate):
     window = watched_window
     window.qwen = _FakeQwen(["qwen3.8-max", "qwen4-max"])
     window.model_list_cache["qwen"] = list(window.qwen.models)
+    rate("qwen4-max", like="qwen3.8-max")
     priced("qwen", "qwen4-max", 0.20, 0.60)
     _select(app, window, "author", "qwen", "qwen3.8-max")
     window._find_control("author_panel_base").load_models()
@@ -494,14 +528,20 @@ def test_a_request_on_a_worse_choice_is_told_the_better_one(
     assert assessment.best_score > assessment.selected_score
     text = window._assessment_text(assessment, 0.05)
     assert "qwen · qwen4-max" in text and "Your selection" in text
+    # Decided on the ratings, and said in their terms, credited.
+    assert assessment.basis == "rating"
+    assert "about the same quality" in text
+    assert "the best value has the lower rate ($0.30 against" in text
+    assert "LMArena leaderboard, CC BY 4.0" in text
 
 
 def test_apply_switches_and_does_not_send(app, watched_window, priced,
-                                         qwen_permitted, monkeypatch):
+                                         qwen_permitted, monkeypatch, rate):
     from PySide6.QtWidgets import QMessageBox
     window = watched_window
     window.qwen = _FakeQwen(["qwen3.8-max", "qwen4-max"])
     window.model_list_cache["qwen"] = list(window.qwen.models)
+    rate("qwen4-max", like="qwen3.8-max")
     priced("qwen", "qwen4-max", 0.20, 0.60)
     panel = _select(app, window, "author", "qwen", "qwen3.8-max")
     panel.load_models()
@@ -515,18 +555,20 @@ def test_apply_switches_and_does_not_send(app, watched_window, priced,
         "qwen", "qwen3.8-max", 0.05, 900, assessment)
     assert sent is False
     assert panel.model_box.currentText() == "qwen4-max"
-    assert "Best fit: qwen · qwen4-max" in asked[0]
+    assert "Best value: qwen · qwen4-max" in asked[0]
 
 
 def test_a_request_already_on_the_best_choice_says_so(
-        app, watched_window, priced, qwen_permitted):
+        app, watched_window, priced, qwen_permitted, rate):
     window = watched_window
     window.qwen = _FakeQwen(["qwen3.8-max", "qwen4-max"])
     window.model_list_cache["qwen"] = list(window.qwen.models)
+    rate("qwen4-max", like="qwen3.8-max")
     priced("qwen", "qwen4-max", 0.20, 0.60)
     assessment = window.assess_request("author", "qwen", "qwen4-max", "chapter")
     assert assessment.selected_is_best
-    assert "your selection is the best fit" in window._assessment_text(assessment, 0.01)
+    assert "your selection is the best value" in \
+        window._assessment_text(assessment, 0.01)
 
 
 def test_no_assessment_offer_when_nothing_is_permitted(app, watched_window,
@@ -542,9 +584,9 @@ def test_no_assessment_offer_when_nothing_is_permitted(app, watched_window,
                                  "chapter") is None
 
 
-def test_a_tie_is_never_reported_or_acted_on_as_a_win(app, watched_window):
-    """Same price, same name pattern: qwen4-max and qwen3.8-max tie. The id
-    order decides the tie, and "qwen4" sorts after "qwen3.8" — which must not
+def test_a_tie_is_never_reported_or_acted_on_as_a_win(app, watched_window, rate):
+    """Same price, same ratings: qwen4-max and qwen3.8-max tie. The id order
+    decides the tie, and "qwen4" sorts after "qwen3.8" — which must not
     surface as "best", nor move anyone."""
     window = watched_window
     window.qwen = _FakeQwen(["qwen3.8-max", "qwen-plus"])
@@ -552,6 +594,7 @@ def test_a_tie_is_never_reported_or_acted_on_as_a_win(app, watched_window):
     author = _select(app, window, "author", "qwen", "qwen3.8-max")
     window.qwen.models += ["qwen4-max"]
     _run_check(app, window)
+    rate("qwen4-max", like="qwen3.8-max")
     assert window._agents_preferring("qwen", "qwen4-max") == ()
     assert window._agents_preferring("qwen", "qwen3.8-max") == ()
     _row(window, "qwen4-max").mark.setChecked(True)
@@ -580,12 +623,13 @@ def test_ranking_uses_an_earlier_sessions_live_list_before_the_check(
 
 
 def test_the_badge_stays_on_a_selection_within_a_point_of_the_top(
-        app, watched_window, qwen_permitted):
-    """qwen4-max and qwen3.8-max tie (same price, same name pattern); the id
+        app, watched_window, qwen_permitted, rate):
+    """qwen4-max and qwen3.8-max tie (same price, same ratings); the id
     order alone would hand qwen4-max the BEST FIT badge. The selection keeps
     it instead, and the tooltip says why."""
     from ui.widgets import RECOMMENDED_ROLE
     window = watched_window
+    rate("qwen4-max", like="qwen3.8-max")
     window.qwen = _FakeQwen(["qwen3.8-max", "qwen4-max"])
     window.model_list_cache["qwen"] = list(window.qwen.models)
     panel = _select(app, window, "author", "qwen")
@@ -599,14 +643,14 @@ def test_the_badge_stays_on_a_selection_within_a_point_of_the_top(
     marked = [box.itemText(i) for i in range(box.count())
               if box.itemData(i, RECOMMENDED_ROLE)]
     assert marked == ["qwen3.8-max"]
-    assert "within a point" in box.toolTip()
+    assert "costs about the same as the best value" in box.toolTip()
 
 
 
 # ── Review of 2026-10-07: findings pinned ───────────────────────────────────
 
 def test_a_lead_too_small_to_see_moves_nobody(app, watched_window, priced,
-                                              qwen_permitted):
+                                              qwen_permitted, rate):
     """qwen4-max one cent per 1M cheaper than qwen3.8-max: a lead of a few
     thousandths of a point. Update selected moved four agents on that."""
     window = watched_window
@@ -615,6 +659,7 @@ def test_a_lead_too_small_to_see_moves_nobody(app, watched_window, priced,
     author = _select(app, window, "author", "qwen", "qwen3.8-max")
     window.qwen.models += ["qwen4-max"]
     _run_check(app, window)
+    rate("qwen4-max", like="qwen3.8-max")             # rated the same, so
     priced("qwen", "qwen4-max", 1.99, 6.0)            # vs 2.00 / 6.00
     assert window._agents_preferring("qwen", "qwen4-max") == ()
     assert window._agents_choosing_overall("qwen", "qwen4-max") == ()
@@ -779,3 +824,45 @@ def test_no_refresh_while_the_cached_ratings_are_fresh(window, monkeypatch):
     before = window.ratings_worker
     window.refresh_model_ratings()
     assert window.ratings_worker is before
+
+
+# ── The rating rule (2026-10-08): the cheapest well-rated model wins ─────────
+
+def test_an_unrated_new_model_is_not_chosen_however_cheap(
+        app, watched_window, priced):
+    """Sentinel's rule, chosen for Imprint: a model no rating covers is not
+    chosen while a rated one can be — nothing shows it is good enough. The
+    tile says so, so a NEW model that never wins is not a mystery."""
+    window = watched_window
+    window.qwen = _FakeQwen(["qwen3.8-max", "qwen-plus"])
+    _run_check(app, window)
+    author = _select(app, window, "author", "qwen", "qwen3.8-max")
+    window.qwen.models += ["qwen4-max"]
+    _run_check(app, window)
+    priced("qwen", "qwen4-max", 0.01, 0.01)        # nearly free
+    assert window._agents_preferring("qwen", "qwen4-max") == ()
+    row = _row(window, "qwen4-max")
+    texts = [label.text() for label in row.findChildren(type(window.model_updates_card.headline))]
+    assert "Not rated yet — ranked below rated models" in texts
+    row.mark.setChecked(True)
+    window.update_selected_models()
+    assert author.model_box.currentText() == "qwen3.8-max"
+
+
+def test_the_dialog_says_why_in_ratings(app, watched_window, priced,
+                                        qwen_permitted, rate):
+    window = watched_window
+    window.qwen = _FakeQwen(["qwen3.8-max", "qwen-plus", "qwen4-max"])
+    window.model_list_cache["qwen"] = list(window.qwen.models)
+    # qwen-plus is rated far below the best Qwen: told so, with the figure.
+    below = window.assess_request("author", "qwen", "qwen-plus", "chapter")
+    text = window._assessment_text(below, 0.01)
+    assert below.basis == "rating" and not below.selected_is_best
+    assert "Best value: qwen · qwen3.8-max" in text
+    assert "more than 20 points below the best available" in text
+    # qwen4-max has no rating: nothing shows it is good enough.
+    unrated = window.assess_request("author", "qwen", "qwen4-max", "chapter")
+    text = window._assessment_text(unrated, 0.01)
+    assert unrated.selected_rating is None and not unrated.selected_is_best
+    assert "Your selection: not rated" in text
+    assert "No public rating covers your selection yet" in text

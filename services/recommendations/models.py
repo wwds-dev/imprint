@@ -52,6 +52,13 @@ class Candidate:
     task_quality: Mapping[str, float] = field(default_factory=dict)
     quality_evidence: Mapping[str, str] = field(default_factory=dict)
     quality_credit: str = ""
+    # The model's own public ratings (Elo), by task tag ("general" for
+    # overall) — only ratings it really has, never a capped estimate. A text
+    # request is decided on these when any candidate has them (the engine's
+    # rating rule). `price_per_1m` is its blended USD rate per 1M tokens from
+    # the pricing table, None when unknown: an unknown price is never cheap.
+    ratings: Mapping[str, float] = field(default_factory=dict)
+    price_per_1m: float | None = None
 
 
 @dataclass(frozen=True)
@@ -78,6 +85,14 @@ class RecommendationResult:
     # deterministic order of ids — which must never be reported as a win:
     # "qwen4" sorting after "qwen3.8" is not evidence.
     margin: float = 0.0
+    # "score": the agent-weighted blend decided. "rating": public ratings
+    # did — the cheapest model rated within `band` points of `reference`,
+    # the best rating among the candidates compared. Pass the result to
+    # RecommendationEngine.score() to score another candidate on the same
+    # terms.
+    basis: str = "score"
+    reference: float | None = None
+    band: int | None = None
 
     @property
     def badge(self) -> str:
