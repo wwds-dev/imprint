@@ -31,7 +31,8 @@ from PySide6.QtWidgets import (
 
 from services.runtime_paths import user_data_base
 from ui.forms import (
-    LG, MD, SM, XS, combo, field, form_grid, line_edit, micro, quiet, section,
+    LG, MD, SM, XS, FieldGridLayout, combo, field, form_grid, line_edit, micro,
+    quiet, section,
 )
 from ui.panels.base import AgentPanel
 from ui import theme
@@ -162,6 +163,8 @@ class AuthorPanel(QWidget):
         self.author_next_step_label = QLabel("")
         self.author_next_step_label.setWordWrap(True)
         self.author_next_step_label.setObjectName("NextStepBanner")
+        # Shown once there is a tip; an empty banner was a bare teal bar.
+        self.author_next_step_label.hide()
         layout.addWidget(self.author_next_step_label)
 
         # ── Book Profile (collapsed by default — persisted, injected into every mode) ──
@@ -221,9 +224,11 @@ class AuthorPanel(QWidget):
         compose_layout.setSpacing(SM)
         compose_layout.addWidget(section("Compose"))
 
-        compose_grid = QGridLayout()
-        compose_grid.setHorizontalSpacing(MD)
-        compose_grid.setVerticalSpacing(0)
+        # Direction takes the full row; Task, Provider and Model share the
+        # next as equal columns. The single strip weighted 3:1:1:2 left Model
+        # about 180px at a 1440 window — "claude-opus-5-…" — and Task less.
+        compose_grid = FieldGridLayout(columns=3)
+        compose_grid.setVerticalSpacing(SM)
 
         self.author_direction_input = QLineEdit()
         self.author_direction_input.setPlaceholderText(
@@ -231,12 +236,13 @@ class AuthorPanel(QWidget):
         )
         self.author_direction_field = field(
             "Direction", self.author_direction_input)
-        compose_grid.addWidget(self.author_direction_field, 0, 0)
+        compose_grid.add_field(
+            self.author_direction_field, span=FieldGridLayout.FULL_ROW)
 
         self.author_task_box = QComboBox()
         # Populated by _on_content_type_changed() after construction.
         self.author_task_field = field("Task", self.author_task_box)
-        compose_grid.addWidget(self.author_task_field, 0, 1)
+        compose_grid.add_field(self.author_task_field)
 
         self.author_panel_base = AgentPanel(
             host, "author",
@@ -247,10 +253,11 @@ class AuthorPanel(QWidget):
         self.author_model_box = self.author_panel_base.model_box
         self.author_provider_field = field("Provider", self.author_provider_box)
         self.author_model_field = field("Model", self.author_model_box)
-        compose_grid.addWidget(self.author_provider_field, 0, 2)
-        compose_grid.addWidget(self.author_model_field, 0, 3)
+        compose_grid.add_field(self.author_provider_field)
+        compose_grid.add_field(self.author_model_field)
 
         self.author_compose_actions = QWidget()
+        self.author_compose_actions.setObjectName("Transparent")
         compose_actions = QHBoxLayout(self.author_compose_actions)
         compose_actions.setContentsMargins(0, 0, 0, 0)
         compose_actions.setSpacing(SM)
@@ -271,16 +278,13 @@ class AuthorPanel(QWidget):
         self.author_stop_btn.clicked.connect(self.stop)
         compose_actions.addWidget(self.author_stop_btn)
         compose_actions.addStretch()
-        compose_grid.addWidget(
-            self.author_compose_actions, 0, 4, Qt.AlignBottom)
 
-        compose_grid.setColumnStretch(0, 3)
-        compose_grid.setColumnStretch(1, 1)
-        compose_grid.setColumnStretch(2, 1)
-        compose_grid.setColumnStretch(3, 2)
-        compose_grid.setColumnStretch(4, 0)
         self.author_compose_grid = compose_grid
-        compose_layout.addLayout(compose_grid)
+        compose_fields = QWidget()
+        compose_fields.setObjectName("Transparent")
+        compose_fields.setLayout(compose_grid)
+        compose_layout.addWidget(compose_fields)
+        compose_layout.addWidget(self.author_compose_actions)
         write_layout.addWidget(compose_card)
 
         # The manuscript is the dominant surface and always remains visible.
@@ -492,17 +496,20 @@ class AuthorPanel(QWidget):
             "Target audience, themes, hook, extra context…")
         self.author_pub_notes_input.setFixedHeight(52)
 
-        pub_fields = QGridLayout()
-        pub_fields.setHorizontalSpacing(MD)
-        pub_fields.setVerticalSpacing(0)
-        pub_fields.addWidget(field("Output Type", self.author_pub_type_box), 0, 0)
-        pub_fields.addWidget(field("Word Count Target", self.author_pub_wordcount_input), 0, 1)
-        pub_fields.addWidget(field("Comp Titles", self.author_pub_comps_input), 0, 2)
-        pub_fields.addWidget(field("Pitch Tone", self.author_pub_pitch_tone_box), 0, 3)
-        pub_fields.addWidget(field("Extra Notes", self.author_pub_notes_input), 0, 4, 1, 2)
-        for column in range(6):
-            pub_fields.setColumnStretch(column, 1)
-        pc.addLayout(pub_fields)
+        # Three equal columns, notes spanning two: the six-column strip gave
+        # each dropdown a sixth of the card, so "Synopsis — 1 Page" read
+        # "Synopsis — 1 Pa" and the comp-titles hint showed one word.
+        pub_fields = FieldGridLayout(columns=3)
+        pub_fields.setVerticalSpacing(SM)
+        pub_fields.add_field(field("Output Type", self.author_pub_type_box))
+        pub_fields.add_field(field("Word Count Target", self.author_pub_wordcount_input))
+        pub_fields.add_field(field("Comp Titles", self.author_pub_comps_input))
+        pub_fields.add_field(field("Pitch Tone", self.author_pub_pitch_tone_box))
+        pub_fields.add_field(field("Extra Notes", self.author_pub_notes_input), span=2)
+        pub_fields_widget = QWidget()
+        pub_fields_widget.setObjectName("Transparent")
+        pub_fields_widget.setLayout(pub_fields)
+        pc.addWidget(pub_fields_widget)
 
         pub_actions = QHBoxLayout()
         pub_actions.setSpacing(SM)
@@ -572,17 +579,17 @@ class AuthorPanel(QWidget):
             "Target audience, mood, key themes…")
         self.author_mkt_notes_input.setFixedHeight(52)
 
-        mkt_fields = QGridLayout()
-        mkt_fields.setHorizontalSpacing(MD)
-        mkt_fields.setVerticalSpacing(0)
-        mkt_fields.addWidget(field("Platform", self.author_mkt_platform_box), 0, 0)
-        mkt_fields.addWidget(field("Hook / Logline", self.author_mkt_hook_input), 0, 1)
-        mkt_fields.addWidget(field("Comp Titles", self.author_mkt_comps_input), 0, 2)
-        mkt_fields.addWidget(field("Tone", self.author_mkt_tone_box), 0, 3)
-        mkt_fields.addWidget(field("Extra Notes", self.author_mkt_notes_input), 0, 4, 1, 2)
-        for column in range(6):
-            mkt_fields.setColumnStretch(column, 1)
-        mc.addLayout(mkt_fields)
+        mkt_fields = FieldGridLayout(columns=3)
+        mkt_fields.setVerticalSpacing(SM)
+        mkt_fields.add_field(field("Platform", self.author_mkt_platform_box))
+        mkt_fields.add_field(field("Hook / Logline", self.author_mkt_hook_input))
+        mkt_fields.add_field(field("Comp Titles", self.author_mkt_comps_input))
+        mkt_fields.add_field(field("Tone", self.author_mkt_tone_box))
+        mkt_fields.add_field(field("Extra Notes", self.author_mkt_notes_input), span=2)
+        mkt_fields_widget = QWidget()
+        mkt_fields_widget.setObjectName("Transparent")
+        mkt_fields_widget.setLayout(mkt_fields)
+        mc.addWidget(mkt_fields_widget)
 
         mkt_actions = QHBoxLayout()
         mkt_actions.setSpacing(SM)
@@ -684,21 +691,9 @@ class AuthorPanel(QWidget):
             return
 
         compact = width < 660
-        compose_stacked = width < 1000
-        layout_state = (compact, compose_stacked)
-        if layout_state == self._layout_state:
+        if compact == self._layout_state:
             return
-        self._layout_state = layout_state
-
-        # At desktop width Compose is one clean command strip.  On narrower
-        # windows the buttons move below the fields instead of crushing model
-        # names or leaving the direction box only a few pixels tall.
-        if compose_stacked:
-            self.author_compose_grid.addWidget(
-                self.author_compose_actions, 1, 0, 1, 5, Qt.AlignLeft)
-        else:
-            self.author_compose_grid.addWidget(
-                self.author_compose_actions, 0, 4, Qt.AlignBottom)
+        self._layout_state = compact
 
         # Counts and metadata are useful context at normal desktop sizes, but
         # the primary Save / format / Export path must win when rails leave the

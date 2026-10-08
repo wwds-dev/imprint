@@ -153,7 +153,7 @@ class MusicPanel(QWidget):
         self.music_income_box = QTextBrowser()
         self.music_tabs.addTab(self.music_income_box, "Income Roadmap")
         self.music_suno_panel = SunoPanel(host)
-        self.music_tabs.addTab(self.music_suno_panel, "Songs & Albums")
+        self.music_tabs.addTab(self.music_suno_panel, "Songs && Albums")
         layout.addWidget(self.music_tabs, 1)
 
         # Aliases retired 2026-09-21 — the first package to drop them.

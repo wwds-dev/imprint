@@ -43,6 +43,17 @@ headings such as “Conversion settings” look like misplaced form labels.
 
 ### One run bar instead of three rows
 
+> **Decided 2026-10-08: the aligned form, not the run bar.** Two mockups were
+> drawn — this run bar (routing in the composer's footer, permissions behind a
+> popover) and an aligned form that keeps every control visible on one grid.
+> The aligned form was chosen and applied app-wide: one label idiom
+> (`forms.field`, label above), equal-column grids (`FieldGridLayout`, with
+> `add_field(span=…, new_row=…)` for rows that mean something), toggle chips
+> for permissions (`forms.toggle_chip`), field-level utilities in the label row
+> (`forms.link_button`) or as an icon beside the control (`forms.icon_button`),
+> and FlowLayout rows that sit buttons on the controls' line. The section below
+> is kept as the alternative that was considered.
+
 Collapse the three control rows into a single bar: **agent chip · provider ·
 model · live cost · Run**. Everything else — execution mode, the five provider
 checkboxes, auto-apply — moves behind one settings affordance on that bar.

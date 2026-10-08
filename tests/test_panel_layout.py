@@ -1173,3 +1173,158 @@ def test_the_text_floor_leaves_spin_box_and_date_edits_alone(app):
     QTest.mouseClick(spin, Qt.MouseButton.LeftButton,
                      pos=QPoint(spin.width() - 6, 6))
     assert spin.value() == value + 1
+
+
+# ── The aligned-form pass (2026-10-08) ──────────────────────────────────────
+# The Chat panel was three rows built three ways; other panels had colon
+# captions, fields painting the page colour inside cards, and wrapped rows that
+# hung buttons from the top of the line. These pin the shared fixes.
+
+def test_form_grid_rows_and_spans_keep_columns_aligned(app):
+    """A deliberate short row does not rebalance: the next row's columns
+    still sit under the first's, and a span covers its columns and the gap."""
+    from PySide6.QtWidgets import QLabel, QWidget
+    from ui.forms import FieldGridLayout
+    host = QWidget()
+    grid = FieldGridLayout(columns=3, min_column_width=100)
+    host.setLayout(grid)
+    tool, command, provider, model, mode, wide, narrow = (
+        QLabel(name) for name in ("tool", "command", "provider", "model",
+                                  "mode", "wide", "narrow"))
+    grid.add_field(tool)
+    grid.add_field(command)
+    grid.add_field(provider, new_row=True)
+    grid.add_field(model)
+    grid.add_field(mode)
+    grid.add_field(wide, span=2, new_row=True)
+    grid.add_field(narrow)
+    host.resize(632, 400)
+    host.show()
+    for _ in range(4):
+        app.processEvents()
+    assert grid.columns_for(632) == 3
+    assert tool.x() == provider.x() == wide.x()
+    assert command.x() == model.x()
+    assert mode.x() == narrow.x()
+    assert provider.y() > tool.y()
+    assert wide.y() > provider.y()
+    assert wide.x() + wide.width() + 16 == narrow.x()     # two columns + gap
+
+
+def test_toggle_chip_is_wide_enough_for_its_label(app):
+    """macOS sizes a styled checkbox with no spare pixel, and every row that
+    placed checkboxes at their hint clipped the last letters ("OpenA")."""
+    from ui.forms import ToggleChip, toggle_chip
+    for text in ("OpenAI", "DeepSeek", "Anthropic", "ElevenLabs", "Auto-Apply"):
+        chip = toggle_chip(text)
+        needed = (chip.fontMetrics().horizontalAdvance(text)
+                  + ToggleChip._INDICATOR + ToggleChip._GAP)
+        assert chip.sizeHint().width() >= needed + 20, text
+        assert chip.sizeHint().height() >= 44, text
+
+
+def test_flow_row_sits_buttons_level_with_the_controls(app):
+    """A button or checkbox beside a labelled field sits on the field's
+    control line, not up beside its caption."""
+    from PySide6.QtWidgets import QCheckBox, QComboBox, QPushButton, QWidget
+    from ui.forms import field
+    from ui.widgets import FlowLayout
+    host = QWidget()
+    flow = FlowLayout(host, spacing=8)
+    box = QComboBox()
+    box.setFixedHeight(44)      # the app sheet's control height
+    labelled = field("Provider", box)
+    button = QPushButton("Refresh")
+    button.setFixedHeight(44)
+    check = QCheckBox("Auto-Apply")
+    for widget in (labelled, button, check):
+        flow.addWidget(widget)
+    host.resize(800, 200)
+    host.show()
+    for _ in range(4):
+        app.processEvents()
+    assert button.geometry().bottom() == labelled.geometry().bottom()
+    assert abs(check.geometry().center().y()
+               - button.geometry().center().y()) <= 1
+
+
+def test_flow_spring_pushes_the_last_group_to_the_right_edge(app):
+    from PySide6.QtWidgets import QPushButton, QWidget
+    from ui.widgets import FlowLayout
+    host = QWidget()
+    flow = FlowLayout(host, spacing=8)
+    left, right = QPushButton("Send"), QPushButton("Export Report")
+    flow.addWidget(left)
+    flow.add_spring()
+    flow.addWidget(right)
+    host.resize(600, 100)
+    host.show()
+    for _ in range(4):
+        app.processEvents()
+    assert left.x() == 0
+    assert right.geometry().right() == host.width() - 1
+    assert right.y() == left.y()
+
+
+def test_fields_do_not_paint_the_page_colour_inside_cards(app):
+    from ui.forms import field
+    from PySide6.QtWidgets import QLineEdit
+    assert field("Direction", QLineEdit()).objectName() == "Transparent"
+
+
+def test_chat_setup_is_one_grid(app, window):
+    """Tool and Command sit over Provider and Model; no colon captions."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QLabel
+    _settle(app, window, (1440, 900), "chat")
+    origin = window.normal_panel
+    x = lambda w: w.mapTo(origin, QPoint(0, 0)).x()
+    assert x(window.tool_box) == x(window.provider_box)
+    assert x(window.command_box) == x(window.model_box)
+    captions = [label.text() for label in window.normal_panel.findChildren(QLabel)
+                if label.isVisible() and label.text().rstrip().endswith(":")]
+    assert not captions, captions
+
+
+def test_cloud_permissions_grey_out_under_local_only(app, window):
+    _settle(app, window, (1440, 900), "chat")
+    mode = window.execution_mode_box
+    saved = mode.currentText()
+    try:
+        mode.setCurrentText("Local only")
+        assert not any(chip.isEnabled() for chip in window.cloud_permission_chips)
+        assert "Local only" in window.cloud_permission_note.text()
+        # Paid media is not routed by Mode and stays live.
+        assert window.allow_higgsfield_checkbox.isEnabled()
+        mode.setCurrentText("Hybrid allowed")
+        assert all(chip.isEnabled() for chip in window.cloud_permission_chips)
+        assert window.cloud_permission_note.text().endswith("allowed")
+    finally:
+        mode.setCurrentText(saved)
+
+
+def test_an_empty_next_step_banner_is_hidden(app, window, monkeypatch):
+    """An empty NextStepBanner was a bare teal bar above Book Profile."""
+    _settle(app, window, (1440, 900), "author")
+    label = window.author_panel.author_next_step_label
+    monkeypatch.setattr(window, "_compute_next_step_tip", lambda: "")
+    window._refresh_next_step_tip()
+    assert label.isHidden()
+    monkeypatch.setattr(window, "_compute_next_step_tip", lambda: "Save a draft")
+    window._refresh_next_step_tip()
+    assert not label.isHidden()
+    assert label.text().endswith("Save a draft")
+
+
+def test_no_button_or_tab_label_has_a_lone_ampersand(app, window):
+    """Qt reads one "&" as a mnemonic marker, swallows it and underlines the
+    next letter: "Songs & Albums" drew as "Songs _Albums"."""
+    import re
+    from PySide6.QtWidgets import QAbstractButton, QTabWidget
+    lone = re.compile(r"(?<!&)&(?!&)")
+    offenders = [button.text() for button in window.findChildren(QAbstractButton)
+                 if lone.search(button.text() or "")]
+    for tabs in window.findChildren(QTabWidget):
+        offenders += [tabs.tabText(i) for i in range(tabs.count())
+                      if lone.search(tabs.tabText(i))]
+    assert not offenders, offenders

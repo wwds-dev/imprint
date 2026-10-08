@@ -60,6 +60,8 @@ if Path("_build_info.json").is_file():
 datas += [
     ("config", "config"),
     ("assets/dropdown-chevron.svg", "assets"),
+    ("assets/check.svg", "assets"),       # checked checkbox / toggle chip
+    ("assets/refresh.svg", "assets"),     # forms.icon_button("refresh", …)
     # The menu bar glyph, and the Retina file Qt resolves beside it by name —
     # ship only the base one and the item is a blurry 18px upscale on every
     # Mac made this decade. scripts/make_tray_icon.py regenerates both.

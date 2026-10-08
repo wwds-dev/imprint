@@ -32,6 +32,7 @@ from agents.audiobook.audiobook_library import (
     delete_mark, embedded_chapters, format_time, progress_storage, save_mark,
     saved_marks, save_position,
 )
+from ui.forms import field
 from ui.widgets import FlowLayout
 
 # How often the playhead is persisted. Frequent enough that a crash costs
@@ -100,7 +101,8 @@ class AudiobookPlayer(QWidget):
         options.setObjectName("Transparent")
         option_row = FlowLayout(options, spacing=8)
 
-        self.chapters_btn = QPushButton("Chapters & marks")
+        # "&&": Qt reads one "&" as a mnemonic and drew "Chapters _marks".
+        self.chapters_btn = QPushButton("Chapters && marks")
         self.chapters_btn.setToolTip(
             "Jump to embedded chapters or to a mark you saved while listening.")
         self.chapters_btn.clicked.connect(self.show_chapters)
@@ -110,20 +112,20 @@ class AudiobookPlayer(QWidget):
         self.mark_btn.clicked.connect(self.add_mark)
         option_row.addWidget(self.mark_btn)
 
-        option_row.addWidget(QLabel("Speed:"))
+        # Labelled above, like every other field; FlowLayout sets the two
+        # buttons level with the dropdowns rather than with their captions.
         self.speed_box = QComboBox()
         self.speed_box.addItems(SPEEDS)
         self.speed_box.setCurrentText("1.0×")
         self.speed_box.currentTextChanged.connect(self._on_speed)
-        option_row.addWidget(self.speed_box)
-        option_row.addWidget(QLabel("Sleep:"))
+        option_row.addWidget(field("Speed", self.speed_box))
         self.sleep_box = QComboBox()
         for label, minutes in (("Off", 0), ("15 min", 15), ("30 min", 30),
                                ("45 min", 45), ("60 min", 60)):
             self.sleep_box.addItem(label, minutes)
         self.sleep_box.setToolTip("Pause playback after this many minutes.")
         self.sleep_box.currentIndexChanged.connect(self._on_sleep_changed)
-        option_row.addWidget(self.sleep_box)
+        option_row.addWidget(field("Sleep", self.sleep_box))
         layout.addWidget(options)
 
         self._player.positionChanged.connect(self._on_position)

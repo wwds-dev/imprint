@@ -173,12 +173,14 @@ from ui.workers import (
 )
 from ui.forms import (
     CONTENT_MAX_WIDTH, CONTROL_HEIGHT, HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH,
-    RAIL_RIGHT_WIDTH, SM, XS, Meter, StatBlock, combo, field, form_grid,
-    line_edit, micro, nav_tab, primary, quiet, rail, rule, section, stat,
+    RAIL_RIGHT_WIDTH, SM, XS, FieldGridLayout, Meter, StatBlock, combo, field,
+    field_note, form_grid, icon_button, line_edit, link_button, micro, nav_tab,
+    primary, quiet, rail, rule, section, stat, toggle_chip,
 )
 from ui.text_fit import install_text_fit
 from ui.widgets import (
-    FlowLayout, CollapsibleSection, ThemeDots, install_dropdown_system, scrollable,
+    FlowLayout, CollapsibleSection, ScrollContent, ThemeDots,
+    install_dropdown_system, scrollable,
     let_combos_shrink, RECOMMENDED_ROLE, RECOMMENDATION_REASON_ROLE,
     RECOMMENDATION_SCORE_ROLE, RECOMMENDATION_CONFIDENCE_ROLE,
     RECOMMENDATION_BADGE_ROLE, NEW_MODEL_ROLE,
@@ -812,6 +814,24 @@ class GodAI(QWidget):
             elif verdict["level"] == "tight":
                 combo.setItemData(i, f"⚠ {verdict['message']}", Qt.ToolTipRole)
 
+    def _sync_cloud_permission_chips(self, *_args) -> None:
+        """Grey the cloud text-model chips while Mode is Local only.
+
+        Under Local only the router keeps Ollama alone whatever is ticked, so
+        live-looking chips were a promise the request would not keep. The
+        ticks stay as they are, ready for when Mode allows the cloud again.
+        """
+        chips = getattr(self, "cloud_permission_chips", ())
+        if not chips:
+            return
+        local_only = self.execution_mode_box.currentText() == "Local only"
+        for chip in chips:
+            chip.setEnabled(not local_only)
+        allowed = sum(chip.isChecked() for chip in chips)
+        self.cloud_permission_note.setText(
+            "Ignored while Mode is Local only" if local_only
+            else f"{allowed} of {len(chips)} allowed")
+
     def refresh_muse_button(self) -> None:
         """Show the pull button only while Muse Glimmer is not installed."""
         btn = getattr(self, "get_muse_btn", None)
@@ -824,7 +844,8 @@ class GodAI(QWidget):
         )
         tag, size_gb = self._muse_choice()
 
-        btn.setVisible(not installed)
+        # The offer is a sentence and a link; hide the sentence with it.
+        getattr(self, "get_muse_row", btn).setVisible(not installed)
         btn.setToolTip(
             f"Download Meta's Muse Glimmer ({tag}) into Ollama — ~{size_gb} GB. "
             "A 30B open-weights agentic model tuned for tool use, long tasks and "
@@ -2033,13 +2054,19 @@ class GodAI(QWidget):
         self.agent_subtitle_label.setWordWrap(True)
         center_layout.addWidget(self.agent_subtitle_label)
 
+        # Scrolls below its minimum like every agent panel does, rather than
+        # letting a short window squeeze the setup grid until its permission
+        # rows and the action row are clipped away.
         self.normal_panel = QWidget()
-        normal_layout = QVBoxLayout(self.normal_panel)
+        self.normal_panel.setObjectName("Transparent")
+        normal_outer = QVBoxLayout(self.normal_panel)
+        normal_outer.setContentsMargins(0, 0, 0, 0)
+        normal_content = ScrollContent()
+        normal_content.setObjectName("Transparent")
+        normal_outer.addWidget(scrollable(normal_content))
+        normal_layout = QVBoxLayout(normal_content)
         normal_layout.setContentsMargins(0, 0, 0, 0)
-        normal_layout.setSpacing(10)
-
-        # Row 1: command only
-        top_row_1 = QHBoxLayout()
+        normal_layout.setSpacing(MD)
 
         self.agent_box = QComboBox()
         # Shared general-chat panel; the selector itself is hidden because the
@@ -2049,168 +2076,168 @@ class GodAI(QWidget):
         self.agent_box.addItems(WORKSPACE_LABELS)
         self.agent_box.hide()
 
-        self.tool_label = QLabel("Tool:")
-        top_row_1.addWidget(self.tool_label)
+        # ── Request setup: one grid ──────────────────────────────────────
+        # This used to be three rows built three ways: "Tool:" captions beside
+        # their dropdowns, small-caps labels above the next row, and FlowLayout
+        # rows that hung buttons and checkboxes from the top of the line, level
+        # with the labels instead of the controls. One grid, one label idiom:
+        # Tool and Command sit directly over Provider and Model, and the
+        # permissions span the columns beneath.
+        # 200px columns: below that the Model dropdown, which shares its
+        # column with the refresh button, could show only "deepse…".
+        setup = FieldGridLayout(columns=3, min_column_width=200)
 
         self.tool_box = QComboBox()
         self.tool_box.addItems(self.tool_prompts.keys())
-
-        self.tool_box.setMinimumWidth(140)
-        top_row_1.addWidget(self.tool_box)
-
-        self.command_label = QLabel("Command:")
-        top_row_1.addWidget(self.command_label)
+        setup.add_field(field("Tool", self.tool_box))
 
         self.command_box = QComboBox()
         self.command_box.addItems(self.commands.keys())
-        self.command_box.setMinimumWidth(180)
-        top_row_1.addWidget(self.command_box)
-
-        top_row_1.addStretch()
-        normal_layout.addLayout(top_row_1)
-
-        # Row 2: provider, model, model tools
-        top_row_2_container = QWidget()
-        top_row_2 = FlowLayout(top_row_2_container, spacing=6)
+        setup.add_field(field("Command", self.command_box))
 
         self.provider_box = QComboBox()
         self.provider_box.addItems(["ollama", "openai", "deepseek", "kimi", "gemini", "anthropic", "qwen"])
-        self.provider_box.setMinimumWidth(120)
-        top_row_2.addWidget(field("Provider", self.provider_box))
+        setup.add_field(field("Provider", self.provider_box), new_row=True)
 
+        # Refresh acts on this list, so it sits against it as an icon; the
+        # guide is about this choice, so it sits in the field's own label row.
         self.model_box = QComboBox()
-        self.model_box.setMinimumWidth(180)
-        top_row_2.addWidget(field("Model", self.model_box))
-
-        self.refresh_models_btn = QPushButton("Refresh Models")
-
-
-        self.refresh_models_btn.setObjectName("ChipBtn")
+        self.refresh_models_btn = icon_button("refresh", "Refresh Models")
         self.refresh_models_btn.clicked.connect(self.load_provider_models)
-        top_row_2.addWidget(self.refresh_models_btn)
-
-        # Offers a one-click pull of Meta's Muse Glimmer. Hidden once the model
-        # is installed, since it is then just another entry in the model box.
-        self.get_muse_btn = QPushButton("Get Muse Glimmer")
-        self.get_muse_btn.setObjectName("ChipBtn")
-        self.get_muse_btn.clicked.connect(self.pull_muse_glimmer)
-        top_row_2.addWidget(self.get_muse_btn)
-
-        self.model_guide_btn = QPushButton("Model Guide")
-
-
-        self.model_guide_btn.setObjectName("ChipBtn")
+        model_row = QWidget()
+        model_row.setObjectName("Transparent")
+        model_layout = QHBoxLayout(model_row)
+        model_layout.setContentsMargins(0, 0, 0, 0)
+        model_layout.setSpacing(SM)
+        model_layout.addWidget(self.model_box, 1)
+        model_layout.addWidget(self.refresh_models_btn)
+        self.model_guide_btn = link_button("Model Guide")
         self.model_guide_btn.clicked.connect(self.show_model_guide)
-        top_row_2.addWidget(self.model_guide_btn)
+        setup.add_field(field("Model", model_row, aside=self.model_guide_btn))
 
-        self.docs_btn = QPushButton("Docs")
-
-
-        self.docs_btn.setObjectName("ChipBtn")
-        self.docs_btn.clicked.connect(self.show_docs)
-        top_row_2.addWidget(self.docs_btn)
-
-        normal_layout.addWidget(top_row_2_container)
-        
         self.model_box.currentTextChanged.connect(self.save_provider_model_preference)
-
-        # Row 3: execution mode and API permissions — wraps when the pane narrows.
-        top_row_3_container = QWidget()
-        top_row_3 = FlowLayout(top_row_3_container, spacing=6)
 
         self.execution_mode_box = QComboBox()
         self.execution_mode_box.addItems(["Local only", "Hybrid allowed", "Cloud only"])
-        self.execution_mode_box.setMinimumWidth(120)
-        top_row_3.addWidget(field("Mode", self.execution_mode_box))
+        setup.add_field(field("Mode", self.execution_mode_box))
 
-        self.allow_openai_checkbox = QCheckBox("OpenAI")
-        self.allow_openai_checkbox.setChecked(False)
-        top_row_3.addWidget(self.allow_openai_checkbox)
+        # Permissions as chips. Text models are moot under Local only — the
+        # router drops every cloud provider then — so they grey out and say
+        # so rather than looking live. Paid media is not routed by Mode.
+        cloud_chips = QWidget()
+        cloud_chips.setObjectName("Transparent")
+        cloud_flow = FlowLayout(cloud_chips, spacing=SM)
+        self.allow_openai_checkbox = toggle_chip("OpenAI")
+        self.allow_deepseek_checkbox = toggle_chip("DeepSeek")
+        self.allow_kimi_checkbox = toggle_chip("Kimi")
+        self.allow_gemini_checkbox = toggle_chip("Gemini")
+        self.allow_anthropic_checkbox = toggle_chip("Anthropic")
+        self.allow_qwen_checkbox = toggle_chip("Qwen")
+        self.cloud_permission_chips = (
+            self.allow_openai_checkbox, self.allow_deepseek_checkbox,
+            self.allow_kimi_checkbox, self.allow_gemini_checkbox,
+            self.allow_anthropic_checkbox, self.allow_qwen_checkbox,
+        )
+        for chip in self.cloud_permission_chips:
+            cloud_flow.addWidget(chip)
+        self.cloud_permission_note = field_note("")
+        setup.add_field(
+            field("Cloud text models", cloud_chips,
+                  aside=self.cloud_permission_note),
+            span=2, new_row=True)
 
-        self.allow_deepseek_checkbox = QCheckBox("DeepSeek")
-        self.allow_deepseek_checkbox.setChecked(False)
-        top_row_3.addWidget(self.allow_deepseek_checkbox)
-
-        self.allow_kimi_checkbox = QCheckBox("Kimi")
-        self.allow_kimi_checkbox.setChecked(False)
-        top_row_3.addWidget(self.allow_kimi_checkbox)
-
-        self.allow_gemini_checkbox = QCheckBox("Gemini")
-        self.allow_gemini_checkbox.setChecked(False)
-        top_row_3.addWidget(self.allow_gemini_checkbox)
-
-        self.allow_anthropic_checkbox = QCheckBox("Anthropic")
-        self.allow_anthropic_checkbox.setChecked(False)
-        top_row_3.addWidget(self.allow_anthropic_checkbox)
-
-        self.allow_qwen_checkbox = QCheckBox("Qwen")
-        self.allow_qwen_checkbox.setChecked(False)
-        top_row_3.addWidget(self.allow_qwen_checkbox)
-
-        self.allow_higgsfield_checkbox = QCheckBox("Higgsfield")
-        self.allow_higgsfield_checkbox.setChecked(False)
+        media_chips = QWidget()
+        media_chips.setObjectName("Transparent")
+        media_flow = FlowLayout(media_chips, spacing=SM)
+        self.allow_higgsfield_checkbox = toggle_chip("Higgsfield", paid=True)
         self.allow_higgsfield_checkbox.setToolTip(
             "Allow paid promo-video requests from the Creator workspace.")
-        top_row_3.addWidget(self.allow_higgsfield_checkbox)
-
-        self.allow_elevenlabs_checkbox = QCheckBox("ElevenLabs")
-        self.allow_elevenlabs_checkbox.setChecked(False)
+        media_flow.addWidget(self.allow_higgsfield_checkbox)
+        self.allow_elevenlabs_checkbox = toggle_chip("ElevenLabs", paid=True)
         self.allow_elevenlabs_checkbox.setToolTip(
             "Allow paid ElevenLabs narration for Manuscript shorts. The "
             "default narrator is the free on-device voice.")
-        top_row_3.addWidget(self.allow_elevenlabs_checkbox)
+        media_flow.addWidget(self.allow_elevenlabs_checkbox)
+        setup.add_field(field("Paid media", media_chips,
+                              aside=field_note("Not affected by Mode")))
 
-        normal_layout.addWidget(top_row_3_container)
+        setup_widget = QWidget()
+        setup_widget.setObjectName("Transparent")
+        setup_widget.setLayout(setup)
+        normal_layout.addWidget(setup_widget)
+
+        # Offers a one-click pull of Meta's Muse Glimmer. Hidden once the model
+        # is installed, since it is then just another entry in the model box.
+        # A sentence and a link rather than a fourth button in the model row.
+        self.get_muse_row = QWidget()
+        self.get_muse_row.setObjectName("Transparent")
+        muse_layout = QHBoxLayout(self.get_muse_row)
+        muse_layout.setContentsMargins(0, 0, 0, 0)
+        muse_layout.setSpacing(SM)
+        muse_note = QLabel("Meta's Muse Glimmer isn't installed. It runs locally through Ollama.")
+        muse_note.setObjectName("EstimateLine")
+        muse_layout.addWidget(muse_note)
+        self.get_muse_btn = link_button("Get Muse Glimmer")
+        self.get_muse_btn.clicked.connect(self.pull_muse_glimmer)
+        muse_layout.addWidget(self.get_muse_btn)
+        muse_layout.addStretch()
+        normal_layout.addWidget(self.get_muse_row)
+
+        normal_layout.addWidget(rule())
 
         self.input_box = QTextEdit()
         self.input_box.setPlaceholderText("Type your message here...")
         self.input_box.setMinimumHeight(190)
-        normal_layout.addWidget(self.input_box)
+        normal_layout.addWidget(field("Message", self.input_box))
 
-        # Single action row — wraps instead of truncating when the pane narrows.
-        actions_container = QWidget()
-        actions_row = FlowLayout(actions_container, spacing=6)
+        # The action row, in three groups that wrap as units: send and stop;
+        # the routing helpers (Auto-Apply modifies Use Recommended, so it
+        # follows it); and the report utilities, pushed to the far end. Each
+        # button keeps the shared control height — Send and Stop used to be
+        # pinned two pixels taller than the rest.
+        def group(*widgets):
+            box = QWidget()
+            box.setObjectName("Transparent")
+            row_layout = QHBoxLayout(box)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(SM)
+            for widget in widgets:
+                row_layout.addWidget(widget)
+            return box
 
         self.send_btn = QPushButton("Send")
-        self.send_btn.setFixedHeight(34)
         self.send_btn.setObjectName("PrimaryAction")
+        self.send_btn.setMinimumWidth(120)
         self.send_btn.clicked.connect(self.send_prompt)
-        actions_row.addWidget(self.send_btn)
 
         self.stop_chat_btn = QPushButton("Stop")
-        self.stop_chat_btn.setFixedHeight(34)
         self.stop_chat_btn.setEnabled(False)
         self.stop_chat_btn.setObjectName("DangerAction")
         self.stop_chat_btn.clicked.connect(self.stop_current_task)
-        actions_row.addWidget(self.stop_chat_btn)
 
         self.auto_route_btn = QPushButton("Auto Route")
-        self.auto_route_btn.setFixedHeight(32)
         self.auto_route_btn.clicked.connect(self.auto_route_agent)
-        actions_row.addWidget(self.auto_route_btn)
 
         self.recommend_setup_btn = QPushButton("Use Recommended")
-        self.recommend_setup_btn.setFixedHeight(32)
         self.recommend_setup_btn.clicked.connect(self.apply_recommended_setup)
-        actions_row.addWidget(self.recommend_setup_btn)
 
-        # "Auto-Apply" modifies "Use Recommended", so it follows it directly. Its
-        # own trailing padding provides the gap before the cost/export buttons —
-        # a spacer item would wrap as if it were a control.
-        self.auto_recommend_checkbox = QCheckBox("Auto-Apply")
-        self.auto_recommend_checkbox.setChecked(False)
-        actions_row.addWidget(self.auto_recommend_checkbox)
+        self.auto_recommend_checkbox = toggle_chip("Auto-Apply")
 
         self.estimate_btn = QPushButton("Estimate Cost")
-        self.estimate_btn.setFixedHeight(32)
         self.estimate_btn.clicked.connect(self.show_cost_estimate_popup)
-        actions_row.addWidget(self.estimate_btn)
 
         self.export_btn = QPushButton("Export Report")
-        self.export_btn.setFixedHeight(32)
         self.export_btn.clicked.connect(self.export_report)
-        actions_row.addWidget(self.export_btn)
 
+        actions_container = QWidget()
+        actions_container.setObjectName("Transparent")
+        actions_row = FlowLayout(actions_container, spacing=MD)
+        actions_row.addWidget(group(self.send_btn, self.stop_chat_btn))
+        actions_row.addWidget(group(
+            self.auto_route_btn, self.recommend_setup_btn,
+            self.auto_recommend_checkbox))
+        actions_row.add_spring()
+        actions_row.addWidget(group(self.estimate_btn, self.export_btn))
         normal_layout.addWidget(actions_container)
 
         # ===== INPUT =====
@@ -2256,6 +2283,14 @@ class GodAI(QWidget):
         self.allow_qwen_checkbox.stateChanged.connect(self.update_live_cost_estimate)
         self.allow_qwen_checkbox.stateChanged.connect(self.update_recommendation_label)
 
+        # The note beside "Cloud text models" and whether the chips are live
+        # follow Mode and the chips themselves.
+        self.execution_mode_box.currentTextChanged.connect(
+            self._sync_cloud_permission_chips)
+        for chip in self.cloud_permission_chips:
+            chip.stateChanged.connect(self._sync_cloud_permission_chips)
+        self._sync_cloud_permission_chips()
+
         self.chat_progress = QProgressBar()
         self.chat_progress.setMinimum(0)
         self.chat_progress.setMaximum(0)
@@ -2266,23 +2301,25 @@ class GodAI(QWidget):
         self.chat_status_label.hide()
         normal_layout.addWidget(self.chat_status_label)
 
-        center_layout.addWidget(self.normal_panel)
+        # Only Chat shows output here (update_agent_ui hides it for every
+        # workspace with its own panel), so it scrolls with Chat's controls.
+        self.output_label = micro("Output")
+        self.output_label.hide()
+        normal_layout.addWidget(self.output_label)
+
+        self.output_box = QTextEdit()
+        self.output_box.setReadOnly(True)
+        self.output_box.setMinimumHeight(130)
+        self.output_box.hide()
+        normal_layout.addWidget(self.output_box, 1)
+
+        center_layout.addWidget(self.normal_panel, 1)
 
         # Built from the same list update_agent_ui switches on, so an agent
         # cannot be constructed but unreachable, or reachable but never built.
         for _panel_name in CUSTOM_PANELS:
             getattr(self, f"build_{_panel_name}_panel")()
             center_layout.addWidget(getattr(self, f"{_panel_name}_panel"))
-
-        self.output_label = micro("Output")
-        self.output_label.hide()
-        center_layout.addWidget(self.output_label)
-
-        self.output_box = QTextEdit()
-        self.output_box.setReadOnly(True)
-        self.output_box.setMinimumHeight(130)
-        self.output_box.hide()
-        center_layout.addWidget(self.output_box, 1)
 
         self.load_provider_models()
 
@@ -2613,9 +2650,13 @@ class GodAI(QWidget):
     def _refresh_next_step_tip(self):
         tip = self._compute_next_step_tip()
         for attr in ("author_next_step_label", "manuscript_next_step_label"):
-            label = getattr(self, attr, None)
+            # The panels own these labels now; a plain getattr on the host
+            # found nothing once the aliases were retired, so the tip was
+            # never set and the banner showed as an empty teal bar.
+            label = self._find_control(attr)
             if label is not None:
-                label.setText(f"Next step:   {tip}")
+                label.setText(f"Next step:   {tip}" if tip else "")
+                label.setVisible(bool(tip))
 
     # ── Manuscript panel builder ──────────────────────────────────────────────
     def build_manuscript_panel(self):

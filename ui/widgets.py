@@ -276,11 +276,31 @@ class FlowLayout(QLayout):
     natural size and lets the pane shrink to the width of the widest single item.
     """
 
+    # The height every single-line control lands on (ui/style.py enforces it).
+    # Items on a line share this band at its foot: a button beside a labelled
+    # field sits level with the field's control, not with its caption, and a
+    # checkbox is centred on the controls rather than hanging from the top of
+    # the line.
+    CONTROL_BAND = 44
+
     def __init__(self, parent=None, spacing=6):
         super().__init__(parent)
         self._items = []
+        self._springs: set[int] = set()
         self.setContentsMargins(0, 0, 0, 0)
         self.setSpacing(spacing)
+
+    def add_spring(self) -> None:
+        """Push what follows to the right end of its line.
+
+        Only while it shares a line with what came before: once the row wraps,
+        the group after the spring starts its own line flush left like
+        everything else.
+        """
+        from PySide6.QtWidgets import QSpacerItem, QSizePolicy
+        spring = QSpacerItem(0, 0, QSizePolicy.Expanding, QSizePolicy.Minimum)
+        self._springs.add(id(spring))
+        self.addItem(spring)
 
     # ── QLayout plumbing ────────────────────────────────────────────────
     def addWidget(self, widget, stretch=0, alignment=None):
@@ -329,26 +349,64 @@ class FlowLayout(QLayout):
                             margins.top() + margins.bottom())
 
     # ── placement ───────────────────────────────────────────────────────
+    def _visible_items(self):
+        return [item for item in self._items
+                if id(item) in self._springs
+                or item.widget() is None or not item.widget().isHidden()]
+
     def _arrange(self, rect, apply):
         margins = self.contentsMargins()
         left = rect.x() + margins.left()
         right = rect.right() - margins.right()
-        x, y = left, rect.y() + margins.top()
-        line_height = 0
         space = self.spacing()
 
-        for item in self._items:
+        # Break into lines first; alignment needs each line's full extent.
+        lines, line, x = [], [], left
+        for item in self._visible_items():
+            if id(item) in self._springs:
+                line.append((item, x, QSize(0, 0)))
+                continue
             hint = item.sizeHint()
-            if x + hint.width() > right and line_height > 0:   # wrap
-                x = left
-                y += line_height + space
-                line_height = 0
-            if apply:
-                item.setGeometry(QRect(QPoint(x, y), hint))
+            if x + hint.width() > right and any(
+                    id(placed) not in self._springs for placed, *_ in line):
+                lines.append(line)
+                line, x = [], left
+            line.append((item, x, hint))
             x += hint.width() + space
-            line_height = max(line_height, hint.height())
+        if line:
+            lines.append(line)
 
-        return y + line_height - rect.y() + margins.bottom()
+        y = rect.y() + margins.top()
+        for line in lines:
+            sized = [(item, lx, hint) for item, lx, hint in line
+                     if id(item) not in self._springs]
+            if not sized:
+                continue
+            line_height = max(hint.height() for _item, _lx, hint in sized)
+            band = min(line_height, self.CONTROL_BAND)
+            shift = 0
+            spring_seen = False
+            used_right = sized[-1][1] + sized[-1][2].width()
+            for item, lx, hint in line:
+                if id(item) in self._springs:
+                    # A spring that starts a line has nothing to push away from.
+                    if item is not line[0][0]:
+                        spring_seen = True
+                        # `right` is inclusive (QRect.right()); used_right
+                        # is one past the last item's last pixel.
+                        shift = max(0, right + 1 - used_right)
+                    continue
+                if not apply:
+                    continue
+                if hint.height() >= band:
+                    top = y + line_height - hint.height()
+                else:
+                    top = y + line_height - band + (band - hint.height()) // 2
+                item.setGeometry(QRect(QPoint(lx + (shift if spring_seen else 0), top), hint))
+            y += line_height + space
+
+        return y - space - rect.y() + margins.bottom() if lines else \
+            margins.top() + margins.bottom()
 
 
 class CollapsibleSection(QWidget):

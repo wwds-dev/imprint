@@ -10,8 +10,8 @@ The Assistant workspace's agent. Plain text in, plain text out, with full multi-
 |---|---|
 | Tool | System prompt frame prepended to every message. |
 | Command | Optional pre-built prompt scaffold from `config/commands.json`. |
-| Provider / Model | Which LLM runs the request. |
-| Mode + API checkboxes | Local-only / hybrid / cloud, and per-provider permission. |
+| Provider / Model | Which LLM runs the request. The icon beside Model refreshes the list; **Model Guide** sits in the Model label. |
+| Mode + permission chips | Local-only / hybrid / cloud, and per-provider permission. The cloud text-model chips grey out under Local only (the router keeps Ollama alone then); Higgsfield and ElevenLabs are paid media, turn amber when on, and are not affected by Mode. |
 | Prompt box | Your message. Send, or Stop to cancel. |
 
 ## Outputs

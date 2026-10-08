@@ -33,6 +33,7 @@ from ui.style import (
     ACCENT, ACCENT_WASH, BG, BORDER, ELEVATED, SUNKEN, SURFACE, TEXT,
     TEXT_DIM, TEXT_MUTE,
 )
+from ui.forms import SM, field
 from ui.project_manager import ProjectManagerDialog
 
 
@@ -46,14 +47,16 @@ def show_cost_history(app):
     layout = QVBoxLayout(dialog)
 
     filter_row = QHBoxLayout()
+    filter_row.setSpacing(SM)
 
     provider_filter = QComboBox()
-    provider_filter.addItems(["all", "ollama", "openai", "deepseek", "kimi", "gemini"])
-    filter_row.addWidget(QLabel("Provider:"))
-    filter_row.addWidget(provider_filter)
+    provider_filter.addItems(["all", "ollama", "openai", "deepseek", "kimi",
+                              "gemini", "anthropic", "qwen"])
+    provider_filter.setMinimumWidth(180)
+    filter_row.addWidget(field("Provider", provider_filter))
 
     export_btn = QPushButton("Export CSV")
-    filter_row.addWidget(export_btn)
+    filter_row.addWidget(export_btn, 0, Qt.AlignBottom)
 
     filter_row.addStretch()
     layout.addLayout(filter_row)
@@ -191,16 +194,17 @@ def show_run_log(app):
     layout = QVBoxLayout(dialog)
 
     filter_row = QHBoxLayout()
+    filter_row.setSpacing(SM)
 
     status_filter = QComboBox()
     status_filter.addItems(["all", "success", "error", "cancelled"])
-    filter_row.addWidget(QLabel("Status:"))
-    filter_row.addWidget(status_filter)
+    status_filter.setMinimumWidth(180)
+    filter_row.addWidget(field("Status", status_filter))
 
     agent_filter = QComboBox()
     agent_filter.addItems(["all"] + sorted({e.get("agent", "") for e in entries if e.get("agent")}))
-    filter_row.addWidget(QLabel("Agent:"))
-    filter_row.addWidget(agent_filter)
+    agent_filter.setMinimumWidth(180)
+    filter_row.addWidget(field("Agent", agent_filter))
 
     filter_row.addStretch()
     layout.addLayout(filter_row)

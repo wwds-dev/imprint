@@ -50,7 +50,10 @@ TEASER_ROUTES = {
 TEASER_SECONDS = 5          # the length Higgsfield's teaser has always been
 TEASER_ASPECT = "9:16"      # vertical: teasers go to social feeds
 TEASER_ROUTE_KEY = "creator_teaser_route"
-from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
+from ui.forms import (
+    LG, MD, SM, FieldGridLayout, combo, field, form_grid, line_edit, primary,
+    quiet, section,
+)
 from ui.panels.base import AgentPanel
 from ui.widgets import scrollable
 
@@ -178,6 +181,26 @@ class CreatorPanel(QWidget):
         models.setVerticalSpacing(MD)
         models.addWidget(field("Provider", self.creator_provider_box), 0, 0, Qt.AlignTop)
         models.addWidget(field("Model", self.creator_model_box), 0, 1, Qt.AlignTop)
+
+        # Who renders the teaser is a choice like Provider and Model, so it is
+        # a field beside them. In the action row it was a compact dropdown
+        # squeezed between two buttons: "Higgsfield · See…".
+        self.creator_video_route_box = QComboBox()
+        for key, route in TEASER_ROUTES.items():
+            self.creator_video_route_box.addItem(route["label"], key)
+        self.creator_video_route_box.setToolTip(
+            "Who renders the teaser from the persona's reference images. Each "
+            "teaser is assessed across the routes you have a key for and "
+            "have permitted before it is approved.")
+        from services.database import get_setting
+        saved = get_setting(TEASER_ROUTE_KEY, "higgsfield")
+        index = self.creator_video_route_box.findData(saved)
+        if index >= 0:
+            self.creator_video_route_box.setCurrentIndex(index)
+        self.creator_video_route_box.currentIndexChanged.connect(
+            self._teaser_route_changed)
+        models.addWidget(field("Teaser renderer", self.creator_video_route_box),
+                         0, 2, Qt.AlignTop)
         for column in range(3):
             models.setColumnStretch(column, 1)
         layout.addLayout(models)
@@ -193,23 +216,6 @@ class CreatorPanel(QWidget):
         self.creator_schedule_btn = QPushButton("Add to Calendar")
         self.creator_schedule_btn.clicked.connect(self.schedule)
         actions.addWidget(self.creator_schedule_btn)
-
-        self.creator_video_route_box = QComboBox()
-        self.creator_video_route_box.setObjectName("CompactCombo")
-        for key, route in TEASER_ROUTES.items():
-            self.creator_video_route_box.addItem(route["label"], key)
-        self.creator_video_route_box.setToolTip(
-            "Who renders the teaser from the persona's reference images. Each "
-            "teaser is assessed across the routes you have a key for and "
-            "have permitted before it is approved.")
-        from services.database import get_setting
-        saved = get_setting(TEASER_ROUTE_KEY, "higgsfield")
-        index = self.creator_video_route_box.findData(saved)
-        if index >= 0:
-            self.creator_video_route_box.setCurrentIndex(index)
-        self.creator_video_route_box.currentIndexChanged.connect(
-            self._teaser_route_changed)
-        actions.addWidget(self.creator_video_route_box)
 
         self.creator_video_btn = QPushButton("Generate Teaser")
         self.creator_video_btn.setToolTip(
@@ -420,49 +426,48 @@ class CreatorPanel(QWidget):
             "One post per line — five or six is plenty.")
         layout.addWidget(self.creator_voice_samples, 1)
 
-        grid = QGridLayout()
-        grid.setSpacing(6)
-        grid.addWidget(QLabel("Tone:"), 0, 0)
+        # The same label-above-input fields as the rest of the panel; these
+        # were "Tone:" captions beside their inputs, each column starting
+        # wherever its caption ended.
         self.creator_voice_tone = QLineEdit()
         self.creator_voice_tone.setPlaceholderText("dry, warm, a bit deadpan")
-        grid.addWidget(self.creator_voice_tone, 0, 1)
-        grid.addWidget(QLabel("Emoji:"), 0, 2)
         self.creator_voice_emoji = QLineEdit()
         self.creator_voice_emoji.setPlaceholderText("sparse — one at most")
-        grid.addWidget(self.creator_voice_emoji, 0, 3)
-        grid.addWidget(QLabel("Length:"), 1, 0)
         self.creator_voice_length = QLineEdit()
         self.creator_voice_length.setPlaceholderText("1–2 short sentences")
-        grid.addWidget(self.creator_voice_length, 1, 1)
-        grid.addWidget(QLabel("Never say:"), 1, 2)
         self.creator_voice_banned = QLineEdit()
         self.creator_voice_banned.setPlaceholderText("babe, hun, 🔥")
-        grid.addWidget(self.creator_voice_banned, 1, 3)
-        layout.addLayout(grid)
+        voice_fields = QWidget()
+        voice_fields.setObjectName("Transparent")
+        voice_fields.setLayout(form_grid([
+            ("Tone", self.creator_voice_tone),
+            ("Emoji", self.creator_voice_emoji),
+            ("Length", self.creator_voice_length),
+            ("Never say", self.creator_voice_banned),
+        ], columns=2))
+        layout.addWidget(voice_fields)
 
         # Persona bible — shown only for persona accounts.
         self.creator_persona_group = QGroupBox("Character bible (persona accounts)")
-        pg = QGridLayout(self.creator_persona_group)
-        pg.setSpacing(6)
-        pg.addWidget(QLabel("Appearance:"), 0, 0)
+        pg = FieldGridLayout(columns=3)
+        self.creator_persona_group.setLayout(pg)
         self.creator_persona_appearance = QLineEdit()
         self.creator_persona_appearance.setPlaceholderText(
             "Locked description — reused in every render so it stays the same character")
-        pg.addWidget(self.creator_persona_appearance, 0, 1, 1, 3)
-        pg.addWidget(QLabel("Backstory:"), 1, 0)
+        pg.add_field(field("Appearance", self.creator_persona_appearance),
+                     span=FieldGridLayout.FULL_ROW)
         self.creator_persona_backstory = QLineEdit()
-        pg.addWidget(self.creator_persona_backstory, 1, 1, 1, 3)
-        pg.addWidget(QLabel("Personality:"), 2, 0)
+        pg.add_field(field("Backstory", self.creator_persona_backstory),
+                     span=FieldGridLayout.FULL_ROW)
         self.creator_persona_personality = QLineEdit()
-        pg.addWidget(self.creator_persona_personality, 2, 1, 1, 3)
-        pg.addWidget(QLabel("Never does:"), 3, 0)
+        pg.add_field(field("Personality", self.creator_persona_personality),
+                     span=FieldGridLayout.FULL_ROW)
         self.creator_persona_boundaries = QLineEdit()
-        pg.addWidget(self.creator_persona_boundaries, 3, 1, 1, 3)
-        pg.addWidget(QLabel("Seed:"), 4, 0)
+        pg.add_field(field("Never does", self.creator_persona_boundaries),
+                     span=FieldGridLayout.FULL_ROW)
         self.creator_persona_seed = QLineEdit()
         self.creator_persona_seed.setPlaceholderText("e.g. 4821 — keeps renders on-model")
-        self.creator_persona_seed.setMaximumWidth(120)
-        pg.addWidget(self.creator_persona_seed, 4, 1)
+        pg.add_field(field("Seed", self.creator_persona_seed))
         layout.addWidget(self.creator_persona_group)
 
         save_btn = QPushButton("Save Voice && Character")

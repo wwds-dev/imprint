@@ -28,7 +28,7 @@ from __future__ import annotations
 from PySide6.QtCore import QRect, QSize, Qt
 
 from PySide6.QtWidgets import (
-    QComboBox, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit,
+    QCheckBox, QComboBox, QFrame, QHBoxLayout, QLabel, QLayout, QLineEdit,
     QProgressBar, QPushButton, QSizePolicy, QVBoxLayout, QWidget,
 )
 
@@ -62,23 +62,135 @@ def rule() -> QFrame:
     return line
 
 
-def field(label: str, widget: QWidget, *, stretch_label: bool = False) -> QWidget:
+def field(label: str, widget: QWidget, *, stretch_label: bool = False,
+          aside: QWidget | None = None) -> QWidget:
     """The one form idiom: label above input, both flush left.
 
     Returns a container so the pair can be dropped into any layout and stay
     together — which is what keeps a column of fields aligned when one of them
     wraps or is hidden.
+
+    The container is transparent. A plain QWidget paints the page colour, so
+    inside a card every field's label used to sit on a strip of BG — a dark
+    band across the Compose card and the spend rail's Limits.
+
+    `aside` sits at the far end of the label row: a `link_button` for an
+    affordance that belongs to this one field (Model Guide beside Model),
+    rather than another button in the row competing with the real actions.
     """
     box = QWidget()
+    box.setObjectName("Transparent")
     layout = QVBoxLayout(box)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(XS)
     label_widget = micro(label)
     if stretch_label:
         label_widget.setWordWrap(True)
-    layout.addWidget(label_widget)
+    if aside is None:
+        layout.addWidget(label_widget)
+    else:
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(SM)
+        head.addWidget(label_widget)
+        head.addStretch()
+        head.addWidget(aside)
+        layout.addLayout(head)
     layout.addWidget(widget)
     return box
+
+
+def link_button(text: str) -> QPushButton:
+    """A small text affordance for a field's label row.
+
+    Shorter than the micro label beside it, so a field with one is exactly as
+    tall as a field without — the controls in a grid row stay on one line.
+    """
+    button = QPushButton(text)
+    button.setObjectName("LinkAction")
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    button.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+    return button
+
+
+# The total height every single-line control lands on (see the "One control
+# height, enforced" rule in ui/style.py). CONTROL_HEIGHT above is the content
+# box that rule starts from; this is what a row of controls actually measures.
+CONTROL_TOTAL_HEIGHT = 44
+
+
+def icon_button(icon_name: str, tooltip: str) -> QPushButton:
+    """A square button that carries an icon instead of a word.
+
+    For a utility that acts on the field beside it (refresh a model list). The
+    icon is an SVG from assets/, not a glyph: a text arrow renders at the
+    emoji baseline and the label test rejects it. The accessible name is the
+    tooltip, so a screen reader still hears what it does.
+    """
+    from PySide6.QtGui import QIcon
+    from services.runtime_paths import resource_base
+
+    button = QPushButton()
+    button.setObjectName("IconAction")
+    button.setIcon(QIcon(str(resource_base() / "assets" / f"{icon_name}.svg")))
+    button.setIconSize(QSize(16, 16))
+    button.setFixedSize(CONTROL_TOTAL_HEIGHT, CONTROL_TOTAL_HEIGHT)
+    button.setToolTip(tooltip)
+    button.setAccessibleName(tooltip)
+    button.setCursor(Qt.CursorShape.PointingHandCursor)
+    return button
+
+
+class ToggleChip(QCheckBox):
+    """A permission or filter drawn as a chip, still a QCheckBox underneath.
+
+    Kept a QCheckBox so `isChecked`, `stateChanged` and every call site that
+    reads one keep working. The reason it exists is the size hint: macOS
+    reports a styled checkbox exactly as wide as its glyphs with nothing to
+    spare, so any row that places checkboxes at their hint — FlowLayout, an
+    HBox with a stretch — clipped the last letters under the next box
+    ("OpenA", "DeepSee"). This one measures itself from the font.
+    """
+
+    _INDICATOR = 14
+    _GAP = 7          # matches `spacing` in the ToggleChip rule
+    _PAD_LEFT = 10
+    _PAD_RIGHT = 12
+    _BORDER = 1
+
+    def __init__(self, text: str, *, paid: bool = False, parent=None):
+        super().__init__(text, parent)
+        self.setObjectName("ToggleChip")
+        # A paid permission turns WARNING when on — the colour the design
+        # system reserves for a step that costs money.
+        self.setProperty("paid", "true" if paid else "false")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt API
+        self.ensurePolished()
+        width = (self._PAD_LEFT + self._INDICATOR + self._GAP
+                 + self.fontMetrics().horizontalAdvance(self.text())
+                 + self._PAD_RIGHT + 2 * self._BORDER)
+        base = super().sizeHint()
+        return QSize(max(width, base.width()),
+                     max(CONTROL_TOTAL_HEIGHT, base.height()))
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802 - Qt API
+        return self.sizeHint()
+
+
+def toggle_chip(text: str, *, paid: bool = False, checked: bool = False) -> ToggleChip:
+    chip = ToggleChip(text, paid=paid)
+    chip.setChecked(checked)
+    return chip
+
+
+def field_note(text: str = "") -> QLabel:
+    """A quiet note that sits in a field's label row (via `aside`)."""
+    label = QLabel(text)
+    label.setObjectName("FieldNote")
+    return label
 
 
 # The narrowest a form_grid column may become before the grid folds into more
@@ -102,15 +214,33 @@ class FieldGridLayout(QLayout):
     up under the first row's.
     """
 
+    #: `span` value for a field that takes the whole row at any column count.
+    FULL_ROW = 0
+
     def __init__(self, columns: int = 3, min_column_width: int = FIELD_MIN_WIDTH,
                  parent=None):
         super().__init__(parent)
         self.max_columns = max(1, columns)
         self.min_column_width = min_column_width
         self._items = []
+        self._placement: dict[int, tuple[int, bool]] = {}
         self._hspace = MD
         self._vspace = MD
         self.setContentsMargins(0, 0, 0, 0)
+
+    def add_field(self, widget: QWidget, *, span: int = 1,
+                  new_row: bool = False) -> None:
+        """Add `widget` spanning `span` columns, optionally starting a row.
+
+        For a form whose rows mean something — Tool and Command over Provider,
+        Model and Mode — so the second row's columns stay under the first's
+        even though the first is one field short. `span` is capped at the
+        column count when the grid folds; `FULL_ROW` always takes the row.
+        A grid that uses either gives up the balanced fold below, because a
+        deliberate row cannot be rebalanced without breaking it.
+        """
+        self.addWidget(widget)
+        self._placement[id(widget)] = (span, new_row)
 
     # ── QLayout plumbing ────────────────────────────────────────────────
     def addItem(self, item):
@@ -168,12 +298,19 @@ class FieldGridLayout(QLayout):
         return [item for item in self._items
                 if item.widget() is None or not item.widget().isHidden()]
 
+    def _placed(self, item) -> tuple[int, bool] | None:
+        widget = item.widget()
+        return self._placement.get(id(widget)) if widget is not None else None
+
     def columns_for(self, inner_width: int) -> int:
         """How many columns fit `inner_width`, balanced across the rows."""
-        count = len(self._visible())
+        items = self._visible()
+        count = len(items)
         if count == 0:
             return 1
         fit = (inner_width + self._hspace) // (self.min_column_width + self._hspace)
+        if any(self._placed(item) for item in items):
+            return max(1, min(self.max_columns, fit))
         columns = max(1, min(self.max_columns, count, fit))
         rows = -(-count // columns)
         # The fewest columns that still need only that many rows: a row of
@@ -181,6 +318,21 @@ class FieldGridLayout(QLayout):
         while columns > 1 and -(-count // (columns - 1)) == rows:
             columns -= 1
         return columns
+
+    def _rows(self, items, columns: int):
+        """Group items into rows of (item, first column, span)."""
+        rows, current, column = [], [], 0
+        for item in items:
+            span, new_row = self._placed(item) or (1, False)
+            span = columns if span == self.FULL_ROW else max(1, min(span, columns))
+            if current and (new_row or column + span > columns):
+                rows.append(current)
+                current, column = [], 0
+            current.append((item, column, span))
+            column += span
+        if current:
+            rows.append(current)
+        return rows
 
     def _arrange(self, rect: QRect, apply: bool) -> int:
         margins = self.contentsMargins()
@@ -191,21 +343,27 @@ class FieldGridLayout(QLayout):
             return margins.top() + margins.bottom()
         columns = self.columns_for(inner.width())
         spare = max(0, inner.width() - (columns - 1) * self._hspace)
+
+        def edge(column: int) -> int:
+            # Spread the remainder pixel by pixel so every column edge lands
+            # on the same x in every row.
+            return inner.x() + (spare * column) // columns + column * self._hspace
+
         y = inner.y()
-        for start in range(0, len(items), columns):
-            row_items = items[start:start + columns]
-            row_height = max(item.sizeHint().height() for item in row_items)
+        for row in self._rows(items, columns):
+            placed = []
+            for item, column, span in row:
+                x = edge(column)
+                width = edge(column + span) - self._hspace - x
+                # A field holding a wrapping row (permission chips) is taller
+                # when narrow; its size hint is only its one-line height.
+                height = (item.heightForWidth(width) if item.hasHeightForWidth()
+                          else item.sizeHint().height())
+                placed.append((item, x, width, height))
             if apply:
-                x = inner.x()
-                for column, item in enumerate(row_items):
-                    # Spread the remainder pixel by pixel so every column
-                    # edge lands on the same x in every row.
-                    width = (spare * (column + 1)) // columns \
-                        - (spare * column) // columns
-                    height = item.sizeHint().height()
+                for item, x, width, height in placed:
                     item.setGeometry(QRect(x, y, width, height))
-                    x += width + self._hspace
-            y += row_height + self._vspace
+            y += max(height for *_rest, height in placed) + self._vspace
         return y - self._vspace - rect.y() + margins.bottom()
 
 

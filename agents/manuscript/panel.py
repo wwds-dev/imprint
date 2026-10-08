@@ -22,7 +22,7 @@ from pathlib import Path
 from PySide6.QtCore import QDate, Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDateEdit, QFileDialog, QHBoxLayout, QLabel,
+    QComboBox, QDateEdit, QFileDialog, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
     QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser,
     QTextEdit, QVBoxLayout, QWidget,
@@ -33,7 +33,9 @@ from agents.manuscript.book_widgets import (
     make_size_box, make_theme_box, make_voice_source_box, populate_voice_box,
     size_key, theme_key, unique_output_path,
 )
-from ui.forms import MD, SM, combo, field, line_edit, micro, primary, section
+from ui.forms import (
+    MD, SM, combo, field, line_edit, micro, primary, section, toggle_chip,
+)
 from ui.panels.base import AgentPanel
 from ui import theme
 from ui.style import ACCENT
@@ -134,6 +136,8 @@ class ManuscriptPanel(QWidget):
         self.manuscript_next_step_label = QLabel("")
         self.manuscript_next_step_label.setWordWrap(True)
         self.manuscript_next_step_label.setObjectName("NextStepBanner")
+        # Shown once there is a tip; an empty banner was a bare teal bar.
+        self.manuscript_next_step_label.hide()
         layout.addWidget(self.manuscript_next_step_label)
 
         # ── Connections: which 3rd-party services are actually configured ─────
@@ -156,7 +160,9 @@ class ManuscriptPanel(QWidget):
 
         overview_tab = QWidget()
         overview_layout = QVBoxLayout(overview_tab)
-        overview_layout.setContentsMargins(0, 0, 0, 0)
+        # The same inset as the other Press tabs; at zero the section headings
+        # sat on the pane's border.
+        overview_layout.setContentsMargins(SM, SM, SM, SM)
 
         # ── Main area: metrics display + Q&A sidebar ─────────────────────────
         splitter = QSplitter(Qt.Horizontal)
@@ -495,18 +501,15 @@ class ManuscriptPanel(QWidget):
         self.calendar_start_date.setCalendarPopup(True)
         settings_row.addWidget(field("Start", self.calendar_start_date))
 
-        # Grouped under one caption and pinned to the controls' baseline: bare
-        # checkboxes in a row of label-above-input fields otherwise float a
-        # label's height above everything beside them.
+        # Grouped under one caption, as chips the height of the controls
+        # beside them. Bare checkboxes floated a label's height above the row,
+        # and macOS sized them with no room for their last letter.
         platforms = QHBoxLayout()
         platforms.setContentsMargins(0, 0, 0, 0)
-        platforms.setSpacing(MD)
-        self.calendar_tiktok_check = QCheckBox("TikTok")
-        self.calendar_tiktok_check.setChecked(True)
-        self.calendar_instagram_check = QCheckBox("Instagram")
-        self.calendar_instagram_check.setChecked(True)
-        self.calendar_pinterest_check = QCheckBox("Pinterest")
-        self.calendar_pinterest_check.setChecked(True)
+        platforms.setSpacing(SM)
+        self.calendar_tiktok_check = toggle_chip("TikTok", checked=True)
+        self.calendar_instagram_check = toggle_chip("Instagram", checked=True)
+        self.calendar_pinterest_check = toggle_chip("Pinterest", checked=True)
         for check in (self.calendar_tiktok_check, self.calendar_instagram_check,
                       self.calendar_pinterest_check):
             platforms.addWidget(check)

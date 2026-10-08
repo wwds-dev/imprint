@@ -1141,8 +1141,10 @@ class AudiobookPanel(QWidget):
         header.addWidget(self.audiobook_library_refresh_btn)
         layout.addLayout(header)
 
+        # Fields with their labels above, sitting on one control line with
+        # the button — not a colon caption that started its own left edge.
         storage = QHBoxLayout()
-        storage.addWidget(QLabel("Save listening progress:"))
+        storage.setSpacing(SM)
         self.audiobook_progress_mode = QComboBox()
         self.audiobook_progress_mode.addItem("On this Mac", "local")
         self.audiobook_progress_mode.addItem("Google Drive folder", "drive")
@@ -1152,18 +1154,25 @@ class AudiobookPanel(QWidget):
             self.audiobook_progress_mode.findData(mode))
         self.audiobook_progress_mode.currentIndexChanged.connect(
             self.change_progress_storage)
-        storage.addWidget(self.audiobook_progress_mode)
+        self.audiobook_progress_mode.setMinimumWidth(220)
+        storage.addWidget(field("Save listening progress", self.audiobook_progress_mode),
+                          0, Qt.AlignBottom)
         proposed_folder = folder or suggested_drive_audiobook_folder()
         self.audiobook_progress_folder = QLineEdit(
             str(proposed_folder) if proposed_folder else "")
         self.audiobook_progress_folder.setReadOnly(True)
         self.audiobook_progress_folder.setPlaceholderText(
             "Choose your synced audiobooks - gdrive folder")
-        storage.addWidget(self.audiobook_progress_folder, 1)
+        self.audiobook_progress_folder_field = field(
+            "Progress folder", self.audiobook_progress_folder)
+        storage.addWidget(self.audiobook_progress_folder_field, 1)
         self.audiobook_progress_folder_btn = QPushButton("Choose folder")
         self.audiobook_progress_folder_btn.clicked.connect(
             self.choose_progress_folder)
-        storage.addWidget(self.audiobook_progress_folder_btn)
+        storage.addWidget(self.audiobook_progress_folder_btn, 0, Qt.AlignBottom)
+        # Takes the slack only while the folder field (stretch 1) is hidden,
+        # so "On this Mac" stays a field-sized dropdown, not a full-width bar.
+        storage.addStretch()
         layout.addLayout(storage)
         self._update_progress_folder_controls()
 
@@ -1213,6 +1222,8 @@ class AudiobookPanel(QWidget):
     def _update_progress_folder_controls(self):
         enabled = self.audiobook_progress_mode.currentData() == "drive"
         self.audiobook_progress_folder.setVisible(enabled)
+        # The field's label goes with it, or it floats alone beside the combo.
+        self.audiobook_progress_folder_field.setVisible(enabled)
         self.audiobook_progress_folder_btn.setVisible(enabled)
 
     def change_progress_storage(self):

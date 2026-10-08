@@ -41,7 +41,7 @@ class SunoPanel(QWidget):
         self.output = QTextEdit()
         self.output.setPlaceholderText("Editable lyrics, style prompts, and track sequence")
         layout.addWidget(self.output)
-        self.generate = QPushButton("Draft songs & Suno prompts")
+        self.generate = QPushButton("Draft songs && Suno prompts")
         self.generate.clicked.connect(self.draft)
         layout.addWidget(self.generate)
         # Named, not anonymous: Learning Centre "Show me" steps point at them.

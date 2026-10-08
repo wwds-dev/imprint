@@ -87,6 +87,8 @@ RADIUS_SM = "6px"
 RADIUS_LG = "12px"
 
 CHEVRON_DOWN = (resource_base() / "assets" / "dropdown-chevron.svg").as_posix()
+# Near-black, so it reads on the accent fill and the warning fill alike.
+CHECK_MARK = (resource_base() / "assets" / "check.svg").as_posix()
 
 
 _STYLESHEET_TEMPLATE = """
@@ -381,7 +383,9 @@ _STYLESHEET_TEMPLATE = """
             color: {TEXT_DIM};
             border: 1px solid {BORDER};
             border-radius: {RADIUS_SM};
-            padding: 5px 10px;
+            /* 7px like every button: with 5px it came out 40px tall beside
+               44px dropdowns (Booth's Rescan, the old Chat model row). */
+            padding: 7px 10px;
             font-size: 12px;
             font-weight: 500;
         }}
@@ -554,6 +558,11 @@ _STYLESHEET_TEMPLATE = """
             top: -1px;
             background-color: {SURFACE};
         }}
+        /* Flush left like every field and stage switch above them. The macOS
+           style centres a tab bar by default, so Draft / Outline / Chapters
+           sat in the middle of the pane — the only row on the page not
+           starting at the content's left edge. */
+        QTabWidget::tab-bar {{ alignment: left; }}
         QTabBar {{ background: transparent; qproperty-drawBase: 0; }}
         QTabBar::tab {{
             background: transparent;
@@ -632,7 +641,97 @@ _STYLESHEET_TEMPLATE = """
         QCheckBox::indicator:checked {{
             background-color: {ACCENT};
             border: 1px solid {ACCENT};
+            image: url("{CHECK_MARK}");
         }}
+        QCheckBox:disabled {{ color: {TEXT_MUTE}; }}
+        QCheckBox::indicator:disabled {{ border: 1px solid {BORDER}; }}
+
+        /* A permission or filter as a chip (forms.toggle_chip). Same height
+           as every other control, so a row of them sits level with the
+           dropdowns above; a QCheckBox underneath, so call sites still read
+           isChecked(). */
+        QCheckBox#ToggleChip {{
+            background-color: transparent;
+            color: {TEXT_DIM};
+            border: 1px solid {BORDER};
+            border-radius: {RADIUS_SM};
+            padding: 0 12px 0 10px;
+            spacing: 7px;
+            font-size: 12px;
+            font-weight: 500;
+            min-height: 42px;
+            max-height: 42px;
+        }}
+        QCheckBox#ToggleChip:hover {{
+            color: {TEXT};
+            background-color: {ELEVATED};
+            border: 1px solid {BORDER_STRONG};
+        }}
+        QCheckBox#ToggleChip::indicator {{ width: 14px; height: 14px; }}
+        QCheckBox#ToggleChip:checked {{
+            color: {TEXT};
+            background-color: {ACCENT_WASH};
+            border: 1px solid {ACCENT_LINE};
+        }}
+        QCheckBox#ToggleChip[paid="true"]:checked {{
+            background-color: {WARNING_WASH};
+            border: 1px solid {WARNING_LINE};
+        }}
+        QCheckBox#ToggleChip[paid="true"]::indicator:checked {{
+            background-color: {WARNING};
+            border: 1px solid {WARNING};
+        }}
+        /* Off because something else makes it moot (Mode is Local only): the
+           choice is kept and shown, just not live. */
+        QCheckBox#ToggleChip:disabled {{
+            color: {TEXT_MUTE};
+            background-color: transparent;
+            border: 1px solid {BORDER};
+        }}
+        QCheckBox#ToggleChip::indicator:disabled {{
+            background-color: transparent;
+            border: 1px dashed {BORDER_STRONG};
+        }}
+        QCheckBox#ToggleChip::indicator:checked:disabled {{
+            background-color: {ACCENT_LINE};
+            border: 1px solid transparent;
+        }}
+
+        /* An affordance that belongs to one field, in its label row
+           (forms.link_button). Shorter than the micro label, so it never
+           makes its field taller than the ones beside it. */
+        QPushButton#LinkAction {{
+            background: transparent;
+            border: none;
+            padding: 0;
+            min-height: 0px;
+            max-height: 12px;
+            color: {TEXT_DIM};
+            font-size: 11px;
+            font-weight: 500;
+            text-decoration: underline;
+        }}
+        QPushButton#LinkAction:hover {{ color: {TEXT}; }}
+        QPushButton#LinkAction:disabled {{ color: {TEXT_MUTE}; }}
+
+        /* A square, icon-only utility beside the control it acts on. */
+        QPushButton#IconAction {{
+            background-color: transparent;
+            border: 1px solid {BORDER};
+            padding: 0;
+            min-height: 42px;
+            max-height: 42px;
+            min-width: 42px;
+            max-width: 42px;
+        }}
+        QPushButton#IconAction:hover {{
+            background-color: {ELEVATED};
+            border: 1px solid {BORDER_STRONG};
+        }}
+
+        /* A field's quiet one-line note (what a choice implies right now). */
+        QLabel#FieldNote {{ color: {TEXT_MUTE}; font-size: 11px; }}
+
 
         QToolTip {{
             background-color: {ELEVATED};
