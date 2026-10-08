@@ -3191,9 +3191,10 @@ class GodAI(QWidget):
         self.output_label.setVisible(show_output)
         self.output_box.setVisible(show_output)
 
+        # The output box is Chat's alone. Booth keeps its conversion log on
+        # its own panel; writing "[Ready] Click Start…" here replaced the
+        # conversation Chat was showing every time Booth was opened.
         if agent_name == "audiobook":
-            self.output_label.setText("Output Log")
-            self.output_box.setPlainText("[Ready] Click Start to begin.")
             self.refresh_audiobook_books()
             self.refresh_audiobook_library()
         elif agent_name == "manuscript":
@@ -3205,8 +3206,6 @@ class GodAI(QWidget):
             self._refresh_next_step_tip()
         elif agent_name == "video":
             self.refresh_video_library()
-        elif not is_custom:
-            self.output_label.setText("Output")
 
     def get_audiobook_defaults(self):
         return self.audiobook_panel.defaults()

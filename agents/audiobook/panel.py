@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox, QFileDialog, QFrame, QGridLayout, QHBoxLayout, QHeaderView, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QProgressBar,
     QPushButton, QSizePolicy, QStackedWidget, QTableWidget, QTableWidgetItem,
-    QTabWidget, QVBoxLayout, QWidget,
+    QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from agents.audiobook import conversions
@@ -22,7 +22,7 @@ from services.database import get_setting, save_setting
 from services.runtime_paths import is_frozen
 from agents.audiobook.audio_player import AudiobookPlayer
 from ui.forms import CONTROL_HEIGHT, LG, MD, SM, combo, field, line_edit, primary, rule, section
-from ui.widgets import FlowLayout, scrollable
+from ui.widgets import CollapsibleSection, FlowLayout, scrollable
 
 SUPPORTED_EBOOKS = {".pdf", ".epub", ".txt", ".mobi", ".azw3"}
 ROUTE_KEY = "audiobook_narration_route"
@@ -101,6 +101,10 @@ class AudiobookPanel(QWidget):
         self._conversion_source = None
         self._conversion_output = None
         self._conversion_job_id = None
+        # This run's converter output, for the outcome checks in
+        # handle_finished. Its own buffer, not a widget's text: nothing else
+        # can clear it between Start and the exit.
+        self._run_output = ""
         self._resume_scan_done = False
         self.process = None
         self.setObjectName("AudiobookPanel")
@@ -268,6 +272,21 @@ class AudiobookPanel(QWidget):
         self.audiobook_status_label.setWordWrap(True)
         page.addWidget(self.audiobook_status_label)
 
+        # The converter's own output lives on Booth. It used to go to the
+        # Chat panel's output box, which Booth never shows: the log was
+        # invisible here and turned up in Chat instead, and visiting Booth
+        # replaced whatever Chat was showing.
+        self.audiobook_log_section = CollapsibleSection(
+            "Conversion log", expanded=False)
+        self.audiobook_log = QTextEdit()
+        self.audiobook_log.setReadOnly(True)
+        self.audiobook_log.setMinimumHeight(160)
+        self.audiobook_log.setAccessibleName("Conversion log")
+        self.audiobook_log.setPlaceholderText(
+            "The converter's output appears here while a book converts.")
+        self.audiobook_log_section.addWidget(self.audiobook_log)
+        page.addWidget(self.audiobook_log_section)
+
         self.audiobook_convert_scroll = scrollable(convert_page)
         self.audiobook_convert_scroll.setObjectName("AudiobookConvertScroll")
         self.audiobook_convert_scroll.setHorizontalScrollBarPolicy(
@@ -352,8 +371,6 @@ class AudiobookPanel(QWidget):
             self._update_source_state(
                 "The input folder does not exist yet. Set it up, add a PDF, "
                 "EPUB, TXT, MOBI, or AZW3 file, then refresh the list.")
-            self.host.output_box.setPlainText(
-                f"[Error] Input folder does not exist:\n{input_folder}")
             self.audiobook_status_label.setText(
                 "Choose an input folder to add your first book.")
             return
@@ -365,8 +382,6 @@ class AudiobookPanel(QWidget):
             self._update_source_state(
                 "No supported books found in the input folder. Add a PDF, "
                 "EPUB, TXT, MOBI, or AZW3 file, then refresh the list.")
-            self.host.output_box.setPlainText(
-                f"[Info] No supported ebooks found in:\n{input_folder}")
             self.audiobook_status_label.setText(
                 "No books yet — add a PDF, EPUB, TXT, MOBI, or AZW3 file.")
             return
@@ -378,8 +393,6 @@ class AudiobookPanel(QWidget):
         self._update_source_state()
         if len(books) == 1:
             self.audiobook_book_list.setCurrentRow(0)
-        self.host.output_box.setPlainText(
-            f"[Ready] Found {len(books)} book(s). Select one and click Start.")
         self.audiobook_status_label.setText(
             f"[Ready] Found {len(books)} book(s).")
         self.estimate_cost_from_selection()
@@ -607,7 +620,7 @@ class AudiobookPanel(QWidget):
     def start_conversion(self):
         item = self.audiobook_book_list.currentItem()
         if not item:
-            self.host.output_box.setPlainText(
+            self.audiobook_status_label.setText(
                 "[Error] Please select a book first.")
             return
         book_path = item.data(Qt.UserRole)
@@ -766,7 +779,8 @@ class AudiobookPanel(QWidget):
             "chunk_tokens": chunk_tokens, "audio_format": audio_format,
             "provider": route, "model": model,
         }
-        self.host.output_box.setPlainText(
+        self._run_output = ""
+        self.audiobook_log.setPlainText(
             f"[Starting]\nBook: {Path(book_path).name}\nOutput: {output_path}"
             f"\nNarrator: {NARRATION_ROUTES[route]['label']}"
             f"\nVoice: {voice}\nChunk tokens: {chunk_tokens}\n\n")
@@ -813,7 +827,7 @@ class AudiobookPanel(QWidget):
         self.tool_progress.setValue(0)
         self.audiobook_status_label.setText(
             "[Error] Converter could not run.")
-        self.host.output_box.append(f"\n[Error] {reason}")
+        self.audiobook_log.append(f"\n[Error] {reason}")
         if error == QProcess.FailedToStart:
             self._close_request(False)
         QMessageBox.critical(self, "Audiobook Conversion Failed", reason)
@@ -825,9 +839,10 @@ class AudiobookPanel(QWidget):
             "utf-8", errors="replace")
         if not data:
             return
-        self.host.output_box.moveCursor(QTextCursor.End)
-        self.host.output_box.insertPlainText(data)
-        self.host.output_box.ensureCursorVisible()
+        self._run_output += data
+        self.audiobook_log.moveCursor(QTextCursor.End)
+        self.audiobook_log.insertPlainText(data)
+        self.audiobook_log.ensureCursorVisible()
         matches = re.findall(r"(\d+(?:\.\d+)?)%\s+\((\d+)/(\d+)\)", data)
         if matches:
             percent = float(matches[-1][0])
@@ -849,7 +864,7 @@ class AudiobookPanel(QWidget):
         exit_code = process.exitCode() if process else 0
         exit_status = (process.exitStatus() if process
                        else QProcess.NormalExit)
-        output_text = self.host.output_box.toPlainText()
+        output_text = self._run_output
         crashed = exit_status == QProcess.CrashExit
         # The deliverable, not the exit code, defines success: a clean
         # exit that produced no file (or a half-book merge) must not bill
@@ -873,7 +888,7 @@ class AudiobookPanel(QWidget):
             self.tool_progress.setValue(0)
             self.audiobook_status_label.setText(
                 "[Blocked] OpenAI quota exceeded — top up your account.")
-            self.host.output_box.append(
+            self.audiobook_log.append(
                 "\n[Blocked] Your OpenAI account has run out of quota.\n"
                 "Top up your account at platform.openai.com/settings/billing,\n"
                 "then click Start on the same book to resume automatically.")
@@ -884,7 +899,7 @@ class AudiobookPanel(QWidget):
         elif refused:
             self.tool_progress.setValue(0)
             self.audiobook_status_label.setText(f"[Blocked] {refused[:120]}")
-            self.host.output_box.append(
+            self.audiobook_log.append(
                 f"\n[Blocked] {refused}\nFix the key or the account's credit, "
                 "then click Start on the same book to resume — cached chunks "
                 "are not paid for again.")
@@ -893,14 +908,14 @@ class AudiobookPanel(QWidget):
             self.tool_progress.setValue(0)
             self.audiobook_status_label.setText(
                 "[Paused] Incomplete — click Start to resume.")
-            self.host.output_box.append(
+            self.audiobook_log.append(
                 "\n[Paused] Some chunks were not completed.\n"
                 "Click Start on the same book to resume automatically.")
         elif crashed or exit_code != 0:
             reason = self.extract_error(output_text)
             self.tool_progress.setValue(0)
             self.audiobook_status_label.setText("[Error] Conversion failed.")
-            self.host.output_box.append(
+            self.audiobook_log.append(
                 f"\n[Error] Conversion failed (exit code {exit_code}).\n{reason}")
             QMessageBox.critical(
                 self, "Audiobook Conversion Failed",
@@ -910,7 +925,7 @@ class AudiobookPanel(QWidget):
             self.audiobook_status_label.setText(
                 "[Error] The converter finished but the audiobook file "
                 "is missing.")
-            self.host.output_box.append(
+            self.audiobook_log.append(
                 "\n[Error] The converter exited cleanly but no audiobook "
                 "file was produced. Nothing was billed for this run "
                 "beyond the chapters it generated; click Start to try "
@@ -919,7 +934,7 @@ class AudiobookPanel(QWidget):
             self.tool_progress.setValue(100)
             self.audiobook_status_label.setText(
                 "[Done] Audiobook created successfully.")
-            self.host.output_box.append(
+            self.audiobook_log.append(
                 "\n[Done] Audiobook created successfully.")
             self._link_completed_conversion()
         self._conversion_project_id = None
@@ -1096,11 +1111,11 @@ class AudiobookPanel(QWidget):
         process = self.process or getattr(self.host, "audiobook_process", None)
         if process is not None and process.state() != QProcess.NotRunning:
             process.kill()
-            self.host.output_box.append(
+            self.audiobook_log.append(
                 "\n[Stopped] Current task stopped by user.")
             self.audiobook_status_label.setText("[Stopped]")
         else:
-            self.host.output_box.append("\n[Info] No running task to stop.")
+            self.audiobook_log.append("\n[Info] No running task to stop.")
         self._reset_conversion_controls()
 
     @staticmethod

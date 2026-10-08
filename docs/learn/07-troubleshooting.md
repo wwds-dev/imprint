@@ -105,7 +105,7 @@ already accepted non-cancellable work.
 - Confirm OpenAI access; audiobook TTS uses it regardless of the text provider
   selected elsewhere.
 - Convert a short sample to verify voice, extraction, and pronunciation.
-- Read Output Log for quota, extraction, chunk, and resume information.
+- Open **Conversion log** (under the progress bar on Booth's Convert tab) for quota, extraction, chunk, and resume information.
 - A partial run can leave completed audio/chunks and incurred charges. Inspect
   them before restarting.
 - In Listen, use Rescan after moving files. Resume is keyed to the full file

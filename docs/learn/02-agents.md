@@ -107,7 +107,7 @@ model answers are interpretations.
 | **Voice** | OpenAI TTS voice used for narration. |
 | **Chunk Tokens** | Text sent per speech request. Smaller chunks retry more precisely; larger chunks make fewer calls. |
 | **Start / Stop** | Launches or terminates the converter process. Partial output and charges may remain. |
-| **Progress / Output Log** | The authoritative stage, resume, quota, and error record. |
+| **Progress / Conversion log** | The authoritative stage, resume, quota, and error record. |
 
 OpenAI access is required even if another text provider is selected elsewhere.
 Listen to a sample before converting an entire book.

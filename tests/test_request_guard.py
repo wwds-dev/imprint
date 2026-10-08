@@ -511,7 +511,7 @@ class TestAudiobookBillingDecision:
         monkeypatch.setattr(QMessageBox, "critical",
                             staticmethod(lambda *a, **k: None))
         win.audiobook_process = _FakeProcess(code, QProcess.NormalExit)
-        win.output_box.setPlainText(text)
+        win.audiobook_panel._run_output = text
         win.handle_audiobook_finished()
 
     def test_exit_zero_records_the_conversion(self, win, monkeypatch,

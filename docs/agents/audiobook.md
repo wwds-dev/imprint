@@ -34,7 +34,7 @@ Every conversion is **assessed before approval** across the narrators that can r
 Chunks are cached per narrator. A book interrupted under one narrator is never resumed on another: the settings-changed question names the narrator it was started with. OpenAI books paused before the routes existed resume unchanged, because OpenAI's chunking did not change.
 
 ## Outputs
-MP3(s) in the output folder + a live **Output Log** (chunk progress, resume state, quota/error detection). Progress bar reflects completed chunks. A completed MP3 is linked to the Project selected when conversion began; Listen still shows the shared output folder, not a Project-filtered library.
+MP3(s) in the output folder + a live **Conversion log** — a collapsed section under the progress bar (chunk progress, resume state, quota/error detection). Progress bar reflects completed chunks. A completed MP3 is linked to the Project selected when conversion began; Listen still shows the shared output folder, not a Project-filtered library.
 
 If the expected MP3 already exists, **Convert audiobook** does not send a new paid request. Open the file from Listen instead.
 

@@ -281,7 +281,7 @@ def test_clean_exit_without_output_is_not_success(window, tmp_path,
     panel._conversion_source = tmp_path / "novel.epub"
     panel.process = None
     window.audiobook_process = None
-    window.output_box.setPlainText("")
+    panel._run_output = ""
 
     before = window.usage_tracker.get_agent_today_total("audiobook")
     panel.handle_finished()
@@ -316,3 +316,48 @@ def test_refresh_books_keeps_non_default_settings(window):
     panel.refresh_books()
     assert panel.audiobook_voice_box.currentText() == "verse"
     assert panel.audiobook_chunk_input.text() == "777"
+
+
+def test_booth_output_stays_on_booth(window):
+    """Booth's converter log used to go to the Chat panel's output box:
+    invisible on Booth, shown in Chat ("[Info] No supported ebooks found…"),
+    and opening Booth replaced the conversation Chat was showing."""
+    panel = window.audiobook_panel
+    panel.process = None
+    window.audiobook_process = None
+    window.select_agent("chat")
+    window.output_box.setPlainText("You\nhello\n\nassistant: hi")
+    window.select_agent("audiobook")        # refreshes the book list
+    panel.stop_conversion()                 # writes to the conversion log
+    window.select_agent("chat")
+    assert window.output_box.toPlainText() == "You\nhello\n\nassistant: hi"
+    assert "No running task to stop" in panel.audiobook_log.toPlainText()
+
+
+def test_chat_activity_cannot_erase_a_running_conversions_outcome(window):
+    """handle_finished reads the run's output for quota and refusal markers.
+    Sending a chat clears Chat's box; that must not touch this run's text."""
+
+    class _Bytes:
+        def __init__(self, raw):
+            self._raw = raw
+
+        def data(self):
+            return self._raw
+
+    class _Streaming:
+        def readAll(self):
+            return _Bytes(b"Error: insufficient_quota\n")
+
+    panel = window.audiobook_panel
+    panel._conversion_job_id = None
+    panel._run_output = ""
+    panel.process = _Streaming()
+    try:
+        panel.handle_stdout()
+    finally:
+        panel.process = None
+    window.output_box.clear()               # what Send does in Chat
+    assert "insufficient_quota" in panel._run_output
+    assert "insufficient_quota" in panel.audiobook_log.toPlainText()
+    assert "insufficient_quota" not in window.output_box.toPlainText()

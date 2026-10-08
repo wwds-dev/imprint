@@ -3215,7 +3215,7 @@ Recurring revenue compounds — once published, content keeps earning. These age
 2. Click **Audiobooks**, refresh the list, select a book.
 3. Pick a voice (`alloy`, `verse`, `aria`, `coral`, `sage`).
 4. Confirm the cost estimate — the dialog compares the narrators for this book (roughly $10 with OpenAI or Gemini, $48 with ElevenLabs, for a 100,000-word novel).
-5. Click **Start**. Monitor progress in the output log.
+5. Click **Start**. Monitor progress in the progress bar, or open **Conversion log** beneath it for the converter's output.
 6. When finished, upload the MP3 files to ACX / Findaway / Google Play.
 
 **Realistic earnings:**
