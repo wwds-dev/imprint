@@ -63,6 +63,7 @@ def rule() -> QFrame:
 
 
 def field(label: str, widget: QWidget, *, stretch_label: bool = False,
+          note: QWidget | None = None,
           aside: QWidget | None = None) -> QWidget:
     """The one form idiom: label above input, both flush left.
 
@@ -73,6 +74,11 @@ def field(label: str, widget: QWidget, *, stretch_label: bool = False,
     The container is transparent. A plain QWidget paints the page colour, so
     inside a card every field's label used to sit on a strip of BG — a dark
     band across the Compose card and the spend rail's Limits.
+
+    `note` follows the label: a `field_note` saying what the choice implies
+    right now. It used to go in `aside`, which on a field spanning two columns
+    left "Ignored while Mode is Local only" hanging past the end of the chips,
+    read as belonging to nothing.
 
     `aside` sits at the far end of the label row: a `link_button` for an
     affordance that belongs to this one field (Model Guide beside Model),
@@ -86,15 +92,18 @@ def field(label: str, widget: QWidget, *, stretch_label: bool = False,
     label_widget = micro(label)
     if stretch_label:
         label_widget.setWordWrap(True)
-    if aside is None:
+    if note is None and aside is None:
         layout.addWidget(label_widget)
     else:
         head = QHBoxLayout()
         head.setContentsMargins(0, 0, 0, 0)
         head.setSpacing(SM)
         head.addWidget(label_widget)
+        if note is not None:
+            head.addWidget(note)
         head.addStretch()
-        head.addWidget(aside)
+        if aside is not None:
+            head.addWidget(aside)
         layout.addLayout(head)
     layout.addWidget(widget)
     return box
@@ -187,7 +196,7 @@ def toggle_chip(text: str, *, paid: bool = False, checked: bool = False) -> Togg
 
 
 def field_note(text: str = "") -> QLabel:
-    """A quiet note that sits in a field's label row (via `aside`)."""
+    """A quiet note that follows a field's label (via `note`)."""
     label = QLabel(text)
     label.setObjectName("FieldNote")
     return label

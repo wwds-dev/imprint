@@ -205,8 +205,12 @@ class ModelPullWorker(QThread):
 
     progress_signal carries (status, completed_bytes, total_bytes); total is 0
     until Ollama has resolved the manifest.
+
+    The byte counts go as `object`, not `int`: Qt's int is 32-bit, so a
+    16.8 GB layer arrived as -423188128 and the panel, seeing no positive
+    total, showed a bare "pulling 71b5c9c9abbc" for the whole download.
     """
-    progress_signal = Signal(str, int, int)
+    progress_signal = Signal(str, object, object)
     finished_signal = Signal(str)
     error_signal = Signal(str)
 

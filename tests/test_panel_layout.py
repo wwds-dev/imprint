@@ -1303,6 +1303,23 @@ def test_cloud_permissions_grey_out_under_local_only(app, window):
         mode.setCurrentText(saved)
 
 
+def test_field_notes_follow_their_label(app, window):
+    """The Mode notes sat at the far end of the label row: on the two-column
+    Cloud text models field that was past the last chip, beside nothing."""
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QLabel
+    from ui.forms import SM
+    _settle(app, window, (1440, 900), "chat")
+    origin = window.normal_panel
+    # chip -> its chip row -> the field holding label, note and row
+    media_field = window.allow_higgsfield_checkbox.parentWidget().parentWidget()
+    for note in (window.cloud_permission_note,
+                 media_field.findChild(QLabel, "FieldNote")):
+        label = note.parentWidget().findChild(QLabel, "MicroLabel")
+        label_right = label.mapTo(origin, QPoint(label.width(), 0)).x()
+        assert note.mapTo(origin, QPoint(0, 0)).x() == label_right + SM
+
+
 def test_an_empty_next_step_banner_is_hidden(app, window, monkeypatch):
     """An empty NextStepBanner was a bare teal bar above Book Profile."""
     _settle(app, window, (1440, 900), "author")

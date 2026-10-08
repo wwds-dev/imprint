@@ -237,3 +237,21 @@ def test_cancel_closes_the_abandoned_stream(app):
     worker.error_signal.connect(lambda _e: None)
     worker.run()
     assert closed == [True]
+
+
+def test_model_pull_progress_carries_byte_counts_past_2_gb(app):
+    """Qt's int is 32-bit. Typed as int, a 16.8 GB layer reached the panel
+    as -423188128, so it never showed a percentage — only the digest."""
+    from ui.workers import ModelPullWorker
+
+    class FakeClient:
+        def pull_model(self, _model, on_progress):
+            on_progress("pulling 71b5c9c9abbc", 9_150_000_000, 16_756_681_056)
+
+    worker = ModelPullWorker(FakeClient(), "muse-glimmer:30b-q4_K_M")
+    progress, errors = [], []
+    worker.progress_signal.connect(lambda *args: progress.append(args))
+    worker.error_signal.connect(errors.append)
+    worker.run()
+    assert errors == []
+    assert progress == [("pulling 71b5c9c9abbc", 9_150_000_000, 16_756_681_056)]

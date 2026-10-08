@@ -2220,7 +2220,7 @@ class GodAI(QWidget):
         self.cloud_permission_note = field_note("")
         setup.add_field(
             field("Cloud text models", cloud_chips,
-                  aside=self.cloud_permission_note),
+                  note=self.cloud_permission_note),
             span=2, new_row=True)
 
         media_chips = QWidget()
@@ -2236,7 +2236,7 @@ class GodAI(QWidget):
             "default narrator is the free on-device voice.")
         media_flow.addWidget(self.allow_elevenlabs_checkbox)
         setup.add_field(field("Paid media", media_chips,
-                              aside=field_note("Not affected by Mode")))
+                              note=field_note("Not affected by Mode")))
 
         setup_widget = QWidget()
         setup_widget.setObjectName("Transparent")
