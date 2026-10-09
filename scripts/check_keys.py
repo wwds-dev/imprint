@@ -66,26 +66,26 @@ def _probe(kind: str) -> tuple[bool, str]:
             models = OllamaClient().list_models()
             return bool(models), (f"{len(models)} model(s) pulled"
                                   if models else "daemon up but nothing pulled")
+        # list_models_live(), not list_models(): the latter swallows every
+        # error and returns KNOWN_MODELS, so a revoked key would read "OK".
+        # (Until 2026-10-09 this imported class names that did not exist —
+        # AnthropicClient and friends — so every keyed provider read FAIL;
+        # the readiness-gate walk was the first run with a key present.)
         if kind == "anthropic":
-            from services.anthropic_client import AnthropicClient
-            models = AnthropicClient().list_models()
+            from services.anthropic_client import AnthropicClientWrapper as C
         elif kind == "openai":
-            from services.openai_client import OpenAIClient
-            models = OpenAIClient().list_models()
+            from services.openai_client import OpenAIClientWrapper as C
         elif kind == "gemini":
-            from services.gemini_client import GeminiClient
-            models = GeminiClient().list_models()
+            from services.gemini_client import GeminiClientWrapper as C
         elif kind == "deepseek":
-            from services.deepseek_client import DeepSeekClient
-            models = DeepSeekClient().list_models()
+            from services.deepseek_client import DeepSeekClientWrapper as C
         elif kind == "kimi":
-            from services.kimi_client import KimiClient
-            models = KimiClient().list_models()
+            from services.kimi_client import KimiClientWrapper as C
         elif kind == "qwen":
-            from services.qwen_client import QwenClient
-            models = QwenClient().list_models()
+            from services.qwen_client import QwenClientWrapper as C
         else:
             return False, "no probe"
+        models = C().list_models_live()
         return bool(models), f"{len(models)} model(s)"
     except Exception as exc:
         # The message can carry a provider's own echo of a request, so report

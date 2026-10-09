@@ -182,3 +182,22 @@ def test_the_unwired_providers_are_still_unwired():
         "providers/avatar is now imported by "
         f"{importers} — remove it from UNWIRED and add its keys to "
         ".env.example and scripts/check_keys.py")
+
+
+def test_the_key_checker_imports_classes_that_exist_and_probes_live():
+    """2026-10-09: the first run with a key in .env showed every keyed provider
+    as FAIL — the probe imported AnthropicClient, GeminiClient, … which do not
+    exist (the classes are *Wrapper). Import each name the checker uses, and
+    make sure the probe is the live call: list_models() falls back to
+    KNOWN_MODELS on any error, which would make a revoked key read OK."""
+    import importlib
+
+    checker = (ROOT / "scripts" / "check_keys.py").read_text(encoding="utf-8")
+    pairs = re.findall(r"from (services\.\w+) import (\w+)", checker)
+    assert pairs, "the checker imports no client at all"
+    for module, name in pairs:
+        assert hasattr(importlib.import_module(module), name), (
+            f"scripts/check_keys.py imports {name} from {module}, which has no such name")
+    assert "list_models_live()" in checker
+    assert re.search(r"C\(\)\.list_models\(\)", checker) is None, (
+        "the probe must not use list_models(), which hides a bad key behind KNOWN_MODELS")

@@ -218,6 +218,16 @@ def win(_window):
     _window.session_request_count = 0
     _window._pending_requests = {}
     _window._pending_by_agent = {}
+    # The caps too. Several tests below set session_budget_eur to 0.01, 1.0
+    # or 1000.0 on the shared window and nothing put it back; in file order
+    # those classes happen to run last, so it never showed. The first
+    # randomised run (pytest-randomly, seed 1, 2026-10-09) put a 0.01 cap
+    # ahead of TestAuthorizeRequest and every authorize_request() came back
+    # False. GodAI's own defaults (main.py) are 1.00 / 5.00.
+    _window.session_budget_eur = 1.0
+    _window.daily_budget_eur = 5.0
+    _window.audiobook_process = None
+    _window._audiobook_request_token = None
     return _window
 
 

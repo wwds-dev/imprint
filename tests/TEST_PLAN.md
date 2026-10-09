@@ -70,15 +70,15 @@ Measured on the checkout at `e23f3cd` (2026-10-09).
 | Measure | Value |
 |---|---|
 | Test files | 60 (`tests/test_*.py`) + `conftest.py` |
-| Test functions | 914 (`def test_`), 54 parametrized → ≈990 collected |
-| Suite wall time | ~90–100 s on the dev Mac (`TODO.md`, 2026-10-06) |
+| Collected | **1 377** (seed-1 randomised run, 2026-10-09 16:08: 1 370 passed, 5 failed, 2 skipped) |
+| Suite wall time | ~100 s in file order; **194 s** under `--randomly-seed=1` (2026-10-09) — the shuffle defeats module-scoped window reuse; budget in §6 raised to 240 s for randomised runs |
 | Files that build the whole window (`GodAI(`) | 24 of 60 |
 | Source modules under `services/ agents/ ui/ providers/ cloud/ vidforge/` | 150 |
 | Modules **no test file names** | 14 (see §5 and Appendix A) |
 | `main.py` | 5 464 lines, one class, 277 methods |
 | CI | none — the suite runs only when someone runs it |
 | Coverage measurement | none (`pytest-cov` not installed) |
-| Markers in use | `parametrize`, `skipif` (darwin-only ×2, vidforge deps ×1) |
+| Markers in use | `parametrize`, `skipif` (darwin-only ×2, vidforge deps ×1); `pytest-randomly` pinned in `requirements-dev.txt` since 2026-10-09 |
 
 ### What is already strong — keep it
 
@@ -348,7 +348,7 @@ a baseline.
 |---|---|---|
 | Cold start to `● Ready` (checkout) | ≤ 4 s | `--selftest` wall time + a window-built timer in T2 |
 | Cold start, frozen `.app` | ≤ 6 s | T5 |
-| Suite, bare `pytest -q` | ≤ 120 s | CI step timeout; investigate above 100 s |
+| Suite, bare `pytest -q` | ≤ 120 s (≤ 240 s randomised) | CI step timeout; investigate above 100 s in order |
 | Narrator chunking of a 1 MB EPUB | ≤ 5 s | T3, no network |
 | UI stays responsive during a long job | event loop never blocked > 250 ms | a watchdog `QTimer` in T2 jobs tests |
 | Memory after a 50-chunk mock narration | no growth > 50 MB run-to-run | `services/resource_monitor.py` readings in T3 |

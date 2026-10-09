@@ -47,7 +47,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # Qt otherwise writes a "Populating font family aliases took N ms" warning on
 # every run because the offscreen platform has no Sans Serif. Harmless, but it
 # buries real output.
-os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.fonts=false")
+# The second rule is for Qt Multimedia's FFmpeg backend, which prints
+# avformat's "Input #0, mp3, from '…/test.mp3'" dump whenever the player tests
+# open their real MP3 — noise that reads like a failure in a quiet run.
+# Added 2026-10-09 after the readiness-gate walk; confirm it silences the
+# banner on the next Mac run (TODO card), and drop it if it does not.
+os.environ.setdefault("QT_LOGGING_RULES",
+                      "qt.qpa.fonts=false;qt.multimedia.ffmpeg*=false")
 
 # ── Database isolation ────────────────────────────────────────────────────────
 # services.database resolves DB_PATH at call time, and several modules build

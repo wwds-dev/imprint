@@ -6,3 +6,4 @@
 
 pytest                 # the suite itself
 pytest-timeout         # see pytest.ini: a deadlocked Qt run must fail, not hang
+pytest-randomly        # randomised order: the only honest test for order-dependent hangs and leaks (TEST_PLAN T6)
