@@ -2882,8 +2882,8 @@ enforces both.
 | Variable | Provider | Where to get it |
 |----------|---------|-----------------|
 | `ANTHROPIC_API_KEY` | Anthropic (Claude) | console.anthropic.com → API Keys |
-| `OPENAI_API_KEY` | OpenAI — also the TTS backend Booth narrates with, so audiobooks need this one specifically | platform.openai.com → API Keys |
-| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Gemini, and Veo video | aistudio.google.com → Get API key |
+| `OPENAI_API_KEY` | OpenAI — also one of Booth's three narration routes (OpenAI TTS) | platform.openai.com → API Keys |
+| `GEMINI_API_KEY` or `GOOGLE_API_KEY` | Gemini, Veo video, and Booth's Gemini TTS narration route | aistudio.google.com → Get API key |
 | `DEEPSEEK_API_KEY` | DeepSeek | platform.deepseek.com → API Keys |
 | `KIMI_API_KEY` | Kimi (Moonshot) | platform.moonshot.ai → API Keys |
 | `DASHSCOPE_API_KEY` | Qwen chat, and Wan video | bailian.console.alibabacloud.com |
@@ -2897,11 +2897,19 @@ asynchronous `/api/v1` endpoint), `HIGGSFIELD_TEXT_VIDEO_ENDPOINT` and
 `HIGGSFIELD_BASE_URL`. The Higgsfield pair is also accepted as
 `HIGGSFIELD_API_KEY_ID` / `HIGGSFIELD_API_KEY_SECRET`.
 
-`ELEVENLABS_API_KEY` (elevenlabs.io → API Keys) is optional and used by one
-two things: the narration in Press's Shorts tab, and Booth's ElevenLabs
-narrator. Without it the Shorts tab falls back to a mock voice and the voice
-list reads "(ElevenLabs key not set)", and Booth's ElevenLabs narrator does not
-start.
+`ELEVENLABS_API_KEY` (elevenlabs.io → API Keys) is optional and used by two
+things: Booth's ElevenLabs narration route, and the paid voice in Press's Shorts
+tab. Without it Booth offers its other two routes, and Shorts keeps its free
+on-device voice; the voice list reads "(ElevenLabs key not set)". Any one of
+the three narration keys is enough for an audiobook — the route is chosen in
+Booth's Narrator menu.
+
+**Press publishing data.** `PUBLISHDRIVE_API_KEY` is optional and feeds Press's
+Overview and sales Q&A with PublishDrive sales and catalogue data; exports,
+approved versions, KDP CSV import and the Submission Ledger work without it.
+The client's endpoint has not yet been exercised against a live account
+(readiness audit 2026-10-09): the first **Refresh Data** is the test, and it
+is a metadata read that bills nothing.
 
 **Herald publishing.** Only needed to post from the Social workspace; drafting
 and scheduling need none of it. `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`,
@@ -2913,9 +2921,20 @@ key here: it needs a Google Cloud Desktop OAuth `client_secret*.json` in
 vidforge's secrets folder. The Accounts tab states what each connection grants
 before you set it up and names whatever is missing.
 
-To see what is actually working — set is not the same as accepted, since a typo,
-a revoked key and a key for the wrong account all look alike until a provider
-is asked:
+Two checks, in this order. First, what the machine has — the app leans on
+`ffmpeg`/`ffprobe` (Booth, Reel, Shorts), Calibre's `ebook-convert` (MOBI and
+AZW3 in Booth), macOS `say` (the free Shorts voice) and an Ollama daemon with
+an instruct model pulled (the free local route), and until 2026-10-09 nothing
+checked for any of them:
+
+```bash
+.venv/bin/python scripts/check_setup.py
+```
+
+Required items missing exit 1; optional ones say which feature degrades. Then,
+what is actually working with your keys — set is not the same as accepted,
+since a typo, a revoked key and a key for the wrong account all look alike
+until a provider is asked:
 
 ```bash
 .venv/bin/python scripts/check_keys.py

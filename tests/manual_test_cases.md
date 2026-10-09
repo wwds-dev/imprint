@@ -54,6 +54,17 @@ session — set a low daily cap in Settings first so a mistake is cheap.
       including Herald's publishing credentials. The app loads it at startup;
       with no keys, every cloud provider is simply unavailable and the `PAID`
       cases cannot run.
+- [ ] Confirm the machine has what the app leans on outside Python:
+
+      ```bash
+      .venv/bin/python scripts/check_setup.py
+      ```
+
+      `ffmpeg`/`ffprobe` are required (Booth, Reel and Shorts cannot render
+      without them); Calibre's `ebook-convert` (MOBI/AZW3), macOS `say` (the
+      free Shorts voice) and the Ollama daemon are optional, and the row says
+      which feature is missing without each. A required row marked `FAIL`
+      means you are about to hand-test a build that cannot pass.
 - [ ] Confirm what is actually working, not just what is set:
 
       ```bash
@@ -63,10 +74,14 @@ session — set a low daily cap in Settings first so a mistake is cheap.
       A typo, a revoked key and a key for the wrong account all look identical
       until a provider is asked. The check lists models (a metadata call that
       bills nothing) and prints no key or part of one. Two provider-specific
-      notes: **Booth narrates with OpenAI TTS**, so B3 needs
-      `OPENAI_API_KEY` and no other key substitutes; and Press's **Shorts**
-      narration needs `ELEVENLABS_API_KEY`, falling back to a mock voice
-      without it.
+      notes: **Booth narrates by one of three routes** — OpenAI TTS
+      (`OPENAI_API_KEY`), Gemini TTS (`GOOGLE_API_KEY`) or ElevenLabs
+      (`ELEVENLABS_API_KEY`), chosen in its Narrator menu — so B3 needs at
+      least one of them and tests the route you pick; and Press's **Shorts**
+      narrates with the free on-device voice unless ElevenLabs is chosen,
+      which needs `ELEVENLABS_API_KEY`. Since 2026-10-09 the on-device voice
+      fails loudly rather than rendering silence — a Short that finishes has
+      narration in it.
 - [ ] A disposable project name is free to use — these cases create
       `UAT 2026-10-05` and delete it at the end.
 - [ ] Settings → budgets: set a small daily cap you are willing to lose.

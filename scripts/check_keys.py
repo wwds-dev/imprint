@@ -50,6 +50,13 @@ PUBLISHERS: list[tuple[str, tuple[str, ...]]] = [
     ("Pinterest", ("PINTEREST_ACCESS_TOKEN",)),
 ]
 
+# Press reads sales and catalogue data from PublishDrive. Presence only: the
+# client's endpoint has not been exercised against a live account yet, so a
+# probe here would be guessing at the shape of its answer.
+DATA_SOURCES: list[tuple[str, tuple[str, ...]]] = [
+    ("PublishDrive", ("PUBLISHDRIVE_API_KEY",)),
+]
+
 
 def _probe(kind: str) -> tuple[bool, str]:
     """List models for one provider. Metadata only; never generates."""
@@ -122,11 +129,19 @@ def main() -> int:
             print(f"  {'FAIL':4} {label:12} incomplete — missing "
                   f"{', '.join(missing)}")
 
-    print("\nNotes: Booth narrates with OpenAI TTS, so audiobooks need\n"
-          "OPENAI_API_KEY specifically. ElevenLabs is used by one thing, the\n"
-          "narration in Press's Shorts tab, and falls back to a mock voice\n"
-          "without a key. YouTube uses no key here: it needs a Google Cloud\n"
-          "Desktop OAuth client_secret*.json in vidforge's secrets folder.")
+    print("\nPress publishing data (optional — exports and KDP import need none)")
+    for label, names in DATA_SOURCES:
+        present = [n for n in names if os.getenv(n)]
+        print(f"  {'set' if present else '—':4} {label:12} "
+              f"{'set, not probed (first Refresh Data is the test)' if present else 'not set'}")
+
+    print("\nNotes: Booth narrates by one of three routes, chosen in its Narrator\n"
+          "menu: OpenAI TTS (OPENAI_API_KEY), Gemini TTS (GOOGLE_API_KEY) or\n"
+          "ElevenLabs (ELEVENLABS_API_KEY) — any one of them is enough for an\n"
+          "audiobook. Press's Shorts tab narrates with the free on-device voice\n"
+          "unless ElevenLabs is chosen. YouTube uses no key here: it needs a\n"
+          "Google Cloud Desktop OAuth client_secret*.json in vidforge's secrets\n"
+          "folder. Tools (ffmpeg, Calibre, Ollama): scripts/check_setup.py.")
     return 0
 
 

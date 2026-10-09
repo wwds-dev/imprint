@@ -25,13 +25,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / ".env.example"
-# Every module that reads a credential, not just the chat clients: ElevenLabs
-# lives under providers/ and was missing from the template precisely because an
-# earlier version of this test looked only at services/*_client.py.
-CLIENTS = sorted(
-    [*(ROOT / "services").glob("*_client.py"),
-     *(ROOT / "providers").rglob("*.py")],
-    key=lambda path: path.name)
+CONFTEST = ROOT / "tests" / "conftest.py"
 
 # Names that carry a secret, as opposed to a host or endpoint override. A
 # missing endpoint override falls back to a working default; a missing secret
@@ -40,9 +34,34 @@ SECRET = re.compile(
     r"^[A-Z0-9_]*(API_KEY|KEY_ID|KEY_SECRET|ACCESS_TOKEN|PASSWORD"
     r"|CLIENT_ID|CLIENT_SECRET|TOKEN)$")
 
-# Modules that read no credential of their own.
-NO_CREDENTIAL = {"ollama_client.py", "mock.py", "base.py", "__init__.py",
-                 "registry.py"}
+
+def _env_names(path: Path) -> set[str]:
+    source = path.read_text(encoding="utf-8")
+    return set(re.findall(r"os\.(?:getenv|environ\.get)\(\s*[\"']([A-Z0-9_]+)[\"']",
+                          source))
+
+
+def _secret_names(path: Path) -> set[str]:
+    return {name for name in _env_names(path) if SECRET.match(name)}
+
+
+# Every module that reads a credential, wherever it lives. Each widening of
+# this scan was forced by a miss: ElevenLabs sat under providers/ when the test
+# looked only at services/*_client.py (2026-10-06), and PublishDrive's key was
+# read by agents/manuscript/ and main.py while the scan stopped at providers/
+# (found by the 2026-10-09 readiness audit — the key was in neither the
+# template, the key checker nor conftest's scrub list). So: every Python file
+# under the app's own packages plus main.py, filtered to the ones that read a
+# secret, so the parametrize ids name only the files that matter.
+_SCANNED = [
+    ROOT / "main.py",
+    *(ROOT / "services").rglob("*.py"),
+    *(ROOT / "providers").rglob("*.py"),
+    *(ROOT / "agents").rglob("*.py"),
+]
+CLIENTS = sorted(
+    (p for p in _SCANNED if "__pycache__" not in p.parts and _secret_names(p)),
+    key=lambda path: str(path.relative_to(ROOT)))
 
 # `providers/avatar/` reads HEYGEN_API_KEY and SYNTHESIA_API_KEY but nothing
 # outside that directory imports it — there is no avatar feature in the app, so
@@ -52,31 +71,44 @@ NO_CREDENTIAL = {"ollama_client.py", "mock.py", "base.py", "__init__.py",
 UNWIRED = {"heygen.py", "synthesia.py"}
 
 
-def _env_names(path: Path) -> set[str]:
-    source = path.read_text(encoding="utf-8")
-    return set(re.findall(r"os\.(?:getenv|environ\.get)\(\s*[\"']([A-Z0-9_]+)[\"']",
-                          source))
-
-
 def _declared() -> set[str]:
     text = TEMPLATE.read_text(encoding="utf-8")
     return set(re.findall(r"^([A-Z0-9_]+)=", text, re.M))
 
 
-@pytest.mark.parametrize("client", CLIENTS, ids=lambda p: p.name)
+# One credential under several names. The template names one per group; a
+# secret outside every group has to appear under its own name.
+ALIASES = (
+    frozenset({"GEMINI_API_KEY", "GOOGLE_API_KEY"}),
+    frozenset({"HF_API_KEY_ID", "HIGGSFIELD_API_KEY_ID"}),
+    frozenset({"HF_API_KEY_SECRET", "HIGGSFIELD_API_KEY_SECRET"}),
+)
+
+
+def _satisfied(secret: str, declared: set[str]) -> bool:
+    for group in ALIASES:
+        if secret in group:
+            return bool(group & declared)
+    return secret in declared
+
+
+@pytest.mark.parametrize("client", CLIENTS,
+                         ids=lambda p: str(p.relative_to(ROOT)))
 def test_every_provider_can_be_configured_from_the_template(client):
-    """At least one accepted name per client, not every alias."""
-    if client.name in NO_CREDENTIAL:
-        pytest.skip(f"{client.name} reads no credential")
+    """Every secret a module reads is in the template under one accepted name.
+
+    "Every", not "any": the earlier form passed a module as soon as one of its
+    secrets was declared, which is how `agents/manuscript/panel.py` — reading
+    both ELEVENLABS_API_KEY and PUBLISHDRIVE_API_KEY — passed with the second
+    one missing."""
     if client.name in UNWIRED:
         pytest.skip(f"{client.name} is not reachable from the app")
-    secrets = {name for name in _env_names(client) if SECRET.match(name)}
-    if not secrets:
-        pytest.skip(f"{client.name} reads no credential")
+    secrets = _secret_names(client)
     declared = _declared()
-    assert secrets & declared, (
-        f"{client.name} needs one of {sorted(secrets)} and .env.example "
-        "declares none of them, so nothing in the template configures it")
+    missing = sorted(s for s in secrets if not _satisfied(s, declared))
+    assert not missing, (
+        f"{client.relative_to(ROOT)} reads {missing} and .env.example declares "
+        "no accepted name for them, so nothing in the template configures it")
 
 
 def test_the_template_declares_no_value_for_any_secret():
@@ -106,14 +138,31 @@ def test_the_key_checker_names_every_provider_the_app_has():
     silently unconfigured."""
     checker = (ROOT / "scripts" / "check_keys.py").read_text(encoding="utf-8")
     for client in CLIENTS:
-        if client.name in NO_CREDENTIAL or client.name in UNWIRED:
+        if client.name in UNWIRED:
             continue
-        secrets = {n for n in _env_names(client) if SECRET.match(n)}
-        if not secrets:
-            continue
+        secrets = _secret_names(client)
         assert any(name in checker for name in secrets), (
             f"scripts/check_keys.py checks none of {sorted(secrets)}, so "
             f"{client.name} would read as configured when it is not")
+
+
+def test_conftest_scrubs_every_secret_the_app_reads():
+    """`tests/conftest.py` empties every credential before a test module can
+    import `main` and its `load_dotenv()`. A secret the app reads that is not
+    in that list is a secret a developer's `.env` can hand to the suite — the
+    exact hole the list exists to close. Read off the code, like the template
+    check, so adding a provider cannot leave the list behind."""
+    source = CONFTEST.read_text(encoding="utf-8")
+    match = re.search(r"_CREDENTIAL_ENV\s*=\s*\((.*?)\)\n", source, re.S)
+    assert match, "tests/conftest.py no longer defines _CREDENTIAL_ENV"
+    scrubbed = set(re.findall(r"[\"']([A-Z0-9_]+)[\"']", match.group(1)))
+    read = set()
+    for client in CLIENTS:
+        read |= _secret_names(client)
+    missing = sorted(read - scrubbed)
+    assert not missing, (
+        f"conftest._CREDENTIAL_ENV does not scrub {missing}; a developer .env "
+        "holding one of them would reach the test suite")
 
 
 def test_the_unwired_providers_are_still_unwired():

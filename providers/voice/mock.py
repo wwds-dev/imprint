@@ -6,12 +6,29 @@ from typing import Optional
 from .base import VoiceProvider, VoiceConfig
 
 
+class NoOnDeviceVoice(RuntimeError):
+    """The free on-device narrator could not produce speech.
+
+    Raised instead of writing anything, so a Short is never assembled over
+    silence and presented as finished. The message names what was missing
+    (the speech engine or ffmpeg) and, for ffmpeg, the tail of its stderr.
+    """
+
+
 class MockVoiceProvider(VoiceProvider):
     """
-    Local TTS using the OS speech engine (no API key needed).
-    macOS: uses `say` command → AIFF → MP3.
-    Linux: uses espeak if available, otherwise silent audio.
-    Falls back to a silent audio file if no TTS is available.
+    Local TTS using the OS speech engine (no API key needed). The panel calls
+    this the free on-device narrator (`providers.voice.registry.SYSTEM_SOURCE`).
+
+    macOS: `say` → AIFF → MP3 via ffmpeg.
+    Linux: `espeak` → WAV → MP3 via ffmpeg.
+
+    It never fabricates audio. Until 2026-10-09 every failure here — no `say`,
+    no `espeak`, an unsupported platform, a failed encode — fell back to a
+    silent MP3 of about the right length and returned it as a success, so a
+    Short rendered with no narration and no error (readiness audit, item 12).
+    Now every failure raises `NoOnDeviceVoice`; the Shorts worker routes that
+    to the panel's error path, which also releases any reservation.
     """
 
     @property
@@ -40,10 +57,13 @@ class MockVoiceProvider(VoiceProvider):
         system = platform.system()
         if system == "Darwin":
             return self._synthesize_macos(text, output_path, config)
-        elif system == "Linux":
+        if system == "Linux":
             return self._synthesize_linux(text, output_path)
-        else:
-            return self._silent_audio(text, output_path)
+        raise NoOnDeviceVoice(
+            f"No on-device speech engine is available on {system}; choose "
+            "another narrator.")
+
+    # ── engines ──────────────────────────────────────────────────────────────
 
     def _synthesize_macos(self, text: str, output_path: str, config: Optional[VoiceConfig]) -> str:
         voice = config.voice_id if config and config.voice_id != "default" else "Samantha"
@@ -54,16 +74,12 @@ class MockVoiceProvider(VoiceProvider):
             aiff_path += ".aiff"
 
         say_cmd = ["say", "-v", voice, "-r", str(rate), "-o", aiff_path, text]
-        r = subprocess.run(say_cmd, capture_output=True, text=True)
-        if r.returncode != 0:
-            return self._silent_audio(text, output_path)
-
-        # Convert AIFF → MP3
-        ffmpeg_cmd = ["ffmpeg", "-y", "-i", aiff_path, "-codec:a", "libmp3lame", "-qscale:a", "2", output_path]
-        subprocess.run(ffmpeg_cmd, capture_output=True)
-        if os.path.exists(aiff_path):
-            os.remove(aiff_path)
-
+        self._run_engine(say_cmd, "say", aiff_path)
+        try:
+            self._encode(aiff_path, output_path)
+        finally:
+            if os.path.exists(aiff_path):
+                os.remove(aiff_path)
         return output_path
 
     def _synthesize_linux(self, text: str, output_path: str) -> str:
@@ -71,24 +87,41 @@ class MockVoiceProvider(VoiceProvider):
         if not wav_path.endswith(".wav"):
             wav_path += ".wav"
 
-        r = subprocess.run(["espeak", "-w", wav_path, text], capture_output=True)
-        if r.returncode != 0:
-            return self._silent_audio(text, output_path)
-
-        subprocess.run(["ffmpeg", "-y", "-i", wav_path, output_path], capture_output=True)
-        if os.path.exists(wav_path):
-            os.remove(wav_path)
+        self._run_engine(["espeak", "-w", wav_path, text], "espeak", wav_path)
+        try:
+            self._encode(wav_path, output_path)
+        finally:
+            if os.path.exists(wav_path):
+                os.remove(wav_path)
         return output_path
 
-    def _silent_audio(self, text: str, output_path: str) -> str:
-        words = len(text.split())
-        duration = max(5, int(words / 130 * 60))
-        cmd = [
-            "ffmpeg", "-y",
-            "-f", "lavfi", "-i", f"anullsrc=r=44100:cl=stereo",
-            "-t", str(duration),
-            "-c:a", "libmp3lame", "-q:a", "9",
-            output_path,
-        ]
-        subprocess.run(cmd, capture_output=True)
-        return output_path
+    # ── failure is an exception, never a file ────────────────────────────────
+
+    @staticmethod
+    def _run_engine(cmd: list[str], engine: str, produced: str) -> None:
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise NoOnDeviceVoice(
+                f"The on-device narrator needs `{engine}`, which is not "
+                "installed; choose another narrator.") from None
+        if result.returncode != 0 or not os.path.exists(produced):
+            detail = (result.stderr or "").strip().splitlines()
+            reason = detail[-1][:200] if detail else f"exit {result.returncode}"
+            raise NoOnDeviceVoice(
+                f"`{engine}` produced no speech ({reason}); nothing was saved.")
+
+    @staticmethod
+    def _encode(source: str, output_path: str) -> None:
+        cmd = ["ffmpeg", "-y", "-i", source,
+               "-codec:a", "libmp3lame", "-qscale:a", "2", output_path]
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True)
+        except FileNotFoundError:
+            raise NoOnDeviceVoice(
+                "Encoding the narration needs ffmpeg, which is not installed "
+                "(scripts/check_setup.py lists what is missing).") from None
+        if result.returncode != 0 or not os.path.exists(output_path):
+            tail = (result.stderr or "").strip()[-300:]
+            raise NoOnDeviceVoice(
+                f"ffmpeg could not encode the narration; nothing was saved. {tail}")
