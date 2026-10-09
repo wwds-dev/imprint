@@ -97,3 +97,22 @@ def test_a_dated_rate_applies_from_its_date():
                                       "gemini-3.8-flash-tts", day)
     assert rate("2026-12-31") == 0.0137
     assert rate("2027-01-01") == 0.0272
+
+
+# ── Qwen endpoint honesty (readiness gate 2026-10-09) ────────────────────────
+
+def test_qwen_says_when_it_is_on_the_maintenance_mode_host(monkeypatch):
+    from services import qwen_client
+
+    monkeypatch.delenv("DASHSCOPE_BASE_URL", raising=False)
+    assert qwen_client.on_legacy_endpoint()
+    note = qwen_client.endpoint_note()
+    assert "maintenance mode" in note and "ap-southeast-1" in note
+
+    monkeypatch.setenv("DASHSCOPE_BASE_URL",
+                       "https://ws-abc123.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1")
+    assert not qwen_client.on_legacy_endpoint()
+    assert qwen_client.endpoint_note() == ""
+
+    monkeypatch.setenv("DASHSCOPE_BASE_URL", qwen_client.CHINA_BASE_URL)
+    assert not qwen_client.on_legacy_endpoint(), "the mainland host is not the legacy one"

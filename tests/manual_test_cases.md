@@ -146,10 +146,10 @@ by reading this output, not by using the app.
 
 | Workspace | Agents | Description should say |
 |---|---|---|
-| Author | Quill, Press | write a book, then prepare, publish and track it |
-| Audio + Music | Booth, Label | narrate books into audiobooks; develop and release music |
+| Author | Quill, Press | write a book, then prepare, export and track it |
+| Audio + Music | Booth, Label | narrate books into audiobooks; plan and prepare music releases |
 | Video + Ads | Reel | script, narrate and assemble long-form video and vertical ads |
-| Social | Herald | write, schedule and publish platform-native posts |
+| Social | Herald | write and schedule platform-native posts; publish where connected |
 | Web | Sitebuilder | build responsive pages in HTML, CSS and JavaScript |
 | Brand Design | Stamp | client-ready brand concepts, logos and delivery copy |
 | Brand Content | Muse | draft campaign content, calendar it, render promos |
@@ -680,6 +680,14 @@ Accounts tab → open the guide for Reddit.
 - [ ] No publisher claims to be ready without its credentials; an unconfigured
       one **names what is missing**
 - [ ] Credentials are never written to the database
+- [ ] The Accounts intro says plainly that the platform notes are unverified
+      guidance, and that the three posting platforms' terms are checked before
+      a publishing pass
+
+> **Before any `PAID` case that actually posts** (Reddit, YouTube, Pinterest):
+> read each platform's current API terms and rate rules once, and note the date
+> in `agents/social/TODO.md`. A wrong tone note costs a weak post; a wrong
+> terms assumption can cost the account.
 
 **Test D — the delivery ledger**  `FREE` (use an unconfigured platform)
 - [ ] A publish job is written **before** the network attempt

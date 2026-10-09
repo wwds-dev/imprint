@@ -2991,6 +2991,8 @@ class GodAI(QWidget):
         for provider, wrapper in key_classes.items():
             self.api_keys_status_card.set_status(
                 provider, self.safe_key_status(wrapper))
+        from services import qwen_client as _qwen
+        self.api_keys_status_card.set_note("Qwen", _qwen.endpoint_note())
         self.openai_key_label = self.api_keys_status_card.status_labels["openai"]
         self.deepseek_key_label = self.api_keys_status_card.status_labels["deepseek"]
         self.kimi_key_label = self.api_keys_status_card.status_labels["kimi"]

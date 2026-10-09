@@ -384,3 +384,27 @@ def test_youtube_refuses_to_upload_without_a_file():
     publisher = publishing.YouTubePublisher()
     with pytest.raises(publishing.PublishError, match="clip"):
         publisher.publish("description", media_path="", title="t")
+
+
+def test_herald_catalog_line_matches_what_actually_publishes():
+    """The one-line promise in agents/catalog.py names a platform count and the
+    publishers by name (readiness gate, 2026-10-09). Hold it to the code, so
+    wiring a fourth publisher or adding a platform cannot leave it stale —
+    the way "publish platform-native content" quietly overstated three of
+    eight for a month."""
+    from agents.catalog import AGENTS_BY_KEY, workspace_description
+    from agents.social.platforms import PLATFORMS
+    from agents.social.publishing import PUBLISHERS
+
+    line = AGENTS_BY_KEY["social"].description
+    words = {3: "three", 4: "four", 5: "five", 6: "six", 7: "seven",
+             8: "eight", 9: "nine", 10: "ten"}
+    assert words[len(PLATFORMS)] in line, (
+        f"the line says a count other than the {len(PLATFORMS)} platforms in platforms.py")
+    names = {p.key: p.name for p in PLATFORMS}
+    for key in PUBLISHERS:
+        assert names[key] in line, f"{names[key]} publishes but the line does not say so"
+    for key, name in names.items():
+        if key not in PUBLISHERS:
+            assert name not in line, f"{name} is drafting-only but the line names it"
+    assert "publish where connected" in workspace_description("Social")

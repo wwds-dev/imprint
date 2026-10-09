@@ -205,6 +205,14 @@ class ApiKeysStatusCard(RailCard):
             self.status_labels[provider.casefold()] = status
             self.dot_labels[provider.casefold()] = dot
 
+    def set_note(self, provider: str, note: str) -> None:
+        """A one-line caveat for a configured key, shown on hover over the row
+        (Qwen's maintenance-mode endpoint is the first). Empty clears it."""
+        for labels in (self.status_labels, self.dot_labels):
+            widget = labels.get(provider.casefold())
+            if widget is not None:
+                widget.setToolTip(note)
+
     def set_status(self, provider: str, status: str) -> None:
         label = self.status_labels.get(provider.casefold())
         if label is None:

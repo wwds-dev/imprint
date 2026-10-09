@@ -53,12 +53,12 @@ not block (10 in the root, ~12 across agents, mostly screenshot re-captures).
 | 2 | `agents/fiverr/TODO.md` ✅ done 2026-10-09 | User edits to Delivery / Gig text not saved to the order — autosave 800 ms after the last keystroke and before any reload/clear/close, 4 tests | code, P2 | Stamp |
 | 3 | `TODO.md` ✅ done 2026-10-09 | Glimmer download progress moves Booth's bar, not Chat's — now Chat's bar, determinate while pulling; 2 tests | code, P2 | Chat, Booth UAT |
 | 4 | `TODO.md` ✅ done 2026-10-09 | Settings Appearance copy says "two themes"; three ship — copy now derived from `theme.THEMES`; 1 test | copy, P2 | professional finish |
-| 5 | `TODO.md`, needs `@me`'s WorkspaceId | DashScope intl endpoint in maintenance mode; new features only on the regional URL | infra, P2 | Qwen routes (Chat text; Stamp and Reel scene images) |
-| 6 | `agents/social/TODO.md` | Platform posting notes unverified against live APIs | `@me` verify-or-descope, P2 | Herald |
-| 7 | `agents/creator/TODO.md` | Backstage handoff contract undefined | `@me` decide-or-park, P2 | Muse (documentation only) |
+| 5 | `TODO.md` → P3, honest note shipped 2026-10-09 | DashScope intl endpoint in maintenance mode; the tile, key check and template now say so; the WorkspaceId itself is `@me`'s | infra, P3 | Qwen routes (Chat text; Stamp and Reel scene images) |
+| 6 | `agents/social/TODO.md` ✅ split 2026-10-09 | Publishers' API terms → precondition of UAT B6's posting cases (P2 `@me`); drafting-only notes → P3, and the Accounts tab now says they are unverified guidance | decision, P2 | Herald |
+| 7 | `SUGGESTIONS.md` #65 ✅ parked 2026-10-09 | Backstage handoff contract — de-facto contract stated in one line; nothing promised depends on it | decision, P2 | Muse (documentation only) |
 | 8 | `TODO.md` §140 | Should `RunLogger` grow a `note` method | `@me` research, P2 | nothing — reclassify P3 |
 | 9 | `TODO.md` ✅ done 2026-10-09 | `PUBLISHDRIVE_API_KEY` absent from `.env.example`, `check_keys.py` **and** `conftest.py`'s scrub list; env-template test did not scan `agents/**` | code, **P1** | Press "measure" |
-| 10 | `TODO.md` card, `@me` | Catalog / workspace lines overstate: Press "distribute", Herald "publish", Label "develop songs" | wording, P2 | three agents |
+| 10 | `TODO.md` ✅ done 2026-10-09 | Six lines (three agent, three workspace) reworded; Herald's held to `PLATFORMS`/`PUBLISHERS` by a test | wording, P2 | three agents |
 | 11 | `TODO.md` ✅ done 2026-10-09 | No preflight for external binaries — now `scripts/check_setup.py`, called by the UAT preconditions before `check_keys.py` | code, P2 | Booth, Reel, Press Shorts |
 | 12 | `TODO.md` ✅ done 2026-10-09 | Verified: the UI wording ("free on-device voice") was fine, but `MockVoiceProvider` **rendered silence as success** when `say`/`espeak`/ffmpeg failed. Now raises; 12 tests, mutation-verified | code, P2 | Press |
 
@@ -69,12 +69,13 @@ Items 1–4, 9, 11 and 12 are closed cards; item 10 is an open `@me` card; item 
 ## 3. The gate — all of these, then the campaign starts
 
 **A. Promises are precise**
-- [ ] Catalog lines and workspace descriptions say what ships: Press
-      *"Prepare, export, record submissions and measure"*; Herald *"Draft and
-      schedule for eight platforms; publish to Reddit, YouTube and Pinterest"*;
-      Label *"Plan songs and albums … (audio generated in Suno, imported here)"*.
-      Exact wording is `@me`'s; the test is that a new user reading the line
-      is never surprised by a button that does not do the thing.
+- [x] Catalog lines and workspace descriptions say what ships (2026-10-09):
+      Press *"Prepare, export, log submissions and measure finished books"*;
+      Herald *"Draft and schedule posts for eight platforms; publish to Reddit,
+      YouTube and Pinterest"*; Label *"Plan songs and albums …; audio is made in
+      Suno"*; and the Author, Social and Audio + Music workspace lines likewise.
+      The rule is a comment above `WORKSPACE_DESCRIPTIONS`; Herald's line is
+      held to the code by a test.
 - [ ] Every agent sheet in `docs/agents/` has a **Deliberate limitations**
       section that matches the code (`overview.md` already promises this).
 - [ ] `manual_test_cases.md` A2's table, README §2 and `agents/catalog.py`
@@ -83,7 +84,7 @@ Items 1–4, 9, 11 and 12 are closed cards; item 10 is an open `@me` card; item 
 **B. No open P0–P2 functional card**
 - [x] Items 1–4 and 9 fixed, each with a failing-first test (full suite green on
       the Mac, 2026-10-09 12:01). Item 5 (DashScope) waits on the WorkspaceId.
-- [ ] Items 6–7 answered by `@me`: verified, or descoped in writing. Item 8
+- [x] Items 6–7 answered 2026-10-09 (Herald split; Muse parked). Item 8
       reclassified.
 - [x] A one-line **feature freeze** note at the top of `TODO.md` until the
       gate passes. The log shows a feature a day for two weeks (narration
@@ -98,9 +99,10 @@ Items 1–4, 9, 11 and 12 are closed cards; item 10 is an open `@me` card; item 
 - [x] Every fallback that substitutes a free output (Shorts voice; the
       free-local offer) labels the result — and a free route that cannot
       actually produce fails loudly instead of fabricating output (2026-10-09).
-- [ ] Dated retirements (Veo 3.1 → 2026-10-22; `gpt-4o-mini-tts` → 2027-01-06;
-      DashScope endpoint) each have a test that freezes the clock on both
-      sides of the date.
+- [ ] Dated retirements (Veo 3.1 → 2026-10-22; `gpt-4o-mini-tts` → 2027-01-06)
+      each have a test that freezes the clock on both sides of the date. The
+      DashScope endpoint now states its status (`endpoint_note`, tested) rather
+      than retiring — campaign-time item, not a gate item.
 - [ ] `providers/avatar/` stays unwired (pinned) and appears in no menu.
 
 **D. Setup is checkable, not assumed**

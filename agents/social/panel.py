@@ -1022,7 +1022,7 @@ class SocialPanel(QWidget):
         """What can post today, and what stands in the way of the rest."""
         from agents.social import publishing
 
-        from agents.social.platforms import PLATFORMS
+        from agents.social.platforms import NOTES_CAVEAT, PLATFORMS
         keys = {platform.name: platform.key for platform in PLATFORMS}
         rows = []
         for name, ready, note in publishing.status_lines():
@@ -1050,4 +1050,5 @@ class SocialPanel(QWidget):
             "below. Posting works for the ones marked ready — the rest need an "
             "app review, a business account or a paid tier that this app "
             "cannot obtain on your behalf.</p>"
+            f"<p style='margin:0 0 14px 0; color:{TEXT_MUTE}'>{NOTES_CAVEAT}</p>"
             + "".join(rows) + "</div>")

@@ -18,10 +18,21 @@ integration expecting it to work and discovers the gate afterwards.
 
 None of this is verified against the live APIs from here, and platform terms
 change often. Treat `posting_note` as a starting point for your own check, not
-as current fact.
+as current fact. `NOTES_CAVEAT` says the same thing in the Accounts tab, so the
+user reads it where the notes are, not only here.
 """
 
 from __future__ import annotations
+
+#: Shown above the platform notes in the Accounts tab. The three publishers'
+#: API terms are checked before the PAID publish pass (UAT B6); the drafting
+#: guidance for the rest is not — say so (readiness gate, 2026-10-09).
+NOTES_CAVEAT = (
+    "The notes below were written from general knowledge and are not checked "
+    "against each platform's current terms; treat them as a starting point, "
+    "not as fact. The terms of the three platforms that can post are verified "
+    "before a publishing test pass."
+)
 
 from dataclasses import dataclass
 

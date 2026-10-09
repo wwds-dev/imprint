@@ -33,7 +33,7 @@ AGENT_SPECS = (
     ),
     AgentSpec(
         "manuscript", "Press", "Author",
-        "Prepare, export, distribute and measure finished books.",
+        "Prepare, export, log submissions and measure finished books.",
         "agents.manuscript",
         recommendation_profile="agents.manuscript.recommendations",
     ),
@@ -45,7 +45,7 @@ AGENT_SPECS = (
     ),
     AgentSpec(
         "music", "Label", "Audio + Music",
-        "Develop songs and albums, artist identities, releases, promotion and income plans.",
+        "Plan songs and albums, artist identities, releases, promotion and income; audio is made in Suno.",
         "agents.music",
         recommendation_profile="agents.music.recommendations",
     ),
@@ -57,7 +57,7 @@ AGENT_SPECS = (
     ),
     AgentSpec(
         "social", "Herald", "Social",
-        "Draft, schedule and publish platform-native campaign content.",
+        "Draft and schedule posts for eight platforms; publish to Reddit, YouTube and Pinterest.",
         "agents.social",
         recommendation_profile="agents.social.recommendations",
     ),
@@ -98,11 +98,18 @@ AGENTS_BY_KEY = MappingProxyType({spec.key: spec for spec in AGENT_SPECS})
 # codenames now ("Quill", "Booth", "Muse"), so a workspace name alone no
 # longer tells a new user what lives inside it. Keyed by workspace name
 # because a workspace is a grouping, not an agent, and has no spec of its own.
+#
+# The rule for every line here and in AGENT_SPECS (readiness gate, 2026-10-09):
+# a new user who reads it is never surprised by a button that does not do the
+# thing. So Press "logs submissions" (the ledger is self-reported; nothing is
+# sent to a retailer), Herald "publishes where connected" (three of its eight
+# platforms), and Label says the audio is made in Suno. A deliberate limit
+# stated in the line is honest; a verb the code cannot back is not.
 WORKSPACE_DESCRIPTIONS = MappingProxyType({
-    "Author": "Write a book, then prepare, publish and track it.",
-    "Audio + Music": "Narrate books into audiobooks, and develop and release music.",
+    "Author": "Write a book, then prepare, export and track it.",
+    "Audio + Music": "Narrate books into audiobooks; plan and prepare music releases.",
     "Video + Ads": "Script, narrate and assemble long-form video and vertical ads.",
-    "Social": "Write, schedule and publish platform-native posts.",
+    "Social": "Write and schedule platform-native posts; publish where connected.",
     "Web": "Build responsive pages in HTML, CSS and JavaScript.",
     "Brand Design": "Create client-ready brand concepts, logos and delivery copy.",
     "Brand Content": "Draft campaign content, plan it on a calendar, and render promos.",

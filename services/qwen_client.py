@@ -26,6 +26,31 @@ def _base_url() -> str:
     return os.getenv("DASHSCOPE_BASE_URL", INTL_BASE_URL)
 
 
+# Alibaba put the international host into maintenance mode on 2026-09-30: it
+# keeps serving, but new models and features ship only on the workspace-scoped
+# regional host, https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com. There
+# is no public way to derive the workspace id, so the app cannot switch on its
+# own; it says so instead (readiness gate 2026-10-09, TODO P3).
+LEGACY_HOSTS = ("dashscope-intl.aliyuncs.com",)
+LEGACY_SINCE = "2026-09-30"
+
+
+def on_legacy_endpoint() -> bool:
+    """True while chat requests go to the maintenance-mode international host."""
+    return any(host in _base_url() for host in LEGACY_HOSTS)
+
+
+def endpoint_note() -> str:
+    """One honest line for the key tile and the key check, or "" when the
+    workspace host is configured."""
+    if not on_legacy_endpoint():
+        return ""
+    return (f"Legacy international endpoint (maintenance mode since {LEGACY_SINCE}) — "
+            "works, but Qwen models released after that date may be missing. Set "
+            "DASHSCOPE_BASE_URL to your workspace host "
+            "(https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1).")
+
+
 def _video_base_url() -> str:
     return os.getenv("DASHSCOPE_VIDEO_BASE_URL", INTL_VIDEO_BASE_URL).rstrip("/")
 

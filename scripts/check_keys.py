@@ -115,6 +115,11 @@ def main() -> int:
         print(f"  {'OK' if ok else 'FAIL':4} {label:12} "
               f"{'reachable' if ok else 'unreachable':18} ({note})")
         usable += bool(ok)
+        if probe == "qwen":
+            from services.qwen_client import endpoint_note
+            caveat = endpoint_note()
+            if caveat:
+                print(f"       {'':12} note: {caveat}")
 
     print(f"\n  {usable} provider(s) usable.")
 
