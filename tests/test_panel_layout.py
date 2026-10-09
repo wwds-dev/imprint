@@ -1083,7 +1083,13 @@ def test_the_full_text_shows_even_with_explanatory_tooltips_off(app, window):
     _settle(app, window, (1000, 600), "author")
     edit = window.author_panel.author_title_input
     edit.setToolTip("Explanation that the toggle hides")
-    edit.setText("A title far too long for the box it has been given to live in")
+    # Long enough to be cut off at ANY width the field can have inside a
+    # 1000 px window. One sentence was clipped only while the project bar
+    # was unfolded; under --randomly-seed=1 (2026-10-09) the preceding test
+    # left the bar folded, Title spanned a whole row, nothing was clipped and
+    # the hover rightly showed nothing. The fold itself is tested elsewhere;
+    # this test is about the hover with explanations off.
+    edit.setText("A title far too long for the box it has been given to live in — " * 8)
     window.tooltips_enabled = False
     try:
         app.sendEvent(edit, QHelpEvent(QEvent.Type.ToolTip, QPoint(4, 4),
