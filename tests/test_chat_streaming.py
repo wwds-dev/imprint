@@ -255,3 +255,54 @@ def test_model_pull_progress_carries_byte_counts_past_2_gb(app):
     worker.run()
     assert errors == []
     assert progress == [("pulling 71b5c9c9abbc", 9_150_000_000, 16_756_681_056)]
+
+
+def test_muse_pull_progress_drives_chats_bar_and_leaves_booths_alone(window, monkeypatch):
+    """TODO P2 (2026-10-08): the pull handlers looked up `tool_progress`, and
+    the only control by that name is Booth's Convert bar — so a Glimmer
+    download moved Booth's bar (overwriting a conversion's progress) while
+    Chat, where the download was started, showed nothing but the status line.
+
+    Chat's own bar is an indeterminate busy bar for chat requests; for the
+    pull it becomes a determinate 0–100 bar, shown while the download runs
+    and hidden when it ends either way."""
+    booth_bar = window._find_control("tool_progress")
+    booth_bar.setValue(37)
+    chat_bar = window.chat_progress
+    monkeypatch.setattr(window, "refresh_muse_button", lambda: None)
+    monkeypatch.setattr(window, "load_provider_models", lambda *a, **k: None)
+
+    window._on_muse_pull_progress("pulling 71b5c9c9abbc", 5_000_000_000, 10_000_000_000)
+    assert (chat_bar.minimum(), chat_bar.maximum()) == (0, 100)
+    assert chat_bar.value() == 50
+    assert not chat_bar.isHidden(), "the pull's progress must be visible where it was started"
+    assert booth_bar.value() == 37, "Booth's bar is not Chat's"
+
+    window._on_muse_pull_progress("verifying sha256 digest", 0, 0)
+    assert not chat_bar.isHidden()          # unknown total: still shown, value kept
+    assert booth_bar.value() == 37
+
+    window._on_muse_pull_finished("muse-glimmer:30b-q4_K_M")
+    assert chat_bar.isHidden()
+    assert booth_bar.value() == 37
+
+    window._on_muse_pull_progress("pulling again", 1, 4)
+    assert chat_bar.value() == 25 and not chat_bar.isHidden()
+    window._on_muse_pull_error("network dropped")
+    assert chat_bar.isHidden()
+    assert booth_bar.value() == 37
+
+
+def test_a_finished_pull_hands_the_bar_back_to_the_chat_timer(window, monkeypatch):
+    """After the pull, start_chat_timer must still get its indeterminate bar —
+    the pull may not leave the range at 0–100 behind."""
+    monkeypatch.setattr(window, "refresh_muse_button", lambda: None)
+    monkeypatch.setattr(window, "load_provider_models", lambda *a, **k: None)
+    window._on_muse_pull_progress("pulling", 3, 4)
+    window._on_muse_pull_finished("muse-glimmer:30b-q4_K_M")
+    window.start_chat_timer("ollama", "llama3.1:8b", "hi")
+    try:
+        assert window.chat_progress.maximum() == 0, "busy bar, not a stuck 75 %"
+        assert not window.chat_progress.isHidden()
+    finally:
+        window.stop_chat_timer()

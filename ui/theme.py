@@ -1,8 +1,8 @@
-"""Two palettes, one design system.
+"""Three palettes, one design system.
 
 ``ui/style.py`` is the design system: a colour is named once and every surface
 that uses it agrees. This module is the other half of that promise — the named
-colours are not fixed values but a *choice between two sets*, and the sheet is
+colours are not fixed values but a *choice between three sets*, and the sheet is
 built from whichever set is current.
 
 Sentinel solves the same problem by turning the hue of a sheet full of literal
@@ -22,7 +22,7 @@ channel values as the green set so the lightness never moves.
 
 Semantic colour does not change. ``DANGER`` stops work, ``WARNING`` flags an
 irreversible or paid step, ``INFO`` is neutral emphasis — those mean the same
-thing under both themes and are not in either palette below. Under the red
+thing under every theme and are in none of the palettes below. Under the red
 theme that puts the accent and ``DANGER`` in the same family, which is why the
 accent is rose and ``DANGER`` stays coral: different saturation, different
 lightness, and ``DANGER`` is never the colour of a focus ring.
@@ -52,7 +52,7 @@ LABELS: Final[dict[str, str]] = {
 SETTING_KEY: Final[str] = "ui_theme"
 
 # The tokens that belong to the theme. Everything else in ui/style.py — the
-# semantic colours, the radii, the chevron — is shared by both.
+# semantic colours, the radii, the chevron — is shared by all three.
 _GREEN: Final[dict[str, str]] = {
     "BG":            "#0d0f12",
     "SURFACE":       "#141820",
@@ -89,7 +89,7 @@ _RED: Final[dict[str, str]] = {
     "ACCENT_TEXT":   "#1a040b",
     "ACCENT_WASH":   "rgba(244, 63, 94, 0.12)",
     "ACCENT_LINE":   "rgba(244, 63, 94, 0.35)",
-    # The phosphor is its own colour in both themes, hotter and more saturated
+    # The phosphor is its own colour in every theme, hotter and more saturated
     # than the accent: the accent says "this is current", the phosphor says
     # "you wrote this".
     "PHOSPHOR":      "#ff0033",

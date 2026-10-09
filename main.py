@@ -889,22 +889,34 @@ class GodAI(QWidget):
         self.muse_pull_worker.error_signal.connect(self._on_muse_pull_error)
         self.muse_pull_worker.start()
 
+    # The pull is started from Chat, so its progress shows on Chat's bar. Until
+    # 2026-10-09 these handlers resolved "tool_progress", and the only control
+    # by that name is Booth's Convert bar: a download moved Booth's bar (over a
+    # running conversion's) while Chat showed only the status line. Chat's bar
+    # is otherwise an indeterminate busy bar (start_chat_timer); for the pull
+    # it is determinate 0–100, shown while the download runs, hidden after.
     def _on_muse_pull_progress(self, status: str, done: int, total: int) -> None:
+        bar = self.chat_progress
         if total > 0:
             pct = int(done / total * 100)
             self._set_chat_status(
                 f"Muse Glimmer: {status} — {done / 1e9:.1f} / {total / 1e9:.1f} GB ({pct}%)"
             )
-            bar = self._find_control("tool_progress")
-            if bar is not None:
-                bar.setValue(pct)
+            bar.setRange(0, 100)
+            bar.setValue(pct)
         else:
+            # Verifying / writing the manifest: no byte total. Keep whatever the
+            # bar shows rather than snapping to a busy bar and back.
             self._set_chat_status(f"Muse Glimmer: {status}")
+        bar.show()
+
+    def _end_muse_pull_progress(self) -> None:
+        """Hide Chat's bar and hand it back to the chat timer as a busy bar."""
+        self.chat_progress.hide()
+        self.chat_progress.setRange(0, 0)
 
     def _on_muse_pull_finished(self, model: str) -> None:
-        bar = self._find_control("tool_progress")
-        if bar is not None:
-            bar.setValue(100)
+        self._end_muse_pull_progress()
         self._set_chat_status(f"Muse Glimmer installed ({model}).")
         self.get_muse_btn.setEnabled(True)
         self.refresh_muse_button()
@@ -919,9 +931,7 @@ class GodAI(QWidget):
         )
 
     def _on_muse_pull_error(self, message: str) -> None:
-        bar = self._find_control("tool_progress")
-        if bar is not None:
-            bar.setValue(0)
+        self._end_muse_pull_progress()
         self._set_chat_status("Muse Glimmer download failed.")
         self.get_muse_btn.setEnabled(True)
         QMessageBox.warning(self, "Download Failed", message)

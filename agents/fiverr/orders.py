@@ -6,12 +6,21 @@ whichever tab still happened to hold them. One row per open order now
 carries all of it — the brief, the brand kit, every event (a revision is
 an event on the same order, not a new order), the generated image paths,
 the delivery text and the gig listing. Qt-free on purpose.
+
+An order ends with an outcome — delivered, accepted or cancelled — through
+`close_order()`, and only through it, so the history always says when and
+how. Until 2026-10-09 nothing ever left `open`, so `open_order()` folded a
+returning client's unrelated new job into their finished one as a
+"revision" (agents/fiverr/TODO.md). A closed order is never reused; a
+mistaken close is undone with `reopen_order()`.
 """
 
 import json
 from datetime import datetime
 
 from services.database import get_connection
+
+CLOSED_STATUSES = ("delivered", "accepted", "cancelled")
 
 
 def _now() -> str:
@@ -84,8 +93,12 @@ def record_event(order_id: int, kind: str, detail: str = "") -> None:
 
 
 def attach(order_id: int, **fields) -> None:
-    """Store a produced artifact on the order (images, delivery, gig)."""
-    allowed = {"image_paths_json", "delivery_text", "gig_text", "status"}
+    """Store a produced artifact on the order (images, delivery, gig).
+
+    `status` is deliberately not an artifact: it changes only through
+    `close_order()` / `reopen_order()`, which also write the event.
+    """
+    allowed = {"image_paths_json", "delivery_text", "gig_text"}
     sets, params = [], []
     for column, value in fields.items():
         if column not in allowed:
@@ -100,6 +113,34 @@ def attach(order_id: int, **fields) -> None:
         conn.execute(
             f"UPDATE fiverr_orders SET {', '.join(sets)} WHERE id = ?",
             params)
+
+
+def close_order(order_id: int, status: str, note: str = ""):
+    """End the order with an outcome. Returns the row, or None if no such order.
+
+    After this, `open_order()` for the same client starts a fresh record."""
+    if status not in CLOSED_STATUSES:
+        raise ValueError(
+            f"not an order outcome: {status!r} (one of {', '.join(CLOSED_STATUSES)})")
+    return _set_status(order_id, status, f"order {status}", note)
+
+
+def reopen_order(order_id: int):
+    """Undo a close. The order is reusable by its client again."""
+    return _set_status(order_id, "open", "order reopened")
+
+
+def _set_status(order_id: int, status: str, event: str, note: str = ""):
+    with get_connection() as conn:
+        row = conn.execute("SELECT id FROM fiverr_orders WHERE id = ?",
+                           (order_id,)).fetchone()
+        if row is None:
+            return None
+        conn.execute(
+            "UPDATE fiverr_orders SET status = ?, updated_at = ? WHERE id = ?",
+            (status, _now(), order_id))
+    record_event(order_id, event, note)
+    return get_order(order_id)
 
 
 def get_order(order_id: int):

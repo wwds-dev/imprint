@@ -49,11 +49,11 @@ not block (10 in the root, ~12 across agents, mostly screenshot re-captures).
 
 | # | Where | Card | Kind | Blocks |
 |---|---|---|---|---|
-| 1 | `agents/fiverr/TODO.md` | Orders can never be closed; returning client folded into an unrelated order | code, P2 | Stamp |
-| 2 | `agents/fiverr/TODO.md` | User edits to Delivery / Gig text not saved to the order | code, P2 | Stamp |
-| 3 | `TODO.md` §52 | Glimmer download progress moves Booth's bar, not Chat's | code, P2 | Chat, Booth UAT |
-| 4 | `TODO.md` §85 | Settings Appearance copy says "two themes"; three ship | copy, P2 | professional finish |
-| 5 | `TODO.md` §69 | DashScope intl endpoint in maintenance mode; new features only on the regional URL | infra, P2 | Qwen routes (Chat text; Stamp and Reel scene images) |
+| 1 | `agents/fiverr/TODO.md` ✅ done 2026-10-09 | Orders can never be closed; returning client folded into an unrelated order — `close_order`/`reopen_order`, Orders-tab controls, 8 tests | code, P2 | Stamp |
+| 2 | `agents/fiverr/TODO.md` ✅ done 2026-10-09 | User edits to Delivery / Gig text not saved to the order — autosave 800 ms after the last keystroke and before any reload/clear/close, 4 tests | code, P2 | Stamp |
+| 3 | `TODO.md` ✅ done 2026-10-09 | Glimmer download progress moves Booth's bar, not Chat's — now Chat's bar, determinate while pulling; 2 tests | code, P2 | Chat, Booth UAT |
+| 4 | `TODO.md` ✅ done 2026-10-09 | Settings Appearance copy says "two themes"; three ship — copy now derived from `theme.THEMES`; 1 test | copy, P2 | professional finish |
+| 5 | `TODO.md`, needs `@me`'s WorkspaceId | DashScope intl endpoint in maintenance mode; new features only on the regional URL | infra, P2 | Qwen routes (Chat text; Stamp and Reel scene images) |
 | 6 | `agents/social/TODO.md` | Platform posting notes unverified against live APIs | `@me` verify-or-descope, P2 | Herald |
 | 7 | `agents/creator/TODO.md` | Backstage handoff contract undefined | `@me` decide-or-park, P2 | Muse (documentation only) |
 | 8 | `TODO.md` §140 | Should `RunLogger` grow a `note` method | `@me` research, P2 | nothing — reclassify P3 |
@@ -62,7 +62,7 @@ not block (10 in the root, ~12 across agents, mostly screenshot re-captures).
 | 11 | `TODO.md` ✅ done 2026-10-09 | No preflight for external binaries — now `scripts/check_setup.py`, called by the UAT preconditions before `check_keys.py` | code, P2 | Booth, Reel, Press Shorts |
 | 12 | `TODO.md` ✅ done 2026-10-09 | Verified: the UI wording ("free on-device voice") was fine, but `MockVoiceProvider` **rendered silence as success** when `say`/`espeak`/ffmpeg failed. Now raises; 12 tests, mutation-verified | code, P2 | Press |
 
-Items 9, 11 and 12 are closed cards in `TODO.md`; item 10 is an open `@me` card. Also fixed on the way: four places still said Booth narrates only with OpenAI TTS (README §19, `.env.example`, `check_keys.py`, UAT preconditions).
+Items 1–4, 9, 11 and 12 are closed cards; item 10 is an open `@me` card; item 5 needs a value only `@me` has. Also fixed on the way: four places still said Booth narrates only with OpenAI TTS (README §19, `.env.example`, `check_keys.py`, UAT preconditions).
 
 ---
 
@@ -81,11 +81,11 @@ Items 9, 11 and 12 are closed cards in `TODO.md`; item 10 is an open `@me` card.
       agree (a T0 test in the plan pins it).
 
 **B. No open P0–P2 functional card**
-- [ ] Items 1–5 and 9 fixed, each with a failing-first test and the mutation
-      named in the card.
+- [x] Items 1–4 and 9 fixed, each with a failing-first test (full suite green on
+      the Mac, 2026-10-09 12:01). Item 5 (DashScope) waits on the WorkspaceId.
 - [ ] Items 6–7 answered by `@me`: verified, or descoped in writing. Item 8
       reclassified.
-- [ ] A one-line **feature freeze** note at the top of `TODO.md` until the
+- [x] A one-line **feature freeze** note at the top of `TODO.md` until the
       gate passes. The log shows a feature a day for two weeks (narration
       routes, image providers, BEST FIT rules); each one re-opens the surface
       the campaign is about to measure.

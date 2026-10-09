@@ -36,11 +36,22 @@ and `pytest tests/test_fiverr_orders.py`.
   order and logs the run; finished logos, the delivery message and the gig
   listing are attached to it as each finishes (`_attach_to_order()` re-derives
   the order whenever the brief's client no longer matches the cached one, so
-  one client's delivery never lands on another's record). Selecting a row
+  one client's delivery never lands on another's record, and — since
+  2026-10-09 — a *closed* order takes no new work either, so a draft written
+  after a close is the client's next job on a new record). Selecting a row
   reloads the brief, brand kit, delivery and gig text into the workspace;
   typing a known client's name (`editingFinished`) fills their stored
   industry/colours/brand kit into EMPTY fields only. **Clear log** clears the
   workspace and forgets the current order; the saved rows stay.
+  Two things added 2026-10-09 (the two P2 cards): the Orders tab's outcome
+  menu (Delivered / Accepted / Cancelled) with **Close order** and **Reopen**,
+  enabled according to the loaded order's status; and the Delivery / Gig
+  text boxes are *the record* — an edit is saved to the loaded order
+  `EDIT_SAVE_DELAY_MS` after the last keystroke and at once before the order
+  changes or the workspace clears, with one `delivery edited` / `gig listing
+  edited` event per changed field (`_flush_order_edits()`; loading an order's
+  own text is not an edit). Before that, only the streamed draft was ever
+  stored, so a reloaded order showed text the user had never sent.
   The workers themselves stay on the host so the umbrella's global Stop and
   shutdown sweeps keep seeing them. The old `setattr(host, name, ...)` alias
   loop that mirrored every `HOST_CONTROLS` widget onto the umbrella was
@@ -84,12 +95,15 @@ and `pytest tests/test_fiverr_orders.py`.
   brand-kit fields overwrite the stored ones and empty fields never erase
   them. `record_event(id, kind, detail)` appends to `history_json` (logos
   requested/delivered, run failed, delivery written, gig listing written);
-  `attach(id, ...)` stores `image_paths_json`, `delivery_text`, `gig_text` or
-  `status` and rejects any other column; `get_order()`, `list_orders(limit)`
-  (newest update first) and `latest_for_client()` (newest order, open or
-  not — the source of the brand-kit auto-fill) read them back. The panel
-  never changes `status` today, so every order stays `open`. Covered by
-  `tests/test_fiverr_orders.py`.
+  `attach(id, ...)` stores `image_paths_json`, `delivery_text` or `gig_text`
+  and rejects any other column — `status` included; `close_order(id,
+  outcome)` (one of `CLOSED_STATUSES`: delivered / accepted / cancelled) and
+  `reopen_order(id)` are the only way status changes, and each writes its
+  event (`order delivered`, `order reopened`, …), so the history always says
+  how an order ended. A closed order is never matched by `open_order()`.
+  `get_order()`, `list_orders(limit)` (newest update first) and
+  `latest_for_client()` (newest order, open or not — the source of the
+  brand-kit auto-fill) read them back. Covered by `tests/test_fiverr_orders.py`.
 
 - **`recommendations.py`** — registers Stamp's `RECOMMENDATION_PROFILE`
   (an `AgentProfile` from `services.recommendations.models`) with the shared

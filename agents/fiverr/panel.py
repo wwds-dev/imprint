@@ -12,7 +12,7 @@ so nothing here resolves a request by agent name.
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QFileDialog, QGridLayout, QHBoxLayout, QHeaderView, QLabel, QMessageBox,
@@ -43,8 +43,14 @@ class FiverrPanel(QWidget):
         "fiverr_delivery_box", "fiverr_gig_box", "fiverr_order_table",
         "fiverr_brand_fonts_input", "fiverr_brand_voice_input",
         "fiverr_brand_rules_input",
-        "fiverr_clear_btn",
+        "fiverr_clear_btn", "fiverr_outcome_box", "fiverr_close_btn",
+        "fiverr_reopen_btn",
     )
+
+    # Edits to the Delivery / Gig text are saved to the loaded order this long
+    # after the last keystroke, and at once when the order changes or the
+    # workspace is cleared. Short enough that a close or a quit rarely races it.
+    EDIT_SAVE_DELAY_MS = 800
 
     def __init__(self, host):
         super().__init__()
@@ -55,6 +61,12 @@ class FiverrPanel(QWidget):
         self._pending_brief: dict = {}
         self._image_paths: list = []
         self._order_id: int | None = None
+        # True while an order's stored text is being written into the boxes,
+        # so the resulting textChanged is not mistaken for a user edit.
+        self._loading_order = False
+        self._edit_save_timer = QTimer(self)
+        self._edit_save_timer.setSingleShot(True)
+        self._edit_save_timer.timeout.connect(self._flush_order_edits)
         self.setObjectName("FiverrPanel")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -249,7 +261,23 @@ class FiverrPanel(QWidget):
         self.fiverr_order_table.verticalHeader().setVisible(False)
         orders_layout.addWidget(self.fiverr_order_table)
 
+        # Closing an order is the only way a client's next job becomes a new
+        # record instead of a "revision" of the finished one (orders.py).
         clear_row = QHBoxLayout()
+        self.fiverr_outcome_box = combo(["Delivered", "Accepted", "Cancelled"])
+        self.fiverr_outcome_box.setToolTip(
+            "How the loaded order ended. Closing it keeps the record and "
+            "starts the client's next job on a new order.")
+        self.fiverr_close_btn = quiet("Close order")
+        self.fiverr_close_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.fiverr_close_btn.clicked.connect(self.close_order)
+        self.fiverr_reopen_btn = quiet("Reopen")
+        self.fiverr_reopen_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.fiverr_reopen_btn.setToolTip("Undo a close; the client reuses this order again.")
+        self.fiverr_reopen_btn.clicked.connect(self.reopen_order)
+        clear_row.addWidget(self.fiverr_outcome_box)
+        clear_row.addWidget(self.fiverr_close_btn)
+        clear_row.addWidget(self.fiverr_reopen_btn)
         clear_row.addStretch()
         self.fiverr_clear_btn = quiet("Clear log")
         self.fiverr_clear_btn.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
@@ -257,6 +285,11 @@ class FiverrPanel(QWidget):
         clear_row.addWidget(self.fiverr_clear_btn)
         orders_layout.addLayout(clear_row)
         self.fiverr_tabs.addTab(orders_widget, "Orders")
+        self._update_order_buttons()
+
+        # What the user corrects in these two boxes is what the order holds.
+        self.fiverr_delivery_box.textChanged.connect(self._schedule_order_edit_save)
+        self.fiverr_gig_box.textChanged.connect(self._schedule_order_edit_save)
 
         layout.addWidget(self.fiverr_tabs, 1)
 
@@ -636,7 +669,10 @@ class FiverrPanel(QWidget):
             if self._order_id is not None:
                 held = orders.get_order(self._order_id)
                 held_client = (held or {}).get("client", "")
-                if (held is None or held_client.strip().lower()
+                # A finished order takes no new work either: a draft written
+                # after a close is the client's next job, on a new record.
+                if (held is None or held.get("status") != "open"
+                        or held_client.strip().lower()
                         != brief.get("business_name", "").strip().lower()):
                     self._order_id = None
             if self._order_id is None:
@@ -646,6 +682,94 @@ class FiverrPanel(QWidget):
         except Exception as exc:
             self.host._note_failure("fiverr: update order", exc)
         self.refresh_orders()
+
+    # ── edits are the record ────────────────────────────────────────────
+    def _schedule_order_edit_save(self) -> None:
+        """A keystroke in Delivery / Gig restarts the save timer — unless the
+        text is being loaded from the order, or no order is loaded."""
+        if self._loading_order or self._order_id is None:
+            return
+        self._edit_save_timer.start(self.EDIT_SAVE_DELAY_MS)
+
+    def _flush_order_edits(self) -> None:
+        """Write the two text boxes to the loaded order where they differ from
+        what it holds, with one history event per changed field. Called by
+        the timer, and directly before the loaded order changes."""
+        from agents.fiverr import orders
+
+        self._edit_save_timer.stop()
+        if self._order_id is None:
+            return
+        try:
+            held = orders.get_order(self._order_id)
+            if held is None:
+                return
+            changes = {}
+            for column, box, event in (
+                    ("delivery_text", self.fiverr_delivery_box, "delivery edited"),
+                    ("gig_text", self.fiverr_gig_box, "gig listing edited")):
+                text = box.toPlainText()
+                if text != (held.get(column) or ""):
+                    changes[column] = (text, event)
+            if not changes:
+                return
+            orders.attach(self._order_id,
+                          **{column: text for column, (text, _) in changes.items()})
+            for _column, (_text, event) in changes.items():
+                orders.record_event(self._order_id, event)
+        except Exception as exc:
+            self.host._note_failure("fiverr: save edits", exc)
+
+    # ── closing ─────────────────────────────────────────────────────────
+    def close_order(self) -> None:
+        from agents.fiverr import orders
+
+        if self._order_id is None:
+            return
+        self._flush_order_edits()
+        outcome = self.fiverr_outcome_box.currentText().strip().lower()
+        try:
+            closed = orders.close_order(self._order_id, outcome)
+        except Exception as exc:
+            self.host._note_failure("fiverr: close order", exc)
+            return
+        if closed is None:
+            self._order_id = None
+        else:
+            self.fiverr_status_label.setText(
+                f"Order closed — {closed['status']}. {closed['client'] or 'This client'}'s "
+                "next job starts a new order.")
+        self.refresh_orders()
+
+    def reopen_order(self) -> None:
+        from agents.fiverr import orders
+
+        if self._order_id is None:
+            return
+        try:
+            reopened = orders.reopen_order(self._order_id)
+        except Exception as exc:
+            self.host._note_failure("fiverr: reopen order", exc)
+            return
+        if reopened is not None:
+            self.fiverr_status_label.setText("Order reopened.")
+        self.refresh_orders()
+
+    def _update_order_buttons(self) -> None:
+        """Close is for an open loaded order; Reopen for a closed one."""
+        from agents.fiverr import orders
+
+        status = None
+        if self._order_id is not None:
+            try:
+                held = orders.get_order(self._order_id)
+            except Exception as exc:
+                self.host._note_failure("fiverr: read order", exc)
+                held = None
+            status = (held or {}).get("status")
+        self.fiverr_outcome_box.setEnabled(status == "open")
+        self.fiverr_close_btn.setEnabled(status == "open")
+        self.fiverr_reopen_btn.setEnabled(status is not None and status != "open")
 
     def refresh_orders(self) -> None:
         """The order log reads the durable rows — it survives restarts."""
@@ -674,6 +798,7 @@ class FiverrPanel(QWidget):
                 # user's edits.
                 table.selectRow(row)
         table.blockSignals(False)
+        self._update_order_buttons()
 
     def _order_selected(self) -> None:
         """Selecting an order reloads its whole record into the workspace."""
@@ -692,7 +817,12 @@ class FiverrPanel(QWidget):
             return
         if order is None:
             return
+        # Pending edits belong to the order they were typed into — flush
+        # before anything is reloaded over them, whether or not the order
+        # changes. A no-op when nothing differs.
+        self._flush_order_edits()
         self._order_id = order["id"]
+        self._loading_order = True
         self.fiverr_name_input.setText(order["client"])
         self.fiverr_industry_input.setText(order["industry"])
         self.fiverr_colors_input.setText(order["colors"])
@@ -707,13 +837,15 @@ class FiverrPanel(QWidget):
         # previous order's.
         self.fiverr_delivery_box.setPlainText(order["delivery_text"] or "")
         self.fiverr_gig_box.setPlainText(order["gig_text"] or "")
+        self._loading_order = False
+        self._update_order_buttons()
         try:
             history = _json.loads(order["history_json"] or "[]")
         except Exception:
             history = []
         last = history[-1] if history else None
         self.fiverr_status_label.setText(
-            f"Order loaded — {len(history)} event(s)"
+            f"Order loaded ({order['status']}) — {len(history)} event(s)"
             + (f", last: {last['kind']}" if last else "") + ".")
 
     def _autofill_client_preferences(self) -> None:
@@ -776,10 +908,14 @@ class FiverrPanel(QWidget):
             f"Saved {len(self._image_paths)} image(s).")
 
     def clear(self) -> None:
+        self._flush_order_edits()   # pending edits belong to the order being left
         self._order_id = None   # a cleared workspace holds no order
         self._clear_logo_grid()
+        self._loading_order = True   # clearing the boxes is not an edit
         self.fiverr_delivery_box.clear()
         self.fiverr_gig_box.clear()
+        self._loading_order = False
+        self._update_order_buttons()
         self.fiverr_status_label.setText("Idle")
         self.update_estimate()
         self.fiverr_preview_status.setText("No logos generated yet.")

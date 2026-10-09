@@ -1,4 +1,4 @@
-"""The two themes, and the line between theme colour and semantic colour.
+"""The themes, and the line between theme colour and semantic colour.
 
 Imprint's sheet was already written against tokens, so a theme is a swap of
 token values rather than a second sheet. The things worth guarding are that
@@ -318,3 +318,19 @@ def test_arrow_keys_step_through_the_themes(window):
     finally:
         theme.set_current(theme.GREEN)
         window.apply_global_style()
+
+
+# ── The copy ──────────────────────────────────────────────────────────
+
+def test_appearance_copy_counts_the_themes_that_ship():
+    """It said "two themes … in both" for a week after Blue shipped. The
+    sentence now counts THEMES and names each label, so adding a theme cannot
+    leave it stale again."""
+    from ui import dialogs
+
+    text = dialogs.appearance_intro()
+    assert "two themes" not in text and "in both" not in text
+    assert f"{len(theme.THEMES)}" in text or "three" in text
+    for key in theme.THEMES:
+        assert theme.LABELS[key] in text
+    assert "every theme" in text

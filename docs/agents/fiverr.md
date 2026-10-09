@@ -30,6 +30,8 @@ Every logo request is **assessed before approval** across the image models that 
 ## Outputs
 Tabs: **Logo Preview** (generated images, 280×280 thumbnails), **Delivery Message** (streamed), **Gig Description** (streamed), and **Orders**. The cost shown is a conservative per-image budget reserve. Images save to `data/fiverr_output/<timestamp>/logo_N.png`.
 
+The Delivery Message and Gig Description you see are what the order holds: an edit is saved to the loaded order shortly after you stop typing, and at once when you switch orders or clear. In **Orders**, pick how an order ended — Delivered, Accepted or Cancelled — and **Close order**; the record stays, and the client's next job starts a new order instead of being added to the finished one as a revision. **Reopen** undoes a close.
+
 ## How it works
 Two-step logo flow: a `ChatWorker` runs `FiverrAgent.build_image_prompt_request()` to craft a clean image prompt, then `FiverrImageWorker` calls `services/image_generation.generate_image()` with the selected model and displays the returned image. Stamp authorizes the image model's own provider, and checks that provider's key before the paid prompt step, so a missing key costs nothing (it used to demand `OPENAI_API_KEY` whatever the model). Each image request is sent exactly once: a paid image is never retried automatically. Delivery/gig use `FiverrAgent.build_messages(task, brief)`.
 

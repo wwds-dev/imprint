@@ -37,6 +37,26 @@ from ui.forms import SM, field
 from ui.project_manager import ProjectManagerDialog
 
 
+_COUNT_WORDS = {2: "two", 3: "three", 4: "four", 5: "five"}
+
+
+def appearance_intro() -> str:
+    """The sentence under Settings → General → Appearance.
+
+    Counts `theme.THEMES` rather than naming a number: this copy said "two
+    themes … in both" for a week after Blue shipped (TODO, 2026-10-08), in the
+    one place a user goes to read what the choice means."""
+    count = len(theme.THEMES)
+    word = _COUNT_WORDS.get(count, str(count))
+    names = ", ".join(theme.LABELS[key] for key in theme.THEMES)
+    return (
+        f"Imprint comes in {word} themes — {names}. Only the accent, the "
+        "phosphor you type in and the tint of the greys change; status colour "
+        "means the same thing in every theme, so a destructive action stays "
+        "red, a paid step stays amber, and an informational note stays blue."
+    )
+
+
 def show_cost_history(app):
     entries = app.usage_tracker.load_log()
 
@@ -381,10 +401,7 @@ def show_settings(app):
     page_intro(
         general_page,
         "Appearance",
-        "Imprint comes in two themes. Only the accent, the phosphor you type in "
-        "and the tint of the greys change — status colour means the same thing "
-        "in both, so a destructive action stays red, a paid step stays amber, "
-        "and an informational note stays blue.",
+        appearance_intro(),
     )
     appearance_card = QFrame()
     appearance_card.setObjectName("SettingsCard")
