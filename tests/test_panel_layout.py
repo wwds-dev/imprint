@@ -1050,24 +1050,39 @@ def test_quill_project_bar_columns_are_equal_and_never_squeezed(app, window, siz
             f"{edit.placeholderText()!r} cut off at {edit.width()}px")
 
 
-def test_a_clipped_field_shows_its_full_text_on_hover(app, window):
+def _record_tips(monkeypatch):
+    """Capture what text_fit asks QToolTip to show, instead of reading the
+    global tip back. QToolTip.hideText() is a 300 ms fade, so the previous
+    test's tip is still "visible" when the next one asserts — which is how
+    the Tooltips-Off test below passed in file order for a week while the
+    value was in fact being swallowed (readiness gate, 2026-10-09)."""
+    from PySide6.QtWidgets import QToolTip
+    shown: list[str] = []
+    monkeypatch.setattr(QToolTip, "showText",
+                        staticmethod(lambda pos, text, *a, **k: shown.append(text)))
+    return shown
+
+
+def _hover(app, edit):
     from PySide6.QtCore import QEvent, QPoint
     from PySide6.QtGui import QHelpEvent
-    from PySide6.QtWidgets import QLineEdit, QToolTip
+    app.sendEvent(edit, QHelpEvent(QEvent.Type.ToolTip, QPoint(4, 4),
+                                   edit.mapToGlobal(QPoint(4, 4))))
+
+
+def test_a_clipped_field_shows_its_full_text_on_hover(app, window, monkeypatch):
+    from PySide6.QtWidgets import QLineEdit
     from ui.text_fit import clipped_text
     _settle(app, window, (1000, 600), "author")
     edit = window.author_panel.author_title_input
-    long_title = "The Unbearable Persistence of Very Long Working Titles"
+    long_title = "The Unbearable Persistence of Very Long Working Titles — " * 8
     edit.setText(long_title)
+    shown = _record_tips(monkeypatch)
     try:
         assert clipped_text(edit) == long_title
-        event = QHelpEvent(QEvent.Type.ToolTip, QPoint(4, 4),
-                           edit.mapToGlobal(QPoint(4, 4)))
-        app.sendEvent(edit, event)
-        assert QToolTip.isVisible()
-        assert QToolTip.text().startswith(long_title)
+        _hover(app, edit)
+        assert shown and shown[0].startswith(long_title)
     finally:
-        QToolTip.hideText()
         edit.clear()
     password = QLineEdit()
     password.setEchoMode(QLineEdit.EchoMode.Password)
@@ -1076,31 +1091,69 @@ def test_a_clipped_field_shows_its_full_text_on_hover(app, window):
     assert clipped_text(password) == ""
 
 
-def test_the_full_text_shows_even_with_explanatory_tooltips_off(app, window):
-    from PySide6.QtCore import QEvent, QPoint
-    from PySide6.QtGui import QHelpEvent
-    from PySide6.QtWidgets import QToolTip
+def test_the_full_text_shows_even_with_explanatory_tooltips_off(app, window, monkeypatch):
+    """The value is content, not help: it shows with the toggle off, and the
+    explanatory tooltip does not. This window's own filter swallows ToolTip
+    events when the toggle is off, so this also pins that text_fit's filter
+    runs first — for THIS window, not only the first one built in the process
+    (see install_text_fit)."""
     _settle(app, window, (1000, 600), "author")
     edit = window.author_panel.author_title_input
     edit.setToolTip("Explanation that the toggle hides")
-    # Long enough to be cut off at ANY width the field can have inside a
-    # 1000 px window. One sentence was clipped only while the project bar
-    # was unfolded; under --randomly-seed=1 (2026-10-09) the preceding test
-    # left the bar folded, Title spanned a whole row, nothing was clipped and
-    # the hover rightly showed nothing. The fold itself is tested elsewhere;
-    # this test is about the hover with explanations off.
-    edit.setText("A title far too long for the box it has been given to live in — " * 8)
+    # Long enough to be cut off at any width the field can have in a 1000 px
+    # window, folded project bar or not.
+    full = "A title far too long for the box it has been given to live in — " * 8
+    edit.setText(full)
+    shown = _record_tips(monkeypatch)
     window.tooltips_enabled = False
     try:
-        app.sendEvent(edit, QHelpEvent(QEvent.Type.ToolTip, QPoint(4, 4),
-                                       edit.mapToGlobal(QPoint(4, 4))))
-        assert QToolTip.isVisible()
-        assert "Explanation" not in QToolTip.text()
+        _hover(app, edit)
+        assert shown, "the full value must show with Tooltips: Off"
+        assert shown[0] == full
+        assert "Explanation" not in shown[0]
+        shown.clear()
+        window.tooltips_enabled = True
+        _hover(app, edit)
+        assert shown and shown[0].startswith(full) and "Explanation" in shown[0]
     finally:
         window.tooltips_enabled = True
-        QToolTip.hideText()
         edit.clear()
         edit.setToolTip("")
+
+
+def test_text_fit_runs_before_a_filter_installed_after_it(app, monkeypatch):
+    """A second GodAI in the same process installs another tooltip-swallowing
+    filter after text_fit's; install_text_fit must move itself back to the
+    front each time it is called, or Tooltips: Off hides the value for every
+    window but the first."""
+    from PySide6.QtCore import QEvent, QObject
+    from PySide6.QtWidgets import QLineEdit
+    from ui import text_fit
+    from ui.text_fit import install_text_fit
+
+    # Whatever callable the live window gave the filter must be put back, or
+    # this test's `lambda: False` would hide explanations for the tests after it.
+    saved = text_fit._FILTER.explanations_enabled if text_fit._FILTER else None
+
+    class Swallow(QObject):
+        def eventFilter(self, obj, event):  # noqa: N802 - Qt API
+            return event.type() == QEvent.Type.ToolTip
+
+    swallow = Swallow(app)
+    edit = QLineEdit()
+    edit.setText("x" * 400)
+    edit.resize(80, 30)
+    shown = _record_tips(monkeypatch)
+    app.installEventFilter(swallow)            # now first in the chain
+    try:
+        _hover(app, edit)
+        assert shown == [], "precondition: the newer filter does swallow the hover"
+        install_text_fit(app, lambda: False)   # must move text_fit back to the front
+        _hover(app, edit)
+        assert shown and shown[0] == "x" * 400
+    finally:
+        app.removeEventFilter(swallow)
+        install_text_fit(app, saved)           # front of the chain, original callable
 
 
 def test_form_grid_folds_into_balanced_rows():

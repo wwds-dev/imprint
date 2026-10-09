@@ -151,9 +151,19 @@ def install_text_fit(app: QApplication | None,
     global _FILTER
     if _FILTER is None:
         _FILTER = _TextFitFilter(app, explanations_enabled)
-        app.installEventFilter(_FILTER)
     elif explanations_enabled is not None:
         _FILTER.explanations_enabled = explanations_enabled
+    # Re-install on every call, not only the first. Qt runs the filter that
+    # was installed last first, and GodAI installs its own tooltip-swallowing
+    # filter on the app just before calling this; a filter installed once per
+    # process therefore ran first only for the first window ever built. In the
+    # app that is the only window. In the test process it is not — every test
+    # module builds its own GodAI — and for every window but the first,
+    # Tooltips: Off hid the full value too (found by the first randomised
+    # suite run, 2026-10-09). Removing and re-adding moves this filter back to
+    # the front, which is the contract the docstring states.
+    app.removeEventFilter(_FILTER)
+    app.installEventFilter(_FILTER)
     for widget in app.allWidgets():
         if isinstance(widget, QLineEdit):
             apply_floor(widget)
