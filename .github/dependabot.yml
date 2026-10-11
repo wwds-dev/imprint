@@ -1,0 +1,23 @@
+# Ecosystems in use: one block per ecosystem in use, each exactly:
+#   - package-ecosystem: pip        # or npm
+#     directory: "/"
+#     schedule:
+#       interval: weekly
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: "/vidforge"
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: "/cloud"
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
