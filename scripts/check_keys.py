@@ -59,39 +59,16 @@ DATA_SOURCES: list[tuple[str, tuple[str, ...]]] = [
 
 
 def _probe(kind: str) -> tuple[bool, str]:
-    """List models for one provider. Metadata only; never generates."""
-    try:
-        if kind == "ollama":
-            from services.ollama_client import OllamaClient
-            models = OllamaClient().list_models()
-            return bool(models), (f"{len(models)} model(s) pulled"
-                                  if models else "daemon up but nothing pulled")
-        # list_models_live(), not list_models(): the latter swallows every
-        # error and returns KNOWN_MODELS, so a revoked key would read "OK".
-        # (Until 2026-10-09 this imported class names that did not exist —
-        # AnthropicClient and friends — so every keyed provider read FAIL;
-        # the readiness-gate walk was the first run with a key present.)
-        if kind == "anthropic":
-            from services.anthropic_client import AnthropicClientWrapper as C
-        elif kind == "openai":
-            from services.openai_client import OpenAIClientWrapper as C
-        elif kind == "gemini":
-            from services.gemini_client import GeminiClientWrapper as C
-        elif kind == "deepseek":
-            from services.deepseek_client import DeepSeekClientWrapper as C
-        elif kind == "kimi":
-            from services.kimi_client import KimiClientWrapper as C
-        elif kind == "qwen":
-            from services.qwen_client import QwenClientWrapper as C
-        else:
-            return False, "no probe"
-        models = C().list_models_live()
-        return bool(models), f"{len(models)} model(s)"
-    except Exception as exc:
-        # The message can carry a provider's own echo of a request, so report
-        # the type and a short reason rather than the whole thing.
-        reason = str(exc).splitlines()[0][:70] if str(exc) else ""
-        return False, f"{type(exc).__name__}: {reason}" if reason else type(exc).__name__
+    """List models for one provider. Metadata only; never generates.
+
+    The same probe Settings → API keys uses for its Test buttons
+    (`services.api_keys.probe`): the live call, with a missing key reported as
+    "not set" rather than as the KNOWN_MODELS fallback. Until 2026-10-09 this
+    file imported class names that did not exist and every keyed provider read
+    FAIL; keeping one implementation is how that stays fixed.
+    """
+    from services.api_keys import probe
+    return probe(kind)
 
 
 def main() -> int:

@@ -435,6 +435,46 @@ class GodAI(QWidget):
         except Exception:
             return "unknown"
 
+    def reload_provider_clients(self) -> None:
+        """Rebuild the six cloud clients from the environment as it is now.
+
+        Every wrapper binds its key at construction, so a key saved in
+        Settings → API keys would otherwise take effect at the next launch
+        while the rail said "Configured". Nothing caches these objects — the
+        panels read `host.<client>` at call time (the Video panel included) —
+        so swapping the attributes is the whole change. Then: the key tile,
+        the live model lists (a provider that just gained a key has a real
+        list now), the current dropdown, and a model scan.
+        """
+        self.openai = OpenAIClientWrapper()
+        self.deepseek = DeepSeekClientWrapper()
+        self.kimi = KimiClientWrapper()
+        self.gemini = GeminiClientWrapper()
+        self.anthropic = AnthropicClientWrapper()
+        self.qwen = QwenClientWrapper()
+        key_classes = {
+            "OpenAI": OpenAIClientWrapper, "DeepSeek": DeepSeekClientWrapper,
+            "Kimi": KimiClientWrapper, "Gemini": GeminiClientWrapper,
+            "Anthropic": AnthropicClientWrapper, "Qwen": QwenClientWrapper,
+        }
+        card = getattr(self, "api_keys_status_card", None)
+        if card is not None:
+            for provider, wrapper in key_classes.items():
+                card.set_status(provider, self.safe_key_status(wrapper))
+            from services import qwen_client as _qwen
+            card.set_note("Qwen", _qwen.endpoint_note())
+        for provider in list(self.model_list_cache):
+            if provider != "ollama":
+                self.model_list_cache.pop(provider, None)
+        try:
+            self.load_provider_models()
+        except Exception as exc:
+            self._note_failure("reload clients: model list", exc)
+        try:
+            self.check_for_new_models()
+        except Exception as exc:
+            self._note_failure("reload clients: model scan", exc)
+
     def estimate_chat_seconds(self, backend: str, model: str, prompt: str) -> int:
         words = max(1, len(prompt.split()))
         base = 10

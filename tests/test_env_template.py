@@ -193,11 +193,33 @@ def test_the_key_checker_imports_classes_that_exist_and_probes_live():
     import importlib
 
     checker = (ROOT / "scripts" / "check_keys.py").read_text(encoding="utf-8")
-    pairs = re.findall(r"from (services\.\w+) import (\w+)", checker)
-    assert pairs, "the checker imports no client at all"
-    for module, name in pairs:
-        assert hasattr(importlib.import_module(module), name), (
-            f"scripts/check_keys.py imports {name} from {module}, which has no such name")
-    assert "list_models_live()" in checker
-    assert re.search(r"C\(\)\.list_models\(\)", checker) is None, (
-        "the probe must not use list_models(), which hides a bad key behind KNOWN_MODELS")
+    probe_module = (ROOT / "services" / "api_keys.py").read_text(encoding="utf-8")
+    for source, label in ((checker, "scripts/check_keys.py"), (probe_module, "services/api_keys.py")):
+        pairs = re.findall(r"from (services\.\w+) import (\w+)", source)
+        assert pairs, f"{label} imports no client at all"
+        for module, name in pairs:
+            assert hasattr(importlib.import_module(module), name), (
+                f"{label} imports {name} from {module}, which has no such name")
+    assert "from services.api_keys import probe" in checker, (
+        "the checker must use the one shared probe, not its own copy")
+    run_probe = probe_module.split("def run_probe(")[1].split("\ndef ")[0]
+    cloud_half = run_probe.split('if kind == "ollama"')[1].split("return bool(models), (")[1]
+    assert "client.list_models_live()" in cloud_half
+    assert "client.list_models()" not in cloud_half, (
+        "the cloud probe must not use list_models(), which hides a bad key behind KNOWN_MODELS")
+
+
+
+def test_every_secret_is_editable_in_settings():
+    """Settings → API keys (services/api_keys.CREDENTIALS) names every secret a
+    wired module reads, so no key is file-only. Read off the same scan as the
+    template check."""
+    from services.api_keys import ALL_NAMES
+
+    read = set()
+    for client in CLIENTS:
+        if client.name in UNWIRED:
+            continue
+        read |= _secret_names(client)
+    missing = sorted(read - set(ALL_NAMES))
+    assert not missing, f"read by the code but not on the API keys page: {missing}"

@@ -89,7 +89,7 @@ local (Ollama) and cloud (Anthropic, OpenAI, DeepSeek, Gemini). It provides:
 - Real-time cost estimation and post-request cost logging.
 - A run log that records the full lifecycle of every AI request.
 - A **Narrator** agent (Booth) that converts ebooks to MP3 or M4B, narrated by OpenAI, Gemini or ElevenLabs, with progress tracking, resume and quota-failure detection.
-- A full Settings panel for configuring pricing, budgets, agents, and tools without touching any file.
+- A full Settings panel for configuring API keys, pricing, budgets, agents, and tools without touching any file.
 
 The application is entirely self-contained: no server, no web interface, no external database. All data is stored in a local SQLite database (`data/imprint.db`).
 
@@ -146,6 +146,11 @@ Title field showed "P…" at a 1440 px window while each dropdown beside it kept
   its text (or its placeholder, when empty), hovering shows it, with the
   control's explanatory tooltip underneath. The full value shows even with
   *Tooltips: Off* — it is content, not help. Password fields are never revealed.
+  `install_text_fit()` removes and re-installs its event filter on every call,
+  so it always runs ahead of the window's own tooltip-swallowing filter (Qt
+  runs the last-installed filter first). Until 2026-10-09 it was installed
+  once per process, which held only for the first window built — in the test
+  process every later window hid the full value under *Tooltips: Off* too.
 
 `tests/test_panel_layout.py` fails the build when any visible field in any
 panel or sub-page is below the floor at any tested window size.
@@ -402,6 +407,15 @@ DeepSeek, Kimi, Gemini, Anthropic, Qwen — with a **Configured**, **Not
 configured** or **Check failed** badge depending on whether the key is present
 in the environment. Presence is not reachability: `scripts/check_keys.py` asks
 each provider (see §19).
+
+Hover the **Qwen** row for a caveat while chat requests still go to DashScope's
+international host (the default when `DASHSCOPE_BASE_URL` is unset): Alibaba
+put that host into maintenance mode on 2026-09-30, so it keeps working but Qwen
+models released after that date may be missing. The note
+(`services/qwen_client.endpoint_note()`, set through
+`ApiKeysStatusCard.set_note()`) disappears once a workspace host is configured.
+The app cannot switch on its own — there is no public way to derive the
+workspace id.
 
 ### Model updates
 
@@ -710,6 +724,13 @@ A progress bar and a status label appear below the action row only while a reque
 
 The **progress bar** runs in indeterminate mode (animating, no percentage) because LLM response time is not predictable.
 
+One exception: **Get Muse Glimmer** — the link under Chat's model row while
+Meta's Muse Glimmer is not installed in Ollama — drives Chat's own bar as a
+determinate 0–100 % bar while the download runs, with the GB count in the
+status label, and hides it (handing it back to the busy bar) when the pull
+finishes or fails. Until 2026-10-09 the download moved Booth's Convert bar
+instead, over any running conversion.
+
 The **status label** shows elapsed time and a rough estimated time remaining, updated every second:
 
 ```
@@ -871,7 +892,16 @@ against the session and daily caps before the image request starts.
 | **Logo Preview** | Grid of generated concepts, with **Save All Images**. |
 | **Delivery Message** | Editable text area with the generated message. |
 | **Gig Description** | Editable text area with the gig listing. |
-| **Orders** | Business, concepts and status for every run this session, with **Clear log**. Was a 190px sidebar column in which all three columns were truncated. |
+| **Orders** | One durable row per client order (client, last update, status) that survives restarts; selecting a row reloads the brief, brand kit, delivery and gig text. Below it: an outcome menu (Delivered / Accepted / Cancelled) with **Close order** and **Reopen**, and **Clear log**. |
+
+The Delivery Message and Gig Description boxes are the order's record: an edit
+is saved to the loaded order about 0.8 s after the last keystroke, and at once
+before another order loads or the workspace clears, with a `delivery edited` /
+`gig listing edited` event in its history. **Close order** ends the loaded
+order with the chosen outcome; the record stays, and that client's next job
+starts a new order instead of being logged as a "revision" of the finished
+one. **Reopen** undoes a close. Status changes only through
+`orders.close_order()` / `reopen_order()` (see `agents/fiverr/README.md`).
 
 Live status appears as a line under the action row.
 
@@ -887,7 +917,7 @@ Live status appears as a line under the action row.
 6. Click **Save All Images** to copy the PNGs out of `data/fiverr_output/<timestamp>/`.
 7. When you are ready to ship to a client, click **Delivery Message** — the tab fills with a copy-ready note.
 8. To productise the offering, click **Gig Description** — the tab fills with a complete Fiverr listing.
-9. The **Orders** tab tracks each run; **Clear log** wipes it.
+9. The **Orders** tab keeps each client's order. When the job is over, pick the outcome and click **Close order**; **Clear log** clears the workspace and forgets the loaded order, but the saved rows stay.
 
 ---
 
@@ -1860,7 +1890,12 @@ finished mp4 against the campaign.
 The Accounts tab shows this live, naming the exact environment variables that
 are missing. None of it is verified against the live APIs from inside the app
 and platform terms change often, so treat it as a starting point for your own
-check rather than current fact.
+check rather than current fact — the tab now says so itself, in a line above
+the platform notes (`platforms.NOTES_CAVEAT`): the drafting guidance is
+general knowledge, and only the three posting platforms' terms are checked
+before a publishing test pass. Herald's catalog line states the same limit:
+*Draft and schedule posts for eight platforms; publish to Reddit, YouTube and
+Pinterest.*
 
 **Nothing posts unattended.** There is no scheduler thread and no "publish
 all" — the schedule is a plan you work through, one confirmed click at a time.
@@ -2271,6 +2306,9 @@ Opened by the **Settings** button in the header. A tabbed dialog with five tabs:
 Red, Blue (Cyberpunk). Choosing one repaints the window immediately and saves
 it, so the choice is made by looking; **Cancel** puts back the theme the dialog
 opened with. The header's theme dots do the same thing — see [Themes](#themes).
+The sentence above the picker (`ui/dialogs.appearance_intro()`) counts and
+names the themes from `ui/theme.THEMES` rather than hard-coding a number; it
+said "two themes" for a week after Blue shipped.
 
 #### Agents Tab
 
@@ -2487,10 +2525,14 @@ imprint/
 ├── README.md                      # This documentation file
 ├── FORK_PLAN.md                   # Split rationale, carved out of sentinel_ai
 ├── TODO.md                        # Prioritised engineering backlog
+├── SUGGESTIONS.md                 # Ideas not yet committed to
+├── CLAUDE.md                      # Local (untracked) instructions for Claude:
+│                                  #   task-list format and working rules
 ├── requirements.txt
 │
 ├── agents/                        # Repo-ready project boundary per agent
-│   ├── catalog.py                 # Umbrella roster, labels, workspaces, recommendations
+│   ├── catalog.py                 # Umbrella roster, labels, workspaces, recommendations;
+│                                  #   one-line descriptions promise only what the code does
 │   ├── README.md                  # Ownership and future extraction contract
 │   ├── author/                    # Each project has __init__.py + agent.py
 │   ├── manuscript/                # plus its own README / TODO / SUGGESTIONS
@@ -2603,7 +2645,7 @@ Just over 1,000 tests: 993 collected at the 2026-10-06 merge (981 passed,
 11 skipped, 1 known red — the converter-drift card in TODO.md), before
 `test_theme.py` and `test_vibe.py` were added. Install the suite's own
 dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
-covers pytest and `pytest-timeout`:
+covers pytest, `pytest-timeout` and `pytest-randomly`:
 
 ```bash
 uv pip install -r requirements.txt -r requirements-dev.txt
@@ -2644,6 +2686,12 @@ Three conventions worth keeping:
   interrupt a main thread parked in a C++ mutex, which is the case that actually
   happens here. A wedge now dies with every thread's stack dumped. It fired on a
   real one: `agents/audiobook/README.md` records what it was.
+- **Order must not matter.** `pytest-randomly` shuffles test order on every
+  run and prints the seed in the header; rerun a failure in the same order
+  with `-p randomly --randomly-seed=<seed>`, or in file order with
+  `-p no:randomly`. Its first run (2026-10-09) found four order-dependent
+  failures from a request-guard fixture that never reset the budget caps, and
+  the text-fit filter bug described in §2.
 
 UI coverage is **behavioural, not visual** — no screenshot comparisons.
 `test_panel_layout.py` asserts the property that actually broke, that no two
@@ -2862,7 +2910,17 @@ workspace `AGENTS.md`.
 
 ### Environment Variables (API Keys)
 
-Copy `.env.example` to `.env` and paste keys into it. **Where `.env` has to
+**Settings → API keys** is the normal way in (since 2026-10-11): one field per
+credential, grouped; **Test** lists the provider's models with the key in the
+box — a metadata call that bills nothing — and reports *reachable* or the
+provider's own refusal; **Save All** writes the file described below and the
+running app rebuilds its provider clients at once, so no restart. Nothing on
+that page reaches the database, the run log or history; the file is written
+owner-only (0600). The page edits the file; a key set in your shell before
+launch wins over the file at startup, and the row says so.
+
+The file itself is the same one it always was. Copy `.env.example` to `.env`
+and paste keys into it, or let Settings create it. **Where `.env` has to
 live depends on how the app is running**, because both read it from the same
 place the app keeps its data:
 
@@ -2890,8 +2948,13 @@ enforces both.
 | `HF_API_KEY_ID` + `HF_API_KEY_SECRET` | Higgsfield — a key **pair**, not a bearer token | cloud.higgsfield.ai |
 
 Optional overrides, all with working defaults: `DASHSCOPE_BASE_URL` (the
-OpenAI-compatible chat endpoint — set it for a mainland-China account or a
-workspace-scoped regional host), `DASHSCOPE_VIDEO_BASE_URL` (Wan's separate
+OpenAI-compatible chat endpoint; the default international host has been in
+maintenance mode since 2026-09-30 — it still works, but newer Qwen models ship
+only on your workspace host,
+`https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`,
+with the Workspace ID on the Model Studio console's workspace page; use
+`https://dashscope.aliyuncs.com/compatible-mode/v1` for a mainland-China
+account), `DASHSCOPE_VIDEO_BASE_URL` (Wan's separate
 asynchronous `/api/v1` endpoint), `HIGGSFIELD_TEXT_VIDEO_ENDPOINT` and
 `HIGGSFIELD_IMAGE_VIDEO_ENDPOINT` (default to Seedance 1.0 Lite), and
 `HIGGSFIELD_BASE_URL`. The Higgsfield pair is also accepted as
@@ -2941,7 +3004,13 @@ until a provider is asked:
 ```
 
 It lists each provider's models, which is a metadata call that bills nothing,
-and never prints a key or any part of one.
+and never prints a key or any part of one. The probe is each client wrapper's
+`list_models_live()`, not `list_models()` — the latter falls back to the
+built-in model list on any error, so a revoked key would read OK. While Qwen
+is on the maintenance-mode international host the Qwen line carries a `note:`
+saying so. (Until 2026-10-09 the script imported class names that did not
+exist, so every keyed provider read FAIL; `tests/test_env_template.py` now
+imports each name it uses.)
 
 ### config/commands.json
 

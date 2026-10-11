@@ -10,10 +10,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
     QGridLayout, QHeaderView, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
-    QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QTextBrowser,
-    QVBoxLayout, QWidget,
+    QPushButton, QScrollArea, QTabWidget, QTableWidget, QTableWidgetItem,
+    QTextBrowser, QVBoxLayout, QWidget,
 )
 
+from services import api_keys
 from services.anthropic_client import AnthropicClientWrapper
 from services.database import get_connection, get_setting, save_setting
 from services.deepseek_client import DeepSeekClientWrapper
@@ -439,6 +440,150 @@ def show_settings(app):
     general_page.addStretch()
     tabs.addTab(general_tab, "General")
 
+    # ── Tab: API keys ──────────────────────────────────────────────
+    # Until 2026-10-11 keys were the one setting that meant editing a file by
+    # hand, and the file turned out to hold three rejected keys that nothing
+    # in the app could show. Paste → Test → Save; the window rebuilds its
+    # clients on save, so no restart. Values live only in the .env the app
+    # loads (owner-only); nothing here reaches the database or the run log.
+    keys_tab = QWidget()
+    keys_tab.setObjectName("SettingsPage")
+    keys_outer = QVBoxLayout(keys_tab)
+    keys_outer.setContentsMargins(0, 0, 0, 0)
+    keys_inner = QWidget()
+    keys_inner.setObjectName("Transparent")
+    keys_page = QVBoxLayout(keys_inner)
+    keys_page.setContentsMargins(18, 20, 18, 18)
+    keys_page.setSpacing(14)
+    keys_scroll = QScrollArea()
+    keys_scroll.setObjectName("SettingsScroll")
+    keys_scroll.setWidgetResizable(True)
+    keys_scroll.setFrameShape(QFrame.Shape.NoFrame)
+    keys_scroll.setWidget(keys_inner)
+    keys_outer.addWidget(keys_scroll)
+
+    env_file = api_keys.env_path()
+    page_intro(
+        keys_page,
+        "API keys",
+        f"Paste a key, Test it, then Save All. Keys are written to {env_file} "
+        "(readable by you only) and the running app picks them up at once — no "
+        "restart. Nothing on this page is stored in the database, the run log or "
+        "history. Test lists the provider's models: a metadata call that bills "
+        "nothing. A key set in your shell before launch wins over the file; a "
+        "row says so when that is the case.",
+    )
+    show_keys = QCheckBox("Show keys")
+    show_keys.setObjectName("ShowKeys")
+    keys_page.addWidget(show_keys)
+
+    key_fields: dict[str, QLineEdit] = {}
+    key_status: dict[str, QLabel] = {}
+    key_test_buttons: dict[str, QPushButton] = {}
+    file_values = api_keys.read_values()
+    probe_workers: list = []
+
+    def key_status_text(cred) -> str:
+        if api_keys.overridden_by_environment(cred.name, file_values):
+            return "set by the shell — the file's value is ignored at launch"
+        stored = file_values.get(cred.name) or next(
+            (file_values[a] for a in cred.aliases if file_values.get(a)), "")
+        if cred.secret:
+            return "set" if stored else "not set"
+        return "set" if stored else "default"
+
+    for group, creds in api_keys.by_group().items():
+        group_title = QLabel(group)
+        group_title.setObjectName("SettingsSectionTitle")
+        keys_page.addWidget(group_title)
+        card = QFrame()
+        card.setObjectName("SettingsCard")
+        grid = QGridLayout(card)
+        grid.setSpacing(12)
+        grid.setContentsMargins(18, 18, 18, 18)
+        for row, cred in enumerate(creds):
+            name_label = QLabel(cred.label)
+            name_label.setToolTip(cred.help)
+            edit = QLineEdit()
+            edit.setObjectName(f"Key:{cred.name}")
+            edit.setToolTip(cred.help)
+            if cred.secret:
+                edit.setEchoMode(QLineEdit.EchoMode.Password)
+                edit.setPlaceholderText("paste the key")
+            else:
+                edit.setPlaceholderText("leave blank for the default" if cred.group == api_keys.ENDPOINTS
+                                        else "")
+            stored = file_values.get(cred.name) or next(
+                (file_values[a] for a in cred.aliases if file_values.get(a)), "")
+            edit.setText(stored)
+            status = QLabel(key_status_text(cred))
+            status.setObjectName("SettingsHelp")
+            status.setWordWrap(True)
+            grid.addWidget(name_label, row, 0)
+            grid.addWidget(edit, row, 1)
+            grid.addWidget(status, row, 2)
+            key_fields[cred.name] = edit
+            key_status[cred.name] = status
+            if cred.probe:
+                test_btn = QPushButton("Test")
+                test_btn.setObjectName(f"TestKey:{cred.name}")
+                test_btn.setToolTip("List this provider's models with the key in the box — "
+                                    "a metadata call that bills nothing.")
+                grid.addWidget(test_btn, row, 3)
+                key_test_buttons[cred.name] = test_btn
+        grid.setColumnStretch(1, 1)
+        grid.setColumnStretch(2, 1)
+        keys_page.addWidget(card)
+    keys_page.addStretch()
+
+    def typed_values_for(kind: str) -> dict[str, str]:
+        """What the probe should see: every field for this provider, and an
+        empty alias so a stale GEMINI_API_KEY cannot stand in for the box."""
+        values: dict[str, str] = {}
+        for cred in api_keys.CREDENTIALS:
+            if cred.probe == kind:
+                values[cred.name] = key_fields[cred.name].text().strip()
+                for alias in cred.aliases:
+                    values[alias] = ""
+        if kind == "qwen":
+            values["DASHSCOPE_BASE_URL"] = key_fields["DASHSCOPE_BASE_URL"].text().strip()
+        return values
+
+    def on_probe_result(kind: str, ok: bool, note: str) -> None:
+        for cred in api_keys.CREDENTIALS:
+            if cred.probe == kind:
+                key_status[cred.name].setText(("reachable — " if ok else "unreachable — ") + note)
+                key_status[cred.name].setProperty("status", "ready" if ok else "warning")
+                key_test_buttons[cred.name].setEnabled(True)
+
+    def test_key(cred) -> None:
+        from ui.workers import KeyProbeWorker
+        client, note = api_keys.prepare_probe(cred.probe, typed_values_for(cred.probe))
+        if client is None:
+            key_status[cred.name].setText(note)
+            return
+        key_status[cred.name].setText("Checking…")
+        key_test_buttons[cred.name].setEnabled(False)
+        worker = KeyProbeWorker(cred.probe, client)
+        worker.result_signal.connect(on_probe_result)
+        # Kept for the dialog's lifetime: a QThread dropped the moment its
+        # finished signal arrives can still be winding down.
+        probe_workers.append(worker)
+        worker.start()
+
+    for cred in api_keys.CREDENTIALS:
+        if cred.probe:
+            key_test_buttons[cred.name].clicked.connect(lambda _=False, c=cred: test_key(c))
+
+    def toggle_show(checked: bool) -> None:
+        mode = QLineEdit.EchoMode.Normal if checked else QLineEdit.EchoMode.Password
+        for cred in api_keys.CREDENTIALS:
+            if cred.secret:
+                key_fields[cred.name].setEchoMode(mode)
+
+    show_keys.toggled.connect(toggle_show)
+    tabs.addTab(keys_tab, "API keys")
+
     # ── Tab 2: Agents ─────────────────────────────────────────────
     agents_tab = QWidget()
     agents_tab.setObjectName("SettingsPage")
@@ -734,6 +879,19 @@ def show_settings(app):
     # ── Save handler ──────────────────────────────────────────────
     def save_all():
         errors = []
+
+        # API keys — only when something differs from the file, so Save All
+        # with nothing changed never rewrites it.
+        try:
+            updates = {name: edit.text().strip() for name, edit in key_fields.items()}
+            current = api_keys.read_values()
+            if any(current.get(name, "") != value for name, value in updates.items()):
+                api_keys.write_values(updates)
+                api_keys.apply(updates)
+                if hasattr(app, "reload_provider_clients"):
+                    app.reload_provider_clients()
+        except Exception as exc:
+            errors.append(f"API keys: could not write {api_keys.env_path()} ({exc}).")
 
         # General
         try:

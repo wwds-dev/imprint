@@ -648,3 +648,25 @@ class VoiceListWorker(DaemonWorker):
             self._emit(self.voices_signal, self.provider, voices, "")
         except Exception as exc:
             self._emit(self.voices_signal, self.provider, [], str(exc))
+
+
+class KeyProbeWorker(QThread):
+    """Settings → API keys, the Test button: one metadata call off the UI thread.
+
+    The client is built on the main thread by `services.api_keys.prepare_probe`
+    (that is where the typed key is swapped into the environment for a
+    moment); this thread only makes the call, so no environment mutation ever
+    happens off the main thread. result_signal carries (kind, ok, note); the
+    note never contains the key.
+    """
+    result_signal = Signal(str, bool, str)
+
+    def __init__(self, kind: str, client):
+        super().__init__()
+        self._kind = kind
+        self._client = client
+
+    def run(self):
+        from services.api_keys import run_probe
+        ok, note = run_probe(self._kind, self._client)
+        self.result_signal.emit(self._kind, ok, note)

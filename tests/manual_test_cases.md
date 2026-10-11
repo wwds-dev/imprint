@@ -314,7 +314,18 @@ Stop the ollama daemon (`killall ollama`), then trip a global cap.
 **Steps:** Settings → walk every section.
 
 **What to verify:**
-- [ ] Pricing, budgets, agents and tools are all editable **without editing a file**
+- [ ] API keys, pricing, budgets, agents and tools are all editable **without
+      editing a file**
+- [ ] **API keys tab** (2026-10-11): one field per credential, secrets shown as
+      dots until **Show keys**; **Test** beside each model provider says
+      *not set* for an empty box without a network call, *Checking…* then
+      *reachable — N model(s)* for a good key, and the provider's own refusal
+      (e.g. *401*) for a bad one, never a traceback. **Save All** writes `.env`
+      (owner-only) and the API-keys rail tile flips to **Configured** without a
+      restart; the provider's models appear in its dropdown. Save All with
+      nothing changed leaves the file's modification time alone. Clearing a
+      box and saving flips the tile back. A key set in the shell before launch
+      is reported as such and is not copied into the box.
 - [ ] A saved change survives a restart
 - [ ] Per-agent, per-project, session and daily caps are all settable
 - [ ] API permission checkboxes gate which providers may be used at all
