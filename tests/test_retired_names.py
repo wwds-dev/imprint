@@ -16,9 +16,15 @@ RETIRED_LABEL = "OF" + " Agent"
 
 
 def _tracked() -> list[str]:
-    result = subprocess.run(["git", "ls-files", "-z"], cwd=ROOT,
-                            capture_output=True, text=True, check=True)
-    return [name for name in result.stdout.split("\0") if name]
+    """Tracked files plus untracked-but-not-ignored ones, so a new file is
+    checked before it is ever added."""
+    names: list[str] = []
+    for args in (["git", "ls-files", "-z"],
+                 ["git", "ls-files", "-z", "-o", "--exclude-standard"]):
+        result = subprocess.run(args, cwd=ROOT,
+                                capture_output=True, text=True, check=True)
+        names += [name for name in result.stdout.split("\0") if name]
+    return names
 
 
 def test_retired_names_appear_in_no_tracked_path_or_file():
