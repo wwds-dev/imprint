@@ -19,6 +19,7 @@ APP_NAME moves the writable directory, which would have stranded the existing
 database, saved chats and — worst — the .env holding the API keys. See
 adopt_previous_app_dir().
 """
+import os
 import sys
 import shutil
 from pathlib import Path
@@ -28,6 +29,12 @@ APP_NAME = "Imprint"
 # Directories this app used to write to, newest first. Only ever read from, to
 # carry state forward across a rename.
 PREVIOUS_APP_NAMES = ("Create & Publish",)
+
+
+# Set when the last adoption attempt failed and the old directory is still in
+# place. user_data_base() then keeps using it for this run, so the keys in its
+# .env still work and no blank directory is seeded to block a retry next launch.
+ADOPT_FALLBACK: Path | None = None
 
 
 def is_frozen() -> bool:
@@ -60,6 +67,8 @@ def adopt_previous_app_dir() -> Path | None:
     question about which is authoritative. Does nothing if the new directory
     already has content, so it can never overwrite newer state.
     """
+    global ADOPT_FALLBACK
+    ADOPT_FALLBACK = None
     if not is_frozen():
         return None
     support = Path.home() / "Library" / "Application Support"
@@ -71,13 +80,15 @@ def adopt_previous_app_dir() -> Path | None:
         if source.is_dir() and any(source.iterdir()):
             target.parent.mkdir(parents=True, exist_ok=True)
             try:
-                if target.exists():
-                    target.rmdir()      # empty, checked above
-                source.rename(target)
+                # One atomic step; on POSIX it replaces an empty target dir.
+                os.replace(source, target)
             except OSError as exc:
-                # Never let a failed carry-forward stop the app starting; it
-                # starts on a fresh directory and the old one stays untouched.
-                print(f"[Paths] Could not adopt {source}: {exc}")
+                # Never let a failed carry-forward stop the app starting, and
+                # never fall through to a blank directory: that would populate
+                # the target and make every later launch skip the adoption.
+                print(f"[Paths] Could not adopt {source} -> {target}: {exc}; "
+                      f"using {source} for this run, will retry next launch")
+                ADOPT_FALLBACK = source
                 return None
             return target
     return None
@@ -91,6 +102,8 @@ def user_data_base() -> Path:
     """
     if is_frozen():
         adopt_previous_app_dir()
+        if ADOPT_FALLBACK is not None and ADOPT_FALLBACK.is_dir():
+            return ADOPT_FALLBACK
         d = Path.home() / "Library" / "Application Support" / APP_NAME
         d.mkdir(parents=True, exist_ok=True)
         return d
@@ -127,15 +140,19 @@ def ensure_seeded() -> None:
         example = rb / ".env.example"
         if example.exists():
             shutil.copy(example, env_file)
-            env_file.chmod(0o600)
+            try:
+                env_file.chmod(0o600)
+            except OSError:
+                print(f"[Paths] Could not restrict {env_file} to 0600")
         else:
-            env_file.write_text(
-                "OPENAI_API_KEY=\n"
-                "DEEPSEEK_API_KEY=\n"
-                "KIMI_API_KEY=\n"
-                "GOOGLE_API_KEY=\n"
-                "ANTHROPIC_API_KEY=\n"
-                "DASHSCOPE_API_KEY=\n",
-                encoding="utf-8",
-            )
-            env_file.chmod(0o600)
+            # Created 0600 from the start rather than chmod-ed afterwards.
+            fd = os.open(env_file, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(
+                    "OPENAI_API_KEY=\n"
+                    "DEEPSEEK_API_KEY=\n"
+                    "KIMI_API_KEY=\n"
+                    "GOOGLE_API_KEY=\n"
+                    "ANTHROPIC_API_KEY=\n"
+                    "DASHSCOPE_API_KEY=\n"
+                )
