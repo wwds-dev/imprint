@@ -627,6 +627,8 @@ class RatingsWorker(DaemonWorker):
         try:
             table = ratings.refresh()
         except Exception as exc:          # the service is often "loading"
+            # Stamp the try: offline, the fetch used to repeat on every launch.
+            ratings.note_attempt()
             self._emit(self.ratings_ready, None, str(exc))
             return
         self._emit(self.ratings_ready, table, "")

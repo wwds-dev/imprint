@@ -3947,7 +3947,8 @@ class GodAI(QWidget):
     def _on_model_ratings_ready(self, table, error: str) -> None:
         if table is None or not table:
             # The service often answers "loading" for minutes; the ratings
-            # already in use stay, and the next check tries again.
+            # already in use stay. The worker stamped the try, so the next
+            # check waits a day — an offline Mac does not re-fetch at every launch.
             self._note_failure("model ratings: refresh",
                                RuntimeError(error or "no ratings returned"))
             return

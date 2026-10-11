@@ -94,6 +94,12 @@ def refresh() -> benchmarks.RatingTable:
     return benchmarks.refresh(cache_file())
 
 
+def note_attempt() -> None:
+    """Record a refresh that failed, so the next try waits a day as a success
+    would; the cached tables, if any, are kept."""
+    benchmarks.note_attempt(cache_file())
+
+
 def describe(table: benchmarks.RatingTable) -> str:
     """One line for the Model updates tile: which ratings, and their credit."""
     if not table:
