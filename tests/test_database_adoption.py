@@ -80,3 +80,17 @@ def test_empty_placeholder_is_replaced(db):
     sqlite3.connect(db).close()                      # 0-byte placeholder
     database._adopt_previous_db()
     assert _rows(db) == ["checkpointed", "wal-only"]
+
+
+def test_sidecars_move_when_legacy_cannot_be_checkpointed(db):
+    # Read-only legacy files: closing the probe connection cannot checkpoint,
+    # so the -wal/-shm still exist and the sidecar-move loop is what carries
+    # the uncheckpointed row across.
+    old = database.PREVIOUS_DB_NAMES[0]
+    _crashed_legacy_db(db.parent, old)
+    for suffix in ("", "-wal", "-shm"):
+        (db.parent / (old + suffix)).chmod(0o444)
+    database._adopt_previous_db()
+    assert (db.parent / "imprint.db-wal").exists()
+    assert not (db.parent / (old + "-wal")).exists()
+    assert _rows(db) == ["checkpointed", "wal-only"]

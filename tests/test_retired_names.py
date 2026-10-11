@@ -7,6 +7,7 @@ contain it.
 """
 
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -42,3 +43,20 @@ def test_retired_names_appear_in_no_tracked_path_or_file():
             if RETIRED_LABEL in row or any(word in row.lower() for word in RETIRED):
                 hits.append(f"{name}:{number}")
     assert not hits, "retired names found:\n" + "\n".join(hits)
+
+
+def test_tracked_includes_untracked_but_not_ignored_files(tmp_path, monkeypatch):
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True,
+                       capture_output=True)
+
+    git("init", "-q")
+    (tmp_path / ".gitignore").write_text("ignored.txt\n", encoding="utf-8")
+    for name in ("tracked.txt", "untracked.txt", "ignored.txt"):
+        (tmp_path / name).write_text("x", encoding="utf-8")
+    git("add", "tracked.txt")
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
+    names = _tracked()
+    assert "tracked.txt" in names
+    assert "untracked.txt" in names
+    assert "ignored.txt" not in names

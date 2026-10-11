@@ -46,3 +46,14 @@ would see the old state silently ignored. The `target` dir is only "empty" befor
 `ensure_seeded()`. Options for a later, owner-gated round: (a) merge selectively (never overwrite
 newer files), (b) show a one-time notice pointing at the old directory. Not decided here; the skip
 is left as is so newer state is never overwritten.
+
+## Round 2 (review and QA findings)
+- Decision: when adopting fails (rename error) and the old directory still exists, `user_data_base()`
+  returns the OLD directory for that run (`runtime_paths.ADOPT_FALLBACK`) instead of creating and
+  seeding a blank new one. The keys keep working, the target stays unpopulated and the next launch
+  retries. The rename is now a single `os.replace` (no rmdir-then-rename window). Reported with a
+  `[Paths]` print naming both paths and the error (the repo convention; no logger exists).
+- Seeding the `.env`: the fallback file is created 0600 with `O_EXCL`; a failing chmod only prints.
+- Deferred, owner decides later: "both populated: nothing merged" costs more than first thought. A
+  user who launched the new build once (so the new dir is populated) and then restores or still has
+  old data never gets it merged, and the old `.env` keys stay unread.
