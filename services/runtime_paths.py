@@ -70,9 +70,15 @@ def adopt_previous_app_dir() -> Path | None:
         source = support / previous
         if source.is_dir() and any(source.iterdir()):
             target.parent.mkdir(parents=True, exist_ok=True)
-            if target.exists():
-                target.rmdir()          # empty, checked above
-            source.rename(target)
+            try:
+                if target.exists():
+                    target.rmdir()      # empty, checked above
+                source.rename(target)
+            except OSError as exc:
+                # Never let a failed carry-forward stop the app starting; it
+                # starts on a fresh directory and the old one stays untouched.
+                print(f"[Paths] Could not adopt {source}: {exc}")
+                return None
             return target
     return None
 
@@ -121,6 +127,7 @@ def ensure_seeded() -> None:
         example = rb / ".env.example"
         if example.exists():
             shutil.copy(example, env_file)
+            env_file.chmod(0o600)
         else:
             env_file.write_text(
                 "OPENAI_API_KEY=\n"
@@ -131,3 +138,4 @@ def ensure_seeded() -> None:
                 "DASHSCOPE_API_KEY=\n",
                 encoding="utf-8",
             )
+            env_file.chmod(0o600)
