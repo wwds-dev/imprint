@@ -70,8 +70,8 @@ Measured on the checkout at `e23f3cd` (2026-10-09).
 | Measure | Value |
 |---|---|
 | Test files | 60 (`tests/test_*.py`) + `conftest.py` |
-| Collected | **1 377** (seed-1 randomised run, 2026-10-09 16:08: 1 370 passed, 5 failed, 2 skipped) |
-| Suite wall time | ~100 s in file order; **194 s** under `--randomly-seed=1` (2026-10-09) — the shuffle defeats module-scoped window reuse; budget in §6 raised to 240 s for randomised runs |
+| Collected | **1 377** — three randomised seeds green on `c72ec4b` (2026-10-09 17:05: 1 377 passed, 2 skipped each). The first randomised run found 5 order-dependent failures, all fixed the same afternoon |
+| Suite wall time | ~100 s in file order; **190–207 s** under `--randomly-seed=1/2/3` (2026-10-09) — the shuffle defeats module-scoped window reuse; budget in §6 is 240 s for randomised runs |
 | Files that build the whole window (`GodAI(`) | 24 of 60 |
 | Source modules under `services/ agents/ ui/ providers/ cloud/ vidforge/` | 150 |
 | Modules **no test file names** | 14 (see §5 and Appendix A) |
@@ -388,8 +388,14 @@ Never: a traceback, a silent partial result billed as full, a hang.
 **Dev Mac (primary).** Python 3.11+ in `.venv`, PySide6, ffmpeg on PATH,
 Ollama with a general instruct model (`llama3.1:8b` — never a reasoning model
 for UAT), `.env` for use and `.env.test` for T4 with its own small caps.
-Everything in §4 runs here. The Cowork Linux VM that mounts this folder cannot
-run the suite (no Mac venv, Python 3.10) — it is for reading and editing only.
+Everything in §4 runs here. The Cowork Linux VM that mounts this folder can
+run it too, Qt included, with its own venv (Python 3.10, `uv pip install -r
+requirements.txt`) and the `libEGL` stub in `tests/sandbox/` — the only
+library Qt needs that the VM lacks (Appendix B). Each shell call there is
+capped at three minutes, so the suite runs in thirds; fonts are Linux ones, so
+layout *measurements* are a signal and the Mac run stays the gate. Added
+2026-10-11, when it found the tiktoken download the Mac's cache was hiding
+(TODO.md, Studio estimate card).
 
 **CI (to add).** GitHub Actions, two jobs:
 - `macos-latest` (arm64): full T0–T2 on every push and PR; T3 on PR; T6 soak
@@ -618,4 +624,10 @@ IMPRINT_ENV_FILE=.env.test .venv/bin/python -m pytest -q -m live
 # before any UAT session
 .venv/bin/python main.py --selftest
 .venv/bin/python scripts/check_keys.py
+
+# in the Cowork sandbox (Linux, no Mesa): once per session, then run in thirds
+mkdir -p $HOME/egl-stub && gcc -shared -fPIC -Wl,-soname,libEGL.so.1 \
+    -o $HOME/egl-stub/libEGL.so.1 tests/sandbox/egl_stub.c
+export LD_LIBRARY_PATH=$HOME/egl-stub QT_QPA_PLATFORM=offscreen
+$HOME/imprint-vm-venv/bin/python -m pytest -q $(ls tests/test_*.py | awk 'NR%3==1')
 ```

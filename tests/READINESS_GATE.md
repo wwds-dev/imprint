@@ -111,12 +111,17 @@ Items 1–4, 9, 11 and 12 are closed cards; item 10 is an open `@me` card; item 
       as unavailable, `ollama` reachable with ≥ 1 model (warns when only
       reasoning models are pulled), `say` present on macOS, writable data dir
       outside any bundle. The UAT preconditions call it before `check_keys.py`.
-- [ ] Launch from a terminal prints only Qt's FFmpeg line; `--selftest` passes.
+- [x] `--selftest`: all 16 checks passed (2026-10-09 16:05).
+- [ ] Launch from a terminal prints only Qt's FFmpeg line (no `[warn]`), and
+      the eight tabs show the six reworded lines — the last by-hand step.
 
 **E. The floor is green and stable**
-- [ ] `pytest -q` passes three times with different `--randomly-seed`s, none
-      over 120 s, none hitting the per-test timeout.
-- [ ] No test in quarantine.
+- [x] `pytest -q` passes three times with different `--randomly-seed`s (1, 2, 3 on
+      `c72ec4b`, 2026-10-09 17:05: 1 377 passed, 2 skipped each; 190–207 s, no
+      per-test timeout). The first randomised run found 5 order-dependent
+      failures — a budget-cap leak across 4 request-guard tests and a tooltip
+      test that passed on the previous test's fading tip — all fixed.
+- [x] No test in quarantine.
 
 **F. Professional finish (not blocking, but do it in the same pass)**
 - [ ] The nine stale Learning Centre screenshots re-captured in one sitting

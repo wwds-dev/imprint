@@ -19,12 +19,12 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QDate, Qt, QUrl
+from PySide6.QtCore import QDate, QSize, Qt, QUrl
 from PySide6.QtGui import QDesktopServices, QPixmap, QTextCursor
 from PySide6.QtWidgets import (
     QComboBox, QDateEdit, QFileDialog, QHBoxLayout, QLabel,
     QLineEdit, QListWidget, QListWidgetItem, QMessageBox, QPushButton,
-    QSplitter, QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser,
+    QTableWidget, QTableWidgetItem, QTabWidget, QTextBrowser,
     QTextEdit, QVBoxLayout, QWidget,
 )
 
@@ -40,6 +40,24 @@ from ui.panels.base import AgentPanel
 from ui import theme
 from ui.style import ACCENT
 from ui.widgets import CollapsibleSection, FlowLayout, ScrollContent, scrollable
+
+
+class _TodoList(QListWidget):
+    """A checklist that prefers its maximum height.
+
+    _fit_todo_list_height sets the maximum to the rows it holds (up to
+    _TODO_MAX_ROWS) and the minimum to _TODO_MIN_ROWS of them. A QListWidget's
+    own hint is a flat 192px, so without this the layout would stop at six
+    rows with room for eight; with it the list shows every row it may, and
+    only a short window compresses it — it is the list, which scrolls, that
+    gives way, not the Ask box, which is typed in.
+    """
+
+    def sizeHint(self):  # noqa: N802 - Qt API
+        hint = super().sizeHint()
+        if self.maximumHeight() >= 16777215:     # not fitted yet
+            return hint
+        return QSize(hint.width(), self.maximumHeight())
 
 
 class ManuscriptPanel(QWidget):
@@ -165,7 +183,13 @@ class ManuscriptPanel(QWidget):
         overview_layout.setContentsMargins(SM, SM, SM, SM)
 
         # ── Main area: metrics display + Q&A sidebar ─────────────────────────
-        splitter = QSplitter(Qt.Horizontal)
+        # A plain row, not a splitter with its own scroll area: the panel
+        # already scrolls as a whole, and the nested area stacked a second
+        # vertical scrollbar beside the panel's. The sidebar's minimum height
+        # now feeds the outer scroll instead.
+        main_row = QHBoxLayout()
+        main_row.setContentsMargins(0, 0, 0, 0)
+        main_row.setSpacing(0)
 
         # Left: royalties as a chart, raw metrics text beneath it. The
         # chart replaces the monospace royalty summary; the text box stays
@@ -185,7 +209,7 @@ class ManuscriptPanel(QWidget):
         self.manuscript_metrics_box.setPlaceholderText(
             "Click Refresh Data to load publishing metrics…")
         left_layout.addWidget(self.manuscript_metrics_box, 1)
-        splitter.addWidget(left)
+        main_row.addWidget(left, 1)
 
         # Right: Q&A and todos. Section labels and fields rather than a stack
         # of "Ask about your book:" / "Provider:" / "Model:" colon captions,
@@ -219,25 +243,45 @@ class ManuscriptPanel(QWidget):
         sb.addWidget(self.manuscript_ask_btn)
 
         sb.addWidget(section("Publishing todos"))
-        self.manuscript_todo_list = QListWidget()
-        self.manuscript_todo_list.setMinimumHeight(120)
-        sb.addWidget(self.manuscript_todo_list, 1)
+        # A checklist that grows to fit its items: long titles wrap instead
+        # of scrolling sideways, and with room the list only scrolls past
+        # _TODO_MAX_ROWS rows (a short window squeezes it to _TODO_MIN_ROWS
+        # before the panel scrolls). Ticking a box marks the todo done (or
+        # reopens it); done items sink to the bottom, dimmed.
+        self.manuscript_todo_list = _TodoList()
+        self.manuscript_todo_list.setWordWrap(True)
+        self.manuscript_todo_list.setTextElideMode(Qt.ElideNone)
+        self.manuscript_todo_list.setUniformItemSizes(False)
+        self.manuscript_todo_list.setResizeMode(QListWidget.Adjust)
+        self.manuscript_todo_list.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarAlwaysOff)
+        self.manuscript_todo_list.setVerticalScrollBarPolicy(
+            Qt.ScrollBarAsNeeded)
+        self.manuscript_todo_list.itemChanged.connect(self._on_todo_toggled)
+        self.manuscript_todo_list.installEventFilter(self)
+        sb.addWidget(self.manuscript_todo_list)
 
+        # Input and Add on one line; Enter adds too.
+        todo_add_row = QHBoxLayout()
+        todo_add_row.setSpacing(SM)
         self.manuscript_todo_input = line_edit("Add todo…")
-        sb.addWidget(self.manuscript_todo_input)
-
-        todo_btn_row = QHBoxLayout()
-        todo_btn_row.setSpacing(SM)
+        self.manuscript_todo_input.returnPressed.connect(self.add_todo)
+        todo_add_row.addWidget(self.manuscript_todo_input, 1)
         self.manuscript_add_todo_btn = QPushButton("Add")
+        self.manuscript_add_todo_btn.setFixedWidth(64)
         self.manuscript_add_todo_btn.clicked.connect(self.add_todo)
+        todo_add_row.addWidget(self.manuscript_add_todo_btn)
+        sb.addLayout(todo_add_row)
+
+        # Kept for the HOST_CONTROLS contract and main.py's
+        # manuscript_mark_todo_done(); the checkboxes replace it in the UI.
         self.manuscript_done_todo_btn = QPushButton("Done")
         self.manuscript_done_todo_btn.clicked.connect(self.mark_todo_done)
-        todo_btn_row.addWidget(self.manuscript_add_todo_btn)
-        todo_btn_row.addWidget(self.manuscript_done_todo_btn)
-        sb.addLayout(todo_btn_row)
+        self.manuscript_done_todo_btn.hide()
+        sb.addStretch(1)
 
-        splitter.addWidget(scrollable(sidebar, min_width=300, max_width=320))
-        overview_layout.addWidget(splitter)
+        main_row.addWidget(sidebar, 0)
+        overview_layout.addLayout(main_row)
         self.manuscript_tabs.addTab(overview_tab, "Overview")
 
         self._build_quote_finder_tab()
@@ -830,38 +874,94 @@ class ManuscriptPanel(QWidget):
         item = self.manuscript_todo_list.currentItem()
         if not item:
             return
-        todo_id = item.data(Qt.UserRole)
+        self._set_todo_status(item.data(Qt.UserRole), "done")
+
+    def _set_todo_status(self, todo_id, status: str) -> None:
         from services.database import DB_PATH
         conn = sqlite3.connect(DB_PATH)
         conn.execute(
-            "UPDATE manuscript_todos SET status='done', updated_at=? WHERE id=?",
-            (datetime.utcnow().isoformat(), todo_id)
+            "UPDATE manuscript_todos SET status=?, updated_at=? WHERE id=?",
+            (status, datetime.utcnow().isoformat(), todo_id)
         )
         conn.commit()
         conn.close()
         self.load_todos()
+
+    def _on_todo_toggled(self, item) -> None:
+        done = item.checkState() == Qt.Checked
+        # Deferred: reloading clears the list, which must not happen inside
+        # the item's own itemChanged emission.
+        from PySide6.QtCore import QTimer
+        todo_id = item.data(Qt.UserRole)
+        QTimer.singleShot(0, lambda: self._set_todo_status(
+            todo_id, "done" if done else "pending"))
+
+    _TODO_MAX_ROWS = 8
+    # The seeded checklist alone is 24 rows, so a fixed eight put the Press
+    # panel 25px over a 1900x1200 window; the list gives way down to this.
+    _TODO_MIN_ROWS = 4
+
+    def _fit_todo_list_height(self) -> None:
+        lst = self.manuscript_todo_list
+        lst.doItemsLayout()
+        rows = lst.count()
+        frame = 2 * lst.frameWidth() + 4
+        if rows == 0:
+            lst.setFixedHeight(frame + 28)
+            return
+        # Measured from the laid-out rects, not sizeHintForRow(): the hint
+        # ignores word wrap, so wrapped titles were undercounted and the
+        # list scrolled anyway.
+        lst.scrollToTop()
+
+        def height_of(count: int) -> int:
+            last = lst.item(min(rows, count) - 1)
+            return max(lst.visualItemRect(last).bottom() + 1, 28) + frame
+
+        lst.setMinimumHeight(height_of(self._TODO_MIN_ROWS))
+        lst.setMaximumHeight(height_of(self._TODO_MAX_ROWS))
+
+    def eventFilter(self, obj, event):
+        # Wrapping depends on width, which is only final once the panel is
+        # shown; refit whenever the list is resized.
+        from PySide6.QtCore import QEvent
+        if (obj is getattr(self, "manuscript_todo_list", None)
+                and event.type() == QEvent.Resize
+                and event.size().width() != event.oldSize().width()):
+            self._fit_todo_list_height()
+        return super().eventFilter(obj, event)
 
     def load_todos(self):
         from services.database import DB_PATH
         conn = sqlite3.connect(DB_PATH)
         rows = conn.execute(
             "SELECT id, title, status, platform, notes FROM manuscript_todos "
-            "ORDER BY created_at DESC"
+            "ORDER BY (status = 'done'), created_at DESC"
         ).fetchall()
         conn.close()
-        self.manuscript_todo_list.clear()
+        from PySide6.QtGui import QColor
+        lst = self.manuscript_todo_list
+        lst.blockSignals(True)
+        lst.clear()
         for row_id, title, status, platform, notes in rows:
-            # A checkbox glyph pair, not emoji: ✓ and ○ share a baseline and an
-            # optical weight, so the list has one left edge. The ℹ️ that used
-            # to mark a note sat at the end of the line, at a different size,
-            # and only repeated what the tooltip already says.
-            check = "✓" if status == "done" else "○"
+            # Real checkboxes instead of ✓/○ glyphs: one left edge, and the
+            # box is the control.
             tag = f"[{platform}] " if platform else ""
-            item = QListWidgetItem(f"{check}  {tag}{title}")
+            item = QListWidgetItem(f"{tag}{title}")
             item.setData(Qt.UserRole, row_id)
+            item.setFlags(item.flags() | Qt.ItemIsUserCheckable)
+            done = status == "done"
+            item.setCheckState(Qt.Checked if done else Qt.Unchecked)
+            if done:
+                item.setForeground(QColor("#6b7685"))
+                font = item.font()
+                font.setStrikeOut(True)
+                item.setFont(font)
             if notes:
                 item.setToolTip(notes)
-            self.manuscript_todo_list.addItem(item)
+            lst.addItem(item)
+        lst.blockSignals(False)
+        self._fit_todo_list_height()
         self.host._refresh_next_step_tip()
 
     # ── quote graphics ──────────────────────────────────────────────────
