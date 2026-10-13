@@ -185,7 +185,10 @@ crossed into any platform yet.
 ### Step 6 — Read what connecting grants
 
 Open the **Accounts** tab. Drafting works for every platform listed; posting
-from Imprint works only for the ones marked **ready**. For a connectable
+from Imprint works only for the ones marked **ready**. The line above the
+list says what the notes are: written from general knowledge, not checked
+against each platform's current terms — only the three platforms that can
+post have their terms verified before a publishing test pass. For a connectable
 platform the entry states what connecting grants — Reddit's, for example, says
 it can submit posts as your user and nothing else, and that the script-app flow
 keeps your Reddit password in the `.env` — *before* the numbered setup steps.

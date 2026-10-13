@@ -21,7 +21,7 @@
 | Logo Preview | Review the actual generated asset | Preview is not final delivery file by itself |
 | Delivery Message | Drafts a concise handoff and usage notes | Never assert work/checks that were not performed |
 | Gig Description | Drafts a marketplace listing | Claims, price, turnaround, and revisions must be truthful |
-| Orders | Records business state | Add real fees, revisions, refunds, time, and acceptance externally if absent |
+| Orders | Records business state; outcome menu with Close order / Reopen ends or resumes the loaded order | Add real fees, revisions, refunds, time, and acceptance externally if absent |
 | Stop | Requests cancellation of the active local generation | Provider-accepted media may still incur cost |
 
 ## Worked run
@@ -194,9 +194,10 @@ Click **Delivery Message**, approve the estimate, and watch the draft stream
 into its tab. Then edit it until it is true: name only the files you are
 actually sending, claim only the checks you performed in Step 5, and state
 the remaining revision count and the next decision the client owns. The
-draft is attached to the order the moment it finishes streaming; edits you
-make afterwards are not saved back to the order, so keep the version you
-actually send.
+draft is attached to the order the moment it finishes streaming, and your
+edits are saved back to it a moment after you stop typing (and at once when
+you switch orders or clear), each logged as *delivery edited* — so the order
+holds the version you actually send. The same goes for the gig listing.
 
 [Show me](show:fiverr_delivery_btn)
 
@@ -218,9 +219,13 @@ delivery written, gig listing written — is logged on the order, and the status
 line shows the event count and the last one when you load it. These rows are durable:
 they survive a restart. Click the row and the whole record reloads into the
 workspace — brief, brand kit, delivery message and gig text (the logo
-previews are not reloaded) — ready for a revision round weeks later. A new
-round for the same client name is logged on that same order, which stays
-open. **Clear log** resets the visible workspace for
+previews are not reloaded) — ready for a revision round weeks later. While
+the order is open, a new round for the same client name is logged on that
+same order. When the job is over, pick how it ended in the outcome menu
+below the table — **Delivered**, **Accepted** or **Cancelled** — and click
+**Close order**: the record stays, and the client's next job starts a new
+order instead of being added to this one as a revision. **Reopen** undoes a
+close made by mistake. **Clear log** resets the visible workspace for
 the next client; the saved rows stay. The money facts — marketplace fee,
 refunds, the client's actual acceptance — happen outside Imprint, so record
 them against the order yourself and treat them as self-reported until the
