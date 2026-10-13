@@ -17,5 +17,12 @@
 - Edit only the parts that need changing; do not regenerate whole files.
 - Never print or copy values from `.env`.
 
+## Tests
+- Run: `.venv/bin/python -m pytest -q` (about 90 s; `QT_QPA_PLATFORM=offscreen` is forced by `tests/conftest.py`). `pytest-randomly` shuffles order, so an order-dependent failure is a bug. CI mirrors this in `.github/workflows/quality.yml`.
+
+## Shared Foundry files
+- Commit only your own changes in shared Foundry files (`apps.md`, `audits/*`, dashboard files in `software_company`). Other sessions have uncommitted edits there; stage by name.
+- The converter and benchmarks files are shared with Sentinel and must stay in sync. Do not change one side alone. `tests/test_benchmarks_drift.py` is the guard.
+
 ## Current goal
 Get Imprint to a professional level, with functionality at 100% of what its agents promise, before the QA test campaign starts. Order of work: fix the gaps between what the agents promise and what the code does, then write the QA plan.
