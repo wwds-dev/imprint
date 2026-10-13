@@ -64,3 +64,7 @@ tests/test_social_onboarding.py` (the second pins the scopes-and-steps contract)
   Its Accounts tab lists every platform as ready or drafting only and, for
   each connectable platform (ready ones included, so what was consented to
   stays visible), shows the connection guide beneath its status.
+  A line above the list (`platforms.NOTES_CAVEAT`, added 2026-10-09) tells
+  the user the platform notes are general knowledge, not checked against
+  current terms; only the three posting platforms' terms are verified before
+  a publishing test pass.

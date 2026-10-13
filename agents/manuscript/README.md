@@ -113,6 +113,16 @@ Run focused coverage with `pytest tests/test_book_pipeline.py tests/test_manuscr
   metrics text box below the chart stays for PublishDrive payloads and as
   the Ask context.
 
+  **Publishing todos** are a real checkbox checklist (`_TodoList`): ticking a
+  box marks a todo done or reopens it (via `_set_todo_status`), done items sink to
+  the bottom dimmed and struck through, and the list grows to fit its rows — long
+  titles wrap rather than scrolling sideways, and only past `_TODO_MAX_ROWS` (8)
+  does the list scroll, squeezing to `_TODO_MIN_ROWS` (4) in a short window before
+  the panel itself scrolls. Enter in the input adds a todo. The old free-standing
+  Done button is hidden but kept for the `HOST_CONTROLS` contract and
+  `manuscript_mark_todo_done()`. The Overview is a plain `QHBoxLayout` row rather
+  than a nested `QSplitter`, so the workspace shows a single scrollbar.
+
   The rest of the package supports `panel.py` and splits into four groups:
 
   **KDP / PublishDrive data** — the two publishing-platform adapters neither
