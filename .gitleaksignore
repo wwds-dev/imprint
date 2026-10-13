@@ -11,3 +11,5 @@
 # comments quoted the offending line verbatim. Re-pinned after the 2026-09-27
 # history rewrite changed that revision's commit SHA.
 5f0664cbe7a2a68c06b790da5643826c87f310e7:.gitleaksignore:generic-api-key:2
+83343104deb18a23ac592929291410b50a44c382:tests/test_settings_pricing.py:generic-api-key:178
+83343104deb18a23ac592929291410b50a44c382:services/database.py:generic-api-key:1022
