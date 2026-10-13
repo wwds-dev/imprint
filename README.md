@@ -568,7 +568,7 @@ what prefers local models.
   beside the Model updates check (free, keyless, about a minute of paced
   requests on a daemon thread) into `data/lmarena_ratings.json`, and the
   ranking re-runs when it lands. Nothing waits on it, and a failed fetch keeps
-  the ratings already loaded. Refresh the snapshot with
+  the ratings already loaded — and stamps the attempt (an `attempted` time written beside any cached tables by `benchmarks.note_attempt`) so a failed try counts toward the "at most once a day" rule exactly as a success does; an offline Mac no longer re-fetches on every launch. Refresh the snapshot with
   `python -m services.benchmarks --snapshot`.
 - **Credit.** The ratings are CC BY 4.0. The Model updates tile names the
   ratings in use, and a BEST FIT or paid-request explanation for a rated model
@@ -2732,6 +2732,8 @@ On the first launch, `init_db()` detects that `data/imprint.db` does not exist a
 
 If a JSON file does not exist, that migration step is skipped silently. The JSON files are not deleted and serve as backups.
 
+**Carrying a renamed app forward.** The app was once *Create & Publish*, and a rename moves the macOS writable directory — which would strand the old `~/Library/Application Support/Create & Publish/` and the `.env`, database, chats and logs inside it. Two adoptions bridge it, each only when the new location holds nothing of its own, so neither can clobber newer state. `runtime_paths.adopt_previous_app_dir()` moves the whole previous directory to `Imprint/` in a single `os.replace`; if that fails it leaves the old directory in place, keeps using it for this run (so its keys still work) and retries next launch rather than seeding a blank directory that would make every later launch skip the adoption. `database._adopt_previous_db()` renames a database left under a previous name together with its `-wal`/`-shm` sidecars — leaving those behind would silently drop the most recent committed transactions. `tests/test_runtime_paths.py` and `tests/test_database_adoption.py` pin every branch, including the crash-like uncheckpointed-write case.
+
 On subsequent launches, the migration is skipped entirely — the database is the source of truth.
 
 **Every launch** also runs `_purge_split_agents()`, which deletes any `agents`
@@ -2920,7 +2922,7 @@ owner-only (0600). The page edits the file; a key set in your shell before
 launch wins over the file at startup, and the row says so.
 
 The file itself is the same one it always was. Copy `.env.example` to `.env`
-and paste keys into it, or let Settings create it. **Where `.env` has to
+and paste keys into it, or let Settings create it. A `.env` the app seeds itself (copied from `.env.example`, or written key-by-key when neither exists) is created owner-only — `0600` from the first byte via `os.open(..., O_EXCL, 0o600)` — so the credentials file is never briefly world-readable. **Where `.env` has to
 live depends on how the app is running**, because both read it from the same
 place the app keeps its data:
 
