@@ -1,4 +1,4 @@
-beautifulsoup4==4.14.3
+beautifulsoup4==4.15.0
 cryptography>=46,<52
 EbookLib==0.20
 Flask>=3.1,<4
