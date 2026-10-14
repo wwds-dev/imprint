@@ -119,9 +119,33 @@ def test_clearing_a_value_leaves_the_name_empty_not_deleted(env_file):
     assert env_file.read_text(encoding="utf-8").splitlines() == ["OPENAI_API_KEY="]
 
 
+@pytest.mark.parametrize("brk", ["\n", "\r", "\r\n", "\u2028"])
+def test_a_value_with_a_line_break_is_refused_and_the_file_is_unchanged(env_file, brk):
+    """A two-line paste would read back as a second, real assignment."""
+    env_file.write_text("# keys\nDASHSCOPE_WORKSPACE_ID=ws1\n", encoding="utf-8")
+    before = env_file.read_bytes()
+    pasted = f"ws2{brk}DASHSCOPE_BASE_URL=https://evil.example/v1"
+    with pytest.raises(ValueError) as refused:
+        api_keys.write_values({"OPENAI_API_KEY": "fine", "DASHSCOPE_WORKSPACE_ID": pasted}, env_file)
+    assert "DASHSCOPE_WORKSPACE_ID" in str(refused.value) and "one line only" in str(refused.value)
+    assert "evil" not in str(refused.value), "the value is never echoed"
+    assert env_file.read_bytes() == before
+    assert not list(env_file.parent.glob(".env.*")), "no temp file left beside it"
+
+
+def test_every_character_the_reader_splits_on_counts_as_a_line_break():
+    """read_values uses str.splitlines(), so the check must refuse all of its breaks."""
+    breaks = [chr(c) for c in range(0x110000) if len(f"a{chr(c)}b".splitlines()) > 1]
+    assert "\n" in breaks and "\u2028" in breaks
+    assert [ch for ch in breaks if api_keys.is_one_line(f"a{ch}b")] == []
+    assert api_keys.is_one_line("ws1") and api_keys.is_one_line("") and api_keys.is_one_line("a b\tc")
+
+
 # ── the process ──────────────────────────────────────────────────────────────
 
 def test_apply_sets_and_clears_including_aliases(monkeypatch):
+    # apply() pops a cleared name; recording it first puts the conftest's blank back
+    monkeypatch.setenv("GOOGLE_API_KEY", os.environ.get("GOOGLE_API_KEY", ""))
     monkeypatch.setenv("GEMINI_API_KEY", "old-alias")
     api_keys.apply({"GOOGLE_API_KEY": "g1"})
     assert os.environ["GOOGLE_API_KEY"] == "g1"

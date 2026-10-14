@@ -6,7 +6,7 @@ parent and to read the handful of members it needs — and shows the dialog. The
 bodies are moved verbatim; only the receiver was renamed from `self` to `app`.
 """
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
     QGridLayout, QHeaderView, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
@@ -528,7 +528,9 @@ def show_settings(app):
                 test_btn = QPushButton("Test")
                 test_btn.setObjectName(f"TestKey:{cred.name}")
                 test_btn.setToolTip("List this provider's models with the key in the box — "
-                                    "a metadata call that bills nothing.")
+                                    "a metadata call that bills nothing."
+                                    + (" Uses the workspace ID and endpoint shown in the boxes."
+                                       if cred.probe == "qwen" else ""))
                 grid.addWidget(test_btn, row, 3)
                 key_test_buttons[cred.name] = test_btn
         grid.setColumnStretch(1, 1)
@@ -547,12 +549,64 @@ def show_settings(app):
                     values[alias] = ""
         if kind == "qwen":
             values["DASHSCOPE_BASE_URL"] = key_fields["DASHSCOPE_BASE_URL"].text().strip()
+            values["DASHSCOPE_WORKSPACE_ID"] = key_fields["DASHSCOPE_WORKSPACE_ID"].text().strip()
         return values
+
+    probe_hosts: dict[str, str] = {}
+
+    def refresh_workspace_status() -> None:
+        from services.qwen_client import WORKSPACE_HOST_SUFFIX, valid_workspace_id
+        cred = api_keys.BY_NAME["DASHSCOPE_WORKSPACE_ID"]
+        raw = key_fields[cred.name].text().strip()
+        status = key_status[cred.name]
+        if (api_keys.overridden_by_environment(cred.name, file_values)
+                and raw in ("", (file_values.get(cred.name) or "").strip())):
+            # The shell's ID is the one in use; the box (blank, or the file's
+            # value) is not, so describing the box here would mislead.
+            text, prop = key_status_text(cred), ""
+        elif not raw:
+            text, prop = "", ""
+        elif valid_workspace_id(raw) is None:
+            text, prop = "Workspace ID not used: letters, digits and hyphens only", "warning"
+            if "." in raw or "/" in raw or ":" in raw:
+                text += " — paste just the ID, not the address"
+        elif key_fields["DASHSCOPE_BASE_URL"].text().strip():
+            text, prop = "Not used: the chat endpoint below takes priority", "warning"
+        else:
+            text, prop = f"Chat will use {valid_workspace_id(raw)}{WORKSPACE_HOST_SUFFIX}", ""
+        status.setText(text)
+        status.setProperty("status", prop)
+        status.style().unpolish(status)
+        status.style().polish(status)
+
+    def refresh_endpoint_warnings() -> None:
+        """A hand-typed Qwen endpoint is the owner's override, never blocked;
+        its row only says so when it is not https or not an Alibaba host."""
+        from services.qwen_client import endpoint_warning
+        for name in ("DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_BASE_URL"):
+            warning = endpoint_warning(key_fields[name].text())
+            status = key_status[name]
+            status.setText(warning or key_status_text(api_keys.BY_NAME[name]))
+            status.setProperty("status", "warning" if warning else "")
+            status.style().unpolish(status)
+            status.style().polish(status)
+
+    workspace_timer = QTimer(keys_tab)
+    workspace_timer.setSingleShot(True)
+    workspace_timer.setInterval(400)
+    workspace_timer.timeout.connect(refresh_workspace_status)
+    workspace_timer.timeout.connect(refresh_endpoint_warnings)
+    for name in ("DASHSCOPE_WORKSPACE_ID", "DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_BASE_URL"):
+        key_fields[name].textChanged.connect(lambda _t="": workspace_timer.start())
+    refresh_workspace_status()
+    refresh_endpoint_warnings()
 
     def on_probe_result(kind: str, ok: bool, note: str) -> None:
         for cred in api_keys.CREDENTIALS:
             if cred.probe == kind:
-                key_status[cred.name].setText(("reachable — " if ok else "unreachable — ") + note)
+                host = probe_hosts.get(kind, "") if ok else ""
+                key_status[cred.name].setText(
+                    ("reachable — " if ok else "unreachable — ") + note + (f" {host}" if host else ""))
                 key_status[cred.name].setProperty("status", "ready" if ok else "warning")
                 key_test_buttons[cred.name].setEnabled(True)
 
@@ -562,6 +616,18 @@ def show_settings(app):
         if client is None:
             key_status[cred.name].setText(note)
             return
+        if cred.probe == "qwen":
+            from services.qwen_client import LEGACY_HOSTS, is_workspace_host, url_host
+            base = getattr(client, "base_url", "") or ""
+            if is_workspace_host(base):
+                where = "via workspace host"
+            elif url_host(base) in LEGACY_HOSTS:
+                # A typed ID that still landed here was invalid or overridden.
+                ignored = bool(key_fields["DASHSCOPE_WORKSPACE_ID"].text().strip())
+                where = "via standard host" + (" (workspace ID ignored)" if ignored else "")
+            else:
+                where = f"via {url_host(base)}" if url_host(base) else "via the typed endpoint"
+            probe_hosts[cred.probe] = where
         key_status[cred.name].setText("Checking…")
         key_test_buttons[cred.name].setEnabled(False)
         worker = KeyProbeWorker(cred.probe, client)
@@ -885,7 +951,19 @@ def show_settings(app):
         try:
             updates = {name: edit.text().strip() for name, edit in key_fields.items()}
             current = api_keys.read_values()
-            if any(current.get(name, "") != value for name, value in updates.items()):
+            # A pasted line break would become a second NAME=value line in the
+            # file, so the whole page is refused and the field named.
+            multiline = [name for name, value in updates.items() if not api_keys.is_one_line(value)]
+            for name in multiline:
+                key_status[name].setText("one line only — not saved")
+                key_status[name].setProperty("status", "warning")
+                key_status[name].style().unpolish(key_status[name])
+                key_status[name].style().polish(key_status[name])
+            if multiline:
+                errors.append("API keys: "
+                              + ", ".join(api_keys.BY_NAME[name].label for name in multiline)
+                              + " must be one line only. No key was saved.")
+            elif any(current.get(name, "") != value for name, value in updates.items()):
                 api_keys.write_values(updates)
                 api_keys.apply(updates)
                 if hasattr(app, "reload_provider_clients"):
@@ -1028,7 +1106,8 @@ _GUIDE_PROVIDERS = (
      "coding and long-context, multi-step tool work."),
     ("qwen", "Qwen (Alibaba Model Studio)",
      "DASHSCOPE_API_KEY — bailian.console.alibabacloud.com (international endpoint; "
-     "DASHSCOPE_BASE_URL switches region, and prices differ by region)",
+     "DASHSCOPE_WORKSPACE_ID or DASHSCOPE_BASE_URL switches to your workspace host; "
+     "prices differ by region)",
      "long-context drafting and analysis, structured output; also Wan video."),
 )
 

@@ -82,12 +82,18 @@ CREDENTIALS: tuple[Credential, ...] = (
                "Booth's ElevenLabs narration route, and the paid voice in Press's Shorts tab. "
                "elevenlabs.io → API keys."),
 
+    Credential("DASHSCOPE_WORKSPACE_ID", "Qwen workspace ID", ENDPOINTS,
+               "Optional. Your Alibaba Model Studio workspace ID, e.g. ws1 (not a web address). With it, "
+               "Qwen chat uses your workspace host, which Alibaba recommends. Leave blank and the standard "
+               "international host is used; it still works. Video is not affected.",
+               secret=False),
     Credential("DASHSCOPE_BASE_URL", "Qwen chat endpoint", ENDPOINTS,
-               "Leave blank for the international host (maintenance mode since 2026-09-30) or set your "
-               "workspace host: https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+               "Leave blank for the standard international host, which still works, or set your "
+               "workspace host: https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1. "
+               "If filled, this overrides the workspace ID.",
                secret=False),
     Credential("DASHSCOPE_VIDEO_BASE_URL", "Wan video endpoint", ENDPOINTS,
-               "Leave blank for the default, or https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/api/v1",
+               "Leave blank for the default. A workspace host (https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/api/v1) is not yet confirmed to serve Wan video",
                secret=False),
 
     Credential("PUBLISHDRIVE_API_KEY", "PublishDrive", PRESS,
@@ -164,6 +170,16 @@ def _quote_if_needed(value: str) -> str:
     return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
+# Everything str.splitlines() ends a line at, which is how this module reads
+# the file back: \r and \n, and the rarer ones a paste can carry too.
+_LINE_BREAKS = "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+
+
+def is_one_line(value: str) -> bool:
+    """True when `value` has no line break the file reader would split on."""
+    return not any(ch in value for ch in _LINE_BREAKS)
+
+
 def write_values(updates: dict[str, str], path: Path | None = None) -> list[str]:
     """Set each NAME=value in the file, preserving every other line.
 
@@ -173,7 +189,14 @@ def write_values(updates: dict[str, str], path: Path | None = None) -> list[str]
     from `.env.example` so the comments come along. The result is written to
     a temp file beside the target and moved into place, then chmod 0600.
     Returns the names whose stored value changed.
+
+    A value with a line break raises ValueError (naming the variable, never
+    the value) before the file is touched: pasted "ws1\\nDASHSCOPE_BASE_URL=…"
+    would otherwise read back as a second, real assignment.
     """
+    multiline = [name for name, value in updates.items() if not is_one_line(value)]
+    if multiline:
+        raise ValueError(f"{', '.join(multiline)}: one line only")
     path = path or env_path()
     if path.exists():
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -294,6 +317,7 @@ def prepare_probe(kind: str, values: dict[str, str] | None = None):
     (client, note); client is None when there is nothing to call and the note
     says why ("not set", "no probe").
     """
+    # Main thread only; the swap is briefly process-wide: a client built elsewhere now sees it.
     saved = {n: os.environ.get(n) for n in (values or {})}
     try:
         for name, value in (values or {}).items():
@@ -333,6 +357,11 @@ def run_probe(kind: str, client) -> tuple[bool, str]:
         models = client.list_models_live()
         return bool(models), f"{len(models)} model(s)"
     except Exception as exc:                       # noqa: BLE001 — the point is to report it
+        if kind == "qwen" and getattr(exc, "status_code", None) == 401:
+            from services.qwen_client import workspace_auth_hint
+            hint = workspace_auth_hint(getattr(client, "base_url", ""))
+            if hint:
+                return False, hint
         reason = str(exc).splitlines()[0][:90] if str(exc) else ""
         return False, f"{type(exc).__name__}: {reason}" if reason else type(exc).__name__
 

@@ -584,13 +584,26 @@ class ModelScanWorker(DaemonWorker):
     endpoint the dropdowns already use — free, and nothing is billed. Runs
     the providers one after another so a slow one delays the rest rather
     than racing them; each answer is emitted as it arrives.
+
+    Then the image and video lane, on its own signals so nothing it finds
+    can reach a chat menu: each media client's `list_media_models_live()`,
+    and last the Higgsfield path probes, strictly one after another (a probe
+    is slow and capped at its own timeout, so chat and media results are
+    already painted by then). Media errors are "unsupported" for a list the
+    provider does not serve here, else the message.
     """
 
     provider_listed = Signal(str, list, str)   # provider, models, error
+    media_listed = Signal(str, list, str)      # provider, models, error
+    path_probed = Signal(str, str, str)        # model, path, status
 
-    def __init__(self, clients: dict):
+    def __init__(self, clients: dict, media_clients: dict | None = None,
+                 probe=None, probe_paths=()):
         super().__init__()
         self.clients = dict(clients)
+        self.media_clients = dict(media_clients or {})
+        self.probe = probe                     # path -> status, or None
+        self.probe_paths = tuple(probe_paths)  # ((model, path), ...)
         self._cancelled = False
 
     def cancel(self) -> None:
@@ -607,6 +620,28 @@ class ModelScanWorker(DaemonWorker):
                            list(fetch() or []), "")
             except Exception as exc:
                 self._emit(self.provider_listed, provider, [], str(exc))
+        from services.model_watch import MEDIA_LIST_UNSUPPORTED, MediaListUnsupported
+        for provider, client in self.media_clients.items():
+            if self._cancelled:
+                return
+            try:
+                self._emit(self.media_listed, provider,
+                           list(client.list_media_models_live() or []), "")
+            except MediaListUnsupported:
+                self._emit(self.media_listed, provider, [], MEDIA_LIST_UNSUPPORTED)
+            except Exception as exc:
+                self._emit(self.media_listed, provider, [],
+                           str(exc) or type(exc).__name__)
+        if self.probe is None:
+            return
+        for model, path in self.probe_paths:
+            if self._cancelled:
+                return
+            try:
+                status = self.probe(path)
+            except Exception:
+                status = "unreachable"
+            self._emit(self.path_probed, model, path, status)
 
 
 class RatingsWorker(DaemonWorker):

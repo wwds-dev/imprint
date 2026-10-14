@@ -104,6 +104,11 @@ and on **Check now** (model lists are free). New models join the menus with a
 **NEW** badge and are ranked on the same evidence as every other model — being
 new earns nothing. **Update N selected** moves an agent to a marked model only
 where the assessment for its current task says it wins by at least one point.
+A separate **Video and image** section lists new Gemini and Qwen video and
+image models (never added to a menu), offered video and image models a
+provider has stopped listing, and shutdown dates such as Veo 3.1's earliest
+shutdown on 22 October 2026. A selected chat model a provider has stopped
+listing is flagged in the chat part. See README §5, *Model updates*.
 
 ### Files and persistence
 

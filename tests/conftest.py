@@ -92,7 +92,7 @@ _database.init_db()
 _CREDENTIAL_ENV = (
     "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY",
     "DEEPSEEK_API_KEY", "KIMI_API_KEY", "DASHSCOPE_API_KEY",
-    "DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_BASE_URL",
+    "DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_BASE_URL", "DASHSCOPE_WORKSPACE_ID",
     "HF_API_KEY_ID", "HF_API_KEY_SECRET",
     "HIGGSFIELD_API_KEY_ID", "HIGGSFIELD_API_KEY_SECRET",
     "HIGGSFIELD_BASE_URL",
@@ -111,6 +111,60 @@ for _name in _CREDENTIAL_ENV:
 # back. The clients all treat a missing key and an empty one the same way.
 for _name in _CREDENTIAL_ENV:
     os.environ[_name] = ""
+
+# The sentinels only hold while the names exist. Settings' Save pops every
+# blank field from os.environ, and vidforge.config.load_env() runs
+# load_dotenv(override=False) the first time the pipeline asks for a path,
+# searching upward from vidforge/ for any .env: in a checkout that is the
+# developer's own, so a popped name could come back with a real key. Marking
+# vidforge's loader done makes it a no-op for the session (the app still runs
+# it), and `_credential_names_stay_blanked` below fails any test that drops a
+# name. The path is appended, never inserted, as agents/video/studio.py does.
+_VIDFORGE_ROOT = PROJECT_ROOT / "vidforge"
+if _VIDFORGE_ROOT.is_dir() and str(_VIDFORGE_ROOT) not in sys.path:
+    sys.path.append(str(_VIDFORGE_ROOT))
+try:
+    from vidforge import config as _vidforge_config  # noqa: E402
+except Exception:                     # no vidforge here: nothing to load a .env either
+    _vidforge_config = None
+else:
+    _vidforge_config._env_loaded = True
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _credential_names_stay_blanked():
+    """Fail the test that removed a blanked name, then put it back so the
+    leak does not spread. A test that changes one records it with
+    monkeypatch.setenv first (test_settings_keys._restore_env_after_save)."""
+    yield
+    dropped = [name for name in _CREDENTIAL_ENV if name not in os.environ]
+    for name in dropped:
+        os.environ[name] = ""
+    if dropped:
+        pytest.fail(f"this test removed {', '.join(dropped)} from os.environ and did not "
+                    "put it back; record it with monkeypatch.setenv before changing it",
+                    pytrace=False)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _collect_the_last_modules_windows():
+    """Free the previous module's widgets now, before this module builds any.
+
+    Most modules build a module-scoped `main.GodAI` and never close it; with
+    its signal-lambda cycles it becomes cyclic garbage when the module ends,
+    and the collector frees it whenever it next runs. If that is inside a
+    new window's `__init__` while it walks `app.allWidgets()`
+    (`install_dropdown_system`, `install_text_fit`), the walk touches freed
+    widgets and the process segfaults: reproduced 2026-10-14 by replaying
+    the `--randomly-seed=28367` order (crash in ui/widgets.py building
+    test_creator_calendar's window, 3 runs of 3), gone with this collection.
+    """
+    import gc
+    gc.collect()
+    yield
+
 
 # ── Public model ratings: the shipped snapshot, and no network ────────────────
 # The window loads services/recommendations/ratings at startup and refreshes it

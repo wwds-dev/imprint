@@ -230,7 +230,12 @@ def _run_check(app, window):
 @pytest.fixture
 def watched_window(app, window, tmp_path, monkeypatch):
     import main
+    from datetime import date
     window.model_watch = ModelWatch(tmp_path / "model_watch.json")
+    # The tile counts a media shutdown within 14 days as a warning in the
+    # section title; these tests are about chat models, so they run on a
+    # day with no shutdown near rather than on the real clock.
+    monkeypatch.setattr(window, "_media_today", lambda: date(2026, 9, 1))
     window.model_list_cache.pop("qwen", None)
     monkeypatch.setattr(main, "WATCHED_PROVIDERS", ("qwen",))
     original = window.qwen

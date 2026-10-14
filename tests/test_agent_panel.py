@@ -366,3 +366,26 @@ def test_revisiting_an_inflight_provider_does_not_double_connect(
     worker = host.model_list_workers["openai"]
     worker.models_signal.emit("openai", ["gpt-live"], "")
     assert refreshed == ["author"]    # exactly one swap per emission
+
+
+def test_a_live_list_never_puts_image_or_video_ids_in_the_box(app, monkeypatch):
+    """Gemini lists its image models as generateContent; the panel's own first
+    fetch used to show them as text models before the host's cache (already
+    filtered) refilled the box. Spec docs/specs/model-watch-media.md."""
+    from ui.workers import ModelListWorker
+    monkeypatch.setattr(ModelListWorker, "start", lambda self: None)
+    host = _async_host()
+    panel = AgentPanel(host, "author", default_provider="gemini")
+    panel.load_models()
+    panel._apply_live("gemini", ["gemini-3.1-pro-preview", "gemini-3-pro-image",
+                                 "gemini-nano-banana-2.1", "veo-3.1-generate-preview",
+                                 "imagen-4.0-generate-001"], "")
+    items = [panel.model_box.itemText(i) for i in range(panel.model_box.count())]
+    assert items == ["gemini-3.1-pro-preview"]
+    assert panel.model_box.property("imprintModelsLive") is True
+
+    before = list(items)
+    panel._apply_live("gemini", ["gemini-3-pro-image"], "")   # nothing for text
+    assert [panel.model_box.itemText(i)
+            for i in range(panel.model_box.count())] == before
+    assert panel.model_box.property("imprintModelsLive") is False

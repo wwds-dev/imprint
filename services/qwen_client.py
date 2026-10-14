@@ -1,6 +1,8 @@
 import os
+import re
 import time
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 import requests
 from openai import OpenAI
@@ -14,45 +16,158 @@ from services.media_catalog import WAN_VIDEO_MODELS
 # ones — only the base URL and key differ.
 #
 # Endpoints are regional. The international ("intl", Singapore-routed) host is
-# the right default outside mainland China; DASHSCOPE_BASE_URL overrides it for
-# a China account or a workspace-scoped regional host, so switching regions
-# never needs a code change.
+# the right default outside mainland China. DASHSCOPE_WORKSPACE_ID (Singapore
+# only) derives the workspace host Alibaba recommends; DASHSCOPE_BASE_URL
+# overrides both, for a China account or any other host, so switching regions
+# never needs a code change. Blank values count as unset.
 INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
 CHINA_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 INTL_VIDEO_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1"
+WORKSPACE_HOST_SUFFIX = ".ap-southeast-1.maas.aliyuncs.com"
+WORKSPACE_CHAT_PATH = "/compatible-mode/v1"
+
+_WORKSPACE_ID_RE = re.compile(r"[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?", re.ASCII)
+
+
+def _env(name: str) -> str:
+    return os.environ.get(name, "").strip()
+
+
+def valid_workspace_id(raw) -> str | None:
+    """The workspace id as one lower-case DNS label, or None.
+
+    Strict on purpose: the API key is sent to the host built from this, so
+    anything that is not a plain label (dots, slashes, @, :, spaces, non-ASCII)
+    is refused rather than cleaned up. Non-ASCII is refused before lower-casing,
+    so a lookalike such as the Kelvin sign cannot fold into a plain "k".
+    """
+    label = str(raw or "").strip()
+    if not label.isascii():
+        return None
+    label = label.lower()
+    return label if _WORKSPACE_ID_RE.fullmatch(label) else None
 
 
 def _base_url() -> str:
-    return os.getenv("DASHSCOPE_BASE_URL", INTL_BASE_URL)
+    explicit = _env("DASHSCOPE_BASE_URL")
+    if explicit:
+        return explicit
+    label = valid_workspace_id(_env("DASHSCOPE_WORKSPACE_ID"))
+    if label:
+        return f"https://{label}{WORKSPACE_HOST_SUFFIX}{WORKSPACE_CHAT_PATH}"
+    return INTL_BASE_URL
 
 
-# Alibaba put the international host into maintenance mode on 2026-09-30: it
-# keeps serving, but new models and features ship only on the workspace-scoped
-# regional host, https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com. There
-# is no public way to derive the workspace id, so the app cannot switch on its
-# own; it says so instead (readiness gate 2026-10-09, TODO P3).
+# Alibaba recommends the workspace-scoped regional host,
+# https://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com; the
+# international host keeps working, so switching is optional. There is no
+# public way to derive the workspace id, so the app cannot switch on its own.
 LEGACY_HOSTS = ("dashscope-intl.aliyuncs.com",)
-LEGACY_SINCE = "2026-09-30"
+_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+
+
+def url_host(url: str) -> str:
+    """The lower-case host name of `url`, or "" when it has none or cannot be
+    trusted. A backslash counts as no host: urlparse reads
+    https://evil.com\\@x.maas.aliyuncs.com as x.maas..., an HTTP client may not."""
+    url = url or ""
+    if "\\" in url:
+        return ""
+    try:
+        return urlparse(url).hostname or ""
+    except ValueError:
+        return ""
+
+
+def is_workspace_host(url: str) -> bool:
+    """True when `url` points at an Alibaba workspace host (*.maas.aliyuncs.com),
+    compared on the parsed host name, never as a substring."""
+    return url_host(url).endswith(".maas.aliyuncs.com")
 
 
 def on_legacy_endpoint() -> bool:
-    """True while chat requests go to the maintenance-mode international host."""
-    return any(host in _base_url() for host in LEGACY_HOSTS)
+    """True while chat requests go to the standard international host."""
+    return url_host(_base_url()) in LEGACY_HOSTS
+
+
+def endpoint_warning(url: str, subject: str = "This address") -> str:
+    """Plain words when a hand-typed endpoint deserves a second look, else "".
+
+    The DashScope key is sent to whatever DASHSCOPE_BASE_URL or
+    DASHSCOPE_VIDEO_BASE_URL names. Those stay the owner's override, so this
+    warns and never blocks: a scheme other than https (plain http to this Mac
+    is fine), or a host outside aliyuncs.com.
+    """
+    url = (url or "").strip()
+    if not url:
+        return ""
+    host = url_host(url)
+    problems = []
+    if not host:
+        problems.append("is not a plain https:// web address the app can check")
+    else:
+        scheme = urlparse(url).scheme.lower()
+        if scheme != "https" and not (scheme == "http" and host in _LOOPBACK_HOSTS):
+            problems.append("is not https (unencrypted)")
+        if host != "aliyuncs.com" and not host.endswith(".aliyuncs.com"):
+            problems.append("is not an Alibaba Cloud host (aliyuncs.com)")
+    if not problems:
+        return ""
+    return (f"{subject} {' and '.join(problems)}. Your Qwen key is sent to it, so "
+            "check it is the address you meant.")
+
+
+def explicit_endpoint_warning() -> str:
+    """endpoint_warning for the explicit chat and video URLs in the
+    environment, each named, or "" when both are blank or look right."""
+    return " ".join(w for w in (endpoint_warning(_env(name), name)
+                                for name in ("DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_BASE_URL"))
+                    if w)
 
 
 def endpoint_note() -> str:
-    """One honest line for the key tile and the key check, or "" when the
-    workspace host is configured."""
-    if not on_legacy_endpoint():
+    """One honest line for the key tile and the key check: a caution about a
+    hand-typed endpoint, then why a set workspace ID is not used or the
+    standard host's recommendation; "" when a workspace host is configured and
+    nothing needs a second look."""
+    notes = [explicit_endpoint_warning()]
+    if on_legacy_endpoint():
+        workspace_id = _env("DASHSCOPE_WORKSPACE_ID")
+        explicit = _env("DASHSCOPE_BASE_URL")
+        if workspace_id and valid_workspace_id(workspace_id) is None and not explicit:
+            notes.append("Workspace ID not used: DASHSCOPE_WORKSPACE_ID must be letters, "
+                         "digits and hyphens only (just the ID, not the address), so chat "
+                         "uses the standard international host, which still works.")
+        else:
+            # A hand-typed standard-host URL wins over any ID, so setting one
+            # would change nothing; say which line to clear instead.
+            notes.append("Alibaba recommends a workspace host "
+                         "(https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/...). "
+                         "The standard international host still works, so "
+                         "switching is optional. "
+                         + ("DASHSCOPE_BASE_URL is set and overrides the workspace ID; clear "
+                            "it to use DASHSCOPE_WORKSPACE_ID." if explicit
+                            else "Set DASHSCOPE_WORKSPACE_ID to use it."))
+    return " ".join(note for note in notes if note)
+
+
+def workspace_auth_hint(base_url: str) -> str:
+    """The 401 explanation for a workspace host, else "". A key from another
+    workspace or region is rejected there; the standard host keeps its text."""
+    if not is_workspace_host(base_url):
         return ""
-    return (f"Legacy international endpoint (maintenance mode since {LEGACY_SINCE}) — "
-            "works, but Qwen models released after that date may be missing. Set "
-            "DASHSCOPE_BASE_URL to your workspace host "
-            "(https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1).")
+    return ("rejected (401). This key may belong to a different workspace or region. "
+            "Check that the key and the workspace ID come from the same Model Studio "
+            "workspace (Singapore).")
 
 
-def _video_base_url() -> str:
-    return os.getenv("DASHSCOPE_VIDEO_BASE_URL", INTL_VIDEO_BASE_URL).rstrip("/")
+def video_base_url() -> str:
+    """Wan / Qwen Image base. The workspace id does not apply here until Wan is
+    confirmed on the workspace host."""
+    return _env("DASHSCOPE_VIDEO_BASE_URL").rstrip("/") or INTL_VIDEO_BASE_URL
+
+
+_video_base_url = video_base_url
 
 
 @dataclass
@@ -112,7 +227,7 @@ class QwenClientWrapper:
             if self.api_key
             else None
         )
-        self.video_base_url = _video_base_url()
+        self.video_base_url = video_base_url()
         # requests.Session does not retry POSTs unless an adapter explicitly
         # enables it, so an ambiguous timeout cannot duplicate a paid task.
         self.video_session = requests.Session() if self.api_key else None
@@ -146,6 +261,87 @@ class QwenClientWrapper:
         result = self.client.models.list()
         models = sorted(m.id for m in result.data)
         return models if models else self.KNOWN_MODELS
+
+    # Page size asked of the native list, and a ceiling on pages, so a body
+    # that never stops claiming more cannot keep the scan looping.
+    MEDIA_PAGE_SIZE = 100
+    MEDIA_MAX_PAGES = 20
+
+    def list_media_models_live(self) -> list[str]:
+        """Image- and video-generation ids (capabilities IG, VG), for Model
+        updates, or an exception.
+
+        The native `GET /api/v1/models` on the Wan host (video_base_url():
+        the workspace host is not used, as for Wan renders); the
+        compatible-mode list is not known to include these ids. No key gives
+        [], never KNOWN_MODELS. A 404/405 or a body without the expected
+        list raises MediaListUnsupported, which the scan drops silently; any
+        other failure raises as it is. The response shape follows Alibaba's
+        list-models page and is not verified against a live account.
+        """
+        from services.model_watch import valid_model_id
+        if not self.api_key:
+            return []
+        # Sent unprompted at every scan, so the key never goes over plain
+        # HTTP to an owner-set host (localhost excepted, for a local proxy).
+        parsed = urlparse(self.video_base_url)
+        if parsed.scheme != "https" and parsed.hostname not in ("localhost", "127.0.0.1"):
+            raise RuntimeError(
+                "DASHSCOPE_VIDEO_BASE_URL is not https; the media list was not "
+                "requested, so the key was not sent.")
+        url = f"{self.video_base_url}/models"
+        found: set[str] = set()
+        with self._media_session() as session:
+            for page in range(1, self.MEDIA_MAX_PAGES + 1):
+                models, total = self._media_page(session, url, page)
+                for item in models:
+                    if not isinstance(item, dict):
+                        continue
+                    model_id = str(item.get("model") or "").strip()
+                    capabilities = item.get("capabilities") or []
+                    if isinstance(capabilities, str):
+                        capabilities = [capabilities]
+                    if (valid_model_id(model_id)
+                            and {"IG", "VG"} & {str(c) for c in capabilities}):
+                        found.add(model_id)
+                # Without a total, a full page means there may be another: a
+                # list cut short would read as models going missing.
+                more = (page * self.MEDIA_PAGE_SIZE < total if total is not None
+                        else len(models) >= self.MEDIA_PAGE_SIZE)
+                if not models or not more:
+                    break
+        return sorted(found)
+
+    @staticmethod
+    def _media_session() -> requests.Session:
+        """A session of its own: video_session belongs to the Video panel's
+        render workers, and this runs on the Model updates scan thread."""
+        return requests.Session()
+
+    def _media_page(self, session, url: str, page: int) -> tuple[list, int | None]:
+        """One page of the native list: its models, and the total if given."""
+        from services.model_watch import MediaListUnsupported
+        response = session.get(
+            url, headers=self._video_headers(),
+            params={"page_no": page, "page_size": self.MEDIA_PAGE_SIZE},
+            timeout=REQUEST_TIMEOUT_SECONDS)
+        if response.status_code in (404, 405):
+            raise MediaListUnsupported(
+                f"Qwen media list not served here (HTTP {response.status_code})")
+        response.raise_for_status()
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise MediaListUnsupported("Qwen media list is not JSON") from exc
+        output = body.get("output") if isinstance(body, dict) else None
+        models = output.get("models") if isinstance(output, dict) else None
+        if not isinstance(models, list):
+            raise MediaListUnsupported("Qwen media list has an unexpected shape")
+        try:
+            total = int(output["total"]) if output.get("total") is not None else None
+        except (TypeError, ValueError):
+            total = None
+        return models, total
 
     def chat(self, messages, model=DEFAULT_MODEL):
         if not self.client:

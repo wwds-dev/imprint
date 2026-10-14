@@ -152,6 +152,13 @@ class AgentPanel(QObject):
             # The host already noted the failure; the seeded list stays.
             self.model_box.setProperty("imprintModelsLive", False)
             return
+        # A chat list can carry image or video ids (Gemini lists its image
+        # models as generateContent); they are not text model options.
+        from services.model_watch import is_chat_model
+        models = [m for m in models if is_chat_model(m)]
+        if not models:
+            self.model_box.setProperty("imprintModelsLive", False)
+            return
         keep = self.model_box.currentText()
         self.model_box.clear()
         self.model_box.setProperty("imprintModelsLive", True)

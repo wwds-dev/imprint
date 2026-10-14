@@ -7,7 +7,7 @@ import sys
 import time
 import types
 from dataclasses import replace
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -95,7 +95,12 @@ from services.recommendations.catalog import (
     request_cost_efficiency,
     speech_candidate, text_candidates,
 )
-from services.model_watch import WATCHED_PROVIDERS, ModelWatch
+from services.model_watch import (
+    MEDIA_LIST_UNSUPPORTED, MEDIA_WATCHED_PROVIDERS, WATCHED_PROVIDERS,
+    ModelWatch, is_chat_model,
+)
+from services.model_watch_digest import media_digest
+from services.higgsfield_client import SEEDANCE_ENDPOINTS, HiggsfieldClient
 from services.pricing_catalog import PROVIDER_LABELS, has_exact_price
 
 
@@ -164,6 +169,14 @@ AGENT_CONTEXT_WIDGETS = {
 }
 
 AGENT_PRETTY_NAMES = {spec.key: spec.label for spec in AGENT_SPECS}
+
+# Footer names for the Model updates scan's non-chat checks.
+SCAN_NOTE_LABELS = {
+    "gemini:media": "Gemini (video and image list)",
+    "qwen:media": "Qwen (video and image list)",
+    "higgsfield": "Higgsfield",
+    "higgsfield:probe": "Higgsfield (Seedance paths)",
+}
 
 
 from ui.panels.base import AgentPanel
@@ -268,6 +281,11 @@ class GodAI(QWidget):
         self.last_applied_assessment = None
         self._model_scan_skipped: list[str] = []
         self._model_scan_failed: dict[str, str] = {}
+        # The Seedance path check: why it did or did not run this scan
+        # (_higgsfield_probe_allowed), and the client it runs on — built per
+        # scan, injectable so a test can count its calls.
+        self._model_scan_probe: str = ""
+        self._higgsfield_factory = HiggsfieldClient
 
         self.author_worker: Optional[ChatWorker] = None
         self._author_export_done: bool = False
@@ -3059,6 +3077,8 @@ class GodAI(QWidget):
             lambda: self.check_for_new_models())
         self.model_updates_card.dismiss_btn.clicked.connect(
             self.dismiss_new_models)
+        self.model_updates_card.media_dismissed.connect(
+            self.dismiss_media_notices)
         self.model_updates_card.update_btn.clicked.connect(
             self.update_selected_models)
         self.model_updates_card.startup_checkbox.setChecked(
@@ -3857,7 +3877,12 @@ class GodAI(QWidget):
         self-healed on every provider switch, and this keeps that.
         """
         if models:
-            self.model_list_cache[provider] = list(models)
+            # Chat menus read this cache: an image or video id a chat list
+            # carries (Gemini lists its image models as generateContent)
+            # must not become a text model option.
+            chat_models = [m for m in models if is_chat_model(m)]
+            if chat_models:
+                self.model_list_cache[provider] = chat_models
             # A panel's fetch is as good a look as the Model updates check,
             # so news reaches the tile with the startup check switched off.
             if self._observe_live_models(provider, models):
@@ -3867,12 +3892,15 @@ class GodAI(QWidget):
             self._note_failure(f"models: {provider}", RuntimeError(error))
 
     # ── Model updates ───────────────────────────────────────────────────────
-    def _observe_live_models(self, provider: str, models: list) -> bool:
+    def _observe_live_models(self, provider: str, models: list,
+                             tracked=None) -> bool:
         """Feed one live list to the watch; True if it announced something.
 
         Only a keyed client's answer is live — without a key, list_models_live
         returns the offline KNOWN_MODELS, and baselining that would record a
-        list the provider never sent.
+        list the provider never sent. `tracked` (the scan's selected models)
+        is what the watch counts absences for; None, from a panel's fetch,
+        counts none.
         """
         if provider not in WATCHED_PROVIDERS:
             return False
@@ -3886,10 +3914,88 @@ class GodAI(QWidget):
         if hasattr(client, "client") and getattr(client, "client") is None:
             return False
         try:
-            return bool(self.model_watch.observe(provider, models))
+            return bool(self.model_watch.observe(provider, models,
+                                                 tracked=tracked))
         except OSError as exc:
             self._note_failure("model updates: save", exc)
             return False
+
+    def _selected_chat_models(self, provider: str) -> tuple[str, ...]:
+        """The models agents have selected on `provider`, read on this thread."""
+        selected = []
+        for provider_attr, model_attr in AGENT_SETUP_WIDGETS.values():
+            provider_box = self._find_control(provider_attr)
+            model_box = self._find_control(model_attr)
+            if (provider_box is None or model_box is None
+                    or provider_box.currentText() != provider):
+                continue
+            model = model_box.currentText()
+            if model and model not in selected:
+                selected.append(model)
+        return tuple(selected)
+
+    def _agents_using(self, provider: str, model_id: str) -> tuple[str, ...]:
+        labels = []
+        for agent_key, (provider_attr, model_attr) in AGENT_SETUP_WIDGETS.items():
+            provider_box = self._find_control(provider_attr)
+            model_box = self._find_control(model_attr)
+            if (provider_box is not None and model_box is not None
+                    and provider_box.currentText() == provider
+                    and model_box.currentText() == model_id):
+                labels.append(AGENT_PRETTY_NAMES.get(agent_key, agent_key))
+        return tuple(labels)
+
+    def _media_today(self):
+        """Today, for shutdown dates; a test replaces it with a fixed day."""
+        return date.today()
+
+    def _offered_media_ids(self, provider: str) -> tuple[str, ...]:
+        from services.media_catalog import offered_models
+        return tuple(m.model_id for m in offered_models(self._media_today().isoformat())
+                     if m.provider.casefold() == provider.casefold())
+
+    def _higgsfield_probe_allowed(self) -> str:
+        """Whether this scan may check the Seedance paths: "ok", "no_key",
+        "off", "not_permitted" or "refused" (the guard's own checks said no).
+
+        Off by default: `/estimate` is not in Higgsfield's public docs, so
+        the owner switches `model_watch_probe_higgsfield` on in settings.json
+        only after confirming by hand that it costs nothing. The probe goes
+        through the guard's validator (agent, provider, permission, budgets)
+        but not authorize_request, whose confirmation dialog has no place in
+        a background check meant to cost nothing.
+        """
+        client = self._higgsfield_factory()
+        if not client.configured:
+            return "no_key"
+        # Only a real JSON true switches it on: "false" or 0 must not.
+        if self.settings.get("model_watch_probe_higgsfield") is not True:
+            return "off"
+        permissions = self.current_api_permissions()
+        if not permissions.get("allow_higgsfield"):
+            return "not_permitted"
+        reserved = self._reserved_in_flight_eur()
+        validation = self.validator.validate(
+            agent_name="video",
+            tool_name=None,
+            provider="higgsfield",
+            api_permissions=permissions,
+            session_cost=self.session_cost_total + reserved,
+            session_budget=self.session_budget_eur,
+            daily_cost=self.usage_tracker.get_today_total() + reserved,
+            daily_budget=self.daily_budget_eur,
+            estimated_cost=0.0,
+            agent_daily_cost=self.usage_tracker.get_agent_today_total("video"),
+            **self._project_budget_fields(),
+        )
+        return "ok" if validation.allowed else "refused"
+
+    def _seedance_probe_paths(self) -> tuple[tuple[str, str], ...]:
+        """Both paths of every Seedance model Imprint offers — not the legacy
+        1.0-lite pair, which would only ever read as "not answering"."""
+        return tuple((model_id, path)
+                     for model_id in self._offered_media_ids("higgsfield")
+                     for path in SEEDANCE_ENDPOINTS.get(model_id, ()))
 
     def check_for_new_models(self) -> None:
         """Ask every keyed cloud provider for its model list, off the GUI thread.
@@ -3911,13 +4017,40 @@ class GodAI(QWidget):
                 clients[provider] = client
             else:
                 skipped.append(provider)
+        # The image and video lane: the same keyed clients' media lists, on
+        # signals of their own so nothing they find reaches a chat menu.
+        media_clients = {
+            provider: clients[provider] for provider in MEDIA_WATCHED_PROVIDERS
+            if provider in clients
+            and callable(getattr(clients[provider], "list_media_models_live", None))}
         self._model_scan_skipped = skipped
         self._model_scan_failed = {}
-        if not clients:
+        self._model_scan_probe = self._higgsfield_probe_allowed()
+        probe, probe_paths = None, ()
+        # At most once per UTC day: the stored answers stand until then.
+        if self._model_scan_probe == "ok" and not self.model_watch.probed_today():
+            probe = self._higgsfield_factory().probe_endpoint
+            probe_paths = self._seedance_probe_paths()
+            try:
+                self.model_watch.mark_probed(path for _m, path in probe_paths)
+            except OSError as exc:
+                self._note_failure("model updates: save", exc)
+        elif self._model_scan_probe != "ok":
+            # No probe may run, so no stored answer stands: a "not answering"
+            # row from before the check was switched off or gated would
+            # otherwise never clear (it has no Dismiss).
+            try:
+                self.model_watch.clear_probes()
+            except OSError as exc:
+                self._note_failure("model updates: save", exc)
+        if not clients and not media_clients and probe is None:
             self.refresh_model_updates()
             return
-        worker = ModelScanWorker(clients)
+        worker = ModelScanWorker(clients, media_clients=media_clients,
+                                 probe=probe, probe_paths=probe_paths)
         worker.provider_listed.connect(self._on_model_scan_listed)
+        worker.media_listed.connect(self._on_media_scan_listed)
+        worker.path_probed.connect(self._on_path_probed)
         worker.finished.connect(self._on_model_scan_finished)
         self.model_scan_worker = worker
         self.model_updates_card.set_checking(True)
@@ -3962,9 +4095,43 @@ class GodAI(QWidget):
         if not models:
             self._model_scan_failed[provider] = error or "returned no models"
             return
-        self.model_list_cache[provider] = list(models)
-        self._observe_live_models(provider, models)
-        self._refresh_model_menus(provider, models)
+        chat_models = [m for m in models if is_chat_model(m)]
+        if chat_models:
+            self.model_list_cache[provider] = chat_models
+        self._observe_live_models(provider, models,
+                                  tracked=self._selected_chat_models(provider))
+        if chat_models:
+            self._refresh_model_menus(provider, chat_models)
+
+    def _on_media_scan_listed(self, provider: str, models: list,
+                              error: str) -> None:
+        """One media list from the scan. Never touches a chat menu or the
+        chat cache: it feeds only the watch's media lane."""
+        if error == MEDIA_LIST_UNSUPPORTED:
+            return      # not served for this account or host: say nothing
+        if error:
+            self._model_scan_failed[f"{provider}:media"] = error
+            self.refresh_model_updates()
+            return
+        if not models:
+            return      # an empty list is not an absence of every model
+        try:
+            self.model_watch.observe_media(
+                provider, models, tracked=self._offered_media_ids(provider))
+        except OSError as exc:
+            self._note_failure("model updates: save", exc)
+        self.refresh_model_updates()
+
+    def _on_path_probed(self, model: str, path: str, status: str) -> None:
+        if status in ("answering", "missing"):
+            try:
+                self.model_watch.observe_probe(path, status)
+            except OSError as exc:
+                self._note_failure("model updates: save", exc)
+        else:
+            # A host that did not answer says nothing about the path.
+            self._model_scan_failed["higgsfield:probe"] = f"{model}: {status}"
+        self.refresh_model_updates()
 
     def _refresh_model_menus(self, provider: str, models: list) -> None:
         """Put a provider's newest list into every menu showing that provider.
@@ -4013,8 +4180,18 @@ class GodAI(QWidget):
         self.refresh_model_updates()
 
     def dismiss_new_models(self) -> None:
-        self.model_watch.acknowledge()
+        try:
+            self.model_watch.acknowledge()
+        except OSError as exc:
+            self._note_failure("model updates: save", exc)
         self.model_updates_card.set_result("")
+        self.refresh_model_updates()
+
+    def dismiss_media_notices(self) -> None:
+        try:
+            self.model_watch.acknowledge_media()
+        except OSError as exc:
+            self._note_failure("model updates: save", exc)
         self.refresh_model_updates()
 
     def update_selected_models(self) -> None:
@@ -4164,7 +4341,14 @@ class GodAI(QWidget):
         if card is None:
             return
         pending = self.model_watch.pending()
+        removed = self.model_watch.removals("chat")
         card.set_notices([
+            ModelNotice(
+                PROVIDER_LABELS.get(r.provider, r.provider.title()),
+                r.model_id, provider=r.provider, removed=True,
+                used_by=self._agents_using(r.provider, r.model_id))
+            for r in removed
+        ] + [
             ModelNotice(
                 PROVIDER_LABELS.get(n.provider, n.provider.title()),
                 n.model_id,
@@ -4177,8 +4361,16 @@ class GodAI(QWidget):
             )
             for n in pending
         ])
-        self.model_updates_section.set_title(
-            f"Model updates · {len(pending)} new" if pending else "Model updates")
+        digest = media_digest(self.model_watch, self._media_today())
+        card.set_media(digest)
+        new_count = len(pending) + digest.new_count
+        warnings = len(removed) + digest.warning_count
+        title = "Model updates"
+        if new_count:
+            title += f" · {new_count} new"
+        if warnings:
+            title += f" · {warnings} warning" + ("s" if warnings > 1 else "")
+        self.model_updates_section.set_title(title)
 
         checked = self.model_watch.last_checked
         if checked:
@@ -4190,19 +4382,36 @@ class GodAI(QWidget):
         else:
             checked_text = "Not checked yet"
         notes = []
-        names = lambda keys: ", ".join(
-            PROVIDER_LABELS.get(k, k.title()) for k in keys)
-        if self._model_scan_skipped:
-            if len(self._model_scan_skipped) == len(WATCHED_PROVIDERS):
-                notes.append("Add a provider key to check for new models.")
-            else:
-                notes.append(f"No key, not checked: {names(self._model_scan_skipped)}")
+        def label(key: str) -> str:
+            return SCAN_NOTE_LABELS.get(key) or PROVIDER_LABELS.get(key, key.title())
+
+        def names(keys) -> str:
+            return ", ".join(label(k) for k in keys)
+
+        probe = self._model_scan_probe
+        skipped = list(self._model_scan_skipped)
+        no_chat_key = bool(skipped) and len(skipped) == len(WATCHED_PROVIDERS)
+        if probe == "no_key":
+            skipped.append("higgsfield")
+        if no_chat_key and probe in ("", "no_key"):
+            notes.append("Add a provider key to check for new models.")
+        elif skipped:
+            notes.append(f"No key, not checked: {names(skipped)}")
+        if probe == "off":
+            notes.append("Seedance paths not checked: the Higgsfield check is off.")
+        elif probe == "not_permitted":
+            notes.append("Seedance paths not checked: the Higgsfield "
+                         "chip under Paid media is off.")
+        elif probe == "refused":
+            notes.append("Seedance paths not checked: the request guard "
+                         "refused the check (agent, budget or permission).")
         if self._model_scan_failed:
             notes.append(f"Could not reach: {names(self._model_scan_failed)}")
         card.set_footer(checked_text, "\n".join(notes))
-        card.skipped_label.setToolTip("\n".join(
-            f"{PROVIDER_LABELS.get(k, k)}: {v}"
-            for k, v in self._model_scan_failed.items()))
+        tips = [f"{label(k)}: {v}" for k, v in self._model_scan_failed.items()]
+        if probe == "off":
+            tips.append("It turns on once its call is confirmed to cost nothing.")
+        card.skipped_label.setToolTip("\n".join(tips))
         card.set_ratings(
             model_ratings.describe(self.ratings),
             "A text model's output quality in every BEST FIT and paid-request "
