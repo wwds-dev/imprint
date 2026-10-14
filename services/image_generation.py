@@ -124,8 +124,8 @@ def _gemini_image(model_id: str, prompt: str, aspect: str,
 # ── Qwen Image (DashScope) ──────────────────────────────────────────────────
 
 def _qwen_endpoint() -> str:
-    base = os.getenv("DASHSCOPE_VIDEO_BASE_URL",
-                     "https://dashscope-intl.aliyuncs.com/api/v1").rstrip("/")
+    from services.qwen_client import video_base_url
+    base = video_base_url()
     return f"{base}/services/aigc/multimodal-generation/generation"
 
 

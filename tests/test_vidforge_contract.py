@@ -140,6 +140,16 @@ class TestConfigContract:
                 f"vidforge.config.{name} is gone; Imprint reads it "
                 "(SECRETS_DIR is how the YouTube publisher reports readiness)")
 
+    def test_vidforge_loads_no_dotenv_during_the_suite(self, monkeypatch):
+        """tests/conftest.py marks load_env done; if vidforge renames that
+        flag, its upward .env search could refill a credential a test removed."""
+        from vidforge import config as vf_config
+
+        calls = []
+        monkeypatch.setattr(vf_config, "load_dotenv", lambda *a, **k: calls.append(1))
+        vf_config.load_env()
+        assert calls == [], "vidforge.config._env_loaded is no longer the switch"
+
 
 class TestImportingVidforgeDoesNotShadowImprint:
     """The nested repo is a whole application, not just a package.

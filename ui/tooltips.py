@@ -95,7 +95,7 @@ def seed_tooltips(app):
         "kimi_key_label":           "Whether a Kimi (Moonshot AI) API key is configured. Set KIMI_API_KEY in .env or ~/.zshrc.",
         "gemini_key_label":         "Whether a Google Gemini API key is configured. Set GOOGLE_API_KEY in .env or ~/.zshrc.",
         "anthropic_key_label":      "Whether an Anthropic API key is configured. Set ANTHROPIC_API_KEY in .env or ~/.zshrc.",
-        "qwen_key_label":           "Whether an Alibaba Model Studio (Qwen) key is configured. Set DASHSCOPE_API_KEY in .env or ~/.zshrc; DASHSCOPE_BASE_URL switches region.",
+        "qwen_key_label":           "Whether an Alibaba Model Studio (Qwen) key is configured. Set DASHSCOPE_API_KEY in .env or ~/.zshrc. Optional: DASHSCOPE_WORKSPACE_ID (or DASHSCOPE_BASE_URL) uses your workspace host.",
     })
 
     # ── Per-agent panel tooltips ─────────────────────────────────────

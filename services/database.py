@@ -984,7 +984,7 @@ def _seed_missing_pricing(conn: sqlite3.Connection) -> None:
         # Qwen via Alibaba Model Studio. Pricing is regional; these are the
         # international (Singapore) rates, because that is the endpoint the
         # client defaults to. Frankfurt/Hong Kong/Beijing list qwen3.8-max at
-        # 1.65/4.951 — set DASHSCOPE_BASE_URL and edit the rows to match.
+        # 1.65/4.951 — set DASHSCOPE_BASE_URL (or the workspace ID) and edit the rows to match.
         ("qwen", "qwen3.8-max",                     2.00,   6.00, 0.00),
         ("qwen", "default",                         2.00,   6.00, 0.00),
     ]

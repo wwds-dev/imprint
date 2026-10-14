@@ -45,9 +45,11 @@ which build is running before changing a file.
 
 A **Configured** badge (drawn in the theme's accent colour) shows detected
 configuration, not policy approval, account quota, current provider health, or
-rights to the submitted content. Hover a row for any caveat: the Qwen row says
-when requests still go to DashScope's maintenance-mode international host,
-where newer Qwen models may be missing. To learn whether a key is actually
+rights to the submitted content. Hover the dot at the start of the Qwen row
+for its caveat: it says when requests still go to DashScope's standard
+international host. Alibaba recommends your own workspace host instead, but the
+standard one still works; to switch, enter your workspace ID under Settings →
+API keys → Qwen workspace ID. To learn whether a key is actually
 accepted, run `scripts/check_keys.py` from the project folder; it asks each
 provider for its model list, bills nothing and never prints a key.
 

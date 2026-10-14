@@ -92,7 +92,7 @@ _database.init_db()
 _CREDENTIAL_ENV = (
     "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY",
     "DEEPSEEK_API_KEY", "KIMI_API_KEY", "DASHSCOPE_API_KEY",
-    "DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_BASE_URL",
+    "DASHSCOPE_BASE_URL", "DASHSCOPE_VIDEO_BASE_URL", "DASHSCOPE_WORKSPACE_ID",
     "HF_API_KEY_ID", "HF_API_KEY_SECRET",
     "HIGGSFIELD_API_KEY_ID", "HIGGSFIELD_API_KEY_SECRET",
     "HIGGSFIELD_BASE_URL",
@@ -111,6 +111,42 @@ for _name in _CREDENTIAL_ENV:
 # back. The clients all treat a missing key and an empty one the same way.
 for _name in _CREDENTIAL_ENV:
     os.environ[_name] = ""
+
+# The sentinels only hold while the names exist. Settings' Save pops every
+# blank field from os.environ, and vidforge.config.load_env() runs
+# load_dotenv(override=False) the first time the pipeline asks for a path,
+# searching upward from vidforge/ for any .env: in a checkout that is the
+# developer's own, so a popped name could come back with a real key. Marking
+# vidforge's loader done makes it a no-op for the session (the app still runs
+# it), and `_credential_names_stay_blanked` below fails any test that drops a
+# name. The path is appended, never inserted, as agents/video/studio.py does.
+_VIDFORGE_ROOT = PROJECT_ROOT / "vidforge"
+if _VIDFORGE_ROOT.is_dir() and str(_VIDFORGE_ROOT) not in sys.path:
+    sys.path.append(str(_VIDFORGE_ROOT))
+try:
+    from vidforge import config as _vidforge_config  # noqa: E402
+except Exception:                     # no vidforge here: nothing to load a .env either
+    _vidforge_config = None
+else:
+    _vidforge_config._env_loaded = True
+
+import pytest  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def _credential_names_stay_blanked():
+    """Fail the test that removed a blanked name, then put it back so the
+    leak does not spread. A test that changes one records it with
+    monkeypatch.setenv first (test_settings_keys._restore_env_after_save)."""
+    yield
+    dropped = [name for name in _CREDENTIAL_ENV if name not in os.environ]
+    for name in dropped:
+        os.environ[name] = ""
+    if dropped:
+        pytest.fail(f"this test removed {', '.join(dropped)} from os.environ and did not "
+                    "put it back; record it with monkeypatch.setenv before changing it",
+                    pytrace=False)
+
 
 # ── Public model ratings: the shipped snapshot, and no network ────────────────
 # The window loads services/recommendations/ratings at startup and refreshes it

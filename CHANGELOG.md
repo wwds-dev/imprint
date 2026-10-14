@@ -22,6 +22,49 @@ This file is generated from `git log`; see the note at the bottom for how to
 regenerate it. It states what the code does, not how well it works for you:
 nothing here is a claim about income, sales or publishing results.
 
+## 2026-10-14
+
+### Added
+- Settings -> API keys has a **Qwen workspace ID** field (`DASHSCOPE_WORKSPACE_ID`,
+  Singapore only). Entering the ID sends Qwen chat to
+  `https://<id>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`, the host
+  Alibaba recommends. The ID must be one plain label (letters, digits, hyphens);
+  anything else is ignored with a visible message, so the ID can only point the
+  key at a `*.ap-southeast-1.maas.aliyuncs.com` host. `DASHSCOPE_BASE_URL`
+  still overrides it; when that URL is the standard host, the Qwen note says to
+  clear it rather than to set the ID. Wan video and Qwen Image are not changed.
+  An ID that is set but invalid is also named, without its value, in the Qwen
+  hover note and `scripts/check_keys.py`.
+- When a Qwen key check on a workspace host returns 401, the note says the key
+  may belong to a different workspace or region.
+- The Qwen **Test** result names the host that answered: "via workspace host",
+  "via standard host" (plus "(workspace ID ignored)" when a typed ID did not
+  apply), or the host name of a typed endpoint, such as "via dashscope.aliyuncs.com".
+- A hand-typed `DASHSCOPE_BASE_URL` or `DASHSCOPE_VIDEO_BASE_URL` that is not
+  https (plain http to localhost is fine) or not on `aliyuncs.com` is still used,
+  but its Settings row, the Qwen hover note and `scripts/check_keys.py` warn that
+  the key is sent there.
+
+### Fixed
+- A blank `DASHSCOPE_BASE_URL=` or `DASHSCOPE_VIDEO_BASE_URL=` (as shipped in
+  `.env.example`) is now treated as unset and falls back to the default host.
+  Before, the empty string was used as the base URL, so every Qwen call (or Wan
+  video or Qwen Image call) from a `.env` with the blank line failed. It failed
+  before sending anything: the URL had no host, so the key went nowhere
+  (checked against openai 2.31.0 and requests).
+
+### Security
+- Settings -> API keys refuses a value with a line break, such as a two-line
+  paste, and names the field ("must be one line only"); nothing on the page is
+  written. Before, pasting `ws1`, a new line and `DASHSCOPE_BASE_URL=…` into one
+  box could leave a second line in `.env` that Settings read back as
+  `DASHSCOPE_BASE_URL`; one more Save made it a setting the app loads at launch.
+
+### Changed
+- The Qwen endpoint note no longer says the international host is in
+  "maintenance mode since 2026-09-30", which no primary source confirmed. It now
+  says a workspace host is recommended and the standard host still works.
+
 ## 2026-10-12
 
 ### Security

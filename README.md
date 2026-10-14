@@ -408,14 +408,20 @@ configured** or **Check failed** badge depending on whether the key is present
 in the environment. Presence is not reachability: `scripts/check_keys.py` asks
 each provider (see §19).
 
-Hover the **Qwen** row for a caveat while chat requests still go to DashScope's
-international host (the default when `DASHSCOPE_BASE_URL` is unset): Alibaba
-put that host into maintenance mode on 2026-09-30, so it keeps working but Qwen
-models released after that date may be missing. The note
-(`services/qwen_client.endpoint_note()`, set through
-`ApiKeysStatusCard.set_note()`) disappears once a workspace host is configured.
-The app cannot switch on its own — there is no public way to derive the
-workspace id.
+Hover the dot at the start of the **Qwen** row for a note while chat requests
+still go to DashScope's standard international host (the default when neither
+`DASHSCOPE_WORKSPACE_ID` nor `DASHSCOPE_BASE_URL` is set): Alibaba recommends a
+workspace host, but the standard host still works, so switching is optional.
+The note (`services/qwen_client.endpoint_note()`, set through
+`ApiKeysStatusCard.set_note()`) disappears once chat uses another host and no
+hand-typed address needs a second look. The app cannot find the workspace ID
+itself; enter it under Settings -> API keys -> Qwen workspace ID. If
+`DASHSCOPE_WORKSPACE_ID` is set but invalid, the note says it is not used and
+why. If `DASHSCOPE_BASE_URL` itself names the standard host, the note says it
+overrides the workspace ID and to clear it. If a hand-typed
+`DASHSCOPE_BASE_URL` or `DASHSCOPE_VIDEO_BASE_URL` is not https or not an
+Alibaba Cloud (`aliyuncs.com`) host, the note starts with a warning, since the
+key is sent there.
 
 ### Model updates
 
@@ -2915,11 +2921,17 @@ workspace `AGENTS.md`.
 **Settings → API keys** is the normal way in (since 2026-10-11): one field per
 credential, grouped; **Test** lists the provider's models with the key in the
 box — a metadata call that bills nothing — and reports *reachable* or the
-provider's own refusal; **Save All** writes the file described below and the
+provider's own refusal (for Qwen it also names the host that answered: *via
+workspace host*, *via standard host*, or a typed endpoint's host name; a 401
+from a workspace host says instead that the key may belong to a different
+workspace or region);
+**Save All** writes the file described below and the
 running app rebuilds its provider clients at once, so no restart. Nothing on
 that page reaches the database, the run log or history; the file is written
-owner-only (0600). The page edits the file; a key set in your shell before
-launch wins over the file at startup, and the row says so.
+owner-only (0600). Every value must be one line: a box holding a line break
+(a two-line paste, say) is named in a "must be one line only" message and
+nothing on the page is saved. The page edits the file; a key set in your shell
+before launch wins over the file at startup, and the row says so.
 
 The file itself is the same one it always was. Copy `.env.example` to `.env`
 and paste keys into it, or let Settings create it. A `.env` the app seeds itself (copied from `.env.example`, or written key-by-key when neither exists) is created owner-only — `0600` from the first byte via `os.open(..., O_EXCL, 0o600)` — so the credentials file is never briefly world-readable. **Where `.env` has to
@@ -2949,15 +2961,20 @@ enforces both.
 | `DASHSCOPE_API_KEY` | Qwen chat, and Wan video | bailian.console.alibabacloud.com |
 | `HF_API_KEY_ID` + `HF_API_KEY_SECRET` | Higgsfield — a key **pair**, not a bearer token | cloud.higgsfield.ai |
 
-Optional overrides, all with working defaults: `DASHSCOPE_BASE_URL` (the
-OpenAI-compatible chat endpoint; the default international host has been in
-maintenance mode since 2026-09-30 — it still works, but newer Qwen models ship
-only on your workspace host,
-`https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`,
-with the Workspace ID on the Model Studio console's workspace page; use
+Optional overrides, all with working defaults: `DASHSCOPE_WORKSPACE_ID` (your
+Model Studio workspace ID, Singapore; letters, digits and hyphens only. Qwen chat
+then uses `https://<WorkspaceId>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1`,
+which Alibaba recommends; the standard international host still works, so this is
+optional. Chat only; Wan video and Qwen Image are not affected. An invalid ID is
+ignored, and Settings, the Qwen hover note and `scripts/check_keys.py` say so),
+`DASHSCOPE_BASE_URL` (the full OpenAI-compatible
+chat URL; overrides the workspace ID; use
 `https://dashscope.aliyuncs.com/compatible-mode/v1` for a mainland-China
 account), `DASHSCOPE_VIDEO_BASE_URL` (Wan's separate
-asynchronous `/api/v1` endpoint), `HIGGSFIELD_TEXT_VIDEO_ENDPOINT` and
+asynchronous `/api/v1` endpoint; a hand-typed chat or video URL is always used,
+but one that is not https (plain http to localhost is fine) or not on
+`aliyuncs.com` gets a warning in its Settings row and the Qwen note, because
+the key is sent to it), `HIGGSFIELD_TEXT_VIDEO_ENDPOINT` and
 `HIGGSFIELD_IMAGE_VIDEO_ENDPOINT` (default to Seedance 1.0 Lite), and
 `HIGGSFIELD_BASE_URL`. The Higgsfield pair is also accepted as
 `HIGGSFIELD_API_KEY_ID` / `HIGGSFIELD_API_KEY_SECRET`.
@@ -3008,9 +3025,11 @@ until a provider is asked:
 It lists each provider's models, which is a metadata call that bills nothing,
 and never prints a key or any part of one. The probe is each client wrapper's
 `list_models_live()`, not `list_models()` — the latter falls back to the
-built-in model list on any error, so a revoked key would read OK. While Qwen
-is on the maintenance-mode international host the Qwen line carries a `note:`
-saying so. (Until 2026-10-09 the script imported class names that did not
+built-in model list on any error, so a revoked key would read OK. When a Qwen
+key is set, the Qwen line can carry a `note:`: a warning about a hand-typed
+endpoint that is not https or not on `aliyuncs.com`, and, while chat uses the
+standard international host, a suggestion to use the workspace host or the
+reason a set workspace ID is not used. (Until 2026-10-09 the script imported class names that did not
 exist, so every keyed provider read FAIL; `tests/test_env_template.py` now
 imports each name it uses.)
 
