@@ -16,15 +16,15 @@ Imprint: a macOS desktop app (PySide6) that bundles ten creative/publishing AI a
 ## Commands
 - Install deps: `uv pip install -r requirements.txt -r requirements-dev.txt`
 - Run app: `.venv/bin/python main.py`
-- Run tests: `.venv/bin/python -m pytest -q` (1408 collected via `--collect-only`; README says ~90 s; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
-- Lint / types: none configured (no ruff/mypy/config found).
+- Run tests: `.venv/bin/python -m pytest -q` (1512 collected via `--collect-only`, 2026-10-14; README says ~90 s; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
+- Lint / types: `ruff.toml` (E4, E7, E9, F, B) with a CI ratchet against `docs/company/tooling/baseline.json`; no type checker.
 - Setup checks: `scripts/check_setup.py`, `scripts/check_keys.py`.
 - Build: `./scripts/build_app.sh [--no-install]` (PyInstaller, ad-hoc codesign, installs to /Applications); everyday: `./scripts/install_app.sh` (launcher into this source tree, edits live on relaunch).
 - Release smoke checklist: UNVERIFIED as a single list; use `tests/manual_test_cases.md` (UAT) plus launch, one agent action, quit, relaunch with DB/projects intact, header version badge matches `v<VERSION>.<git count>`.
 - Ignore `_run_checks.command` (temporary diagnostic).
 
 ## Docs and process files
-- `README.md` (3,435 lines, numbered sections; section 18.1 Versioning), `TODO.md`, `SUGGESTIONS.md`, `FORK_PLAN.md`, `AGENTS.md` (pipeline), `CLAUDE.md`, `agents/README.md` and per-agent READMEs, `docs/agents/*.md`, `docs/learn/` (Learning Centre, `help_map.json`), `tests/TEST_PLAN.md`, `tests/READINESS_GATE.md`, `tests/manual_test_cases.md`. No CHANGELOG found. `docs/specs`, `docs/adr`, `docs/audit` are empty.
+- `README.md` (3,435 lines, numbered sections; section 18.1 Versioning), `TODO.md`, `SUGGESTIONS.md`, `FORK_PLAN.md`, `AGENTS.md` (pipeline), `CLAUDE.md`, `agents/README.md` and per-agent READMEs, `docs/agents/*.md`, `docs/learn/` (Learning Centre, `help_map.json`), `tests/TEST_PLAN.md`, `tests/READINESS_GATE.md`, `tests/manual_test_cases.md`, `CHANGELOG.md` (Keep a Changelog, grouped by date; how versions are numbered is in its header). `docs/specs` and `docs/audit` hold feature specs and review reports; there is no `docs/adr`.
 - Version is derived, never typed: `VERSION` (major) + `git rev-list --count HEAD`.
 - GUI entry: `main.py` (about 4,400 lines per TODO); widgets in `ui/` (`forms.py`, `panels/`, `theme.py`).
 - Invariant from CLAUDE.md: `TODO.md` and `SUGGESTIONS.md` feed the Lab Projects Monitor; keep their format exactly. TODO line: `- [ ] \`P1\` \`bug\` \`@me\` Text` (P0-P3; category from the legend at top; owner `@me` or `@ai`; done = `- [x]`; long reasoning under **Detail**). SUGGESTIONS tags: IDEA, CONSIDERING, PLANNED, DONE, REJECTED.
@@ -44,13 +44,13 @@ Imprint: a macOS desktop app (PySide6) that bundles ten creative/publishing AI a
 - Secrets: `.env` (gitignored; packaged app uses Application Support copy). Keys: OpenAI, DeepSeek, Kimi, Google, Anthropic, DashScope, ElevenLabs, Higgsfield, PublishDrive, Reddit (includes password), Pinterest. Settings -> API keys writes this file. Never print values. `.env.example` is the template (`tests/test_env_template.py`). `.gitleaksignore` has one documented false positive.
 - Network: outbound only to provider APIs, YouTube/Reddit/Pinterest posting, PublishDrive, LMArena ratings fetch; local Ollama. Repo is public (cloud/README says so): no account IDs or tokens in tracked files.
 - Untrusted input: user manuscripts/PDF/EPUB/DOCX import, model output rendered in the GUI, web scraping (beautifulsoup/lxml), `vidforge` OAuth `client_secret*.json` in its secrets folder.
-- Packaging: ad-hoc signed only (no notarization found); the live launcher executes this source tree. Dependencies: `requirements.txt` has several unpinned packages. `pip-audit` use: UNVERIFIED.
+- Packaging: ad-hoc signed only (no notarization found); the live launcher executes this source tree. Dependencies: `requirements.txt` has several unpinned packages. `pip-audit` runs in `.github/workflows/security.yml` (non-blocking); it cannot audit the unpinned lines.
 
 ## Test bar
-- Layout: flat `tests/test_*.py` (1408 collected), shared `tests/conftest.py`; `tests/TEST_PLAN.md` defines tiers T0-T6. Suite runs in an isolated DB; no test may touch `data/imprint.db`.
-- Last recorded (2026-10-06): 981 passed, 11 skipped, 1 known red (converter drift card in TODO). Current pass count UNVERIFIED (not run).
+- Layout: flat `tests/test_*.py` (1512 collected), shared `tests/conftest.py`; `tests/TEST_PLAN.md` defines tiers T0-T6. Suite runs in an isolated DB; no test may touch `data/imprint.db`.
+- Last recorded (2026-10-14, full run with `-p no:randomly`): 1506 passed, 6 skipped.
 - Coverage target: none found. Flaky = any order-dependent hang or failure under `pytest-randomly`; a wedge is a bug, not a retry. No xdist (Qt).
-- CI: TEST_PLAN describes macos/ubuntu jobs but no `.github` directory exists, so UNVERIFIED/not set up.
+- CI: `.github/workflows/quality.yml` (tests with coverage on macOS; ruff lint ratchet on Ubuntu), `.github/workflows/security.yml` (gitleaks secret scan, blocking; pip-audit, not blocking; also weekly), `.github/dependabot.yml` (weekly: pip for root, `vidforge/`, `cloud/`; GitHub Actions). Whether runs pass on GitHub: UNVERIFIED.
 
 ## Invariants
 - No paid call outside the request guard; new per-unit paid paths must be added to it.
