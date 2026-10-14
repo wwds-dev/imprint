@@ -13,3 +13,9 @@
 5f0664cbe7a2a68c06b790da5643826c87f310e7:.gitleaksignore:generic-api-key:2
 83343104deb18a23ac592929291410b50a44c382:tests/test_settings_pricing.py:generic-api-key:178
 83343104deb18a23ac592929291410b50a44c382:services/database.py:generic-api-key:1022
+
+# Same false positive, quoted in the security audit's findings table
+# (docs/audit/security.md, commit 8f75d96): SQL settings-key literals, not secrets.
+8f75d965dfb1ff09a6957f73d9a4ac11d2f7be2c:docs/audit/security.md:generic-api-key:99
+8f75d965dfb1ff09a6957f73d9a4ac11d2f7be2c:docs/audit/security.md:generic-api-key:100
+8f75d965dfb1ff09a6957f73d9a4ac11d2f7be2c:docs/audit/security.md:generic-api-key:101
