@@ -11,7 +11,7 @@ import re
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel, QPushButton,
     QSizePolicy, QVBoxLayout, QWidget,
@@ -27,6 +27,9 @@ from ui.style import (
 
 def _label(text: str, object_name: str) -> QLabel:
     widget = QLabel(text)
+    # Plain text always: rail labels carry provider-sent model ids, and Qt's
+    # auto-detect would render markup in one as rich text.
+    widget.setTextFormat(Qt.TextFormat.PlainText)
     widget.setObjectName(object_name)
     widget.setWordWrap(True)
     return widget
@@ -245,6 +248,7 @@ class ElidedLabel(QLabel):
     def __init__(self, text: str = "", object_name: str = "RailDetail"):
         super().__init__()
         self.setObjectName(object_name)
+        self.setTextFormat(Qt.TextFormat.PlainText)   # ids come from providers
         self.setSizePolicy(QSizePolicy.Ignored, QSizePolicy.Preferred)
         self._full = ""
         self.set_full_text(text)
@@ -280,6 +284,11 @@ class ModelNotice:
     # False while public ratings are loaded but none covers it yet: it then
     # cannot be anyone's best value (an unrated model never beats rated ones).
     rated: bool = True
+    # A selected model the provider no longer lists: a warning row with no
+    # mark, because there is nothing to update to. `used_by` names the agents
+    # on it.
+    removed: bool = False
+    used_by: tuple[str, ...] = ()
 
 
 class ModelNoticeRow(QFrame):
@@ -294,11 +303,15 @@ class ModelNoticeRow(QFrame):
         super().__init__()
         self.notice = notice
         self.setObjectName("RailModelRow")
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setProperty("marked", False)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(XS + 2, XS + 2, XS + 2, XS + 2)
         layout.setSpacing(2)
+        if notice.removed:
+            self.mark = None
+            self._build_removed(layout, notice)
+            return
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.mark = QCheckBox(notice.provider_label)
         self.mark.setObjectName("RailModelMark")
         self.mark.setAccessibleName(
@@ -345,8 +358,19 @@ class ModelNoticeRow(QFrame):
                 "count it exactly.")
             layout.addWidget(price)
 
+    def _build_removed(self, layout, notice: "ModelNotice") -> None:
+        text = f"{notice.provider_label} no longer lists {notice.model_id}"
+        text += (f", which {', '.join(notice.used_by)} use. Choose another "
+                 "model in their setup." if notice.used_by else
+                 ". Choose another model in the agent's setup.")
+        warning = _label(text, "RailAvailability")
+        warning.setProperty("status", "warning")
+        layout.addWidget(warning)
+        self.setAccessibleName(f"Warning: {text}")
+
     def mouseReleaseEvent(self, event):  # noqa: N802 - Qt API
-        if event.button() == Qt.MouseButton.LeftButton and \
+        if self.mark is not None and \
+                event.button() == Qt.MouseButton.LeftButton and \
                 self.rect().contains(event.position().toPoint()):
             self.mark.toggle()
         super().mouseReleaseEvent(event)
@@ -367,9 +391,11 @@ class ModelUpdatesCard(RailCard):
     """
 
     SHOWN = 5
+    media_dismissed = Signal()
 
     def __init__(self):
-        super().__init__("New AI models from configured providers")
+        super().__init__(
+            "New AI models and video and image changes from configured providers")
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SM, SM, SM, SM)
         layout.setSpacing(XS)
@@ -401,6 +427,39 @@ class ModelUpdatesCard(RailCard):
         self.result_label.setProperty("status", "ready")
         self.result_label.hide()
         layout.addWidget(self.result_label)
+
+        # Video and image: its own lane, painted from a MediaDigest. Built
+        # before the footer buttons so its Dismiss comes before Check now in
+        # the tab order.
+        self.media_box = QWidget()
+        self.media_box.setObjectName("Transparent")
+        self.media_box.setAccessibleName("Video and image")
+        media_layout = QVBoxLayout(self.media_box)
+        media_layout.setContentsMargins(0, 0, 0, 0)
+        media_layout.setSpacing(XS)
+        media_divider = QFrame()
+        media_divider.setObjectName("RailCardDivider")
+        media_divider.setFrameShape(QFrame.HLine)
+        media_layout.addWidget(media_divider)
+        self.media_title = _label("VIDEO AND IMAGE", "RailFieldName")
+        media_layout.addWidget(self.media_title)
+        self.media_headline = _label("Not checked yet", "RailPrimaryValue")
+        media_layout.addWidget(self.media_headline)
+        self.media_rows_box = QVBoxLayout()
+        self.media_rows_box.setContentsMargins(0, 0, 0, 0)
+        self.media_rows_box.setSpacing(XS)
+        media_layout.addLayout(self.media_rows_box)
+        self.media_rows: list[QFrame] = []
+        self.media_dismiss_btn = QPushButton("Dismiss")
+        self.media_dismiss_btn.setObjectName("RailCardButton")
+        self.media_dismiss_btn.setAccessibleName("Dismiss video and image notices")
+        self.media_dismiss_btn.setToolTip(
+            "Clear new and removed video and image notices. Shutdown dates "
+            "stay until the date has passed.")
+        self.media_dismiss_btn.clicked.connect(self._on_media_dismiss)
+        self.media_dismiss_btn.hide()
+        media_layout.addWidget(self.media_dismiss_btn)
+        layout.addWidget(self.media_box)
 
         divider = QFrame()
         divider.setObjectName("RailCardDivider")
@@ -440,6 +499,9 @@ class ModelUpdatesCard(RailCard):
         self.startup_checkbox.setObjectName("RailCardCheck")
         layout.addWidget(self.startup_checkbox)
 
+    def _on_media_dismiss(self) -> None:
+        self.media_dismissed.emit()
+
     def set_checking(self, checking: bool) -> None:
         self.check_btn.setEnabled(not checking)
         self.check_btn.setText("Checking…" if checking else "Check now")
@@ -453,30 +515,71 @@ class ModelUpdatesCard(RailCard):
             if item.widget() is not None:
                 item.widget().deleteLater()
         self.rows = []
-        count = len(notices)
+        # A removed selected model leads, as a warning; it is not new.
+        notices = ([n for n in notices if n.removed]
+                   + [n for n in notices if not n.removed])
+        count = sum(1 for n in notices if not n.removed)
         self.headline.setText(
             "No new models" if count == 0 else
             "1 new model" if count == 1 else f"{count} new models")
-        self.dismiss_btn.setVisible(count > 0)
+        self.dismiss_btn.setVisible(bool(notices))
         self.update_btn.setVisible(count > 0)
         self.hint_label.setVisible(count > 0)
         for notice in notices[:self.SHOWN]:
             row = ModelNoticeRow(notice)
-            row.mark.setChecked(
-                (notice.provider, notice.model_id) in still_marked)
-            row.mark.toggled.connect(self._sync_update_button)
+            if row.mark is not None:
+                row.mark.setChecked(
+                    (notice.provider, notice.model_id) in still_marked)
+                row.mark.toggled.connect(self._sync_update_button)
             self.rows.append(row)
             self.rows_box.addWidget(row)
         self._sync_update_button()
-        if count > self.SHOWN:
+        hidden = notices[self.SHOWN:]
+        if hidden:
             self.rows_box.addWidget(_label(
-                f"+{count - self.SHOWN} more — all are in the model menus, "
-                "marked NEW.", "RailDetail"))
+                f"+{len(hidden)} more — all are in the model menus, marked NEW."
+                if not any(n.removed for n in hidden) else
+                f"+{len(hidden)} more notices", "RailDetail"))
+
+    def set_media(self, digest) -> None:
+        """Paint a `model_watch_digest.MediaDigest`; it has made every decision."""
+        while self.media_rows_box.count():
+            item = self.media_rows_box.takeAt(0)
+            if item.widget() is not None:
+                item.widget().deleteLater()
+        self.media_rows = []
+        self.media_box.setVisible(digest.visible)
+        self.media_headline.setText(digest.headline)
+        self.media_dismiss_btn.setVisible(digest.dismissable)
+        for row in digest.rows[:self.SHOWN]:
+            frame = QFrame()
+            frame.setObjectName("RailModelRow")
+            frame.setAccessibleName(row.accessible_name or row.text)
+            box = QVBoxLayout(frame)
+            box.setContentsMargins(XS + 2, XS + 2, XS + 2, XS + 2)
+            box.setSpacing(2)
+            if row.kind == "new":
+                box.addWidget(_label(row.provider_label, "RailKeyName"))
+                box.addWidget(ElidedLabel(row.model_id, "RailModelId"))
+                box.addWidget(_label(row.text, "RailDetail"))
+            elif row.warning:
+                text = _label(row.text, "RailAvailability")
+                text.setProperty("status", "warning")
+                box.addWidget(text)
+            else:
+                box.addWidget(_label(row.text, "RailDetail"))
+            self.media_rows.append(frame)
+            self.media_rows_box.addWidget(frame)
+        extra = len(digest.rows) - self.SHOWN
+        if extra > 0:
+            self.media_rows_box.addWidget(_label(
+                f"+{extra} more video and image notices", "RailDetail"))
 
     def marked(self) -> list[tuple[str, str]]:
         """`(provider, model_id)` for every row the user has marked."""
         return [(row.notice.provider, row.notice.model_id)
-                for row in self.rows if row.mark.isChecked()]
+                for row in self.rows
+                if row.mark is not None and row.mark.isChecked()]
 
     def _sync_update_button(self, *_args) -> None:
         count = len(self.marked())

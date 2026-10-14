@@ -162,6 +162,24 @@ class GeminiClientWrapper:
         )
         return models if models else self.KNOWN_MODELS
 
+    def list_media_models_live(self) -> list[str]:
+        """Live image and video ids for Model updates, or an exception.
+
+        The same free `models.list`, without the generateContent filter that
+        drops Veo and Imagen. Unlike list_models_live, no client or an empty
+        answer gives [] and never KNOWN_MODELS: a media baseline must only
+        ever come from a list the provider sent.
+        """
+        if not self.client:
+            return []
+        from itertools import islice
+        from services.model_watch import MAX_LISTED_IDS, is_media_model, valid_model_id
+        # The SDK pages on its own; a list that never ends is cut off here.
+        names = (str(getattr(m, "name", "") or "").replace("models/", "")
+                 for m in islice(self.client.models.list(), 5 * MAX_LISTED_IDS))
+        return sorted({name for name in names
+                       if valid_model_id(name) and is_media_model(name)})
+
     def chat(self, messages, model="gemini-2.5-flash"):
         if not self.client:
             raise RuntimeError("GEMINI_API_KEY is not set.")

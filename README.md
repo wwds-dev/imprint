@@ -353,8 +353,9 @@ change nothing, so they read as links rather than buttons.
 
 **System · Routing · API keys · Model updates** — collapsed by default. Each
 opens a compact status card with separate values and state badges instead of a
-paragraph of diagnostic text. Model updates puts its count in its own title
-(*Model updates · 2 new*), so news is visible without opening it.
+paragraph of diagnostic text. Model updates puts its counts in its own title
+(*Model updates · 2 new · 1 warning*), so news is visible without opening it.
+It covers chat models and, in a section of its own, video and image models.
 
 ### Resource Monitor
 
@@ -426,7 +427,9 @@ key is sent there.
 ### Model updates
 
 Directly under **API keys**: which models the providers behind those keys have
-released since Imprint last looked (`services/model_watch.py`).
+released since Imprint last looked (`services/model_watch.py`), and, under
+**Video and image** below, what has changed for the video and image models you
+pay for.
 
 **How it looks.** Each provider with a key is asked for its model list — the
 same `/models` call the model dropdowns already make. It is free: model lists
@@ -441,8 +444,13 @@ fetch also counts as a look, so news arrives with the startup check off.
   otherwise the first launch would announce the whole catalogue.
 - Only a **live** answer counts. A provider without a key is listed as *No key,
   not checked*; its offline fallback list is never recorded.
-- **Chat models only.** Embedding, speech, image and video ids are not options
-  for a text dropdown and are not announced (or offered as candidates).
+- **Chat models only, in this part of the tile.** Embedding, speech, image and
+  video ids are not options for a text dropdown. They are not announced here,
+  not offered as candidates, and not put in any chat model dropdown: a
+  provider's list is filtered before the dropdowns see it. The filter also
+  drops every model in Imprint's Video menus (`services/media_catalog.py`),
+  such as Nano Banana 2.1 (`gemini-nano-banana-2.1`), whose id does not say
+  "image". Image and video news has its own section (*Video and image*, below).
 - A **dated snapshot** of a known model (`gpt-5-2026-10-01` beside `gpt-5`) is
   not a release.
 
@@ -476,8 +484,10 @@ a model is new; a marked model that wins nowhere is reported as *left in the
 menus, nothing switched*. The marked notices are cleared, the unmarked ones
 stay, and the tile lists what moved.
 
-**Dismiss** clears every notice and the NEW badges without switching anything.
-The models stay in the menus and are not announced again.
+**Dismiss** clears every chat notice (new models, and any selected model a
+provider stopped listing) and the NEW badges without switching anything. The
+models stay in the menus and are not announced again. Video and image notices
+have their own **Dismiss** (below).
 
 Rules that keep the tile, the menus and the badges in agreement:
 
@@ -496,6 +506,119 @@ Rules that keep the tile, the menus and the badges in agreement:
   threads. A QThread still running at quit is destroyed under it, and Qt aborts
   the app (SIGABRT), which is what a two-minute provider call did when you
   quit early.
+
+#### Removed models
+
+A model can also disappear from a provider's list. Imprint watches two kinds of
+model for this, and no others:
+
+- a video or image model it offers in the Video menus, on Gemini or Qwen;
+- a chat model an agent has selected in its setup.
+
+Such a model is reported as removed only when it was in the provider's previous
+live list and is then missing from **two live lists on two different days**.
+Days are counted in UTC (Coordinated Universal Time), so a startup check and a
+**Check now** on the same day count once. Only the Model updates check counts;
+a panel's own model fetch never does. An empty or failed list, or a provider
+without a key, never counts as the model being gone, and a dated snapshot in
+the list (`-001`, `-2026-08-01`) counts as the model being there. If the
+provider lists the model again, the notice drops on its own. Once dismissed, it
+is not raised again while the model stays missing.
+
+A removed chat model is the first row of the chat part, with no checkbox:
+*{Provider} no longer lists {model}, which {agents} use. Choose another model
+in their setup.* Nothing is switched for you; **Dismiss** clears it.
+
+#### Video and image
+
+The tile's second section, under **VIDEO AND IMAGE**
+(`services/model_watch_digest.py`), answers one question: will the video or
+image model I am about to pay for still work, and is there a newer one?
+
+- **New models.** The Model updates check (not a panel's fetch) also asks
+  Gemini and Qwen for their image and video models. For Gemini this is the same
+  free model list, without the chat filter. For Qwen it is Alibaba's native
+  model list (`GET /api/v1/models` on the host Wan renders use), keeping the
+  models marked as image or video generation. That Qwen call has **not been
+  verified against a live account**; if Qwen does not serve it, it is skipped
+  with no note. The chat rules apply: the first look per provider is a silent
+  baseline (even when chat already has one), and a dated snapshot is not new.
+  A new model is a row such as *Not in Imprint's Video menus yet — listed by
+  Gemini*. It is **never added to a menu**: the Video menus list only models
+  Imprint has a working route for (`services/media_catalog.py`), and no chat
+  menu gets it or a NEW badge.
+- **Removed models** (see above): *Veo 3.1 (veo-3.1-generate-preview) is no
+  longer listed by Gemini. Renders with it will fail; pick another model in
+  Video.*
+- **Shutdown dates.** These need no check: they come only from the `retires`
+  dates in `services/media_catalog.py`. Google gives 22 October 2026 as the
+  earliest date it may shut down the three Veo 3.1 previews, so the tile shows
+  *Veo 3.1, Fast and Lite: earliest shutdown 22 October 2026*. In the last 14
+  days the row becomes a warning and adds the time left (*— in 8 days*, or
+  *tomorrow*), and the headline says *3 Veo models shut down in 8 days*. From
+  the date itself the models leave the Video menus, and for 14 days the row
+  reads *past its earliest shutdown date (22 October 2026); no longer offered
+  in Video*. Shutdown rows cannot be dismissed.
+- **Seedance paths not answering** (see below).
+
+Rows are ordered by urgency: removed models and Seedance paths not answering,
+then shutdowns (soonest first), then past shutdowns, then new models. Up to
+five are shown, then *+N more video and image notices*. The headline repeats
+the most urgent item; otherwise it reads *N new video or image models*, *No
+video or image changes* or *Not checked yet*. The title's *warning* count adds
+removed models, paths not answering and shutdowns within 14 days; a shutdown
+further out does not count.
+
+**Dismiss** under the rows appears only when there are new or removed video and
+image models. It clears them, and hides any current *not answering* row until
+that path's answer changes.
+
+#### Seedance path check (Higgsfield, off by default)
+
+Higgsfield publishes no model list, so Imprint can only ask whether each
+Seedance path still answers. The check sends one `POST` to Higgsfield's
+`/estimate/<path>` (the price-quote call the Video panel already uses) for the
+text-to-video and image-to-video paths of each Seedance model Imprint offers
+(2.5 and 2.0): four calls, each with the shortest duration, the prompt *status
+check*, a 15-second timeout and no retry. It never uploads a file and never
+starts a render.
+
+`/estimate` is not in Higgsfield's public documentation, so it is **not
+confirmed** that the call is free or that a missing path answers 404. The check
+therefore stays **off** until you have confirmed both by hand (the TODO.md item
+*Confirm by hand that Higgsfield's `/estimate/<path>` costs nothing*). To turn
+it on, add this to `config/settings.json` (in
+`~/Library/Application Support/Imprint/` when packaged):
+
+```json
+"model_watch_probe_higgsfield": true
+```
+
+It must be the JSON value `true`; `"true"` or `1` leaves it off. There is no
+switch for it in the app. With it on, the check runs only when all of these
+hold, and at most once per UTC day:
+
+- a Higgsfield key is set;
+- the **Higgsfield** chip under **Paid media** is on;
+- the request guard's own checks pass (the Video agent may use Higgsfield, and
+  no budget is exceeded). These are the validator's checks only: the
+  paid-request confirmation dialog is not shown for a call meant to cost
+  nothing.
+
+What it shows:
+
+- A path that answers 404: *Seedance 2.5: Higgsfield's path is not answering.
+  Renders on it will likely fail.* It clears when a later check finds the path
+  answering.
+- A path that answers (2xx, 400 or 422): nothing.
+- Any other answer (401, 403, 429, 5xx, a timeout): the footer adds
+  *Could not reach: Higgsfield (Seedance paths)*. That is never read as the
+  path being gone.
+- When the check may not run, the footer says why: *Seedance paths not
+  checked: the Higgsfield check is off.*, *…the Higgsfield
+  chip under Paid media is off.*, or *…the request guard refused the check (agent, budget or
+  permission).* Without a Higgsfield key, Higgsfield joins the *No key, not
+  checked* list. Earlier answers are forgotten whenever the check may not run.
 
 ### Cost in the ranking
 
@@ -613,7 +736,7 @@ scale, halving the price of a clip moved its score by under a point.
 
 | Request | Routes compared |
 |---|---|
-| Reel, social clip | every direct-video model that can make the requested length and shape (Gemini Omni, Wan 3.0 / Prime / 2.7, Seedance — its cost marked *price only after the provider's quote*, Veo 3.1 until its 22 Oct shutdown), plus the scene pipeline when the length is one of its clip lengths |
+| Reel, social clip | every direct-video model that can make the requested length and shape (Gemini Omni, Wan 3.0 / Prime / 2.7, Seedance — its cost marked *price only after the provider's quote*, Veo 3.1 until its earliest shutdown date, 22 Oct), plus the scene pipeline when the length is one of its clip lengths |
 | Reel, long-form | the scene pipeline routes — GPT Image ×3, Nano Banana 2.1 / Pro, Qwen Image 3.0 / Pro, Pexels, local cards — each priced by the pipeline's own pre-estimate |
 | Herald clip | the scene pipeline routes at the clip's shape; Apply sets Herald's visuals |
 | Stamp logos | all seven image models (OpenAI, Gemini, Qwen), for the number of concepts asked |
@@ -1818,9 +1941,10 @@ scene-by-scene assembly OpenAI offers the GPT Image models, Gemini Nano Banana
 2.1 and Nano Banana Pro, and Qwen Qwen Image 3.0 and 3.0 Pro — a Gemini or Qwen
 scene route needs that provider's key and permission as well as OpenAI's, which
 still writes and narrates the script. For direct clips Gemini adds Omni 1.1
-Flash and the Veo 3.1 quality, Fast and Lite tiers — **Google shuts the Veo
-previews down on 22 October 2026**; they say so in their note and leave the
-menus on that date, while a render already in flight is still collected. Qwen
+Flash and the Veo 3.1 quality, Fast and Lite tiers — **Google may shut the
+Veo previews down from 22 October 2026 (its earliest date)**; they say so in
+their note, the Model updates tile counts down to it, and they leave the menus
+on that date, while a render already in flight is still collected. Qwen
 adds Wan 3.0, Wan 3.0 Prime and Wan 2.7 text-to-video. Higgsfield's Seedance route also makes a direct clip after
 an exact provider quote. Pexels supplies stock visuals and Local makes gradient
 cards. Every visible model has an implemented route; DeepSeek, Anthropic, Kimi
@@ -2647,9 +2771,10 @@ imprint/
 .venv/bin/python -m pytest -q
 ```
 
-Just over 1,000 tests: 993 collected at the 2026-10-06 merge (981 passed,
-11 skipped, 1 known red — the converter-drift card in TODO.md), before
-`test_theme.py` and `test_vibe.py` were added. Install the suite's own
+1,605 tests are collected (2026-10-14); the last full run in file order
+(`-p no:randomly`) gave 1,603 passed and 2 skipped. A full run takes
+**13 to 17 minutes** on the owner's Mac (793 s and 1,039 s measured on
+2026-10-14), not seconds; plan for that before starting one. Install the suite's own
 dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
 covers pytest, `pytest-timeout` and `pytest-randomly`:
 
@@ -2975,7 +3100,7 @@ asynchronous `/api/v1` endpoint; a hand-typed chat or video URL is always used,
 but one that is not https (plain http to localhost is fine) or not on
 `aliyuncs.com` gets a warning in its Settings row and the Qwen note, because
 the key is sent to it), `HIGGSFIELD_TEXT_VIDEO_ENDPOINT` and
-`HIGGSFIELD_IMAGE_VIDEO_ENDPOINT` (default to Seedance 1.0 Lite), and
+`HIGGSFIELD_IMAGE_VIDEO_ENDPOINT` (default to Seedance 2.5), and
 `HIGGSFIELD_BASE_URL`. The Higgsfield pair is also accepted as
 `HIGGSFIELD_API_KEY_ID` / `HIGGSFIELD_API_KEY_SECRET`.
 

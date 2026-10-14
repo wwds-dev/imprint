@@ -262,6 +262,87 @@ class QwenClientWrapper:
         models = sorted(m.id for m in result.data)
         return models if models else self.KNOWN_MODELS
 
+    # Page size asked of the native list, and a ceiling on pages, so a body
+    # that never stops claiming more cannot keep the scan looping.
+    MEDIA_PAGE_SIZE = 100
+    MEDIA_MAX_PAGES = 20
+
+    def list_media_models_live(self) -> list[str]:
+        """Image- and video-generation ids (capabilities IG, VG), for Model
+        updates, or an exception.
+
+        The native `GET /api/v1/models` on the Wan host (video_base_url():
+        the workspace host is not used, as for Wan renders); the
+        compatible-mode list is not known to include these ids. No key gives
+        [], never KNOWN_MODELS. A 404/405 or a body without the expected
+        list raises MediaListUnsupported, which the scan drops silently; any
+        other failure raises as it is. The response shape follows Alibaba's
+        list-models page and is not verified against a live account.
+        """
+        from services.model_watch import valid_model_id
+        if not self.api_key:
+            return []
+        # Sent unprompted at every scan, so the key never goes over plain
+        # HTTP to an owner-set host (localhost excepted, for a local proxy).
+        parsed = urlparse(self.video_base_url)
+        if parsed.scheme != "https" and parsed.hostname not in ("localhost", "127.0.0.1"):
+            raise RuntimeError(
+                "DASHSCOPE_VIDEO_BASE_URL is not https; the media list was not "
+                "requested, so the key was not sent.")
+        url = f"{self.video_base_url}/models"
+        found: set[str] = set()
+        with self._media_session() as session:
+            for page in range(1, self.MEDIA_MAX_PAGES + 1):
+                models, total = self._media_page(session, url, page)
+                for item in models:
+                    if not isinstance(item, dict):
+                        continue
+                    model_id = str(item.get("model") or "").strip()
+                    capabilities = item.get("capabilities") or []
+                    if isinstance(capabilities, str):
+                        capabilities = [capabilities]
+                    if (valid_model_id(model_id)
+                            and {"IG", "VG"} & {str(c) for c in capabilities}):
+                        found.add(model_id)
+                # Without a total, a full page means there may be another: a
+                # list cut short would read as models going missing.
+                more = (page * self.MEDIA_PAGE_SIZE < total if total is not None
+                        else len(models) >= self.MEDIA_PAGE_SIZE)
+                if not models or not more:
+                    break
+        return sorted(found)
+
+    @staticmethod
+    def _media_session() -> requests.Session:
+        """A session of its own: video_session belongs to the Video panel's
+        render workers, and this runs on the Model updates scan thread."""
+        return requests.Session()
+
+    def _media_page(self, session, url: str, page: int) -> tuple[list, int | None]:
+        """One page of the native list: its models, and the total if given."""
+        from services.model_watch import MediaListUnsupported
+        response = session.get(
+            url, headers=self._video_headers(),
+            params={"page_no": page, "page_size": self.MEDIA_PAGE_SIZE},
+            timeout=REQUEST_TIMEOUT_SECONDS)
+        if response.status_code in (404, 405):
+            raise MediaListUnsupported(
+                f"Qwen media list not served here (HTTP {response.status_code})")
+        response.raise_for_status()
+        try:
+            body = response.json()
+        except ValueError as exc:
+            raise MediaListUnsupported("Qwen media list is not JSON") from exc
+        output = body.get("output") if isinstance(body, dict) else None
+        models = output.get("models") if isinstance(output, dict) else None
+        if not isinstance(models, list):
+            raise MediaListUnsupported("Qwen media list has an unexpected shape")
+        try:
+            total = int(output["total"]) if output.get("total") is not None else None
+        except (TypeError, ValueError):
+            total = None
+        return models, total
+
     def chat(self, messages, model=DEFAULT_MODEL):
         if not self.client:
             raise RuntimeError("DASHSCOPE_API_KEY is not set.")
