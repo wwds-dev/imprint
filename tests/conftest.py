@@ -148,6 +148,24 @@ def _credential_names_stay_blanked():
                     pytrace=False)
 
 
+@pytest.fixture(autouse=True, scope="module")
+def _collect_the_last_modules_windows():
+    """Free the previous module's widgets now, before this module builds any.
+
+    Most modules build a module-scoped `main.GodAI` and never close it; with
+    its signal-lambda cycles it becomes cyclic garbage when the module ends,
+    and the collector frees it whenever it next runs. If that is inside a
+    new window's `__init__` while it walks `app.allWidgets()`
+    (`install_dropdown_system`, `install_text_fit`), the walk touches freed
+    widgets and the process segfaults: reproduced 2026-10-14 by replaying
+    the `--randomly-seed=28367` order (crash in ui/widgets.py building
+    test_creator_calendar's window, 3 runs of 3), gone with this collection.
+    """
+    import gc
+    gc.collect()
+    yield
+
+
 # ── Public model ratings: the shipped snapshot, and no network ────────────────
 # The window loads services/recommendations/ratings at startup and refreshes it
 # from Hugging Face beside the Model updates check — a minute of paced GETs.

@@ -224,8 +224,18 @@ def test_an_interrupted_wan_teaser_is_watched_again_from_its_task(window,
     monkeypatch.setattr("agents.video.workers.VideoResumeWorker.start",
                         lambda self: spawned.append((self.provider, self.job_id)))
     _insert("qwen-live-1", "qwen:wan3.0-video", correlation="task-77")
-    window.creator_panel._spawn_teaser_resume(_row("qwen-live-1"))
-    assert spawned == [("qwen", "task-77")]
-    assert _row("qwen-live-1")["spend_state"] == "reserved"   # until it settles
-    for token in list(window._pending_requests):
-        window.abandon_request(token)
+    try:
+        window.creator_panel._spawn_teaser_resume(_row("qwen-live-1"))
+        assert spawned == [("qwen", "task-77")]
+        assert _row("qwen-live-1")["spend_state"] == "reserved"   # until it settles
+    finally:
+        for token in list(window._pending_requests):
+            window.abandon_request(token)
+        # The row stays "reserved" by design here, and the temp DB is shared
+        # by the whole run: left behind, the next resume_pending_teasers in
+        # any module picks it up (test_creator_resume, seed 28367).
+        from services.database import get_connection
+        with get_connection() as conn:
+            conn.execute("DELETE FROM creator_video_jobs WHERE request_id = ?",
+                         ("qwen-live-1",))
+            conn.commit()

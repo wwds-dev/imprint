@@ -60,6 +60,8 @@ SEEDANCE_DURATION_BOUNDS = {
 DEFAULT_SEEDANCE_MODEL = "seedance-2.5"
 DEFAULT_TEXT_ENDPOINT, DEFAULT_IMAGE_ENDPOINT = (
     SEEDANCE_ENDPOINTS[DEFAULT_SEEDANCE_MODEL])
+# The Model updates path check: one short estimate POST, never retried.
+PROBE_TIMEOUT_SECONDS = 15
 TERMINAL_STATUSES = frozenset({"completed", "failed", "nsfw", "canceled"})
 RETRYABLE_STATUS_CODES = frozenset({500, 502, 503, 504})
 SUPPORTED_UPLOAD_TYPES = frozenset({
@@ -386,6 +388,40 @@ class HiggsfieldClient:
         if not math.isfinite(credits) or not math.isfinite(usd) or credits < 0 or usd < 0:
             raise HiggsfieldAPIError("Higgsfield returned an invalid estimate.")
         return VideoEstimate(credits=credits, usd=usd)
+
+    def probe_endpoint(self, path: str) -> str:
+        """Is this Seedance path still served? "answering", "missing" or
+        "unreachable".
+
+        One `POST /estimate/<path>` with a fixed minimal body, on a short
+        timeout and with no retry — never prepare_video (an image-to-video
+        request would upload a file), never a submit. 2xx, 400 or 422 mean
+        the route exists and only the payload was judged; 404 means nothing
+        is there. Anything else (401, 403, 429, 5xx, a timeout, no
+        connection) says nothing about the path, so it is "unreachable".
+
+        Whether `/estimate` is unbilled, and returns 404 for a missing
+        path, is not in Higgsfield's public docs: Model updates calls this
+        only once the owner has switched the check on after confirming both
+        by hand (settings `model_watch_probe_higgsfield`, off by default).
+        """
+        self._require_key()
+        model = next((name for name, paths in SEEDANCE_ENDPOINTS.items()
+                      if path in paths), DEFAULT_SEEDANCE_MODEL)
+        low, _high = SEEDANCE_DURATION_BOUNDS[model]
+        try:
+            response = self._client().post(
+                self._api_url(f"/estimate/{path.lstrip('/')}"),
+                json={"duration": low, "prompt": "status check"},
+                timeout=PROBE_TIMEOUT_SECONDS)
+        except requests.RequestException:
+            return "unreachable"
+        code = response.status_code
+        if 200 <= code < 300 or code in (400, 422):
+            return "answering"
+        if code == 404:
+            return "missing"
+        return "unreachable"
 
     # ── generation ──────────────────────────────────────────────────────
     def generate_video(self, prompt: str, *, model: str = "",

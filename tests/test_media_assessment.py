@@ -394,9 +394,10 @@ def test_a_difference_too_small_to_see_is_not_offered_as_a_switch(window,
 
 
 def test_a_shut_down_model_leaves_the_menus_and_the_ranking_on_its_date():
-    """Veo 3.1's previews shut down on 2026-10-22 (Google names Gemini Omni
-    as the replacement). Before that they are offered with a note; from that
-    day they are not offered, and never ranked."""
+    """Veo 3.1's previews may shut down from 2026-10-22, Google's earliest
+    date (it names Gemini Omni as the replacement). Before that they are
+    offered with a note; from that day they are not offered, and never
+    ranked."""
     from services.media_catalog import VEO_SHUTDOWN, find_model, offered_models
     veo = find_model("Gemini", "veo-3.1-lite-generate-preview")
     assert veo.retires == VEO_SHUTDOWN == "2026-10-22"

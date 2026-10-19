@@ -54,8 +54,19 @@ LANDSCAPE = "Landscape 16:9"
 VERTICAL = "Vertical 9:16"
 SQUARE = "Square 1:1"
 
+
+def human_date(iso: str) -> str:
+    """`2026-10-22` as "22 October 2026", the only way a date is shown."""
+    from datetime import date
+    day = date.fromisoformat(iso)
+    return f"{day.day} {day:%B %Y}"
+
+
+# The one place this date is written: the Model updates tile, the notes below
+# and offered_models all read it from here (a test pins that).
 VEO_SHUTDOWN = "2026-10-22"
-VEO_SHUTDOWN_NOTE = ("Google shuts this preview down on 22 October 2026; "
+VEO_SHUTDOWN_NOTE = (f"Google may shut this preview down from "
+                     f"{human_date(VEO_SHUTDOWN)} (earliest date); "
                      "Gemini Omni is its replacement.")
 
 
@@ -93,9 +104,9 @@ MODELS = (
                "direct_video", "Fast text-to-video with generated audio. "
                "The requested length is expressed in the prompt.",
                tuple(range(3, 11)), (LANDSCAPE, VERTICAL)),
-    # Google shuts the three Veo 3.1 previews down on 2026-10-22 and names
-    # Gemini Omni as the replacement (ai.google.dev/gemini-api/docs/deprecations,
-    # checked 2026-10-07).
+    # Google may shut the three Veo 3.1 previews down from VEO_SHUTDOWN (its
+    # "earliest possible" date) and names Gemini Omni as the replacement
+    # (ai.google.dev/gemini-api/docs/deprecations, updated 2026-10-12).
     MediaModel("Gemini", "veo-3.1-generate-preview", "Veo 3.1",
                "direct_video", "Highest-quality Veo preview at 720p with audio. "
                + VEO_SHUTDOWN_NOTE,

@@ -27,17 +27,23 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_naming_the_process_titles_the_application_menu():
     """CFBundleName is what macOS puts next to the Apple logo. Unnamed, this
     process is titled after whatever script started it."""
+    before = app_identity.menu_bar_name()
     assert app_identity.name_in_menu_bar("Imprint")
-    assert app_identity.menu_bar_name() == "Imprint"
+    # An interpreter inside a bundle (the python.org framework build, as on the
+    # macOS CI runner) already has a name, and that one is authoritative.
+    # Without a bundle name, ours is written.
+    assert app_identity.menu_bar_name() == (before or "Imprint")
 
 
 def test_a_name_that_is_already_there_is_left_alone():
     """A real bundle answers with its own Info.plist, and that one is
     authoritative — this is what keeps the frozen build untouched."""
     app_identity.name_in_menu_bar("Imprint")
+    settled = app_identity.menu_bar_name()
+    assert settled
 
     assert app_identity.name_in_menu_bar("Something Else")
-    assert app_identity.menu_bar_name() == "Imprint"
+    assert app_identity.menu_bar_name() == settled
 
 
 def test_the_dock_icon_is_refused_when_the_file_is_gone():

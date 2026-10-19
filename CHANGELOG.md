@@ -92,6 +92,31 @@ nothing here is a claim about income, sales or publishing results.
 - The Qwen **Test** result names the host that answered: "via workspace host",
   "via standard host" (plus "(workspace ID ignored)" when a typed ID did not
   apply), or the host name of a typed endpoint, such as "via dashscope.aliyuncs.com".
+- The **Model updates** tile has a **Video and image** section. The startup
+  check and **Check now** also read Gemini's and Qwen's image and video model
+  lists (both free). A new model is listed in the tile only; it is not added to
+  the Video menus or to any chat menu. The Qwen list call has not been verified
+  against a live account, and is skipped without a note if Qwen does not serve
+  it.
+- Shutdown dates from the Video catalogue show in the tile: "Veo 3.1, Fast and
+  Lite: earliest shutdown 22 October 2026". In the final 14 days the row is a
+  warning with the days left; after the date it says the models are no longer
+  offered, for 14 days. These rows cannot be dismissed.
+- Removed-model warnings: a video or image model Imprint offers, or a chat
+  model an agent has selected, is flagged when the provider stops listing it.
+  It takes two misses on two different UTC days, from the Model updates check
+  only; an empty or failed list never counts. The notice drops on its own if
+  the model is listed again. Nothing is switched for you.
+- An optional check that Higgsfield's Seedance paths still answer. It is **off
+  by default** and has no switch in the app: set
+  `"model_watch_probe_higgsfield": true` in `config/settings.json` only after
+  confirming by hand that Higgsfield's `/estimate` call costs nothing (TODO.md).
+  It also needs a Higgsfield key, the **Higgsfield** chip on and the request
+  guard's checks to pass, and runs at most once per UTC day: one estimate call
+  per path of Seedance 2.5 and 2.0, never a render or an upload.
+- The tile's title counts warnings as well as new models
+  ("Model updates · 2 new · 1 warning"), and the video and image notices have
+  their own **Dismiss**.
 - A hand-typed `DASHSCOPE_BASE_URL` or `DASHSCOPE_VIDEO_BASE_URL` that is not
   https (plain http to localhost is fine) or not on `aliyuncs.com` is still used,
   but its Settings row, the Qwen hover note and `scripts/check_keys.py` warn that
@@ -104,6 +129,15 @@ nothing here is a claim about income, sales or publishing results.
   video or Qwen Image call) from a `.env` with the blank line failed. It failed
   before sending anything: the URL had no host, so the key went nowhere
   (checked against openai 2.31.0 and requests).
+- Chat model dropdowns no longer show image or video models. A provider's list
+  is now filtered before it reaches them, and the filter also drops every model
+  in the Video catalogue (for example `gemini-nano-banana-2.1`, whose id does
+  not say "image"). Those models also stop being ranked as text models.
+- `.env.example` and the README said the Higgsfield endpoints default to
+  Seedance 1.0 Lite; the default is Seedance 2.5. `.env.example` now leaves the
+  two endpoint overrides blank.
+- The README said the test suite has just over 1,000 tests. It has 1,605, and
+  a full run takes 13 to 17 minutes.
 
 ### Security
 - Settings -> API keys refuses a value with a line break, such as a two-line
@@ -116,6 +150,8 @@ nothing here is a claim about income, sales or publishing results.
 - The Qwen endpoint note no longer says the international host is in
   "maintenance mode since 2026-09-30", which no primary source confirmed. It now
   says a workspace host is recommended and the standard host still works.
+- The Veo 3.1 notes now say Google *may* shut the previews down from
+  22 October 2026, its earliest date, rather than that it will on that day.
 
 ## 2026-10-12
 
