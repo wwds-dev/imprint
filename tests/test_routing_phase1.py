@@ -237,25 +237,33 @@ def _amber_pixels(widget) -> int:
     return count
 
 
-def test_the_closed_picker_paints_a_tag_for_an_abliterated_model_only(qapp):
+@pytest.fixture(scope="module")
+def host(qapp):
+    """One parent for the test widgets, so none is a stray top-level window
+    for the next module's allWidgets() walk to trip over (see conftest)."""
+    from PySide6.QtWidgets import QWidget
+    widget = QWidget()
+    yield widget
+    widget.deleteLater()
+
+
+def test_the_closed_picker_paints_a_tag_for_an_abliterated_model_only(host):
     from PySide6.QtWidgets import QComboBox
     from ui.widgets import polish_combo
-    combo = QComboBox()
+    combo = QComboBox(host)
     combo.resize(320, 34)
     combo.addItems(["deepseek-r1:8b", "DeepSeek-R1-Distill-Qwen-14B-abliterated"])
     polish_combo(combo)
-    combo.show()
     plain = _amber_pixels(combo)
     combo.setCurrentIndex(1)
     assert _amber_pixels(combo) > plain + 40
-    combo.close()
 
 
-def test_the_popup_row_of_an_uncensored_model_is_wider_and_has_a_note(qapp):
+def test_the_popup_row_of_an_uncensored_model_is_wider_and_has_a_note(host):
     from PySide6.QtCore import QModelIndex
     from PySide6.QtWidgets import QComboBox, QStyleOptionViewItem
     from ui import widgets
-    combo = QComboBox()
+    combo = QComboBox(host)
     combo.addItems(["llama3.1:8b", "dolphin3.0-llama3.1-8b"])
     delegate = widgets.DropdownItemDelegate(combo)
     option = QStyleOptionViewItem()
