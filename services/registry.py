@@ -1,6 +1,7 @@
 import json
 import math
 from services.database import get_connection
+from services.providers import expand_allowed
 
 
 def _row_to_agent(row) -> dict:
@@ -138,14 +139,14 @@ class Registry:
         if not a:
             return False
         allowed = a.get("allowed_providers", [])
-        return not allowed or provider in allowed
+        return not allowed or str(provider).casefold() in expand_allowed(allowed)
 
     def tool_allows_provider(self, tool_name: str, provider: str) -> bool:
         t = self.get_tool(tool_name)
         if not t:
             return True
         allowed = t.get("allowed_providers", [])
-        return not allowed or provider in allowed
+        return not allowed or str(provider).casefold() in expand_allowed(allowed)
 
     def agent_allows_tool(self, agent_name: str, tool_name: str) -> bool:
         a = self.get_agent(agent_name)

@@ -76,7 +76,7 @@ class WebdesignPanel(QWidget):
         layout.addWidget(section("Model"))
         self.webdesign_panel_base = AgentPanel(
             host, "webdesign",
-            providers=("ollama", "openai", "deepseek", "kimi", "gemini",
+            providers=("ollama", "lmstudio", "openai", "deepseek", "kimi", "gemini",
                        "anthropic", "qwen"),
             default_provider="anthropic",
         )

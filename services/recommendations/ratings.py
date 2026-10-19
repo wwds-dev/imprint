@@ -44,6 +44,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Mapping
 
+from services.providers import is_local as is_local_provider
 from services import benchmarks
 from services.runtime_paths import resource_base, user_data_base
 
@@ -128,7 +129,7 @@ def rated_quality(table: benchmarks.RatingTable, provider: str, model_id: str,
     then stands unchanged.
     """
     key = provider.casefold()
-    if not table or key == "ollama":
+    if not table or is_local_provider(key):
         return None
     quality, per_tag, evidence, scores = estimate, {}, {}, {}
     said_anything = False

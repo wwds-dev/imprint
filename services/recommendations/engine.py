@@ -21,6 +21,7 @@ Two rules decide, and the result says which (`RecommendationResult.basis`):
 
 from __future__ import annotations
 
+from services.providers import is_local as is_local_provider
 from .models import AgentProfile, Candidate, RecommendationContext, RecommendationResult
 
 # Rating points a candidate may sit below the best-rated one and still count
@@ -178,7 +179,7 @@ class RecommendationEngine:
             return round(UNRATED_CEILING * self._score(profile, item, context), 6)
         if rating >= best - band:
             known = item.price_per_1m is not None and (
-                item.price_per_1m > 0 or item.provider.casefold() == "ollama")
+                item.price_per_1m > 0 or is_local_provider(item.provider))
             return round(0.50 + 0.50 * (item.cost_efficiency if known else 0.0), 6)
         edge = best - band
         below = 2.0 / (1.0 + 10 ** ((edge - rating) / 400.0))

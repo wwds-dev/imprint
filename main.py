@@ -21,6 +21,9 @@ if "--narrator-worker" in sys.argv:
     _narrator_main()
     sys.exit(0)
 
+from services import providers as provider_registry
+from services.providers import is_local as is_local_provider
+from services.lmstudio_client import LMStudioClient
 from services import version as app_version
 from services.runtime_paths import resource_base, user_data_base, ensure_seeded, is_frozen
 ensure_seeded()
@@ -233,7 +236,8 @@ class GodAI(QWidget):
         )
         self.settings = self.load_json(SETTINGS_FILE, {})
 
-        self.ollama = OllamaClient()
+        self.ollama = OllamaClient(provider_registry.ollama_host())
+        self.lmstudio = LMStudioClient()
         self.openai = OpenAIClientWrapper()
         self.deepseek = DeepSeekClientWrapper()
         self.kimi = KimiClientWrapper()
@@ -482,7 +486,7 @@ class GodAI(QWidget):
             from services import qwen_client as _qwen
             card.set_note("Qwen", _qwen.endpoint_note())
         for provider in list(self.model_list_cache):
-            if provider != "ollama":
+            if not is_local_provider(provider):
                 self.model_list_cache.pop(provider, None)
         try:
             self.load_provider_models()
@@ -496,7 +500,7 @@ class GodAI(QWidget):
     def estimate_chat_seconds(self, backend: str, model: str, prompt: str) -> int:
         words = max(1, len(prompt.split()))
         base = 10
-        if backend == "ollama":
+        if is_local_provider(backend):
             if "8b" in model.lower():
                 base = 35
             elif "1.5b" in model.lower():
@@ -522,7 +526,7 @@ class GodAI(QWidget):
         approx_output_tokens = max(250, int(approx_input_tokens * 1.2))
         approx_total_tokens = approx_input_tokens + approx_output_tokens
 
-        if backend == "ollama":
+        if is_local_provider(backend):
             return 0.0, approx_total_tokens
 
         estimated_cost = self.usage_tracker.calculate_cost_eur(
@@ -585,7 +589,7 @@ class GodAI(QWidget):
 
         # One line, beside the bars it will move. The cost comes first because
         # it is the only part that decides anything.
-        if backend == "ollama":
+        if is_local_provider(backend):
             self.live_estimate_label.setText(
                 f"Next request: free · {model} · ~{approx_tokens} tokens")
         elif backend in {"openai", "deepseek", "kimi", "gemini", "anthropic"}:
@@ -600,7 +604,7 @@ class GodAI(QWidget):
     def show_cost_estimate_popup(self):
         estimated_cost, approx_tokens, backend, model = self.get_current_cost_estimate()
 
-        if backend == "ollama":
+        if is_local_provider(backend):
             msg = (
                 f"Agent: {self.agent_box.currentText()}\n"
                 f"Backend: {backend}\n"
@@ -638,18 +642,21 @@ class GodAI(QWidget):
     # every last byte of physical RAM.
     MEMORY_HEADROOM_GB = 3.0
 
-    def assess_local_model(self, model: str, *,
+    def assess_local_model(self, model: str, provider: str = "ollama", *,
                            details: dict | None = None) -> dict | None:
         """Weigh a local model against this machine's memory.
 
         Returns None when the check does not apply (not a known local model, or
-        the daemon is unreachable and the size is unknowable). Otherwise a dict
+        the runtime is unreachable and the size is unknowable). Otherwise a dict
         with level "ok" | "tight" | "too_big", the numbers behind it, and a
-        human-readable message.
+        human-readable message. "tight" is "too big right now": it fits on this
+        machine but not in the memory that is free at the moment.
         """
         import psutil
 
-        if details is not None:
+        if provider == "lmstudio":
+            size_bytes = self.lmstudio.model_size_bytes(model)
+        elif details is not None:
             size_bytes = self.ollama.size_from_details(details, model)
         else:
             size_bytes = self.ollama.model_size_bytes(model)
@@ -657,33 +664,29 @@ class GodAI(QWidget):
             # Not pulled yet — fall back to the published download size for the
             # builds we ship a figure for, so the dropdown can grey them out.
             published_gb = MUSE_GLIMMER_VARIANTS.get(model)
-            if published_gb is None:
+            if published_gb is None or provider != "ollama":
                 return None
-            size_gb = float(published_gb)
-        else:
-            size_gb = size_bytes / 1e9
+            size_bytes = float(published_gb) * 1e9
 
-        needed_gb = size_gb * self.MEMORY_OVERHEAD_FACTOR
         vm = psutil.virtual_memory()
-        total_gb = vm.total / 1e9
-        available_gb = vm.available / 1e9
+        fit = provider_registry.fit_check(size_bytes, vm.available, vm.total)
+        needed_gb, available_gb, total_gb = (
+            fit["needed_gb"], fit["available_gb"], fit["total_gb"])
+        level = fit["level"]
 
-        if needed_gb > total_gb - self.MEMORY_HEADROOM_GB:
-            level = "too_big"
+        if level == "too_big":
             message = (
                 f"{model} needs about {needed_gb:.1f} GB of memory, but this machine "
                 f"only has {total_gb:.0f} GB in total. It cannot run here without "
                 "swapping so hard the system becomes unresponsive."
             )
-        elif needed_gb > available_gb:
-            level = "tight"
+        elif level == "tight":
             message = (
                 f"{model} needs about {needed_gb:.1f} GB, but only {available_gb:.1f} GB "
                 f"is free right now (of {total_gb:.0f} GB). It will fit, but expect "
                 "heavy swapping and slow replies — closing other apps will help."
             )
         else:
-            level = "ok"
             message = f"{model} needs ~{needed_gb:.1f} GB; {available_gb:.1f} GB free."
 
         return {
@@ -700,10 +703,10 @@ class GodAI(QWidget):
 
         Must be called from the GUI thread, before the worker is constructed.
         """
-        if backend != "ollama":
+        if not is_local_provider(backend):
             return True
 
-        verdict = self.assess_local_model(model)
+        verdict = self.assess_local_model(model, backend)
         if verdict is None or verdict["level"] == "ok":
             return True
 
@@ -760,7 +763,7 @@ class GodAI(QWidget):
             }
         winner = provider_result.candidate
         return {
-            "mode": "Local only" if winner.provider == "ollama" else "Hybrid allowed",
+            "mode": "Local only" if is_local_provider(winner.provider) else "Hybrid allowed",
             "provider": winner.provider,
             "model": winner.model_id,
             "reason": provider_result.reason,
@@ -844,7 +847,7 @@ class GodAI(QWidget):
         """The Muse Glimmer build best suited to this machine: (tag, size_gb)."""
         return muse_glimmer_default(self._total_ram_gb())
 
-    def mark_oversized_models(self, combo) -> None:
+    def mark_oversized_models(self, combo, provider: str = "ollama") -> None:
         """Grey out local models this machine cannot physically run.
 
         Advisory only — the entry stays selectable, and run_backend() is the
@@ -854,16 +857,19 @@ class GodAI(QWidget):
             return
 
         # One daemon read for the whole pass, not one per item.
-        try:
-            details = self.ollama.model_details()
-        except Exception:
-            details = {}
+        details = {}
+        if provider == "ollama":
+            try:
+                details = self.ollama.model_details()
+            except Exception:
+                details = {}
         for i in range(combo.count()):
             # Never overwrite the red recommendation marking.
             if combo.itemData(i, Qt.ForegroundRole) is not None:
                 continue
-            verdict = self.assess_local_model(combo.itemText(i),
-                                              details=details)
+            verdict = self.assess_local_model(
+                combo.itemText(i), provider,
+                details=details if provider == "ollama" else None)
             if verdict is None:
                 continue
             if verdict["level"] == "too_big":
@@ -994,7 +1000,8 @@ class GodAI(QWidget):
         self.get_muse_btn.setEnabled(True)
         QMessageBox.warning(self, "Download Failed", message)
 
-    def models_for_provider(self, provider: str) -> list[str]:
+    def models_for_provider(self, provider: str, *,
+                            raise_errors: bool = False) -> list[str]:
         """Model ids offered by one provider, or [] for an unknown provider.
 
         Every client falls back to its own KNOWN_MODELS list when the API is
@@ -1002,6 +1009,7 @@ class GodAI(QWidget):
         """
         clients = {
             "ollama": self.ollama,
+            "lmstudio": self.lmstudio,
             "openai": self.openai,
             "deepseek": self.deepseek,
             "kimi": self.kimi,
@@ -1015,6 +1023,8 @@ class GodAI(QWidget):
         try:
             return list(client.list_models())
         except Exception:
+            if raise_errors:
+                raise
             return []
 
     # ── Explainable provider/model recommendations ───────────────────────────
@@ -1102,7 +1112,7 @@ class GodAI(QWidget):
     def _provider_permission(self, provider: str) -> bool:
         """Whether the user has permitted this provider for paid/external work."""
         key = provider.casefold()
-        if key in {"ollama", "local", "pexels"}:
+        if is_local_provider(key) or key in {"local", "pexels"}:
             return True
         checkbox = getattr(self, f"allow_{key}_checkbox", None)
         return bool(checkbox is not None and checkbox.isChecked())
@@ -1530,7 +1540,7 @@ class GodAI(QWidget):
         conn = get_connection()
         try:
             for item in candidates:
-                if item.provider.casefold() == "ollama":
+                if is_local_provider(item.provider.casefold()):
                     priced.append(replace(item, estimated_cost=0.0))
                     continue
                 row, _source = resolve_price_row(conn, item.provider, item.model_id)
@@ -1556,19 +1566,19 @@ class GodAI(QWidget):
         if agent_key == "chat" and getattr(self, "execution_mode_box", None) is not None:
             mode = self.execution_mode_box.currentText()
             allowed_cloud = [
-                provider for provider in providers if provider != "ollama"
+                provider for provider in providers if not is_local_provider(provider)
                 and getattr(self, f"allow_{provider}_checkbox", None) is not None
                 and getattr(self, f"allow_{provider}_checkbox").isChecked()
             ]
             if mode == "Local only":
-                providers = [provider for provider in providers if provider == "ollama"]
+                providers = [provider for provider in providers if is_local_provider(provider)]
             elif mode == "Cloud only":
                 # With no permission checked, rank cloud choices as setup
                 # targets; once permissions exist they become a hard filter.
-                providers = allowed_cloud or [p for p in providers if p != "ollama"]
+                providers = allowed_cloud or [p for p in providers if not is_local_provider(p)]
             else:
                 providers = [p for p in providers
-                             if p == "ollama" or p in allowed_cloud]
+                             if is_local_provider(p) or p in allowed_cloud]
         selected = provider_box.currentText()
         # Every provider's live list this session, not just the selected
         # one's: a model a provider released after KNOWN_MODELS was written
@@ -1581,8 +1591,8 @@ class GodAI(QWidget):
         candidates = [
             replace(item, available=(
                 bool(item.available and self._provider_permission(item.provider))
-                if item.provider.casefold() != "ollama"
-                else bool(selected == "ollama"
+                if not is_local_provider(item.provider.casefold())
+                else bool(selected == item.provider.casefold()
                           and model_box.property("imprintModelsLive"))
             ))
             for item in candidates
@@ -1615,7 +1625,7 @@ class GodAI(QWidget):
         if (result.candidate.provider == provider
                 and result.candidate.model_id == model):
             return True
-        if provider == "ollama":
+        if is_local_provider(provider):
             runnable = bool(model_box is not None
                             and model_box.property("imprintModelsLive"))
         else:
@@ -1694,8 +1704,9 @@ class GodAI(QWidget):
             # for local models, and running it per cloud repaint was N+1
             # HTTP GETs on the GUI thread.
             if provider_box is not None and \
-                    provider_box.currentText() == "ollama":
-                self.mark_oversized_models(model_box)
+                    is_local_provider(provider_box.currentText()):
+                self.mark_oversized_models(model_box,
+                                           provider_box.currentText())
         if model_box is not None and provider_box is not None \
                 and hasattr(self, "model_watch"):
             self._mark_new_models(model_box, provider_box.currentText())
@@ -3104,79 +3115,17 @@ class GodAI(QWidget):
         self.model_box.clear()
 
         try:
-            if provider == "ollama":
+            if is_local_provider(provider):
                 try:
-                    models = self.ollama.list_models()
+                    models = self.models_for_provider(provider, raise_errors=True)
                     self.model_box.setProperty("imprintModelsLive", bool(models))
                 except Exception:
                     models = []
                     self.model_box.setProperty("imprintModelsLive", False)
-                if not models:
+                if not models and provider == "ollama":
                     models = list(OllamaClient.KNOWN_MODELS)
-
-            elif provider == "openai":
-                if not self.openai.client:
-                    models = list(self.openai.KNOWN_MODELS)
-                else:
-                    result = self.openai.client.models.list()
-                    models = sorted(
-                        m.id for m in result.data
-                        if any(x in m.id.lower() for x in ["gpt", "o1", "o3", "o4"])
-                    )
-
-            elif provider == "deepseek":
-                # Try API model list if available. Fallback to known/common names.
-                try:
-                    if self.deepseek.client:
-                        result = self.deepseek.client.models.list()
-                        models = sorted(m.id for m in result.data)
-                    else:
-                        models = []
-                except Exception:
-                    models = []
-
-                if not models:
-                    models = list(self.deepseek.KNOWN_MODELS)
-
-            elif provider == "kimi":
-                # Try API model list if available. Fallback to known/common names.
-                try:
-                    if self.kimi.client:
-                        result = self.kimi.client.models.list()
-                        models = sorted(m.id for m in result.data)
-                    else:
-                        models = []
-                except Exception:
-                    models = []
-
-                if not models:
-                    models = self.kimi.KNOWN_MODELS
-
-            elif provider == "gemini":
-                try:
-                    if self.gemini.client:
-                        result = self.gemini.client.models.list()
-                        models = sorted(
-                            m.name.replace("models/", "")
-                            for m in result
-                            if "generateContent" in getattr(m, "supported_actions", [])
-                            or "generateContent" in getattr(m, "supported_generation_methods", [])
-                        )
-                    else:
-                        models = []
-                except Exception:
-                    models = []
-
-                if not models:
-                    models = list(self.gemini.KNOWN_MODELS)
-
-            elif provider == "anthropic":
-                models = self.anthropic.list_models()
-            elif provider == "qwen":
-                models = self.qwen.list_models()
-
             else:
-                models = []
+                models = self.models_for_provider(provider)
 
             self.model_box.addItems(models)
 
@@ -3503,11 +3452,13 @@ class GodAI(QWidget):
         }
 
         if execution_mode == "Local only":
+            if is_local_provider(provider):
+                return provider, model if model else "deepseek-r1:8b"
             return "ollama", model if model else "deepseek-r1:8b"
 
         if execution_mode == "Cloud only":
-            if provider == "ollama":
-                raise RuntimeError("Cloud only mode selected, but provider is Ollama/local.")
+            if is_local_provider(provider):
+                raise RuntimeError("Cloud only mode selected, but provider is local (Ollama or LM Studio).")
 
             if provider not in allowed_apis:
                 raise RuntimeError(f"Unknown cloud provider: {provider}")
@@ -3518,8 +3469,8 @@ class GodAI(QWidget):
             return provider, model
 
         if execution_mode == "Hybrid allowed":
-            if provider == "ollama":
-                return "ollama", model if model else "deepseek-r1:8b"
+            if is_local_provider(provider):
+                return provider, model if model else "deepseek-r1:8b"
 
             if provider in allowed_apis and not allowed_apis[provider]:
                 raise RuntimeError(f"{provider} API is not enabled. Tick the checkbox first.")
@@ -3668,7 +3619,7 @@ class GodAI(QWidget):
         deliberately on the new choice, the same rule as the free-local offer:
         a paid request is never silently re-routed.
         """
-        if backend == "ollama":
+        if is_local_provider(backend):
             return True
 
         message = (
@@ -4443,7 +4394,7 @@ class GodAI(QWidget):
         user re-sends deliberately on the free model rather than the guard
         silently re-routing a paid request.
         """
-        if provider == "ollama" or flat_cost_eur is not None:
+        if is_local_provider(provider) or flat_cost_eur is not None:
             return False
         # Only the GLOBAL caps, decided by the validator's machine-readable
         # scope — never by parsing the sentence (the project cap's wording
@@ -4633,75 +4584,36 @@ class GodAI(QWidget):
             self.run_logger.finish(run_id=context["run_id"], status=reason)
 
     def run_backend(self, backend, model, messages, prompt):
-        if backend == "ollama":
+        """Send one request to `backend`, dispatching on its registry spec.
+
+        Local providers (any protocol) are fit-checked against memory first;
+        the call itself is the same for every client: stream if it can, else
+        chat, else generate. The local model is the slowest responder in the
+        app, so the stream matters most there.
+        """
+        spec = provider_registry.get(backend)
+        client = getattr(self, backend, None) if spec is not None else None
+        if spec is None or client is None:
+            raise RuntimeError(f"No compatible backend method found for backend: {backend}")
+
+        if spec.is_local:
             # Runs on the worker thread, so this cannot prompt — it is the hard
             # floor only. Every agent funnels through here, so a model that
             # physically cannot fit is stopped once, for all of them, and the
             # message surfaces via each agent's existing error path instead of
             # freezing the machine for the full request timeout.
-            verdict = self.assess_local_model(model)
+            verdict = self.assess_local_model(model, backend)
             if verdict is not None and verdict["level"] == "too_big":
                 raise RuntimeError(verdict["message"])
 
-            # Prefer the stream: the local model is the slowest responder
-            # in the app, and it was the one provider still waiting for the
-            # whole generation before showing a word.
-            if hasattr(self.ollama, "stream_chat"):
-                return self.ollama.stream_chat(model=model, messages=messages)
-            if hasattr(self.ollama, "chat"):
-                return self.ollama.chat(model=model, messages=messages)
-            if hasattr(self.ollama, "generate"):
-                return self.ollama.generate(model=model, prompt=prompt)
-
-        if backend == "openai":
-            if hasattr(self.openai, "stream_chat"):
-                return self.openai.stream_chat(messages=messages, model=model)
-            if hasattr(self.openai, "chat"):
-                return self.openai.chat(messages=messages, model=model)
-            if hasattr(self.openai, "generate"):
-                return self.openai.generate(prompt, model=model)
-
-        if backend == "deepseek":
-            if hasattr(self.deepseek, "stream_chat"):
-                return self.deepseek.stream_chat(messages=messages, model=model)
-            if hasattr(self.deepseek, "chat"):
-                return self.deepseek.chat(messages=messages, model=model)
-            if hasattr(self.deepseek, "generate"):
-                return self.deepseek.generate(prompt, model=model)
-
-        if backend == "kimi":
-            if hasattr(self.kimi, "stream_chat"):
-                return self.kimi.stream_chat(messages=messages, model=model)
-            if hasattr(self.kimi, "chat"):
-                return self.kimi.chat(messages=messages, model=model)
-            if hasattr(self.kimi, "generate"):
-                return self.kimi.generate(prompt, model=model)
-
-        if backend == "qwen":
-            if hasattr(self.qwen, "stream_chat"):
-                return self.qwen.stream_chat(messages=messages, model=model)
-            if hasattr(self.qwen, "chat"):
-                return self.qwen.chat(messages=messages, model=model)
-            if hasattr(self.qwen, "generate"):
-                return self.qwen.generate(prompt, model=model)
-
-        if backend == "gemini":
-            if hasattr(self.gemini, "stream_chat"):
-                return self.gemini.stream_chat(messages=messages, model=model)
-
-            if hasattr(self.gemini, "chat"):
-                return self.gemini.chat(messages=messages, model=model)
-
-            if hasattr(self.gemini, "generate"):
-                return self.gemini.generate(prompt, model=model)
-
-        if backend == "anthropic":
-            if hasattr(self.anthropic, "stream_chat"):
-                return self.anthropic.stream_chat(messages=messages, model=model)
-
-            if hasattr(self.anthropic, "chat"):
-                return self.anthropic.chat(messages=messages, model=model)
-
+        if hasattr(client, "stream_chat"):
+            return client.stream_chat(messages=messages, model=model)
+        if hasattr(client, "chat"):
+            return client.chat(messages=messages, model=model)
+        if hasattr(client, "generate"):
+            if spec.protocol == provider_registry.PROTOCOL_OLLAMA:
+                return client.generate(model=model, prompt=prompt)
+            return client.generate(prompt, model=model)
         raise RuntimeError(f"No compatible backend method found for backend: {backend}")
 
     def start_chat_timer(self, backend: str, model: str, prompt: str):

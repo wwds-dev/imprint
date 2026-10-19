@@ -246,7 +246,7 @@ class AuthorPanel(QWidget):
 
         self.author_panel_base = AgentPanel(
             host, "author",
-            providers=("ollama", "openai", "deepseek", "kimi", "gemini",
+            providers=("ollama", "lmstudio", "openai", "deepseek", "kimi", "gemini",
                        "anthropic", "qwen"),
             default_provider="anthropic")
         self.author_provider_box = self.author_panel_base.provider_box

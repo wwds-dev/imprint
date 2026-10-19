@@ -137,7 +137,7 @@ class SocialPanel(QWidget):
         self.social_panel_base = AgentPanel(
             host, "social",
             providers=("anthropic", "openai", "deepseek", "kimi", "gemini",
-                       "qwen", "ollama"),
+                       "qwen", "ollama", "lmstudio"),
             default_provider="anthropic")
         self.social_provider_box = self.social_panel_base.provider_box
         self.social_model_box = self.social_panel_base.model_box

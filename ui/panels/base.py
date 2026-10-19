@@ -17,10 +17,11 @@ from __future__ import annotations
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QComboBox
 
+from services import providers as provider_registry
 from ui.host import AgentHost
 
 # Every provider the app can talk to, in the order the panels list them.
-ALL_PROVIDERS = ("ollama", "openai", "deepseek", "kimi", "gemini", "anthropic", "qwen")
+ALL_PROVIDERS = provider_registry.SUPPORTED
 
 
 class AgentPanel(QObject):

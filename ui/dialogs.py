@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QTextBrowser, QVBoxLayout, QWidget,
 )
 
+from services.providers import SUPPORTED as SUPPORTED_PROVIDERS
 from services import api_keys
 from services.anthropic_client import AnthropicClientWrapper
 from services.database import get_connection, get_setting, save_setting
@@ -71,8 +72,7 @@ def show_cost_history(app):
     filter_row.setSpacing(SM)
 
     provider_filter = QComboBox()
-    provider_filter.addItems(["all", "ollama", "openai", "deepseek", "kimi",
-                              "gemini", "anthropic", "qwen"])
+    provider_filter.addItems(["all", *SUPPORTED_PROVIDERS])
     provider_filter.setMinimumWidth(180)
     filter_row.addWidget(field("Provider", provider_filter))
 

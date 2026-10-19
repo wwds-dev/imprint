@@ -10,9 +10,10 @@ from PySide6.QtCore import QEvent, QObject, Qt, QRect, QPoint, QPointF, QSize
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QComboBox, QLayout, QProxyStyle,
-    QPushButton, QScrollArea, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget,
+    QPushButton, QScrollArea, QStyle, QStyledItemDelegate, QToolTip, QVBoxLayout, QWidget,
 )
 
+from services.providers import uncensored_tag
 from ui.style import ACCENT, ELEVATED, TEXT, TEXT_DIM, TEXT_MUTE
 from ui import theme
 
@@ -41,6 +42,42 @@ RECOMMENDATION_BADGE_ROLE = int(Qt.ItemDataRole.UserRole) + 105
 NEW_MODEL_ROLE = int(Qt.ItemDataRole.UserRole) + 106
 
 
+# Models with their safety tuning removed are offered everywhere and must be
+# tagged wherever one is named (owner's decision, 2026-10-19). The tag comes
+# from the model's name (services/providers.py), so a new download is tagged
+# with nobody remembering to. It is warning-amber, never the accent: BEST FIT is
+# advice, this is a fact about the model.
+TAG_TONE = "#d9a441"
+TAG_NOTES = {
+    "abliterated": "Abliterated: this model's refusal behaviour was removed. "
+                   "It will answer requests a standard model declines.",
+    "uncensored": "Uncensored: this model was tuned not to refuse. "
+                  "It will answer requests a standard model declines.",
+}
+TAG_WIDTH = 96
+
+
+def paint_tag(painter: QPainter, font: QFont, text: str, right: int,
+              centre_y: int, width: int | None = None) -> None:
+    """A warning pill whose right edge is at `right`."""
+    from PySide6.QtGui import QFontMetrics
+    width = width or QFontMetrics(font).horizontalAdvance(text) + 16
+    pill = QRect(right - width, centre_y - 9, width, 18)
+    tone = QColor(TAG_TONE)
+    fill, edge = QColor(tone), QColor(tone)
+    fill.setAlpha(30)
+    edge.setAlpha(140)
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setFont(font)
+    painter.setPen(QPen(edge, 1))
+    painter.setBrush(fill)
+    painter.drawRoundedRect(pill, 8, 8)
+    painter.setPen(tone)
+    painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, text)
+    painter.restore()
+
+
 class DropdownProxyStyle(QProxyStyle):
     """Force Qt's styleable list popup instead of macOS's native menu.
 
@@ -59,6 +96,20 @@ class DropdownProxyStyle(QProxyStyle):
             return 0
         return super().styleHint(hint, option, widget, returnData)
 
+    def drawComplexControl(self, control, option, painter, widget=None):  # noqa: N802
+        super().drawComplexControl(control, option, painter, widget)
+        if control != QStyle.ComplexControl.CC_ComboBox \
+                or not isinstance(widget, QComboBox):
+            return
+        tag = uncensored_tag(widget.currentText())
+        if not tag:
+            return
+        font = QFont(widget.font())
+        font.setPointSizeF(max(8.0, font.pointSizeF() - 2.0))
+        font.setWeight(QFont.Weight.DemiBold)
+        paint_tag(painter, font, tag.upper(), widget.width() - 30,
+                  widget.height() // 2)
+
 
 class DropdownItemDelegate(QStyledItemDelegate):
     """Paint a compact menu card with an unmistakable selected state."""
@@ -74,6 +125,8 @@ class DropdownItemDelegate(QStyledItemDelegate):
         width = option.fontMetrics.horizontalAdvance(text)
         badge_space = self.BADGE_SPACE \
             if index.data(RECOMMENDED_ROLE) or index.data(NEW_MODEL_ROLE) else 0
+        if uncensored_tag(text):
+            badge_space += TAG_WIDTH + 6
         # QStyledItemDelegate's width can be the popup viewport's current width
         # (640px before layout on macOS). Only the content should influence the
         # horizontal hint; retain the base hint solely for row height.
@@ -81,6 +134,16 @@ class DropdownItemDelegate(QStyledItemDelegate):
             width + self.HORIZONTAL_PADDING * 2 + self.CHECK_SPACE + badge_space,
             max(base.height(), self.ROW_HEIGHT),
         )
+
+    def helpEvent(self, event, view, option, index):  # noqa: N802 - Qt API
+        tag = uncensored_tag(str(index.data(Qt.ItemDataRole.DisplayRole) or ""))
+        if not tag or event is None:
+            return super().helpEvent(event, view, option, index)
+        tip = str(index.data(Qt.ItemDataRole.ToolTipRole) or "")
+        QToolTip.showText(event.globalPos(),
+                          f"{tip}\n\n{TAG_NOTES[tag]}" if tip else TAG_NOTES[tag],
+                          view)
+        return True
 
     @staticmethod
     def _wash(color: str, alpha: int) -> QColor:
@@ -131,19 +194,31 @@ class DropdownItemDelegate(QStyledItemDelegate):
         painter.setPen(text_color if enabled else _c(TEXT_MUTE))
         is_new = bool(index.data(NEW_MODEL_ROLE)) and not recommended
         badge_space = self.BADGE_SPACE if recommended or is_new else 0
+        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+        tag = uncensored_tag(text)
+        if tag:
+            badge_space += TAG_WIDTH + 6
         text_rect = QRect(
             text_left,
             row.top(),
             max(0, row.right() - text_left - self.CHECK_SPACE - badge_space),
             row.height(),
         )
-        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
         painter.drawText(
             text_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
             option.fontMetrics.elidedText(
                 text, Qt.TextElideMode.ElideRight, text_rect.width()),
         )
+
+        if tag:
+            tag_font = QFont(option.font)
+            tag_font.setPointSizeF(max(8.0, tag_font.pointSizeF() - 2.0))
+            tag_font.setWeight(QFont.Weight.DemiBold)
+            used = self.BADGE_SPACE if recommended or is_new else 0
+            paint_tag(painter, tag_font, tag.upper(),
+                      row.right() - self.CHECK_SPACE - used - 6,
+                      row.center().y(), TAG_WIDTH)
 
         if recommended:
             badge = QRect(row.right() - self.CHECK_SPACE - 66,

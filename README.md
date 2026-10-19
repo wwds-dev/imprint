@@ -785,11 +785,12 @@ Changing the tool updates the live cost estimate and the recommendation label in
 
 ### 6.2 Control Bar — Row 2: Provider & Model
 
-**Provider** (combo box) — Selects the AI provider: `ollama`, `openai`, `deepseek`, `kimi`, `gemini`, `anthropic` or `qwen`. Changing the provider triggers `load_provider_models()` which repopulates the Model combo.
+**Provider** (combo box) — Selects the AI provider: `ollama`, `lmstudio`, `openai`, `deepseek`, `kimi`, `gemini`, `anthropic` or `qwen`. Changing the provider triggers `load_provider_models()` which repopulates the Model combo.
 
 **Model** (combo box) — Selects the specific model for the chosen provider. The list is populated dynamically:
 
-- **Ollama:** fetches the list of locally installed models via `ollama.list_models()`. Falls back to `deepseek-r1:8b` and `deepseek-r1:1.5b` if none are found.
+- **Ollama:** fetches the list of locally installed models via `ollama.list_models()`. Falls back to `deepseek-r1:8b` and `deepseek-r1:1.5b` if none are found. The daemon address comes from `OLLAMA_HOST`.
+- **LM Studio:** with the server on, `/api/v0/models` (state, quantisation, architecture, maximum context); with it off, `~/.lmstudio/models`, listed as *on disk · server off*. See §6.2.1.
 - **Every cloud provider:** queries the provider's live model list when a key is configured, and otherwise falls back to the client's `KNOWN_MODELS` — the offline lists in §9, checked against each provider on 2026-10-07. Retired ids (the claude-3 family, `deepseek-chat`/`deepseek-reasoner`, Gemini 1.5/2.0, `qwen3-max`) are not offered offline. Every offline id has its own row in `config/pricing.json`; `tests/test_settings_pricing.py` fails otherwise.
 
 The last selected model for each provider is saved to `config/settings.json` and restored on the next startup.
@@ -802,15 +803,19 @@ The last selected model for each provider is saved to `config/settings.json` and
 
 ---
 
+#### 6.2.1 Local providers: Ollama and LM Studio
+
+Local is a property of a provider's spec (`services/providers.py`, a byte-identical copy of Sentinel's; `tests/test_providers_drift.py` keeps them equal), not a name check. Ollama and **LM Studio** are the local providers. LM Studio is priced as free (a zero price still means *unknown* for cloud only), scored as private, needs no permission checkbox, never raises the paid-request dialog and is not counted as paid usage; an agent that allows `ollama` allows every local runtime. LM Studio's address is `http://localhost:1234/v1` (`LMSTUDIO_URL` overrides) and chat goes through `/v1/chat/completions`. Before a local model runs, its file size × 1.2 is compared with free memory (`providers.fit_check`): *too big right now* warns, a file that cannot fit this machine is refused. Uncensored, abliterated and Dolphin models are offered in every agent that offers local models and **always tagged** — an amber ABLITERATED or UNCENSORED pill in the dropdown and on the closed picker, with a hover note — derived from the model's name and publisher, never typed in. Local models are not yet rated, so the ranker does not pick one by itself (phase 3 of `docs/local_model_routing_plan.html` in the lab root). The Manuscript and Creator agents still do not offer local providers: their registry rows exclude `ollama` on purpose.
+
 ### 6.3 Control Bar — Row 3: Execution Mode & API Permissions
 
 **Mode** (combo box) — Controls how the backend is resolved when the Send button is pressed:
 
 | Mode | Behaviour |
 |------|-----------|
-| **Local only** | Always routes to Ollama, regardless of the Provider selection. No API cost. |
+| **Local only** | Always routes to a local provider: the selected one if it is local, otherwise Ollama. No API cost. |
 | **Hybrid allowed** | Uses the selected Provider. Cloud APIs require their checkbox to be enabled. |
-| **Cloud only** | Forces a cloud provider. Ollama is not accepted. Fails immediately if the selected provider's checkbox is not ticked. |
+| **Cloud only** | Forces a cloud provider. Local providers are not accepted. Fails immediately if the selected provider's checkbox is not ticked. |
 
 **OpenAI** (checkbox) — Grants the application permission to call the OpenAI API for this session. Unchecked by default. Must be ticked before any request that would use OpenAI.
 

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from services.providers import is_local as is_local_provider
 from services.registry import Registry
 
 
@@ -82,7 +83,7 @@ class Validator:
             )
 
         # 6. API checkbox permission (free pass for ollama)
-        if provider != "ollama":
+        if not is_local_provider(provider):
             perm_key = f"allow_{provider}"
             if not api_permissions.get(perm_key, False):
                 return ValidationResult(
@@ -99,7 +100,7 @@ class Validator:
         # daily cap. Callers that cannot supply the day's spend pass 0 and
         # get the old per-request behaviour.
         agent_budget = self.registry.get_agent_budget(agent_name)
-        if agent_budget is not None and provider != "ollama":
+        if agent_budget is not None and not is_local_provider(provider):
             if estimated + _money(agent_daily_cost) > _money(agent_budget):
                 return ValidationResult(
                     False,
@@ -110,7 +111,7 @@ class Validator:
                 )
 
         # 8. Optional daily cap for the currently selected project.
-        if project_budget is not None and provider != "ollama":
+        if project_budget is not None and not is_local_provider(provider):
             project_remaining = _money(project_budget) - _money(project_cost)
             if estimated > project_remaining:
                 return ValidationResult(
@@ -121,7 +122,7 @@ class Validator:
                 )
 
         # 9. Session budget
-        if provider != "ollama":
+        if not is_local_provider(provider):
             session_remaining = _money(session_budget) - _money(session_cost)
             if estimated > session_remaining:
                 return ValidationResult(
@@ -132,7 +133,7 @@ class Validator:
                 )
 
         # 10. Daily budget
-        if provider != "ollama":
+        if not is_local_provider(provider):
             daily_remaining = _money(daily_budget) - _money(daily_cost)
             if estimated > daily_remaining:
                 return ValidationResult(
