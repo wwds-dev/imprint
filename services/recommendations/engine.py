@@ -119,6 +119,12 @@ class RecommendationEngine:
                                result.reference, result.band)
         return self._score(profile, item, context)
 
+    def request_tags(self, profile: AgentProfile,
+                     context: RecommendationContext) -> list[str]:
+        """The kinds of work this request is rated on: the agent's tags plus
+        those its own words name (the routing advisor's kind of job)."""
+        return self._tags(profile, context)
+
     def request_rating(self, profile: AgentProfile, item: Candidate,
                        context: RecommendationContext) -> float | None:
         """The candidate's public rating for this request's kinds of work."""

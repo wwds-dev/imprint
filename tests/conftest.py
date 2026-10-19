@@ -243,3 +243,27 @@ def _local_inventory_is_seeded_not_discovered():
 
         patch.setattr(local_ratings.RatingStore, "__init__", memory_store)
         yield
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _settings_and_routing_files_are_temporary(tmp_path_factory):
+    """The tracked config/settings.json and the routing rules and savings
+    files in data/ are never written by a test.
+
+    Several paths save the whole settings dict (a model pick, the routing
+    mode in Settings → Models or the Mode box), and the suite used to leave
+    the tracked file modified. Each test session works on a copy instead.
+    """
+    import shutil
+
+    import main
+
+    root = tmp_path_factory.mktemp("settings")
+    copy = root / "settings.json"
+    if main.SETTINGS_FILE.is_file():
+        shutil.copyfile(main.SETTINGS_FILE, copy)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(main, "SETTINGS_FILE", copy)
+        patch.setattr(main, "ROUTING_RULES_FILE", root / "routing_rules.json")
+        patch.setattr(main, "ROUTING_SAVINGS_FILE", root / "routing_savings.json")
+        yield

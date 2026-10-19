@@ -74,6 +74,9 @@ consequences of what just landed rather than new ideas.
 | 68 | **Measure analysis (hard prompts) for local models.** Only writing, code, summarising and extraction are measured, so Chat, Sitebuilder and Manuscript — whose work includes *analysis* — can never pick a measured-only local model. A short hard-prompt set in `config/local_rating_prompts.json` (shared with Sentinel) would cover it. | feature | M | IDEA |
 | 69 | **Calibrate the local-ratings judge** against cloud pairs LMArena already rates, and record the agreement with each measurement. | quality | M | IDEA |
 | 70 | **Mark a measurement stale when its reference changes** (a better cloud model becomes the reference, or its score moves more than the band); re-measure stays manual. | feature | S | IDEA |
+| 71 | **Learn local speed for the advisor's time estimate.** It uses fixed throughput (12 tokens/s local, 60 cloud); record tokens/s per model from finished runs. | quality | S | IDEA |
+| 72 | **Keep local as a rule.** Only *Always* (switch) is remembered; a *Keep local for this kind* rule would stop repeat banners for an unmeasured model the user trusts. | feature | S | IDEA |
+| 73 | **Context windows for cloud candidates.** Imprint's catalog scores context as 0-1, so the advisor checks context only for local models (from LM Studio's loaded context); a real window per cloud model would let it name a too-long prompt for those too. | quality | S | IDEA |
 
 ## Done
 

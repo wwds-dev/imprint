@@ -26,6 +26,7 @@ from services.providers import is_local as is_local_provider
 from services.lmstudio_client import LMStudioClient
 from services import local_models
 from services import local_ratings
+from services import routing_advisor
 from services import version as app_version
 from services.runtime_paths import resource_base, user_data_base, ensure_seeded, is_frozen
 ensure_seeded()
@@ -121,6 +122,10 @@ LOCAL_RATINGS_FILE = DATA_DIR / "local_ratings.json"
 # Measurement runs are guarded and billed as the Studio Assistant: the
 # registered general-text agent, so its permissions and daily cap apply.
 LOCAL_RATINGS_AGENT = "chat"
+# Hybrid routing (services/routing_advisor.py): the rules made with "Always
+# for this kind of job", and what running local saved.
+ROUTING_RULES_FILE = DATA_DIR / "routing_rules.json"
+ROUTING_SAVINGS_FILE = DATA_DIR / "routing_savings.json"
 CHATS_DIR = DATA_DIR / "chats"
 
 # Sentinel value for the Saved Chats agent filter — not a real agent name.
@@ -159,6 +164,20 @@ REGISTRY_FILE = CONFIG_DIR / "registry.json"
 README_FILE = RESOURCE_DIR / "README.md"
 
 # agent key -> (provider box attribute, model box attribute)
+def execution_mode_for(window, agent: str = "chat") -> str:
+    """The three-way mode the run path reads. An agent with a routing mode of
+    its own (Settings → Models) answers for itself; otherwise the Mode box,
+    which follows the app's routing mode."""
+    settings = getattr(window, "settings", None) or {}
+    overrides = settings.get(routing_advisor.OVERRIDES_KEY) if isinstance(settings, dict) else None
+    if isinstance(overrides, dict) and overrides.get(agent) in routing_advisor.MODES:
+        return routing_advisor.LEGACY_EXECUTION[overrides[agent]]
+    box = getattr(window, "execution_mode_box", None)
+    if box is not None:
+        return box.currentText()
+    return routing_advisor.LEGACY_EXECUTION[routing_advisor.mode_for(settings, agent)]
+
+
 AGENT_SETUP_WIDGETS = {
     "chat":        ("provider_box",             "model_box"),
     "fiverr":      ("fiverr_provider_box",      "fiverr_model_box"),
@@ -272,6 +291,11 @@ class GodAI(QWidget):
         local_models.set_rating_lookup(self.local_ratings.text)
         model_ratings.set_local_lookup(self.local_ratings.rating)
         self.local_measure_worker = None
+        # Hybrid routing: one advice per new job, rules, savings (phase 4).
+        self.routing_rules = routing_advisor.RoutingRules(ROUTING_RULES_FILE)
+        self.savings_tally = routing_advisor.SavingsTally(ROUTING_SAVINGS_FILE)
+        self._held_job = None       # a job the advice banner is holding
+        self._job = None            # the Chat job in flight, for failover/tally
         self.monitor = ResourceMonitor()
         self.history = HistoryStore()
         self.report_exporter = ReportExporter()
@@ -818,7 +842,12 @@ class GodAI(QWidget):
         if hasattr(self, "execution_mode_box"):
             index = self.execution_mode_box.findText(rec["mode"])
             if index >= 0:
-                self.execution_mode_box.setCurrentIndex(index)
+                # A recommendation moves this box, not the saved routing mode.
+                self._applying_recommendation = True
+                try:
+                    self.execution_mode_box.setCurrentIndex(index)
+                finally:
+                    self._applying_recommendation = False
 
         if hasattr(self, "provider_box"):
             index = self.provider_box.findText(rec["provider"])
@@ -1477,7 +1506,7 @@ class GodAI(QWidget):
             budget_remaining=self._remaining_budget_eur(agent_key),
             priority=("privacy" if agent_key == "chat"
                       and getattr(self, "execution_mode_box", None) is not None
-                      and self.execution_mode_box.currentText() == "Local only"
+                      and execution_mode_for(self, agent_key) == "Local only"
                       else "balanced"),
         )
 
@@ -1849,17 +1878,34 @@ class GodAI(QWidget):
 
     def _text_recommendations(self, agent_key: str, task: str | None = None,
                               prompt_for_cost: str | None = None):
+        built = self._text_candidates_for(agent_key, prompt_for_cost, task)
+        if built is None:
+            return None, None
+        candidates, profile, base = built
+        selected = self._find_control(AGENT_SETUP_WIDGETS[agent_key][0]).currentText()
+        provider_result = self.recommendation_engine.recommend(profile, candidates, base)
+        model_result = self.recommendation_engine.recommend(
+            profile, candidates,
+            RecommendationContext(**{**base.__dict__, "selected_provider": selected}),
+        )
+        return provider_result, model_result
+
+    def _text_candidates_for(self, agent_key: str, prompt_for_cost: str | None = None,
+                             task: str | None = None):
+        """(candidates, profile, context) for one agent's text request, from
+        caches only — the ranking input BEST FIT, the paid-request assessment
+        and the routing advisor share. None for an agent without a pair."""
         widgets = AGENT_SETUP_WIDGETS.get(agent_key)
         if not widgets:
-            return None, None
+            return None
         provider_box = self._find_control(widgets[0])
         model_box = self._find_control(widgets[1])
         if provider_box is None or model_box is None:
-            return None, None
+            return None
 
         providers = [provider_box.itemText(i) for i in range(provider_box.count())]
         if agent_key == "chat" and getattr(self, "execution_mode_box", None) is not None:
-            mode = self.execution_mode_box.currentText()
+            mode = execution_mode_for(self, agent_key)
             allowed_cloud = [
                 provider for provider in providers if not is_local_provider(provider)
                 and getattr(self, f"allow_{provider}_checkbox", None) is not None
@@ -1903,14 +1949,7 @@ class GodAI(QWidget):
         ]
         if prompt_for_cost is not None:
             candidates = self._priced_for_request(candidates, prompt_for_cost)
-        profile = profile_for(agent_key)
-        base = self._recommendation_context(agent_key, task)
-        provider_result = self.recommendation_engine.recommend(profile, candidates, base)
-        model_result = self.recommendation_engine.recommend(
-            profile, candidates,
-            RecommendationContext(**{**base.__dict__, "selected_provider": selected}),
-        )
-        return provider_result, model_result
+        return candidates, profile_for(agent_key), self._recommendation_context(agent_key, task)
 
     def _selection_holds(self, agent_key: str, result, provider: str,
                          model: str, model_box=None) -> bool:
@@ -2648,6 +2687,14 @@ class GodAI(QWidget):
         self.input_box = QTextEdit()
         self.input_box.setPlaceholderText("Type your message here...")
         self.input_box.setMinimumHeight(190)
+        # Mockup C: holds a job until the user answers; also the failover offer.
+        from ui.routing_advice import AdviceBanner
+        self.advice_banner = AdviceBanner(self)
+        self.advice_banner.switch_requested.connect(self._advice_switch)
+        self.advice_banner.always_requested.connect(self._advice_always)
+        self.advice_banner.keep_requested.connect(self._advice_keep)
+        self.advice_banner.dismissed.connect(self._advice_dismissed)
+        normal_layout.addWidget(self.advice_banner)
         normal_layout.addWidget(field("Message", self.input_box))
 
         # The action row, in three groups that wrap as units: send and stop;
@@ -2721,6 +2768,8 @@ class GodAI(QWidget):
         self.model_box.currentTextChanged.connect(self.update_live_cost_estimate)
 
         # ===== MODE =====
+        self._sync_execution_mode()
+        self.execution_mode_box.currentTextChanged.connect(self._execution_mode_picked)
         self.execution_mode_box.currentTextChanged.connect(self.update_live_cost_estimate)
         self.execution_mode_box.currentTextChanged.connect(self.update_recommendation_label)
 
@@ -3247,6 +3296,12 @@ class GodAI(QWidget):
         stats.addWidget(self.today_cost_stat, 0, 1)
         stats.addWidget(self.request_count_stat, 1, 0)
         stats.addWidget(self.last_request_stat, 1, 1)
+        # Hybrid routing: saved by running local, spent on suggestions you
+        # accepted (services/routing_advisor.SavingsTally); totals on hover.
+        self.local_savings_stat = StatBlock("saved local", "€0.00")
+        self.local_spent_stat = StatBlock("advice spent", "€0.00")
+        stats.addWidget(self.local_savings_stat, 2, 0)
+        stats.addWidget(self.local_spent_stat, 2, 1)
         stats.setColumnStretch(0, 1)
         stats.setColumnStretch(1, 1)
         layout.addLayout(stats)
@@ -3745,7 +3800,8 @@ class GodAI(QWidget):
     def resolve_backend_model(self):
         provider = self.provider_box.currentText()
         model = self.model_box.currentText()
-        execution_mode = self.execution_mode_box.currentText()
+        execution_mode = execution_mode_for(
+            self, self.agent_box.currentText() if hasattr(self, "agent_box") else "chat")
 
         allowed_apis = {
             "openai": self.allow_openai_checkbox.isChecked(),
@@ -3785,6 +3841,279 @@ class GodAI(QWidget):
 
         return "ollama", model if model else "deepseek-r1:8b"
 
+    # ── Hybrid routing (phase 4): advisor, banner, failover, tally ──────────
+    # services/routing_advisor.py decides; these methods gather what it needs
+    # from caches (the engine's candidates, ratings, the price index, the local
+    # inventory, this session's model lists) and act on the user's answer.
+    # Nothing here fetches: it runs on the UI thread once per new job. Nothing
+    # here changes an agent's selection either — a switch is for one job, and
+    # a paid one still goes through the paid-request dialog.
+
+    def routing_mode(self, agent: str = "chat") -> str:
+        """The mode a job of `agent` runs under: its override, else the Mode
+        box's Local only / Cloud only, else the mode in Settings → Models."""
+        box = getattr(self, "execution_mode_box", None)
+        return routing_advisor.effective_mode(
+            getattr(self, "settings", None), agent,
+            box.currentText() if box is not None else None)
+
+    def _execution_mode(self, agent: str = "chat") -> str:
+        return execution_mode_for(self, agent)
+
+    def _sync_execution_mode(self) -> None:
+        """Point the Mode box at the routing mode saved in Settings → Models."""
+        box = getattr(self, "execution_mode_box", None)
+        if box is None:
+            return
+        wanted = routing_advisor.LEGACY_EXECUTION[routing_advisor.mode_for(self.settings)]
+        if box.currentText() != wanted:
+            box.blockSignals(True)
+            box.setCurrentText(wanted)
+            box.blockSignals(False)
+
+    def _execution_mode_picked(self, text: str) -> None:
+        """The user moved the Mode box: keep the saved routing mode in step.
+        Applying a recommended setup moves the box too, and must not rewrite
+        the user's setting."""
+        if getattr(self, "_applying_recommendation", False):
+            return
+        mode = routing_advisor.mode_for(self.settings)
+        if text == "Local only":
+            wanted = routing_advisor.LOCAL_ONLY
+        elif text == "Cloud only":
+            wanted = routing_advisor.CLOUD_ONLY
+        elif mode in (routing_advisor.LOCAL_ONLY, routing_advisor.CLOUD_ONLY):
+            wanted = routing_advisor.DEFAULT_MODE
+        else:
+            return
+        if wanted != mode:
+            routing_advisor.set_mode(self.settings, wanted)
+            self._save_routing_settings()
+
+    def apply_routing_settings(self, _settings=None) -> None:
+        """Settings → Models changed the mode or an override (in self.settings)."""
+        self._save_routing_settings()
+        self._sync_execution_mode()
+        self.update_live_cost_estimate()
+
+    def _save_routing_settings(self) -> None:
+        try:
+            with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                json.dump(self.settings, f, indent=2)
+        except OSError as exc:
+            self._note_failure("routing mode: save", exc)
+
+    def _advisor_candidate(self, item, profile, context, snap) -> "routing_advisor.Candidate":
+        """An engine candidate as the advisor sees it, for this job."""
+        provider = item.provider.casefold()
+        local = is_local_provider(provider)
+        rating = self.recommendation_engine.request_rating(profile, item, context)
+        source = ""
+        if rating is not None:
+            evidence = getattr(item, "quality_evidence", {}) or {}
+            source = ("measured" if any("measured" in str(v) for v in evidence.values())
+                      else "base model" if local else "LMArena")
+        window, runnable, why, size, tag = None, True, "", None, ""
+        if local:
+            found = snap.find(provider, item.model_id)
+            if found is not None:
+                window, size, tag = found.max_context, found.size_gb, found.tag or ""
+                if found.fit in {"tight", "too_big"}:
+                    runnable = False
+                    why = (f"{found.name} needs about {(found.size_gb or 0) * 1.2:.0f} GB "
+                           f"of memory, and {snap.ram_free_gb:.0f} GB is free right now.")
+            if runnable and snap.taken_at:
+                if provider == local_models.LMSTUDIO and not snap.lmstudio_up:
+                    runnable, why = False, ("The LM Studio server is off. Start it under "
+                                            "Settings → Local models.")
+                elif provider == local_models.OLLAMA and not snap.ollama_up:
+                    runnable, why = False, "Ollama is not running."
+        elif item.available is False:
+            runnable, why = False, f"{provider} is not set up or not permitted."
+        return routing_advisor.Candidate(
+            provider, item.model_id, local, rating=rating, rating_source=source,
+            cost_eur=0.0 if local else item.estimated_cost, context_window=window,
+            runnable=runnable, not_runnable=why, tag=tag, size_gb=size)
+
+    def _advisor_context(self, agent, tool, raw_text, billable_prompt, backend, model):
+        """Everything the advisor needs for one job, from caches only."""
+        snap = self.local_inventory.snapshot()
+        task = " ".join(part for part in (
+            self._recommendation_task(agent), (raw_text or "")[:240]) if part).strip()
+        built = self._text_candidates_for(agent, billable_prompt)
+        if built is None:
+            return None
+        candidates, profile, base = built
+        context = RecommendationContext(**{**base.__dict__, "task": task})
+        tags = self.recommendation_engine.request_tags(profile, context)
+        extra = [t for t in tags if t not in profile.task_tags]
+        kind = extra[0] if extra else (profile.task_tags[0] if profile.task_tags else "general")
+        mode = self.routing_mode(agent)
+        cloud_ok = routing_advisor.allows_cloud(mode)
+        make = lambda item: self._advisor_candidate(item, profile, context, snap)  # noqa: E731
+        local = [make(c) for c in candidates if is_local_provider(c.provider.casefold())
+                 and snap.find(c.provider.casefold(), c.model_id) is not None]
+        cloud = [make(c) for c in candidates if cloud_ok
+                 and not is_local_provider(c.provider.casefold()) and c.available]
+        mine = next((c for c in candidates if c.provider.casefold() == backend
+                     and c.model_id == model), None)
+        if mine is None:
+            listed = self._priced_for_request(text_candidates(
+                [backend], {backend: [model]}, self._price_index(), self.ratings),
+                billable_prompt)
+            mine = listed[0] if listed else None
+        if mine is None:
+            return None
+        selected = make(mine)
+        result = self.recommendation_engine.recommend(profile, candidates, context)
+        recommended = (make(result.candidate)
+                       if result is not None and not result.fallback else None)
+        tokens = max(1, len(billable_prompt or "") // 4)
+        job = routing_advisor.Job(agent, kind, context_tokens=tokens,
+                                  output_tokens=max(250, int(tokens * 1.2)))
+        advice = routing_advisor.advise(
+            job, selected, mode=mode, local=local, cloud=cloud, recommended=recommended,
+            rules=self.routing_rules, budget_left_eur=self._remaining_budget_eur(agent))
+        ranked = [make(item) for _score, item in self.recommendation_engine.rank(
+            profile, [c for c in candidates if c.available is not False], context)]
+        fallbacks = ([recommended] if recommended else []) + ranked + sorted(
+            local, key=lambda c: (c.rating is None, -(c.rating or 0))) + sorted(
+            cloud, key=lambda c: (c.rating is None, -(c.rating or 0)))
+        return types.SimpleNamespace(
+            job=job, selected=selected, local=local, cloud=cloud,
+            recommended=recommended, advice=advice, mode=mode, privacy=False,
+            fallbacks=fallbacks, saved_eur=routing_advisor.saved_by_local(job, cloud))
+
+    def _advise_job(self, agent, tool, raw_text, billable_prompt, backend, model):
+        """None: send as resolved. (provider, model, accepted): send that.
+        False: the job is held on the banner, or refused there."""
+        self._advised_context = None
+        try:
+            context = self._advisor_context(agent, tool, raw_text, billable_prompt,
+                                            backend, model)
+        except Exception as exc:  # noqa: BLE001 - advice must never block Send
+            self._note_failure("routing advisor", exc)
+            return None
+        if context is None:
+            return None
+        self._advised_context = context
+        advice = context.advice
+        if advice.action == routing_advisor.RUN:
+            if advice.run is None or advice.run.same(context.selected):
+                return None
+            if advice.message:
+                self._set_chat_status(advice.message)
+            return advice.run.provider, advice.run.model, advice.rule is not None
+        self._held_job = {"agent": agent, "tool": tool, "raw_text": raw_text,
+                          "context": context}
+        self.advice_banner.show_advice(advice, context.job, context.selected)
+        if advice.action == routing_advisor.REFUSE:
+            self._held_job = None
+        return False
+
+    def _resume_held(self, provider=None, model=None, *, accepted=False) -> None:
+        held, self._held_job = self._held_job, None
+        if held is None:
+            return
+        if self.input_box.toPlainText().strip() != held["raw_text"]:
+            self._send_chat()                # the job changed: advise afresh
+            return
+        self._advised_context = held["context"]
+        override = (provider, model) if provider else None
+        self._send_chat(override, advised=True, accepted=accepted)
+
+    def _advice_switch(self) -> None:
+        offer = self.advice_banner.offer
+        if offer is not None:
+            self._resend_failed(offer.cloud)
+            return
+        held = self._held_job
+        if held is None or held["context"].advice.suggestion is None:
+            return
+        target = held["context"].advice.suggestion
+        self._resume_held(target.provider, target.model, accepted=not target.local)
+
+    def _advice_always(self) -> None:
+        held = self._held_job
+        if held is None or held["context"].advice.suggestion is None:
+            return
+        context, target = held["context"], held["context"].advice.suggestion
+        try:
+            self.routing_rules.add(context.job.agent, context.job.kind, target.provider,
+                                   target.model, context.job.label)
+        except OSError as exc:
+            self._note_failure("routing rules: save", exc)
+        self._resume_held(target.provider, target.model, accepted=not target.local)
+
+    def _advice_keep(self) -> None:
+        offer = self.advice_banner.offer
+        if offer is not None:
+            self._resend_failed(offer.local)
+            return
+        held = self._held_job
+        if held is None:
+            return
+        selected = held["context"].selected
+        self._resume_held(selected.provider, selected.model)
+
+    def _advice_dismissed(self) -> None:
+        self._held_job = None
+        self._failed_job = None
+
+    def _offer_failover(self, error) -> None:
+        """A run failed: offer the engine's next candidate. Never sends."""
+        job, self._job = getattr(self, "_job", None), None
+        self._failed_job = None
+        context = (job or {}).get("context")
+        if job is None or context is None:
+            return
+        failed = next((c for c in context.fallbacks + [context.selected]
+                       if c.key == (job["provider"], job["model"])), None)
+        if failed is None:
+            return
+        offer = routing_advisor.failover(
+            failed, context.fallbacks, mode=context.mode, error=str(error)[:160],
+            job=context.job, budget_left_eur=self._remaining_budget_eur(job["agent"]))
+        if offer.empty:
+            return
+        self._failed_job = job
+        self.advice_banner.show_failover(offer)
+
+    def _resend_failed(self, target) -> None:
+        job, self._failed_job = getattr(self, "_failed_job", None), None
+        self.advice_banner.clear()
+        if job is None or target is None:
+            return
+        # A failed turn never entered the conversation, so it is simply sent
+        # again on the chosen model.
+        self.input_box.setPlainText(job["raw_text"])
+        self._advised_context = job["context"]
+        self._send_chat((target.provider, target.model), advised=True,
+                        accepted=not target.local)
+
+    def _tally_finished_job(self, cost_eur) -> None:
+        """Count what a finished job saved (local) or spent (an accepted
+        suggestion or rule), and write the status line for a local run."""
+        self._job_status_line = ""
+        job, self._job = getattr(self, "_job", None), None
+        if job is None:
+            return
+        context = job.get("context")
+        try:
+            if is_local_provider(job["provider"]):
+                saved = context.saved_eur if context is not None else None
+                self.savings_tally.record_local_run(saved)
+                if context is not None:
+                    ran = next((c for c in context.local + [context.selected]
+                                if c.key == (job["provider"], job["model"])), context.selected)
+                    best = routing_advisor.best_rated(context.local + context.cloud)
+                    self._job_status_line = routing_advisor.status_line(
+                        ran, context.job, best, saved, self.savings_tally.today()["saved"])
+            elif job.get("accepted"):
+                self.savings_tally.record_accepted(cost_eur)
+        except OSError as exc:
+            self._note_failure("routing savings: save", exc)
+
     def build_user_prompt(self, raw_text: str):
         command_name = self.command_box.currentText()
         prefix = self.commands.get(command_name, "")
@@ -3793,6 +4122,14 @@ class GodAI(QWidget):
         return command_name, raw_text
 
     def send_prompt(self):
+        """Send: the routing advisor looks at the job first (phase 4)."""
+        self._send_chat()
+
+    def _send_chat(self, route_override=None, *, advised=False, accepted=False):
+        """One Chat job. `route_override` is a (provider, model) the user chose
+        on the advice banner or the failover offer, or a rule they made. It
+        still passes every gate below — the budget check and the paid-request
+        dialog included — and the agent's own selection is never changed."""
         selected_agent = self.agent_box.currentText()
 
         if selected_agent == "audiobook":
@@ -3810,6 +4147,23 @@ class GodAI(QWidget):
 
         previous = self._conversation_context_text(selected_agent, selected_tool)
         billable_prompt = f"{previous}\n{full_prompt}" if previous else full_prompt
+
+        context = None
+        if route_override is not None:
+            final_backend, final_model = route_override
+            context = getattr(self, "_advised_context", None)
+        elif not advised:
+            self.advice_banner.clear()
+            self._held_job = None
+            answer = self._advise_job(selected_agent, selected_tool, raw_text,
+                                      billable_prompt, final_backend, final_model)
+            if answer is False:
+                return                       # held on the banner, or refused
+            context = getattr(self, "_advised_context", None)
+            if answer is not None:
+                final_backend, final_model, accepted = answer
+        else:
+            context = getattr(self, "_advised_context", None)
         estimated_cost, approx_tokens = self.estimate_chat_cost(
             final_backend, final_model, billable_prompt)
 
@@ -3862,6 +4216,12 @@ class GodAI(QWidget):
             messages = self._build_chat_request_messages(
                 selected_agent, selected_tool, full_prompt, bool(previous))
 
+            self._job = {
+                "agent": selected_agent, "tool": selected_tool, "raw_text": raw_text,
+                "context": context,
+                "accepted": bool(accepted) and not is_local_provider(final_backend),
+                "provider": final_backend, "model": final_model,
+            }
             self.pending_agent = selected_agent
             self.pending_tool = selected_tool
             self.pending_backend = final_backend
@@ -4981,12 +5341,17 @@ class GodAI(QWidget):
         )
 
         self.last_request_cost = usage_entry.get("cost_eur", usage_entry.get("estimated_cost", 0.0))
+        self._tally_finished_job(self.last_request_cost)
         tool = getattr(self, "pending_tool", "General Chat")
         self.last_tool_name = f"{self.pending_agent}/{tool} - {self.pending_backend}"
         self.session_cost_total += usage_entry["estimated_cost"]
         self.session_request_count += 1
         self.update_usage_labels()
         self.refresh_all_recommendations()
+        status = getattr(self, "_job_status_line", "")
+        if status:
+            self.chat_status_label.setText(status)
+            self.chat_status_label.show()
 
         run_id = getattr(self, "active_run_id", None)
         if run_id:
@@ -5024,11 +5389,13 @@ class GodAI(QWidget):
         if run_id:
             self.run_logger.finish(run_id=run_id, status="error", error=error)
             self.active_run_id = None
-        
+        self._offer_failover(error)
+
     def handle_chat_usage(self, usage):
         self.pending_usage = usage
 
     def stop_chat_worker(self):
+        self._job = None            # stopped by the user: no failover offer
         # cancel() only — terminate() on a QThread inside a Python call is a
         # crash/deadlock class. The worker now routes a cancel to its error
         # signal from every path, so nothing is billed or saved for it.
@@ -5109,6 +5476,16 @@ class GodAI(QWidget):
 
         self.last_request_stat.set_value(f"€{self.last_request_cost:.2f}")
         self.last_request_stat.setToolTip(f"Last request ran: {tool_name}")
+        tally = getattr(self, "savings_tally", None)
+        stat = getattr(self, "local_savings_stat", None)
+        if tally is not None and stat is not None:
+            today = tally.today()
+            stat.set_value(f"€{today['saved']:.2f}")
+            stat.setToolTip(tally.summary())
+            spent = getattr(self, "local_spent_stat", None)
+            if spent is not None:
+                spent.set_value(f"€{today['spent']:.2f}")
+                spent.setToolTip(tally.summary())
 
         # The bars show spend against the cap. Remaining is the gap, which is
         # the thing you were subtracting for by hand before.

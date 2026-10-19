@@ -676,6 +676,19 @@ def show_settings(app):
     if app.local_inventory.stale():
         app.start_local_discovery()
 
+    # ── Models: routing mode, per-agent overrides, remembered rules ───
+    from main import AGENT_PRETTY_NAMES
+    from services.routing_advisor import RoutingRules
+    from ui.routing_page import RoutingModesPage
+    models_page = RoutingModesPage(
+        getattr(app, "settings", None) if isinstance(getattr(app, "settings", None), dict) else {},
+        {key: AGENT_PRETTY_NAMES.get(key, key.replace("_", " ").title())
+         for key in AGENT_SETUP_WIDGETS},
+        getattr(app, "routing_rules", None) or RoutingRules(),
+        getattr(app, "savings_tally", None),
+        on_change=getattr(app, "apply_routing_settings", None), parent=dialog)
+    tabs.addTab(models_page, "Models")
+
     # ── Tab 2: Agents ─────────────────────────────────────────────
     agents_tab = QWidget()
     agents_tab.setObjectName("SettingsPage")
