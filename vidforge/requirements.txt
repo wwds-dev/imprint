@@ -11,7 +11,7 @@ python-pptx==1.0.2  # course PowerPoint generation
 anthropic>=0.69
 
 # optional: only needed for `main.py upload`
-google-api-python-client>=2.140
+google-api-python-client>=2.201.0
 google-auth-oauthlib>=1.2
 google-auth-httplib2>=0.2
 
