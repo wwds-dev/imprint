@@ -131,9 +131,16 @@ class RecommendationEngine:
             score, item = pair
             rating = (self._request_rating(item, self._tags(profile, context))
                       if reference is not None else None)
-            # Equal scores: the better rated first (Sentinel's tie-break),
-            # then a fixed order of ids that is never reported as a win.
-            return (score, rating if rating is not None else float("-inf"),
+            # Equal scores under the rating rule: the cheaper first, as
+            # Sentinel orders the band by price. Cost efficiency saturates
+            # at 1.0 for any very cheap cloud model, so without this a free
+            # local model tied one and lost on rating. Then the better rated
+            # (Sentinel's tie-break), then a fixed order of ids that is never
+            # reported as a win.
+            price = item.price_per_1m
+            cheaper = (-price if price is not None else float("-inf")) \
+                if reference is not None else 0.0
+            return (score, cheaper, rating if rating is not None else float("-inf"),
                     item.provider.casefold(), item.model_id.casefold())
         if reference is None:
             scored = ((self._score(profile, item, context), item) for item in items)

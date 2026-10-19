@@ -31,8 +31,13 @@ ratings are loaded, never above the best rating its own provider has for that
 kind of work. Otherwise a model would gain an edge for being too new to have
 been measured: the estimate for a Qwen "max" is 0.92, LMArena puts qwen3.8-max
 at 0.88, and a qwen4-max would have outranked it the day it shipped. Being new
-earns nothing. Ollama models are never rated (the leaderboard rates the full
-model, not the quantised copy on this Mac).
+earns nothing. A local model is never rated by the table itself (the
+leaderboard rates the full model, not the quantised copy on this Mac): it is
+rated by `services/local_ratings.py`, from its base model's rating less a
+quantisation penalty or from a measurement, which the app installs with
+`set_local_lookup`. A local model with neither is unrated, and is unrated
+for every kind of work its evidence does not cover — it does not fall back
+to its overall rating the way a cloud model's unrated tag does.
 
 CC BY 4.0: wherever a rating is shown it is credited — `CREDIT` travels on
 the candidate into the recommendation's explanation, and the Model updates
@@ -60,6 +65,17 @@ RATED_TAGS: Mapping[str, str] = {
 
 CREDIT = f"{benchmarks.SOURCE} leaderboard, {benchmarks.LICENSE}"
 SOURCE_URL = benchmarks.SOURCE_URL
+
+# Local models: (provider, model, benchmarks task) -> LocalRating or None.
+# Set by the app (services.local_ratings.LocalRatings.rating); None rates
+# no local model.
+_LOCAL_LOOKUP = None
+
+
+def set_local_lookup(lookup) -> None:
+    global _LOCAL_LOOKUP
+    _LOCAL_LOOKUP = lookup
+
 
 # Redirectable by tests (tests/conftest.py); None means the default place.
 CACHE_FILE: Path | None = None
@@ -129,8 +145,10 @@ def rated_quality(table: benchmarks.RatingTable, provider: str, model_id: str,
     then stands unchanged.
     """
     key = provider.casefold()
-    if not table or is_local_provider(key):
+    if not table:
         return None
+    if is_local_provider(key):
+        return _local_rated(table, key, model_id, estimate)
     quality, per_tag, evidence, scores = estimate, {}, {}, {}
     said_anything = False
     for tag, task in RATED_TAGS.items():
@@ -157,3 +175,37 @@ def rated_quality(table: benchmarks.RatingTable, provider: str, model_id: str,
         else:
             per_tag[tag] = value
     return (quality, per_tag, evidence, scores) if said_anything else None
+
+
+def _local_rated(table, key: str, model_id: str, estimate: float):
+    """rated_quality for a local model: its inherited or measured ratings.
+
+    Every rated tag is present in the scores, None where the model has no
+    evidence, so the engine treats it as unrated for that kind of work
+    rather than reading its overall rating in.
+    """
+    lookup = _LOCAL_LOOKUP
+    if lookup is None:
+        return None
+    quality, per_tag, evidence, scores = estimate, {}, {}, {}
+    rated_any = False
+    for tag, task in RATED_TAGS.items():
+        try:
+            rating = lookup(key, model_id, task)
+        except Exception:
+            rating = None
+        best = benchmarks.best_rating(table, task)
+        if rating is None or best is None:
+            scores[tag] = None
+            continue
+        rated_any = True
+        value = quality_from_rating(rating.score, best)
+        evidence[tag] = f"{rating.label} {rating.score:.0f} ({rating.source})"
+        scores[tag] = rating.score
+        if tag == "general":
+            quality = value
+        else:
+            per_tag[tag] = value
+    if not rated_any:
+        return None
+    return quality, per_tag, evidence, scores

@@ -71,6 +71,9 @@ consequences of what just landed rather than new ideas.
 | 8 | Local model provider (Ollama) as a zero-cost fallback when the budget cap is hit. Shipped 2026-09-30 as an offer at the refusal, never a silent re-route; see TODO.md. | feature | L | DONE |
 | 9 | Retry-with-backoff wrapper shared by every provider client, instead of per-client handling | infra | M | IDEA |
 | 10 | Export a run (prompt + response + usage + cost) as a single markdown file for archiving | feature | S | IDEA |
+| 68 | **Measure analysis (hard prompts) for local models.** Only writing, code, summarising and extraction are measured, so Chat, Sitebuilder and Manuscript — whose work includes *analysis* — can never pick a measured-only local model. A short hard-prompt set in `config/local_rating_prompts.json` (shared with Sentinel) would cover it. | feature | M | IDEA |
+| 69 | **Calibrate the local-ratings judge** against cloud pairs LMArena already rates, and record the agreement with each measurement. | quality | M | IDEA |
+| 70 | **Mark a measurement stale when its reference changes** (a better cloud model becomes the reference, or its score moves more than the band); re-measure stays manual. | feature | S | IDEA |
 
 ## Done
 

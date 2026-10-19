@@ -736,3 +736,38 @@ class StartLMStudioWorker(DaemonWorker):
         from services.lmstudio_client import LMStudioClient
         started, message = LMStudioClient.start_server()
         self._emit(self.result_signal, started, message)
+
+
+class LocalMeasureWorker(QThread):
+    """Measure one local model against the best cloud model (routing phase 3).
+
+    The whole run — local answers, reference answers, judge calls — happens
+    here, never on the GUI thread. A QThread rather than a DaemonWorker
+    because the run is paid: closeEvent cancels it and waits, so a quit
+    does not abandon a call that has been made but not billed. Every cloud
+    call is reported through `usage_signal` and billed on the GUI thread;
+    progress goes through `progress_signal`. `cancel()` stops it between
+    prompts.
+    """
+    progress_signal = Signal(int, int)
+    usage_signal = Signal(str, str, str, str)
+    finished_signal = Signal(object)
+
+    def __init__(self, model, plan, prompts, ask, store, cost, budget_eur):
+        super().__init__()
+        self.model, self.plan, self.prompts = model, plan, prompts
+        self._ask, self._store, self._cost = ask, store, cost
+        self.budget_eur = budget_eur
+        self._cancelled = False
+
+    def cancel(self):
+        self._cancelled = True
+
+    def run(self):
+        from services import local_ratings
+        result = local_ratings.measure(
+            self.model, self.plan, self.prompts, self._ask, store=self._store,
+            on_progress=self.progress_signal.emit,
+            on_usage=self.usage_signal.emit, cost=self._cost,
+            budget_eur=self.budget_eur, cancelled=lambda: self._cancelled)
+        self.finished_signal.emit(result)

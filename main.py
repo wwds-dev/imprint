@@ -25,6 +25,7 @@ from services import providers as provider_registry
 from services.providers import is_local as is_local_provider
 from services.lmstudio_client import LMStudioClient
 from services import local_models
+from services import local_ratings
 from services import version as app_version
 from services.runtime_paths import resource_base, user_data_base, ensure_seeded, is_frozen
 ensure_seeded()
@@ -114,6 +115,12 @@ BASE_DIR = user_data_base()
 RESOURCE_DIR = resource_base()
 CONFIG_DIR = BASE_DIR / "config"
 DATA_DIR = BASE_DIR / "data"
+# Measured ratings of the local models on this Mac, and the cached reference
+# answers they were measured against (services/local_ratings.py).
+LOCAL_RATINGS_FILE = DATA_DIR / "local_ratings.json"
+# Measurement runs are guarded and billed as the Studio Assistant: the
+# registered general-text agent, so its permissions and daily cap apply.
+LOCAL_RATINGS_AGENT = "chat"
 CHATS_DIR = DATA_DIR / "chats"
 
 # Sentinel value for the Saved Chats agent filter — not a real agent name.
@@ -186,7 +193,7 @@ SCAN_NOTE_LABELS = {
 from ui.panels.base import AgentPanel
 from ui.workers import (
     ChatWorker, ModelPullWorker, ModelScanWorker, FiverrImageWorker,
-    RatingsWorker, LocalDiscoveryWorker, StartLMStudioWorker,
+    RatingsWorker, LocalDiscoveryWorker, StartLMStudioWorker, LocalMeasureWorker,
 )
 from ui.forms import (
     CONTENT_MAX_WIDTH, CONTROL_HEIGHT, HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH,
@@ -256,6 +263,15 @@ class GodAI(QWidget):
         # config/; refreshed beside the Model updates check.
         self.ratings = model_ratings.load()
         self.ratings_worker: Optional[RatingsWorker] = None
+        # Ratings for local models: inherited from a base model or measured
+        # here. Read from caches only; a measurement runs on its own worker.
+        self.local_rating_store = local_ratings.RatingStore(LOCAL_RATINGS_FILE)
+        self.local_ratings = local_ratings.LocalRatings(
+            self.local_rating_store, self.local_inventory,
+            lambda: getattr(self, "ratings", None))
+        local_models.set_rating_lookup(self.local_ratings.text)
+        model_ratings.set_local_lookup(self.local_ratings.rating)
+        self.local_measure_worker = None
         self.monitor = ResourceMonitor()
         self.history = HistoryStore()
         self.report_exporter = ReportExporter()
@@ -1042,6 +1058,7 @@ class GodAI(QWidget):
 
     def _on_local_discovery(self, snap) -> None:
         """On the GUI thread: lists, rows and BEST FIT follow the snapshot."""
+        self.maybe_measure_local_models()
         try:
             for provider in provider_registry.LOCAL_PROVIDERS:
                 ids = [m.id for m in snap.of(provider)]
@@ -1059,6 +1076,192 @@ class GodAI(QWidget):
             self.refresh_all_recommendations()
         except Exception as exc:  # noqa: BLE001
             self._note_failure("local models: refresh", exc)
+        listener = getattr(self, "_local_models_listener", None)
+        if callable(listener):
+            listener(snap)
+
+    # ── Local models: ratings (routing phase 3) ─────────────────────────────
+    # A new local model is measured once, automatically, in the background;
+    # every later run is the Measure / Re-measure button. The request guard's
+    # validator is asked first, for the whole run: automatically, only
+    # providers already allowed under API permissions and within every cap
+    # may be used (there is nobody to ask); from the button, one
+    # confirmation covers the run. Nothing is ever switched: a rating only
+    # moves the BEST FIT badge.
+
+    def maybe_measure_local_models(self) -> None:
+        """Start the automatic measurement of the next never-measured model."""
+        if not local_ratings.AUTOMATIC:
+            return
+        worker = self.local_measure_worker
+        if worker is not None and worker.isRunning():
+            return
+        waiting = local_ratings.auto_candidates(
+            self.local_inventory.snapshot(), self.local_rating_store)
+        if waiting:
+            self.start_local_measure(waiting[0], automatic=True)
+
+    def _measurement_plan(self):
+        """(plan, why not): the reference per kind of work and the judge."""
+        if not getattr(self, "ratings", None):
+            return None, "no LMArena ratings are loaded to place a result on"
+        cloud = [p for p in provider_registry.CLOUD_PROVIDERS
+                 if provider_configured(p)]
+        live = {p: models for p in cloud if (models := self._best_known_models(p))}
+        candidates = text_candidates(sorted(cloud), live, self._price_index(),
+                                     self.ratings)
+        prices = {(c.provider, c.model_id): c.price_per_1m for c in candidates}
+        return local_ratings.choose_plan(list(prices), self.ratings.rating,
+                                         lambda p, m: prices.get((p, m)))
+
+    def _measurement_cost(self, plan):
+        """EUR per call, priced on the GUI thread from the bill's own table."""
+        rates = {}
+        for provider, model in plan.cloud_models():
+            rates[(provider, model)] = (
+                self.usage_tracker.calculate_cost_eur(provider, model, 1_000_000, 0),
+                self.usage_tracker.calculate_cost_eur(provider, model, 0, 1_000_000))
+
+        def by_tokens(provider, model, tokens_in, tokens_out):
+            per_in, per_out = rates.get((provider, model), (0.0, 0.0))
+            return (tokens_in * per_in + tokens_out * per_out) / 1_000_000
+
+        def by_text(provider, model, prompt, reply):
+            return by_tokens(provider, model, max(1, len(prompt) // 4),
+                             max(1, len(reply) // 4))
+        return by_tokens, by_text
+
+    def _authorize_measurement(self, model, plan, ceiling_eur, interactive):
+        """(allowed, reason). The request guard for one measurement run."""
+        permissions = self.current_api_permissions()
+        cloud = plan.cloud_models()
+        for provider, _ in cloud:
+            if not provider_configured(provider):
+                return False, f"no {provider} API key is set"
+            if not permissions.get(f"allow_{provider}", False):
+                if not interactive:
+                    return False, (f"automatic measuring needs {provider} allowed "
+                                   "under API permissions; press Measure to "
+                                   "confirm once")
+                permissions[f"allow_{provider}"] = True     # this run only
+        reserved = self._reserved_in_flight_eur()
+        for provider in {p for p, _ in cloud}:
+            verdict = self.validator.validate(
+                agent_name=LOCAL_RATINGS_AGENT, tool_name=None, provider=provider,
+                api_permissions=permissions,
+                session_cost=self.session_cost_total + reserved,
+                session_budget=self.session_budget_eur,
+                daily_cost=self.usage_tracker.get_today_total() + reserved,
+                daily_budget=self.daily_budget_eur, estimated_cost=ceiling_eur,
+                agent_daily_cost=self.usage_tracker.get_agent_today_total(
+                    LOCAL_RATINGS_AGENT))
+            if not verdict.allowed:
+                return False, verdict.reason
+        if interactive:
+            refs = sorted({f"{p} · {m}" for p, m, _ in plan.references.values()})
+            answer = QMessageBox.question(
+                self, "Measure local model",
+                f"Measuring {model.id} sends {self.local_measure_prompts().total} "
+                f"prompts to it, compares its answers with {', '.join(refs)} and "
+                f"asks {plan.judge[0]} · {plan.judge[1]} to judge each pair.\n\n"
+                f"Estimated cost: at most ~€{ceiling_eur:.2f}. Continue?",
+                QMessageBox.Yes | QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                return False, "cancelled"
+        return True, ""
+
+    def local_measure_prompts(self):
+        prompts = getattr(self, "_local_measure_prompts", None)
+        if prompts is None:
+            prompts = local_ratings.load_prompts(
+                RESOURCE_DIR / "config" / "local_rating_prompts.json")
+            self._local_measure_prompts = prompts
+        return prompts
+
+    def start_local_measure(self, model, automatic: bool = False) -> bool:
+        """Measure one local model in the background. False if it did not start."""
+        worker = self.local_measure_worker
+        if worker is not None and worker.isRunning():
+            self._set_chat_status("A local model is already being measured.")
+            return False
+        plan, why = self._measurement_plan()
+        if plan is None:
+            self.local_rating_store.record_refusal(model, why, automatic=automatic)
+            self._local_ratings_changed()
+            return False
+        prompts = self.local_measure_prompts()
+        by_tokens, by_text = self._measurement_cost(plan)
+        ceiling = round(1.5 * local_ratings.estimate_cost(
+            plan, prompts, by_tokens, self.local_rating_store) + 0.01, 2)
+        allowed, reason = self._authorize_measurement(
+            model, plan, ceiling, interactive=not automatic)
+        if not allowed:
+            if reason != "cancelled":
+                self.local_rating_store.record_refusal(model, reason,
+                                                       automatic=automatic)
+            self._local_ratings_changed()
+            return False
+        worker = LocalMeasureWorker(model, plan, prompts, self._measure_ask,
+                                    self.local_rating_store, by_text, ceiling)
+        worker.progress_signal.connect(
+            lambda done, total, m=model: self._on_measure_progress(m, done, total))
+        worker.usage_signal.connect(self._on_measure_usage)
+        worker.finished_signal.connect(
+            lambda result, m=model, a=automatic: self._on_measure_finished(m, result, a))
+        self.local_measure_worker = worker
+        self.local_ratings.set_progress(model, 0, prompts.total)
+        self._local_ratings_changed()
+        worker.start()
+        return True
+
+    def _measure_ask(self, provider, model, prompt) -> str:
+        """One request for a measurement run. Runs on the measure worker."""
+        reply = self.run_backend(provider, model,
+                                 [{"role": "user", "content": prompt}], prompt)
+        return reply if isinstance(reply, str) else "".join(reply)
+
+    def _on_measure_progress(self, model, done, total) -> None:
+        self.local_ratings.set_progress(model, done, total)
+        self._local_ratings_changed(rerank=False)
+
+    def _on_measure_usage(self, provider, model, prompt, reply) -> None:
+        """Bill one cloud call of a measurement run, as every request is billed."""
+        try:
+            entry = self.usage_tracker.log_request(
+                agent=LOCAL_RATINGS_AGENT, backend=provider, model=model,
+                prompt_text=prompt, response_text=reply)
+            self.session_cost_total += entry.get("estimated_cost", 0.0)
+            self.session_request_count += 1
+            self.update_usage_labels()
+        except Exception as exc:  # noqa: BLE001
+            self._note_failure("local ratings: bill", exc)
+
+    def _on_measure_finished(self, model, result, automatic) -> None:
+        self.local_ratings.clear_progress(model)
+        self.local_rating_store.record_result(model, result, automatic=automatic)
+        name = local_models.row_label(model)
+        if result.status == local_ratings.STATUS_MEASURED:
+            self._set_chat_status(
+                f"Measured {name}: {self.local_ratings.text(model.provider, model.id)}.")
+        else:
+            self._set_chat_status(f"{name} stays unrated: {result.reason}.")
+        self._local_ratings_changed()
+        QTimer.singleShot(0, self.maybe_measure_local_models)
+
+    def _local_ratings_changed(self, rerank: bool = True) -> None:
+        """A rating, a refusal or progress changed: badges and the page follow."""
+        try:
+            snap = self.local_inventory.snapshot()
+            for provider_attr, model_attr in AGENT_SETUP_WIDGETS.values():
+                provider_box = self._find_control(provider_attr)
+                model_box = self._find_control(model_attr)
+                if provider_box is not None and model_box is not None:
+                    self.apply_picker_roles(provider_box.currentText(), model_box)
+            if rerank:
+                self.refresh_all_recommendations()
+        except Exception as exc:  # noqa: BLE001
+            self._note_failure("local ratings: refresh", exc)
+            snap = self.local_inventory.snapshot()
         listener = getattr(self, "_local_models_listener", None)
         if callable(listener):
             listener(snap)
@@ -5524,7 +5727,8 @@ class GodAI(QWidget):
                     "creator_video_estimate_worker", "creator_video_worker",
                     "fiverr_text_worker", "fiverr_image_worker",
                     "video_worker", "video_estimate_worker",
-                    "muse_pull_worker", "model_scan_worker"):
+                    "muse_pull_worker", "model_scan_worker",
+                    "local_measure_worker"):
                 worker = getattr(self, attr, None)
                 if worker is not None and worker.isRunning():
                     if hasattr(worker, "cancel"):
