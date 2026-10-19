@@ -839,3 +839,24 @@ def test_gemini_quota_stops_the_run(tmp_path, monkeypatch, route):
     assert converter.generate_tts_chunk("Text.", tmp_path / "chunk_0.mp3",
                                         retries=3) is False
     assert len(calls) == 1
+
+
+# ── Retirement: the default leaves OpenAI by itself on 2027-01-06 ────────────
+
+def test_openai_route_carries_its_retirement_date():
+    assert converter.TTS_PROVIDERS["openai"]["retires"] == "2027-01-06"
+
+
+@pytest.mark.parametrize("today,expected", [
+    ("2026-10-19", "openai"),
+    ("2027-01-05", "openai"),
+    ("2027-01-06", "gemini"),
+    ("2028-01-01", "gemini"),
+])
+def test_default_route_moves_off_a_retired_model(today, expected):
+    assert converter.default_tts_provider(today) == expected
+
+
+def test_module_defaults_agree_with_the_default_route():
+    spec = converter.TTS_PROVIDERS[converter.default_tts_provider()]
+    assert (converter.TTS_MODEL, converter.TTS_VOICE) == (spec["model"], spec["voice"])

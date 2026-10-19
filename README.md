@@ -1592,6 +1592,7 @@ For a selected ebook (PDF / EPUB / TXT / MOBI / AZW3 — MOBI and AZW3 are conve
 1. Extracts the book's text content.
 2. Chunks it (default 1400 tokens per chunk).
 3. Sends each chunk to the chosen **narrator** — OpenAI `gpt-4o-mini-tts` (voices alloy, marin, cedar, verse, coral, sage), Gemini `gemini-3.8-flash-tts` (Kore, Charon, Aoede, Puck, Leda, Orus, Fenrir, Zephyr) or ElevenLabs `eleven_multilingual_v2` (the account's own voices). OpenAI removes gpt-4o-mini-tts on 2027-01-06, which is why there is a choice.
+The converter and Booth carry that date (`retires`): from 2027-01-06 the default narrator is the first route not retired (Gemini) and OpenAI leaves the menu and the cost comparison, though a book already narrated with it can still be resumed. `config/pricing.json` is the one source for token prices; the fallback seed in `services/database.py` must match it (a test checks).
 4. Concatenates the returned audio into a single MP3 (or per-chapter MP3s).
 5. Writes the output to the configured output folder.
 

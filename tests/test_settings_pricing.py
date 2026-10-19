@@ -126,12 +126,19 @@ def test_every_offered_model_has_a_price_of_its_own(provider):
         f"{provider}: offered offline but billed at the provider default: {missing}")
 
 
+# Old models that cost more than today's `default`; they keep their own row,
+# because only a *current* new model is meant to fall back to the default.
+LEGACY_DEARER_THAN_DEFAULT = {"claude-opus-4-1-20250805"}
+
+
 @pytest.mark.parametrize("provider", PROVIDERS)
 def test_the_default_row_is_the_dearest_rate(provider):
     """An unpriced (new) model is over-, never under-estimated."""
     table = _json_table()[provider]
     default = table["default"]
     for model, row in table.items():
+        if model in LEGACY_DEARER_THAN_DEFAULT:
+            continue
         assert row["input_per_1m_usd"] <= default["input_per_1m_usd"], model
         assert row["output_per_1m_usd"] <= default["output_per_1m_usd"], model
 
@@ -213,3 +220,18 @@ def test_the_model_guide_lists_what_the_app_offers_at_what_it_bills(tmp_path,
     assert "deepseek-flash — $0.3 in / $1.2 out" in text
     for retired in ("claude-3-", "gemini-1.5", "deepseek-chat", "qwen3-max"):
         assert retired not in text, retired
+
+
+def test_pricing_json_holds_every_fallback_seed_row_unchanged():
+    """One source of truth: config/pricing.json. The code seed may not disagree
+    with it or list a model it lacks (the file is read on every launch)."""
+    import json
+    from pathlib import Path
+    from services import database
+
+    shipped = json.loads((Path(__file__).resolve().parents[1] / "config" / "pricing.json").read_text())
+    for backend, model, inp, out, cached in database.SEED_FALLBACK_PRICES:
+        row = shipped.get(backend, {}).get(model)
+        assert row is not None, f"config/pricing.json lacks {backend}/{model}"
+        assert (row["input_per_1m_usd"], row["output_per_1m_usd"],
+                row.get("cached_input_per_1m_usd", 0.0)) == (inp, out, cached), (backend, model)

@@ -31,12 +31,14 @@ ROUTE_KEY = "audiobook_narration_route"
 # gpt-4o-mini-tts on 2027-01-06, which is why there is a choice at all; every
 # conversion is assessed across the routes that can run before it is approved.
 # `voices` None means the list is the user's own account, fetched live.
+OPENAI_TTS_RETIRES = "2027-01-06"
 NARRATION_ROUTES = {
     "openai": {
         "label": "OpenAI · gpt-4o-mini-tts", "model": "gpt-4o-mini-tts",
         "speech": "OpenAI", "key": "OPENAI_API_KEY",
         "voices": ("alloy", "marin", "cedar", "verse", "coral", "sage"),
         "note": "OpenAI removes this model on 6 January 2027.",
+        "retires": OPENAI_TTS_RETIRES,
     },
     "gemini": {
         "label": "Gemini · 3.8 Flash TTS", "model": "gemini-3.8-flash-tts",
@@ -52,6 +54,25 @@ NARRATION_ROUTES = {
         "note": "The most natural voice, at about five times the price.",
     },
 }
+
+
+def offered_routes(today: str | None = None) -> dict:
+    """The routes a user may pick today: those whose model is not yet removed.
+
+    NARRATION_ROUTES keeps a retired route so a book narrated with it can still
+    be named, priced and resumed; only the menus and the assessment drop it.
+    """
+    from datetime import date
+    today = today or date.today().isoformat()
+    return {key: route for key, route in NARRATION_ROUTES.items()
+            if not route.get("retires") or today < route["retires"]}
+
+
+def default_route(today: str | None = None) -> str:
+    """The route used when none is saved: the first one still on offer."""
+    return next(iter(offered_routes(today)))
+
+
 OUTPUT_MODE_KEY = "audiobook_output_mode"
 LOCAL_OUTPUT_KEY = "audiobook_local_output_folder"
 DRIVE_OUTPUT_KEY = "audiobook_drive_output_folder"
@@ -186,7 +207,7 @@ class AudiobookPanel(QWidget):
         page.addLayout(folders)
 
         self.audiobook_route_box = QComboBox()
-        for key, route in NARRATION_ROUTES.items():
+        for key, route in offered_routes().items():
             self.audiobook_route_box.addItem(route["label"], key)
             self.audiobook_route_box.setItemData(
                 self.audiobook_route_box.count() - 1, route["note"], Qt.ToolTipRole)
@@ -194,12 +215,13 @@ class AudiobookPanel(QWidget):
             "Who narrates. Every conversion is assessed across the routes you "
             "have a key for and have permitted, with this book's cost on each, "
             "before it is approved.")
-        self.audiobook_voice_box = combo(list(NARRATION_ROUTES["openai"]["voices"]))
+        first_route = default_route()
+        self.audiobook_voice_box = combo(list(NARRATION_ROUTES[first_route]["voices"]))
         self.audiobook_voice_box.setToolTip(
             "Narration voice. Open the menu to see Imprint's best-fit default.")
         self._voice_worker = None
-        saved_route = get_setting(ROUTE_KEY, "openai")
-        if saved_route in NARRATION_ROUTES and saved_route != "openai":
+        saved_route = get_setting(ROUTE_KEY, first_route)
+        if saved_route in offered_routes() and saved_route != first_route:
             self.audiobook_route_box.setCurrentIndex(
                 self.audiobook_route_box.findData(saved_route))
             self._load_route_voices(saved_route)
@@ -480,7 +502,7 @@ class AudiobookPanel(QWidget):
 
     # ── narration route ──────────────────────────────────────────────────
     def _route(self) -> str:
-        return self.audiobook_route_box.currentData() or "openai"
+        return self.audiobook_route_box.currentData() or default_route()
 
     def _route_model(self, route: str | None = None) -> str:
         return NARRATION_ROUTES[route or self._route()]["model"]
@@ -730,7 +752,7 @@ class AudiobookPanel(QWidget):
         # for), the others at the whole book, since a switch starts over.
         options = []
         text = self._text(Path(book_path))
-        for key, spec in NARRATION_ROUTES.items():
+        for key, spec in offered_routes().items():
             if key == route:
                 cost = remaining_eur
             else:
@@ -805,8 +827,9 @@ class AudiobookPanel(QWidget):
             "--voice", config["voice"], "--chunk-tokens",
             str(config["chunk_tokens"]),
             "--format", config.get("audio_format", "mp3"),
-            "--provider", config.get("provider", "openai"),
-            "--model", config.get("model", "gpt-4o-mini-tts"),
+            "--provider", config.get("provider") or default_route(),
+            "--model", config.get("model") or self._route_model(
+                config.get("provider") or default_route()),
         ]
         arguments = (["--narrator-worker"] + conv_args if is_frozen() else
                      ["-u", "-m", tool.get(

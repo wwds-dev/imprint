@@ -49,6 +49,8 @@ controls through `GodAI._find_control()`.
 
 ## v2 — current
 
+- [x] `P1` `bug` `@ai` `agent:audiobook` **Phase 0 of the local-model routing plan: OpenAI TTS retirement and one price source (2026-10-19).** `gpt-4o-mini-tts` now has a retirement date (`2027-01-06`) in the converter's `TTS_PROVIDERS` and in Booth's `NARRATION_ROUTES`. The default route is no longer a constant: `default_tts_provider()` (converter) and `default_route()` (panel) take the first route not yet retired, so on 2027-01-06 the default moves to Gemini on its own, `offered_routes()` drops OpenAI from the menu and the cost assessment (a paused OpenAI book can still be named and resumed), and a new `open_job` without a route gets the current default instead of a hardcoded model. The converter change is mirrored byte for byte in `lab_hub` (`test_converter_drift.py` passes). The schema's `DEFAULT 'gpt-4o-mini-tts'` columns are deliberately unchanged: they describe rows written before routes existed, which really were OpenAI's. Prices: `config/pricing.json` is the source; the code fallback seed is now `database.SEED_FALLBACK_PRICES`, five Anthropic rows it had and the file lacked were added, and `test_pricing_json_holds_every_fallback_seed_row_unchanged` fails on drift. `tests/test_narration_route_retirement.py`.
+
 > **Feature freeze, 2026-10-09.** Bug fixes, tests and wording only until
 > `tests/READINESS_GATE.md` §3 A–E are all ticked on one commit; that commit
 > becomes the baseline for the campaign in `tests/TEST_PLAN.md`. The log shows a
