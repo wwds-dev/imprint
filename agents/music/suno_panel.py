@@ -4,7 +4,7 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton, QSpinBox, QComboBox, QListWidget,
@@ -71,6 +71,8 @@ class SunoPanel(QWidget):
         layout.addLayout(row)
         self.status = QLabel("Double-click an imported track to listen in your audio player.")
         self.status.setWordWrap(True)
+        # It shows provider error text: never render it as markup.
+        self.status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.status)
         self.albums.activated.connect(self.load)
         self.refresh()

@@ -59,3 +59,32 @@ own price row €1.02: refused on a fresh session**; qwen3.8-max €0.41; claude
 7. **P3** Live line builds messages on every keystroke without the try/except `send_prompt` uses (`main.py:546` vs `:3563`).
 8. **P3** A model with no price shows "Up to €0.00" (B-F5, non-goal).
 9. **P3, pre-existing** The suite writes Saved Chats into `data/chats/` and rewrites `data/model_watch.json` (gitignored).
+
+---
+
+# Verify loop 1 (2026-10-19): PASS, P2 gaps open
+
+HEAD ae79f2f. Playbook `status: current`.
+- Full suite `--randomly-seed=11` (order confirmed shuffled): **1772 passed, 6 skipped, 6 subtests** (6:34). A file-order run in a
+  no-git copy failed only 3 git-dependent tests (pass in the worktree).
+- Mutation (copies only): loop-0 survivors d1, h, i now killed (`assert [] == [('partial', 0.7268)]`); spot-checks killed (Kimi
+  65,536 back, Qwen `thinking_budget` dropped on chat, Cost History unescaped, Fiverr Stop on `images_running`); 6 more loop-1
+  mutants killed (cut-off brief still rendered, model row ignored, clause for every model, `_with_stop(entry, None)`, Gemini
+  stop_reason cleared, no micro-euro rounding). 13/13.
+- "Up to" for 100 tokens, default caps, €0 spent: none of 46 priced models or an unlisted model per provider refused; highest €0.38.
+  kimi-k3 €0.12 (was €1.02), qwen3.8-max €0.10 (was €0.41), deepseek-v4-pro €0.27, kimi-k2.7-code €0.04.
+- Changed-line coverage: 740/806 lines (91.8%), 113/130 `if` outcomes; 100% for the six clients, `output_limits`, `money_text`,
+  `validator`, `dialogs`, `publishing`.
+
+## Ranked gaps
+1. **P2** Nine cut-off notice sites untested (`result_notice → None` survives the full suite): `agents/creator/panel.py:699`,
+   `agents/author/panel.py:1421`, `:1542`, `agents/manuscript/panel.py:850`, `agents/fiverr/panel.py:694`, `:649`,
+   `agents/webdesign/panel.py:225`, `agents/music/panel.py:241`, `agents/music/suno_panel.py:226` (five never executed).
+2. **P2** `_assessment_text` "up to" wording unasserted (`main.py:1281-1282` never executed; `:1333-1334` not asserted); live line
+   non-paid branch `main.py:610-612` uncovered.
+3. **P3** Uncovered B-F3 branches: `agents/video/panel.py:877-878`; `agents/social/panel.py:726-727`, `:734`;
+   `agents/video/studio.py:385`, `:395`; `ui/workers.py:639`.
+4. **P3** Fiverr partial tests don't assert session/daily totals; FakeHost `authorized_messages` unasserted; AST check keyword-only.
+5. **P3** Live line builds messages without try/except (`main.py:564`).
+6. **P3, pre-existing** Suite writes Saved Chats into `data/chats/`; music and Suno `record_request("music", …)` by agent name.
+7. Doc drift: app-context says 1512 collected; now 1778 collected, 1772 passed.

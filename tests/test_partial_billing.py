@@ -20,6 +20,7 @@ Run with:  pytest tests/test_partial_billing.py -v
 import math
 
 import pytest
+from PySide6.QtCore import Qt
 
 from agents.video.studio import partial_render_cost_usd, partial_render_notice
 from services import database, money_text
@@ -91,6 +92,34 @@ def test_status_and_log_lines():
         ESTIMATE, _trace(), recorded_eur=0.0, confirmed_eur=2.1068,
         eur_rate=EUR, error="Cancelled.", stopped=True)
     assert before == "[Stopped] Before any paid step: nothing recorded."
+
+
+def test_an_error_before_any_paid_step_says_nothing_was_recorded():
+    """QA loop 1 gap 3 (agents/video/studio.py, the failure twin of the Stop
+    above): no stage began, so nothing is billed and the line says so."""
+    status, log = partial_render_notice(
+        ESTIMATE, _trace(), recorded_eur=0.0, confirmed_eur=2.1068,
+        eur_rate=EUR, error="RuntimeError: no OpenAI key.", stopped=False)
+    assert status == ("[Error] RuntimeError: no OpenAI key. Before any paid "
+                      "step: nothing recorded.")
+    assert log == ("[Billing] Nothing recorded of €2.11 confirmed: no paid "
+                   "step had started.")
+
+
+def test_a_stop_after_captions_names_the_steps_because_no_image_was_made():
+    """QA loop 1 gap 3: stopped once captions began, before the visuals
+    stage, so the line counts steps, not "0 of 35 images"."""
+    trace = _trace(["script", "voice", "captions"])
+    recorded = round(partial_render_cost_usd(ESTIMATE, trace) * EUR, 6)
+    assert recorded == pytest.approx((0.03 + 0.112 + 0.048) * EUR)
+    status, log = partial_render_notice(
+        ESTIMATE, trace, recorded_eur=recorded, confirmed_eur=2.1068,
+        eur_rate=EUR, error="Cancelled.", stopped=True)
+    assert status == ("[Stopped] After script, narration, captions: €0.17 of "
+                      "€2.11 recorded.")
+    assert log == ("[Billing] Recorded €0.17 of €2.11 confirmed: script €0.03, "
+                   "narration €0.10, captions €0.04. A new render starts from "
+                   "the beginning and is paid again.")
 
 
 # ── 8. The worker reports what the render did ────────────────────────────────
@@ -212,6 +241,27 @@ def test_a_failure_in_motion_reports_every_image(app, monkeypatch):
     assert trace == ("trace", {"stages": ["script", "voice", "captions",
                                           "visuals", "motion"], "images": 35})
     assert error == ("error", "RuntimeError: ffmpeg died")
+
+
+def test_a_finished_render_sends_its_trace_before_done(app, monkeypatch):
+    """QA loop 1 gap 3 (ui/workers.py): the success path sends the trace
+    too, once, before done — the same order the failure path keeps."""
+    from types import SimpleNamespace
+
+    def produce(cfg, *, topic=None, resume_slug=None, reporter=None):
+        for stage in ("script", "voice", "captions"):
+            reporter.begin(stage)
+        reporter.begin("visuals")
+        for i in range(3):
+            reporter.substep(i, 3)
+        for stage in ("motion", "audio", "assemble", "thumbnail"):
+            reporter.begin(stage)
+        return SimpleNamespace(slug="fox", video_path="/nowhere/fox.mp4")
+
+    _worker, events = _run_worker(monkeypatch, produce)
+    assert events == [
+        ("trace", {"stages": ALL_PIPELINE + ["thumbnail"], "images": 3}),
+        ("done", ("fox", "/nowhere/fox.mp4"))]
 
 
 # ── The window: record_partial and the three panels ─────────────────────────
@@ -444,6 +494,57 @@ def test_a_social_clip_failure_records_its_finished_steps(win):
     assert panel._clip_video_token is None
 
 
+# QA loop 1 gap 3: the branches where record_partial has nothing to close.
+
+@pytest.mark.parametrize("closed", ["already closed", "no token"])
+def test_a_video_failure_with_no_open_request_says_only_the_error(win, closed):
+    panel = _video(win)
+    _arm_video(win, panel, _trace(ALL_PIPELINE[:5], 34))
+    win.abandon_request(panel._request_token)        # closed by another path
+    if closed == "no token":
+        panel._request_token = None
+    panel.video_log.clear()
+    panel._on_error("RuntimeError: boom")
+    assert _rows() == []
+    assert win.session_cost_total == 0.0
+    assert panel.video_status_label.text() == "[Error] RuntimeError: boom"
+    assert panel.video_log.toPlainText() == "RuntimeError: boom"   # no [Billing]
+    assert panel._request_token is None
+
+
+def test_a_clip_render_error_without_its_render_token_closes_the_brief(win):
+    """No render token: the error closes what the flow still holds, the
+    brief, at €0 (agents/social/panel.py, _on_clip_render_error)."""
+    panel = win.social_panel
+    brief = _text_token(win, "social", "Write a clip brief.",
+                        {"input_tokens": 40, "output_tokens": 300})
+    panel._brief_token = brief
+    panel._clip_video_token = None
+    panel._on_clip_render_error("RuntimeError: boom")
+    assert brief not in win._pending_requests and win._pending_requests == {}
+    assert _rows() == []
+    assert panel.social_status_label.text() == "[Error] RuntimeError: boom"
+    assert panel.social_clip_btn.isEnabled()
+
+
+def test_a_clip_render_error_on_a_closed_request_records_nothing(win):
+    panel = win.social_panel
+    token, _run_id = _authorize(win, 1.0, label="tiktok clip")
+    win.abandon_request(token)
+    panel._clip_video_token = token
+    panel._clip_estimate = dict(ESTIMATE)
+    panel._clip_eur_rate = EUR
+    panel._on_clip_trace(dict(TEN_IMAGES))
+    panel.social_status_label.setToolTip("a stale billing line")
+    panel._on_clip_render_error("RuntimeError: boom")
+    assert _rows() == []
+    assert win.session_cost_total == 0.0
+    assert panel.social_status_label.text() == "Clip: [Error] RuntimeError: boom"
+    assert panel.social_status_label.toolTip() == ""
+    assert panel._clip_video_token is None and panel._clip_trace is None
+    assert panel.social_clip_btn.isEnabled()
+
+
 # ── 9. The wiring: the real render paths with a fake VideoWorker ────────────
 # The handler tests above set the panel's state by hand, so a render whose
 # trace or error signal was not connected (or connected to the €0 abandon
@@ -672,14 +773,29 @@ def fiverr(win, monkeypatch):
     win.fiverr_image_worker = None
 
 
+def _totals(win):
+    """The session total and today's total: both caps a close must move."""
+    return win.session_cost_total, win.usage_tracker.get_today_total()
+
+
+def _assert_rose_by(win, before, amount):
+    """Session and daily totals rose by exactly the recorded amount (spec
+    success measure B-F3; QA loop 1 gap 4 for Fiverr)."""
+    session, today = _totals(win)
+    assert session - before[0] == pytest.approx(amount, abs=1e-9)
+    assert today - before[1] == pytest.approx(amount, abs=1e-9)
+
+
 def test_fiverr_bills_three_of_four_when_the_fourth_fails(win, fiverr):
     panel, worker, run_id, rate, confirmed = fiverr
+    before = _totals(win)
     for i in range(3):
         worker.image_ready_signal.emit(f"/nowhere/logo_{i + 1}.png", i)
     worker.running = False
     worker.error_signal.emit("Concept 4 failed: content policy")
     assert [(r["cost_type"], r["cost_eur"]) for r in _rows()] == [
         ("partial", round(3 * rate, 6))]
+    _assert_rose_by(win, before, round(3 * rate, 6))
     assert _run(run_id)["status"] == "error"
     assert panel.fiverr_status_label.text() == (
         f"[Error] Concept 4 failed: content policy. 3 of 4 concepts made; "
@@ -691,6 +807,7 @@ def test_fiverr_bills_three_of_four_when_the_fourth_fails(win, fiverr):
 def test_fiverr_stop_bills_the_concept_in_flight_once_the_worker_exits(
         win, fiverr):
     panel, worker, run_id, rate, confirmed = fiverr
+    before = _totals(win)
     worker.image_ready_signal.emit("/nowhere/logo_1.png", 0)
     panel.stop()                                   # during concept 2
     assert worker.cancelled
@@ -700,6 +817,7 @@ def test_fiverr_stop_bills_the_concept_in_flight_once_the_worker_exits(
     worker.running = False
     worker.error_signal.emit("Cancelled.")
     assert [r["cost_eur"] for r in _rows()] == [round(2 * rate, 6)]
+    _assert_rose_by(win, before, round(2 * rate, 6))
     assert _run(run_id)["status"] == "cancelled"
     assert panel.fiverr_status_label.text() == (
         f"[Stopped] 2 of 4 concepts made; {money_text.paid(2 * rate)} of "
@@ -714,6 +832,7 @@ def test_fiverr_stop_after_the_worker_finished_bills_every_concept_made(
     queued. Closing on isRunning() billed 1 of 4; the close now waits for
     the worker's last signal."""
     panel, worker, run_id, rate, confirmed = fiverr
+    before = _totals(win)
     paths = [f"/nowhere/logo_{i + 1}.png" for i in range(4)]
     worker.image_ready_signal.emit(paths[0], 0)
     worker.running = False                 # finished; the rest still queued
@@ -726,6 +845,7 @@ def test_fiverr_stop_after_the_worker_finished_bills_every_concept_made(
     assert [(r["cost_type"], r["cost_eur"]) for r in _rows()] == [
         ("per_unit", pytest.approx(4 * rate, abs=1e-6))]
     assert confirmed == pytest.approx(4 * rate, abs=1e-6)
+    _assert_rose_by(win, before, _rows()[0]["cost_eur"])
     assert _run(run_id)["status"] == "success"
     assert panel._image_stop_requested is False
     assert panel.fiverr_generate_btn.isEnabled()
@@ -734,6 +854,7 @@ def test_fiverr_stop_after_the_worker_finished_bills_every_concept_made(
 def test_fiverr_stop_after_a_failure_already_queued_bills_what_was_made(
         win, fiverr):
     panel, worker, run_id, rate, _confirmed = fiverr
+    before = _totals(win)
     worker.image_ready_signal.emit("/nowhere/logo_1.png", 0)
     worker.running = False
     panel.stop()
@@ -742,6 +863,7 @@ def test_fiverr_stop_after_a_failure_already_queued_bills_what_was_made(
     worker.error_signal.emit("Concept 3 failed: timeout")
     assert [(r["cost_type"], r["cost_eur"]) for r in _rows()] == [
         ("partial", round(2 * rate, 6))]
+    _assert_rose_by(win, before, round(2 * rate, 6))
     assert _run(run_id)["status"] == "cancelled"
 
 
@@ -762,10 +884,12 @@ def test_the_image_worker_always_ends_with_a_last_signal(app, tmp_path):
 
 def test_fiverr_stop_before_the_first_concept_records_nothing(win, fiverr):
     panel, worker, run_id, _rate, _confirmed = fiverr
+    before = _totals(win)
     panel.stop()
     worker.running = False
     worker.error_signal.emit("Cancelled.")
     assert _rows() == []
+    _assert_rose_by(win, before, 0.0)
     assert _run(run_id)["status"] == "cancelled"
     assert panel.fiverr_status_label.text() == (
         "[Stopped] Before the first concept: nothing recorded.")
@@ -773,11 +897,13 @@ def test_fiverr_stop_before_the_first_concept_records_nothing(win, fiverr):
 
 def test_a_late_signal_from_a_closed_run_counts_for_nothing(win, fiverr):
     panel, worker, _run_id, _rate, _confirmed = fiverr
+    before = _totals(win)
     worker.running = False
     worker.error_signal.emit("Concept 1 failed: x")
     worker.image_ready_signal.emit("/nowhere/late.png", 3)
     worker.error_signal.emit("Concept 2 failed: y")
     assert _rows() == []
+    _assert_rose_by(win, before, 0.0)
     assert panel._images_made == 0
 
 
@@ -826,3 +952,58 @@ def test_cost_history_shows_markup_as_text(app, monkeypatch):
         "cost_type": "partial"}])
     text = _browser_text(monkeypatch, show_cost_history, host)
     assert text.count(MARKUP) == 2
+
+
+# ── The Video log and the status lines show error text as text ──────────────
+# Code review loop 1 P3-5: video_log.append(error) rendered a provider's error
+# body as HTML. Escaping alone would show "&amp;" for "&" on a line with no
+# tag, so both shapes are pinned.
+
+@pytest.mark.parametrize("error", [MARKUP, 'HTTP 400: "Tom & Jerry" isn\'t valid'])
+@pytest.mark.parametrize("kind", ["pipeline", "local"])
+def test_the_video_log_shows_a_providers_error_as_text(win, kind, error):
+    panel = _video(win)
+    if kind == "pipeline":
+        _arm_video(win, panel, _trace())
+    else:                                  # the non-pipeline failure path
+        panel._active_kind = kind
+        panel._request_token = None
+    panel.video_log.clear()
+    panel._on_error(error)
+    assert panel.video_log.toPlainText().split("\n")[0] == error
+    assert panel.video_status_label.textFormat() == Qt.PlainText
+    assert panel.video_status_label.text().startswith(f"[Error] {error}")
+
+
+def _status_labels(win):
+    return {
+        "author": win.author_panel.author_status_label,
+        "creator": win.creator_panel.creator_status_label,
+        "creator video": win.creator_panel.creator_video_status,
+        "manuscript": win.manuscript_panel.manuscript_status_label,
+        "social": win.social_panel.social_status_label,
+        "fiverr": win.fiverr_panel.fiverr_status_label,
+        "fiverr preview": win.fiverr_panel.fiverr_preview_status,
+        "video": win.video_panel.video_status_label,
+        "suno": win.music_panel.music_suno_panel.status,
+    }
+
+
+def test_every_error_status_line_this_change_touched_is_plain_text(win):
+    """The `[Error] {error}` lines put provider text in a QLabel, whose
+    default format renders markup."""
+    labels = _status_labels(win)
+    if not win.video_panel._available:
+        labels.pop("video")              # no form without vidforge
+    rich = [name for name, label in labels.items()
+            if label.textFormat() != Qt.PlainText]
+    assert not rich, f"status lines that would render markup: {rich}"
+
+
+def test_a_panel_error_with_markup_reads_as_text(win):
+    panel = win.author_panel
+    panel._pub_token = None
+    panel._pub_on_error(MARKUP)
+    label = panel.author_status_label
+    assert (label.text(), label.textFormat()) == (f"[Error] {MARKUP}",
+                                                  Qt.PlainText)

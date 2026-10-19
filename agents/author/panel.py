@@ -637,6 +637,8 @@ class AuthorPanel(QWidget):
         # Wraps: a cut-off notice is a sentence, and must not clip at
         # 125-200% text size.
         self.author_status_label.setWordWrap(True)
+        # It shows provider error text: never render it as markup.
+        self.author_status_label.setTextFormat(Qt.PlainText)
         theme.themed(self.author_status_label,
                      f"font-size: 12px; color: {TEXT_MUTE}; padding: 2px 4px;")
         layout.addWidget(self.author_status_label)

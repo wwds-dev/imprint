@@ -192,6 +192,8 @@ class SocialPanel(QWidget):
         self.social_status_label.setObjectName("EstimateLine")
         # Wraps: cut-off and billing notices are sentences.
         self.social_status_label.setWordWrap(True)
+        # It shows provider error text: never render it as markup.
+        self.social_status_label.setTextFormat(Qt.PlainText)
         actions.addWidget(self.social_status_label)
         layout.addLayout(actions)
 

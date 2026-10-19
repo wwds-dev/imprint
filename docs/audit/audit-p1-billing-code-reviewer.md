@@ -63,3 +63,41 @@ the worker thread, emitted as a copy; no new deadlock path. `estimate_chat_cost`
 `cost_type` TEXT without CHECK; totals sum regardless of type.
 
 Doc drift: app-context says 1512 tests collected; now 1623.
+
+---
+
+# Loop 1 re-review and Secure re-check (2026-10-19): PASS
+
+Scope `git diff b0db81e` (50 files) plus uncommitted TODO/activity. Playbook `status: current` (2026-10-14).
+Targeted 13 files: 458 passed; 29 related files: 917 passed, 2 skipped. Mutation on a `git archive HEAD` copy: loop-0 fixes
+19 mutants, 18 killed (P3-2 survived); panel cut-off notices 5 mutants, 5 survived (P2-1). pyflakes: no new findings; F821 gone.
+
+All loop-0 P1s fixed and mutant-proven: thinking reserve per owner decision (`services/output_limits.py:27`, `:45-48`, `:66-72`;
+`services/qwen_client.py:361`, `:391`; kimi-k3 up to €0.12, qwen3.8-max €0.10, deepseek-v4-pro €0.27 recomputed from
+`config/pricing.json`); thinking clause only when non-zero; stop reason through the real guard (`main.py:4707`); Video/Social
+wiring tests; single eur_per_usd reader + Settings validation; no chaining after cut-off/empty; Gemini stop_reason kept;
+validator quantize; Fiverr Stop on terminal signal; last image counted; html.escape in Run Log and Cost History; Reddit name rule
+and "r/<name>" in the confirmation; README Export sentence; Anthropic 404.
+
+## Open
+- **P2-1** Cut-off notice untested in most panel handlers (`agents/fiverr/panel.py:649`, `:694`; `agents/creator/panel.py:699`;
+  `agents/music/panel.py:241`; `agents/music/suno_panel.py:226`; `agents/manuscript/panel.py:850`; `agents/webdesign/panel.py:225`;
+  `agents/author/panel.py:1421`, `:1542`). Five `result_notice → None` mutants survived. Fix: one parametrized window test per handler.
+- **P3-1** Right-rail Save Limits (`main.py:743-756`) accepts inf/nan/negative budgets; the refusal text points users there. inf
+  removes the cap; nan makes `authorize_request` raise and can leave Fiverr's buttons disabled. Pre-existing. Share the Settings
+  `budget()` check; test "inf", "nan", "-1".
+- **P3-2** `services/stream_usage.py:56-58` keep-once-set guard for OpenAI-compatible streams untested (mutant survived).
+- **P3-3** AST test checks only the `messages=` keyword (`tests/test_request_estimate.py:594-605`); today all 15 sites pass the
+  same variable they hand the worker.
+- **P3-4** Wording beyond Design without sign-off: `agents/video/studio.py:384-387`, `agents/fiverr/panel.py:445-446`, `:973-975`,
+  `agents/social/panel.py:585-587`, `:742`.
+- **P3-5** Video log renders provider error HTML (`agents/video/panel.py:869` `video_log.append(error)`); escape it.
+- **P3-6** Suite writes Saved Chats and `data/model_watch.json` into the worktree's gitignored `data/` (pre-existing).
+- Also open: `_assessment_text` "up to" wording not asserted (`main.py:1277-1283`, `:1330-1336`); live line builds messages without
+  try/except (`main.py:564-565`); Fiverr tests don't assert session/daily totals; app-context test count stale.
+
+## Secure re-check
+No new budget-guard bypass; no double billing via `record_partial` (`main.py:4715-4773`); Reddit name validated before login, only
+`[A-Za-z0-9_]` reaches the form; Run Log and Cost History escaped. Model-watch `list_media_models_live` uses free list calls.
+Higgsfield `/estimate` probe (`services/higgsfield_client.py:394-427`) is one POST, catalog paths only, never a submit, €0-gated
+and off by default; whether `/estimate` is free remains the TODO `@me`.

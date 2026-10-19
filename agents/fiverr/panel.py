@@ -205,6 +205,8 @@ class FiverrPanel(QWidget):
         self.fiverr_status_label = QLabel("Idle")
         self.fiverr_status_label.setObjectName("EstimateLine")
         self.fiverr_status_label.setWordWrap(True)
+        # Both status lines show provider error text: never as markup.
+        self.fiverr_status_label.setTextFormat(Qt.PlainText)
         layout.addWidget(self.fiverr_status_label)
 
         # ── Results ─────────────────────────────────────────────────────
@@ -223,6 +225,7 @@ class FiverrPanel(QWidget):
         self.fiverr_preview_status.setObjectName("EstimateLine")
         # Wraps: a failed or stopped batch reports what it recorded.
         self.fiverr_preview_status.setWordWrap(True)
+        self.fiverr_preview_status.setTextFormat(Qt.PlainText)
         preview_top.addWidget(self.fiverr_preview_status, 1)
         preview_top.addStretch()
         self.fiverr_save_images_btn = quiet("Save All Images")

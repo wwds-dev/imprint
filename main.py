@@ -73,7 +73,7 @@ from services.output_limits import (
 from services.tool_runner import ToolRunner
 from services.database import get_connection, init_db, save_setting
 from services.registry import Registry
-from services.validator import Validator
+from services.validator import Validator, valid_budget_eur
 from services.run_logger import RunLogger
 
 from agents.audiobook import AudiobookConnector, AudiobookPanel
@@ -560,9 +560,17 @@ class GodAI(QWidget):
         previous = self._conversation_context_text(agent, tool)
         billable_prompt = f"{previous}\n{full_prompt}" if previous else full_prompt
         # The messages send_prompt will build, so the live line, the popup,
-        # the confirmation and the guard show one figure.
-        messages = self._build_chat_request_messages(
-            agent, tool, full_prompt, bool(previous))
+        # the confirmation and the guard show one figure. Guarded like
+        # send_prompt's build: this runs on every keystroke, so a failure is
+        # noted and the prompt alone is priced instead of raising into the
+        # Qt slot. Nothing is sent at that figure — send_prompt refuses on
+        # the same failure.
+        try:
+            messages = self._build_chat_request_messages(
+                agent, tool, full_prompt, bool(previous))
+        except Exception as exc:
+            self._note_failure("live estimate: build messages", exc)
+            messages = None
 
         estimated_cost, approx_tokens = self.estimate_chat_cost(
             backend,
@@ -741,19 +749,27 @@ class GodAI(QWidget):
     # inside authorize_request().
 
     def save_budget_limits(self):
-        try:
-            self.session_budget_eur = float(self.session_budget_input.text().strip())
-            self.daily_budget_eur = float(self.daily_budget_input.text().strip())
+        # The Settings dialog's check (valid_budget_eur): float() alone took
+        # "inf", which removed the cap, and "nan", which made every guarded
+        # request raise. Both fields are checked before either is kept, so a
+        # bad Daily € no longer leaves a new Session € half-applied.
+        session = valid_budget_eur(self.session_budget_input.text())
+        daily = valid_budget_eur(self.daily_budget_input.text())
+        if session is None or daily is None:
+            QMessageBox.warning(
+                self, "Invalid Budget",
+                "Session and Daily budgets must be numbers of 0 or more. "
+                "The limits were not saved.")
+            return
 
-            save_setting("session_budget_eur", str(self.session_budget_eur))
-            save_setting("daily_budget_eur", str(self.daily_budget_eur))
+        self.session_budget_eur = session
+        self.daily_budget_eur = daily
+        save_setting("session_budget_eur", str(session))
+        save_setting("daily_budget_eur", str(daily))
 
-            self.update_usage_labels()
-            self.refresh_all_recommendations()
-            QMessageBox.information(self, "Budget Saved", "Budget limits saved.")
-
-        except ValueError:
-            QMessageBox.warning(self, "Invalid Budget", "Please enter valid numbers.")
+        self.update_usage_labels()
+        self.refresh_all_recommendations()
+        QMessageBox.information(self, "Budget Saved", "Budget limits saved.")
 
     def reset_session_spend(self):
         self.session_cost_total = 0.0

@@ -13,6 +13,7 @@ notice instead of a form, aliases nothing onto the host, and every public
 method is a no-op.
 """
 
+import html
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
@@ -174,6 +175,8 @@ class VideoPanel(QWidget):
         self.video_status_label = QLabel("Idle")
         self.video_status_label.setObjectName("EstimateLine")
         self.video_status_label.setWordWrap(True)
+        # It shows provider error text: never render it as markup.
+        self.video_status_label.setTextFormat(Qt.PlainText)
         render.addWidget(self.video_status_label)
 
         self.video_log = QTextEdit()
@@ -851,6 +854,20 @@ class VideoPanel(QWidget):
     def _on_trace(self, trace: dict) -> None:
         self._render_trace = dict(trace or {})
 
+    def _log_text(self, text: str) -> None:
+        """Append untrusted text (a provider's error) to the log as text.
+
+        QTextEdit.append() renders anything that looks like HTML, so an
+        error body with markup showed as markup (code review P3-5).
+        html.escape alone is not enough: append() treats a line with no tag
+        as plain text and would then show "&amp;" for "&". The span makes
+        it rich text every time, so the escaped line shows exactly what was
+        sent.
+        """
+        self.video_log.append(
+            "<span style='white-space:pre-wrap'>"
+            + html.escape(str(text)).replace("\n", "<br>") + "</span>")
+
     def _on_pipeline_error(self, error: str) -> None:
         """A pipeline render failed or was stopped: record what it paid for.
 
@@ -866,7 +883,7 @@ class VideoPanel(QWidget):
         trace, self._render_trace = self._render_trace, None
         stopped, self._stop_requested = self._stop_requested, False
         estimate, rate = self._render_estimate, self._render_eur_rate
-        self.video_log.append(error)
+        self._log_text(error)
         result = None
         if token:
             cost = video_studio.partial_render_cost_usd(estimate, trace) * rate
@@ -936,7 +953,7 @@ class VideoPanel(QWidget):
                 "saves the result.")
         elif not provider_completed:
             self._close_job_row(billed=False, error=error)
-        self.video_log.append(error)
+        self._log_text(error)
         self._reset(f"[Error] {error}")
 
     # ── startup reconciliation of jobs that outlived the process ────────

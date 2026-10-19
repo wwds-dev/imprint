@@ -55,11 +55,14 @@ nothing here is a claim about income, sales or publishing results.
   €0.43 left").
 - Token and per-unit pricing read one EUR/USD rate, and a rate of 0, below 0,
   NaN or infinity falls back to 0.92 instead of making requests free or
-  negative. Settings refuses to save such a rate, or a NaN, infinite or
-  negative Session or Daily budget.
+  negative. Settings refuses to save such a rate. Settings and **Save Limits**
+  both refuse a NaN, infinite or negative Session or Daily budget and keep the
+  old limits (Save Limits took "inf", which removed the cap, and "nan", which
+  made every paid request fail).
 - Reddit: a subreddit must be one valid name ("r/r/rust", "r/ rust" or a URL is
   refused before login), and "Post now?" names it (`r/rust`).
-- Run Log and Cost History show provider and error text as text, not HTML.
+- Run Log, Cost History, the Video log and the agents' status lines show
+  provider and error text as text, not HTML.
 - An Anthropic 404 during a stream names the missing model instead of raising
   a NameError.
 

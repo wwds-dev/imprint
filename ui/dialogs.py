@@ -7,7 +7,6 @@ bodies are moved verbatim; only the receiver was renamed from `self` to `app`.
 """
 
 import html
-import math
 
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
@@ -31,7 +30,7 @@ from services.pricing_catalog import (
     PROVIDER_LABELS, build_token_price_catalog,
 )
 from services.registry import Registry
-from services.validator import Validator
+from services.validator import Validator, valid_budget_eur
 from ui import theme
 from ui.style import (
     ACCENT, ACCENT_WASH, BG, BORDER, ELEVATED, SUNKEN, SURFACE, TEXT,
@@ -986,16 +985,11 @@ def show_settings(app):
         # General. A rate of 0, below 0, NaN or infinity prices every request
         # at €0, a negative amount or NaN, and a NaN or infinite budget never
         # refuses anything: each would switch the caps off without a word.
-        # Any bad field keeps all three as they were.
-        def budget(edit):
-            try:
-                value = float(edit.text().strip())
-            except ValueError:
-                return None
-            return value if math.isfinite(value) and value >= 0 else None
-
+        # Any bad field keeps all three as they were. Save Limits in the
+        # right rail checks the budgets with the same function.
         eur = valid_eur_per_usd(eur_input.text())
-        sess, daily = budget(sess_input), budget(daily_input)
+        sess = valid_budget_eur(sess_input.text())
+        daily = valid_budget_eur(daily_input.text())
         if eur is None:
             errors.append("General: EUR per USD must be a number above zero, "
                           "such as 0.92. The General settings were not saved.")

@@ -499,6 +499,34 @@ def test_gemini_stream_keeps_the_stop_reason_once_set():
     assert stream.stop_reason == "length"
 
 
+@pytest.mark.parametrize("provider", ["openai", "deepseek", "kimi", "qwen"])
+def test_an_openai_compatible_stream_keeps_the_stop_reason_once_set(provider):
+    """The same guard for the OpenAI-compatible clients
+    (services/stream_usage.note_finish): a chunk after the one that said
+    "length", with a choice but no finish reason, must not clear it. Code
+    review loop 1 P3-2: dropping the guard survived the suite."""
+    wrapper, _calls, _param, model = _client(provider)
+    usage = types.SimpleNamespace(prompt_tokens=10, completion_tokens=20,
+                                  total_tokens=30)
+
+    def create(**kwargs):
+        return iter([
+            types.SimpleNamespace(usage=None, choices=[types.SimpleNamespace(
+                delta=types.SimpleNamespace(content="Hi"),
+                finish_reason="length")]),
+            # A trailing chunk with a choice and no finish reason.
+            types.SimpleNamespace(usage=None, choices=[types.SimpleNamespace(
+                delta=types.SimpleNamespace(content=""), finish_reason=None)]),
+            types.SimpleNamespace(usage=usage, choices=[]),
+        ])
+
+    wrapper.client.chat.completions.create = create
+    stream = wrapper.stream_chat(MESSAGES, model=model)
+    assert "".join(stream) == "Hi"
+    assert stream.stop_reason == "length"
+    assert stream.usage["output_tokens"] == 20
+
+
 # ── The stop reason through the real guard (code review P2-2) ───────────────
 
 ALL_ALLOWED = {f"allow_{p}": True for p in (
@@ -557,3 +585,87 @@ def test_a_panel_shows_the_cut_off_line_from_the_real_record_request(guarded):
     panel._on_written("Variant one, cut mid-")
     assert panel.social_status_label.text() == output_limits.RESULT_CUT_OFF
     assert token not in win._pending_requests
+
+
+# ── Every panel's finished handler, through the real guard (QA loop 1 gap 1)
+# One case per handler that reads result_notice(): authorise through the real
+# guard, let the worker's usage signal report the cut-off, then finish. A cut
+# answer must never read "[Done]" or "ready" (spec Design, length-limit
+# notice); `result_notice → None` at any one of these used to survive.
+# site: (agent, panel, token attribute or None when the panel closes its
+#        request by agent name, finished handler, status label, the line a
+#        complete reply shows)
+
+CUT_OFF_SITES = {
+    "creator draft": ("creator", lambda w: w.creator_panel, "_draft_token",
+                      "_on_finished", "creator_status_label",
+                      "Draft ready — review before posting."),
+    "author publishing": ("author", lambda w: w.author_panel, "_pub_token",
+                          "_pub_on_finished", "author_status_label", "[Done] "),
+    "author marketing": ("author", lambda w: w.author_panel, "_mkt_token",
+                         "_mkt_on_finished", "author_status_label", "[Done] "),
+    "manuscript ask": ("manuscript", lambda w: w.manuscript_panel, "_ask_token",
+                       "_on_ask_finished", "manuscript_status_label", "[Done]"),
+    "fiverr gig": ("fiverr", lambda w: w.fiverr_panel, "_prompt_token",
+                   "_on_gig_done", "fiverr_status_label",
+                   "Gig description ready."),
+    "fiverr delivery": ("fiverr", lambda w: w.fiverr_panel, "_prompt_token",
+                        "_on_delivery_done", "fiverr_status_label",
+                        "Delivery message ready."),
+    "web design": ("webdesign", lambda w: w.webdesign_panel, None,
+                   "_on_finished", "webdesign_status_label",
+                   "Generation complete."),
+    "music plan": ("music", lambda w: w.music_panel, None, "_on_finished",
+                   "music_status_label", "Plan complete — tabs populated"),
+    "suno draft": ("music", lambda w: w.music_panel.music_suno_panel, None,
+                   "complete", "status", "Saved locally."),
+}
+
+
+@pytest.fixture
+def site_panel(guarded, tmp_path, monkeypatch):
+    """Arm one site's panel on a real token; returns (panel, token, site)."""
+    def arm(site, usage):
+        agent, panel_of, token_attr, *_rest = CUT_OFF_SITES[site]
+        panel = panel_of(guarded)
+        if site == "suno draft":
+            # complete() saves the album: into tmp, never the worktree's data/.
+            monkeypatch.setattr(panel, "root", tmp_path / "music_library")
+            monkeypatch.setattr(panel, "current", None)
+            panel.title.setText("Night Drive")
+        messages = [{"role": "user", "content": "Write the whole thing."}]
+        token = guarded.authorize_request(agent, "openai", "gpt-4o-mini",
+                                          messages[-1]["content"],
+                                          messages=messages)
+        assert token
+        if token_attr:
+            monkeypatch.setattr(panel, token_attr, token)
+        guarded.note_request_usage(token, usage)
+        return panel, token
+
+    yield arm
+    suno = guarded.music_panel.music_suno_panel
+    suno.title.clear()
+    suno.output.clear()
+
+
+@pytest.mark.parametrize("site", sorted(CUT_OFF_SITES))
+def test_every_panel_shows_the_cut_off_line_from_the_real_guard(
+        guarded, site_panel, site):
+    _agent, _panel_of, _attr, handler, label, _done = CUT_OFF_SITES[site]
+    panel, token = site_panel(site, {"input_tokens": 12, "output_tokens": 8192,
+                                     "stop_reason": "length"})
+    getattr(panel, handler)("Half of it, cut mid-")
+    assert getattr(panel, label).text() == output_limits.RESULT_CUT_OFF
+    assert token not in guarded._pending_requests
+
+
+@pytest.mark.parametrize("site", sorted(CUT_OFF_SITES))
+def test_every_panel_still_says_done_for_a_complete_reply(
+        guarded, site_panel, site):
+    _agent, _panel_of, _attr, handler, label, done = CUT_OFF_SITES[site]
+    panel, token = site_panel(site, {"input_tokens": 12, "output_tokens": 30})
+    getattr(panel, handler)("All of it.")
+    text = getattr(panel, label).text()
+    assert text.startswith(done) and "[Cut off]" not in text
+    assert token not in guarded._pending_requests

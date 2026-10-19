@@ -346,7 +346,8 @@ remainder and left you to subtract.
 ("up to €X", rounded up), whether it is a paid API, the provider, model, and
 the tokens it sends plus the output reserve ("+ up to 8,192").
 
-**Limits** — the session and daily caps in euros, and **Save Limits**.
+**Limits** — the session and daily caps in euros, and **Save Limits**, which
+takes numbers of 0 or more only and otherwise keeps the old limits.
 **Reset session spend** zeroes the session counter only.
 
 **Cost History · Run Log · Learning Centre** — utilities that open a window and
@@ -2418,7 +2419,7 @@ project caps, and the Run Log shows `error` or `cancelled` with "recorded €X o
 After a successful response, `UsageTracker.log_request()` calculates the real cost:
 
 1. Token counts are sourced from the API's usage response if available (field names vary by provider: `input_tokens`, `prompt_tokens`, `prompt_token_count`, etc.). If exact data is unavailable, character-count estimation is used.
-2. The EUR/USD exchange rate and per-model pricing are read from the `pricing` and `settings` tables in the database. Token and per-unit costs share one rate reader (`services/per_unit_pricing.eur_per_usd`): a rate that is not a finite number above zero falls back to `config/pricing.json`'s, then 0.92, and Settings refuses to save one (or a NaN, infinite or negative budget).
+2. The EUR/USD exchange rate and per-model pricing are read from the `pricing` and `settings` tables in the database. Token and per-unit costs share one rate reader (`services/per_unit_pricing.eur_per_usd`): a rate that is not a finite number above zero falls back to `config/pricing.json`'s, then 0.92, and Settings refuses to save one. Settings and **Save Limits** share one budget check (`services/validator.valid_budget_eur`) and refuse a NaN, infinite or negative Session or Daily budget, keeping the old limits.
 3. A row is inserted into the `usage` table with timestamp, agent, provider, model, token counts, cost, and cost type (`exact`, `estimated`, or `mixed`).
 
 ### Budget Controls

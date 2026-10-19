@@ -349,6 +349,80 @@ def test_the_live_line_and_popup_name_the_thinking_reserve(win, monkeypatch):
         assert "Most it can cost: €0.10 (you pay for what it writes)" in shown[-1]
 
 
+def test_the_live_line_for_another_provider_says_up_to_without_paid(
+        win, monkeypatch):
+    """The live line's last branch: neither local nor one of the six paid
+    text clients (QA loop 1 gap 2)."""
+    monkeypatch.setattr(win.agent_box, "currentText", lambda: "chat")
+    monkeypatch.setattr(win, "get_current_cost_estimate",
+                        lambda: (0.0906, 1234, "higgsfield", "seedance-2.5"))
+    win.update_live_cost_estimate()
+    assert win.live_estimate_label.text() == (
+        "Next request: up to €0.10 · higgsfield seedance-2.5 · "
+        "~1,234 tokens + up to 8,192")
+
+
+def test_the_live_line_survives_a_message_build_that_fails(
+        win, monkeypatch, capsys):
+    """Code review loop 1: send_prompt guards its message build and the live
+    line, run on every keystroke, did not, so a failing build raised into
+    the Qt slot. The failure is noted and the prompt alone is priced;
+    send_prompt refuses on the same failure, so nothing is sent at it."""
+    monkeypatch.setattr(win.agent_box, "currentText", lambda: "chat")
+    monkeypatch.setattr(win, "resolve_backend_model", lambda: ("openai", MODEL))
+    monkeypatch.setattr(win, "_conversation_context_text", lambda *a: "")
+    _, full_prompt = win.build_user_prompt("Write chapter 3.")
+    cost, tokens = win.estimate_chat_cost("openai", MODEL, full_prompt)
+
+    def broken(*_a, **_k):
+        raise RuntimeError("tool prompt file unreadable")
+
+    win.input_box.setPlainText("Write chapter 3.")
+    try:
+        monkeypatch.setattr(win, "_build_chat_request_messages", broken)
+        capsys.readouterr()
+        win.update_live_cost_estimate()
+        shown = win.live_estimate_label.text()
+    finally:
+        win.input_box.clear()
+    assert shown == (
+        f"Next request: up to {money_text.up_to(cost)} · paid · openai {MODEL} "
+        f"· ~{tokens:,} tokens + up to 8,192")
+    assert ("[warn] live estimate: build messages: RuntimeError: tool prompt "
+            "file unreadable") in capsys.readouterr().err
+
+
+# ── The assessment says "up to" in both of its shapes ───────────────────────
+# QA loop 1 gap 2: the score branch never ran in the suite and the rating
+# branch's figures were not asserted, so "~€" could come back unnoticed.
+
+def _text_assessment(**fields):
+    import types
+    base = dict(kind="text", agent="author", basis="score",
+                selected_is_best=False, selected_score=0.62, best_score=0.91,
+                best_provider="openai", best_model="gpt-best",
+                best_cost_eur=0.4330)
+    base.update(fields)
+    return types.SimpleNamespace(**base)
+
+
+def test_the_score_assessment_says_up_to_for_both_figures(win):
+    text = win._assessment_text(_text_assessment(), 0.1201)
+    assert ("  Best fit: openai · gpt-best — 91/100, up to €0.44\n"
+            "  Your selection: 62/100, up to €0.13\n") in text
+    assert "~€" not in text
+
+
+def test_the_rating_assessment_says_up_to_for_both_figures(win):
+    text = win._assessment_text(_text_assessment(
+        basis="rating", band=5, reference=80.0, best_rating=80.0,
+        selected_rating=70.0, best_rate=1.5, selected_rate=3.0), 0.1201)
+    assert ("  Best value: openai · gpt-best — rated 80 for this work, "
+            "up to €0.44\n"
+            "  Your selection: rated 70, up to €0.13\n") in text
+    assert "~€" not in text
+
+
 # ── Refusal wording, every scope ─────────────────────────────────────────────
 
 class _Registry:
@@ -578,6 +652,55 @@ def test_settings_saves_a_valid_rate_and_zero_budgets(settings_dialog):
     assert (host.session_budget_eur, host.daily_budget_eur) == (0.0, 6.0)
 
 
+# Code review loop 1 P3-1, pre-existing: the right rail's Save Limits, where
+# every session refusal sends the user, took float() as it came: "inf"
+# removed the cap and "nan" made authorize_request raise. It now uses the
+# Settings check (services/validator.valid_budget_eur).
+
+LIMITS_REFUSED = ("Session and Daily budgets must be numbers of 0 or more. "
+                  "The limits were not saved.")
+
+
+def _save_limits(win, session, daily):
+    typed = (win.session_budget_input.text(), win.daily_budget_input.text())
+    win.session_budget_input.setText(session)
+    win.daily_budget_input.setText(daily)
+    try:
+        win.save_budget_limits()
+    finally:
+        win.session_budget_input.setText(typed[0])
+        win.daily_budget_input.setText(typed[1])
+
+
+@pytest.mark.parametrize("session, daily", [
+    ("inf", "5"), ("nan", "5"), ("-1", "5"),
+    ("2", "inf"), ("2", "nan"), ("2", "-1"), ("2", "five"),
+])
+def test_save_limits_refuses_a_budget_that_switches_the_caps_off(
+        win, session, daily):
+    from services.database import get_setting
+    _save_limits(win, session, daily)
+    assert win.shown["warning"] == [LIMITS_REFUSED]
+    # Neither field kept: a bad Daily € no longer half-applies Session €.
+    assert (win.session_budget_eur, win.daily_budget_eur) == (1.0, 5.0)
+    assert get_setting("session_budget_eur", "unset") == "unset"
+    assert get_setting("daily_budget_eur", "unset") == "unset"
+
+
+def test_save_limits_still_saves_valid_budgets(win, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from services.database import get_setting
+    said = []
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(
+        lambda *a, **k: said.append(a[2])))
+    _save_limits(win, " 2.5 ", "0")
+    assert win.shown["warning"] == []
+    assert said == ["Budget limits saved."]
+    assert (win.session_budget_eur, win.daily_budget_eur) == (2.5, 0.0)
+    assert (get_setting("session_budget_eur"),
+            get_setting("daily_budget_eur")) == ("2.5", "0.0")
+
+
 # ── Every text call site passes its messages ─────────────────────────────────
 
 def _guard_calls():
@@ -603,6 +726,78 @@ def test_every_text_request_passes_the_messages_it_sends():
                      if "partial_billing" in kw)
     assert partial == ["agents/fiverr/panel.py", "agents/social/panel.py",
                        "agents/video/panel.py"]
+
+
+def _own_calls(function, attr):
+    """Calls to `.attr(...)` in this function's own body, not nested defs."""
+    stack = list(function.body)
+    while stack:
+        node = stack.pop()
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.ClassDef)):
+            continue
+        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == attr):
+            yield node
+        stack.extend(ast.iter_child_nodes(node))
+
+
+MUTATORS = {"append", "extend", "insert", "pop", "remove", "clear", "sort",
+            "reverse", "__setitem__", "__delitem__"}
+
+
+def test_each_text_request_prices_the_very_messages_its_worker_sends():
+    """Review loop 1 (code review P3-3, QA gap 4): the check above sees only
+    the keyword, so `messages=[prompt]` beside a worker sent `messages` would
+    pass. In every function that authorises a text request, `messages=` must
+    be the same name the function hands `_new_chat_worker`, the worker comes
+    after the guard, and nothing rebinds or changes that list in between."""
+    checked = []
+    for path in sorted((ROOT / "agents").rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for function in ast.walk(tree):
+            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            guards = [call for call in _own_calls(function, "authorize_request")
+                      if "flat_cost_eur" not in {k.arg for k in call.keywords}]
+            if not guards:
+                continue
+            where = f"{path.relative_to(ROOT)}:{function.name}"
+            workers = list(_own_calls(function, "_new_chat_worker"))
+            assert workers, f"{where}: authorises but builds no chat worker"
+            for guard in guards:
+                priced = next(k.value for k in guard.keywords
+                              if k.arg == "messages")
+                assert isinstance(priced, ast.Name), (
+                    f"{where}:{guard.lineno}: messages= is not a plain name")
+                for worker in workers:
+                    sent = (worker.args[2] if len(worker.args) > 2 else
+                            next(k.value for k in worker.keywords
+                                 if k.arg == "messages"))
+                    assert isinstance(sent, ast.Name) and sent.id == priced.id, (
+                        f"{where}:{worker.lineno}: the worker is sent "
+                        f"{ast.unparse(sent)}, the guard priced {priced.id}")
+                    assert worker.lineno > guard.lineno, (
+                        f"{where}: the worker is built before the guard")
+                    between = [node for node in ast.walk(function)
+                               if guard.lineno < getattr(node, "lineno", 0)
+                               < worker.lineno]
+                    rebound = [node.lineno for node in between
+                               if isinstance(node, (ast.Name, ast.Subscript))
+                               and isinstance(node.ctx, (ast.Store, ast.Del))
+                               and getattr(getattr(node, "value", node),
+                                           "id", None) == priced.id]
+                    changed = [node.lineno for node in between
+                               if isinstance(node, ast.Call)
+                               and isinstance(node.func, ast.Attribute)
+                               and isinstance(node.func.value, ast.Name)
+                               and node.func.value.id == priced.id
+                               and node.func.attr in MUTATORS]
+                    assert not rebound and not changed, (
+                        f"{where}: {priced.id} changes between the guard and "
+                        f"the worker (lines {rebound + changed})")
+                checked.append(where)
+    assert len(checked) >= 15, checked
 
 
 def test_chat_send_validates_the_messages_its_worker_sends(win, monkeypatch):

@@ -1,8 +1,26 @@
+import math
 from dataclasses import dataclass
 from decimal import Decimal
 
 from services import money_text
 from services.registry import Registry
+
+
+def valid_budget_eur(raw) -> float | None:
+    """`raw` as a session or daily budget in euros: a finite number of 0 or
+    more, else None.
+
+    An infinite cap never refuses anything, NaN makes the Decimal comparison
+    below raise (and a panel that disabled its buttons first stays stuck),
+    and a negative one refuses everything with a figure that makes no sense.
+    The Settings dialog and the right rail's Save Limits both check with
+    this, so neither can switch the caps off (audit B-F5; code review P3-1).
+    """
+    try:
+        value = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value >= 0 else None
 
 
 def _money(value: float | int | str) -> Decimal:

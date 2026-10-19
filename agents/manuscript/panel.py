@@ -302,6 +302,8 @@ class ManuscriptPanel(QWidget):
         self.manuscript_status_label.setObjectName("EstimateLine")
         # Wraps: a cut-off notice is a sentence.
         self.manuscript_status_label.setWordWrap(True)
+        # It shows provider error text: never render it as markup.
+        self.manuscript_status_label.setTextFormat(Qt.PlainText)
         layout.addWidget(self.manuscript_status_label)
 
         # Aliases retired 2026-09-21: shared wiring resolves controls

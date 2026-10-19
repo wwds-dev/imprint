@@ -242,12 +242,15 @@ class CreatorPanel(QWidget):
         self.creator_status_label.setObjectName("EstimateLine")
         # Wraps: a cut-off notice is a sentence.
         self.creator_status_label.setWordWrap(True)
+        # Both show provider error text: never render it as markup.
+        self.creator_status_label.setTextFormat(Qt.PlainText)
         actions.addWidget(self.creator_status_label)
         layout.addLayout(actions)
 
         self.creator_video_status = QLabel("")
         self.creator_video_status.setObjectName("EstimateLine")
         self.creator_video_status.setWordWrap(True)
+        self.creator_video_status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.creator_video_status)
 
         # ── Tabs ────────────────────────────────────────────────────────
