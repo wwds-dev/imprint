@@ -17,10 +17,16 @@ from typing import Callable, Generator
 
 
 class UsageStream:
-    """Iterate the wrapped generator; expose the provider's final usage."""
+    """Iterate the wrapped generator; expose the provider's final usage.
+
+    `stop_reason` is "length" when the provider's last finish reason says the
+    reply stopped at the output cap (services/output_limits.stop_kind), else
+    None. The worker reads it with `.usage` after draining the stream.
+    """
 
     def __init__(self, make_gen: Callable[["UsageStream"], Generator]):
         self.usage: dict | None = None
+        self.stop_reason: str | None = None
         self._gen = make_gen(self)
 
     def __iter__(self):
@@ -36,6 +42,20 @@ class UsageStream:
         user's own machine on a response nobody will see.
         """
         self._gen.close()
+
+
+def note_finish(out: UsageStream, chunk) -> None:
+    """Keep the stop reason of an OpenAI-compatible chunk that carries one.
+
+    The finish reason rides on the last content chunk, before the usage-only
+    frame; a later chunk with none must not clear it.
+    """
+    from services.output_limits import stop_kind
+
+    choices = getattr(chunk, "choices", None)
+    finish = getattr(choices[0], "finish_reason", None) if choices else None
+    if finish:
+        out.stop_reason = stop_kind(finish)
 
 
 def cached_input_tokens(usage) -> int:

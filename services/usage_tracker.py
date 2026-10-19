@@ -8,6 +8,70 @@ CLOUD_BACKENDS = {"openai", "deepseek", "gemini", "anthropic", "kimi", "qwen",
                   "higgsfield"}
 
 
+def _eur_per_usd(conn) -> float:
+    # The one reader per-unit pricing uses too: a rate that is not a finite
+    # number above zero falls back, so a typo in Settings can no longer make
+    # every text request free or negative (security review P2-2).
+    from services.per_unit_pricing import eur_per_usd
+    return eur_per_usd(conn)
+
+
+def _row_cost_usd(row, input_tokens: int, output_tokens: int,
+                  cached_input_tokens: int = 0) -> float:
+    """One request's USD cost on one pricing row."""
+    full_rate = row["input_per_1m_usd"]
+    cached_rate = row["cached_input_per_1m_usd"] or full_rate
+    # Clamp: a provider reporting more cached than prompt tokens must not
+    # produce a negative full-rate slice.
+    cached = max(0, min(int(cached_input_tokens or 0), input_tokens))
+    uncached = input_tokens - cached
+    input_usd = ((uncached / 1_000_000) * full_rate
+                 + (cached / 1_000_000) * cached_rate)
+    output_usd = (output_tokens / 1_000_000) * row["output_per_1m_usd"]
+    return input_usd + output_usd
+
+
+def estimate_input_tokens(messages) -> int:
+    """Input tokens for the messages a request will send: chars/4 over every
+    message's text — system prompt, context, history and project
+    instructions, not just the user's own prompt (audit B-F2)."""
+    chars = 0
+    for message in messages or ():
+        content = message.get("content") if isinstance(message, dict) else message
+        chars += len(str(content or ""))
+    return max(1, chars // 4)
+
+
+def max_cost_eur(backend: str, model: str, in_tokens: int,
+                 conn=None) -> float | None:
+    """The most one text request can cost: its input plus the full output
+    reserve (services/output_limits.reserved_output_tokens) at the output
+    rate. None when the model has no price; 0.0 for local models.
+
+    The request guard, the Chat estimate and the recommendation engine's
+    budget rule all call this, so the three agree on the euros (spec B-F2 b).
+    """
+    from services.output_limits import reserved_output_tokens
+    from services.pricing_catalog import resolve_price_row
+
+    if backend == "ollama":
+        return 0.0
+    own = conn is None
+    if own:
+        conn = get_connection()
+    try:
+        row, _source = resolve_price_row(conn, backend, model)
+        rate = _eur_per_usd(conn)
+    finally:
+        if own:
+            conn.close()
+    if not row:
+        return None
+    usd = _row_cost_usd(row, int(in_tokens),
+                        reserved_output_tokens(backend, model))
+    return round(usd * rate, 6)
+
+
 class UsageTracker:
     def estimate_tokens(self, prompt_text: str, response_text: str) -> tuple[int, int]:
         return max(1, len(prompt_text) // 4), max(1, len(response_text) // 4)
@@ -29,11 +93,8 @@ class UsageTracker:
         return i, o, override or "exact"
 
     def load_pricing(self) -> dict:
-        result = {"eur_per_usd": 0.92}
         with get_connection() as conn:
-            row = conn.execute("SELECT value FROM settings WHERE key = 'eur_per_usd'").fetchone()
-            if row:
-                result["eur_per_usd"] = float(row["value"])
+            result = {"eur_per_usd": _eur_per_usd(conn)}
 
             for r in conn.execute(
                 "SELECT backend, model, input_per_1m_usd, output_per_1m_usd, "
@@ -62,8 +123,7 @@ class UsageTracker:
             return 0.0
 
         with get_connection() as conn:
-            eur_row = conn.execute("SELECT value FROM settings WHERE key = 'eur_per_usd'").fetchone()
-            eur_per_usd = float(eur_row["value"]) if eur_row else 0.92
+            eur_per_usd = _eur_per_usd(conn)
 
             # Exact row, else the row of the model this one is a dated
             # snapshot or alias of, else the provider default.
@@ -73,22 +133,14 @@ class UsageTracker:
         if not row:
             return 0.0
 
-        full_rate = row["input_per_1m_usd"]
-        cached_rate = row["cached_input_per_1m_usd"] or full_rate
-        # Clamp: a provider reporting more cached than prompt tokens must not
-        # produce a negative full-rate slice.
-        cached = max(0, min(int(cached_input_tokens or 0), input_tokens))
-        uncached = input_tokens - cached
-
-        input_usd = ((uncached / 1_000_000) * full_rate
-                     + (cached / 1_000_000) * cached_rate)
-        output_usd = (output_tokens / 1_000_000) * row["output_per_1m_usd"]
-        return round((input_usd + output_usd) * eur_per_usd, 6)
+        usd = _row_cost_usd(row, input_tokens, output_tokens, cached_input_tokens)
+        return round(usd * eur_per_usd, 6)
 
     def log_request(self, agent: str, backend: str, model: str,
                     prompt_text: str, response_text: str, usage: dict | None = None,
                     flat_cost_eur: float | None = None,
-                    project: str | None = None) -> dict:
+                    project: str | None = None,
+                    cost_type: str | None = None) -> dict:
         """Record one request and what it cost.
 
         `flat_cost_eur` is for work that is **not billed per token**: an image,
@@ -97,14 +149,18 @@ class UsageTracker:
         generation, Higgsfield renders and TTS were all counting as €0.00
         against the session and daily caps no matter how much they cost. A
         caller that knows the real price passes it, and the token arithmetic is
-        skipped rather than fudged.
+        skipped rather than fudged. `cost_type` names such an amount when it
+        is not a per-unit price: "partial" is what a failed or stopped render
+        or batch had already spent (GodAI.record_partial).
         """
-        input_tokens, output_tokens, cost_type = self.normalize_usage(usage, prompt_text, response_text)
+        input_tokens, output_tokens, token_cost_type = self.normalize_usage(
+            usage, prompt_text, response_text)
         cached_input_tokens = int((usage or {}).get("cached_input_tokens") or 0)
         if flat_cost_eur is not None:
             cost_eur = round(float(flat_cost_eur), 6)
-            cost_type = "per_unit"
+            cost_type = cost_type or "per_unit"
         else:
+            cost_type = token_cost_type
             cost_eur = self.calculate_cost_eur(
                 backend, model, input_tokens, output_tokens, cached_input_tokens)
         timestamp = datetime.now().isoformat(timespec="seconds")

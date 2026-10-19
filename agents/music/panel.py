@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
     QSizePolicy, QTabWidget, QTextBrowser, QTextEdit, QVBoxLayout, QWidget,
 )
 
+from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, section
 from ui.panels.base import AgentPanel
@@ -137,6 +138,8 @@ class MusicPanel(QWidget):
         actions.addStretch()
         self.music_status_label = QLabel("")
         self.music_status_label.setObjectName("EstimateLine")
+        # Wraps: a cut-off notice is a sentence.
+        self.music_status_label.setWordWrap(True)
         actions.addWidget(self.music_status_label)
         layout.addLayout(actions)
 
@@ -201,11 +204,13 @@ class MusicPanel(QWidget):
         prompt_parts.append(f"\nMusic Description:\n{description}")
         prompt = "\n".join(prompt_parts)
 
+        # Built first: the guard prices the messages the worker will send.
+        messages = self.host.agent_instances["music"].build_messages(prompt)
         # A denied paid request must leave the panel usable. Previously this
         # guard ran after disabling Generate, with no path to re-enable it.
-        if not self.host.authorize_request("music", provider, model, prompt):
+        if not self.host.authorize_request("music", provider, model, prompt,
+                                           messages=messages):
             return
-        messages = self.host.agent_instances["music"].build_messages(prompt)
         self._clear_displays()
         self.last_response = ""
         self.music_status_label.setText("Generating Spotify plan…")
@@ -232,7 +237,8 @@ class MusicPanel(QWidget):
         self.music_profile_box.moveCursor(QTextCursor.End)
 
     def _on_finished(self, response: str):
-        self.host.record_request("music", response)
+        entry = self.host.record_request("music", response)
+        notice = result_notice(entry, response)
         self.last_response = response
         self._populate_tabs(response)
         from agents.music import plans
@@ -250,12 +256,12 @@ class MusicPanel(QWidget):
                 sections=self.parse_sections(response),
                 project=project["id"] if project else None)
             self.music_status_label.setText(
-                "Plan complete — tabs populated and stored.")
+                notice or "Plan complete — tabs populated and stored.")
         except Exception as exc:
             self._last_plan_id = None
             self.host._note_failure("music: store plan", exc)
             self.music_status_label.setText(
-                "Plan complete — tabs populated (storing it failed).")
+                notice or "Plan complete — tabs populated (storing it failed).")
         self._set_idle()
         self.music_save_btn.setEnabled(True)
 

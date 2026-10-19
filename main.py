@@ -65,7 +65,11 @@ from services.chat_projects import (
     continue_chat_messages, conversation_turns, with_project_instructions,
 )
 from services.report_exporter import ReportExporter
-from services.usage_tracker import UsageTracker
+from services.usage_tracker import UsageTracker, estimate_input_tokens, max_cost_eur
+from services import money_text
+from services.output_limits import (
+    output_reserve_short, output_reserve_text, result_notice,
+)
 from services.tool_runner import ToolRunner
 from services.database import get_connection, init_db, save_setting
 from services.registry import Registry
@@ -489,29 +493,31 @@ class GodAI(QWidget):
             base = 15
         return min(180, max(10, base + words // 20))
 
-    def estimate_chat_cost(self, backend, model, prompt):
-        """Pre-flight cost estimate in EUR, plus the approximate token count.
+    def estimate_chat_cost(self, backend, model, prompt, messages=None):
+        """The most this request can cost in EUR, and its input tokens.
 
-        Prices come from the pricing table via UsageTracker — the same source
-        that bills the request afterwards. This used to be a second hardcoded
-        per-backend dict which had no entry for anthropic or qwen, so both were
-        estimated at zero and sailed straight past the budget gate in
-        Validator.validate() no matter how expensive the model was.
+        Input is counted from every message the worker will send — system
+        prompt, context, history and the project instructions it adds, via the
+        same idempotent with_project_instructions() call ChatWorker makes —
+        not from the user's prompt alone, which ran 30× low on Author
+        (audit B-F2). Output is reserved at the length limit every client now
+        sends (owner decision D2), so a cap holds whatever the model writes.
+        `prompt` stands in for the messages only when a caller has none.
+
+        Prices come from the pricing table (usage_tracker.max_cost_eur), the
+        same source that bills the request afterwards. An unpriced model
+        still estimates €0 (B-F5).
         """
         project = self._active_project() if hasattr(self, "_active_project") else None
         instructions = (project or {}).get("instructions", "")
-        approx_input_tokens = max(1, int((len(prompt) + len(instructions)) / 4))
-        approx_output_tokens = max(250, int(approx_input_tokens * 1.2))
-        approx_total_tokens = approx_input_tokens + approx_output_tokens
-
+        sent = with_project_instructions(
+            messages or [{"role": "user", "content": prompt or ""}],
+            instructions)
+        in_tokens = estimate_input_tokens(sent)
         if backend == "ollama":
-            return 0.0, approx_total_tokens
-
-        estimated_cost = self.usage_tracker.calculate_cost_eur(
-            backend, model, approx_input_tokens, approx_output_tokens
-        )
-
-        return round(estimated_cost, 5), approx_total_tokens
+            return 0.0, in_tokens
+        cost = max_cost_eur(backend, model, in_tokens)
+        return (cost or 0.0), in_tokens
 
     def _conversation_context_text(self, agent: str, tool: str) -> str:
         """Bill and preview only the conversation that this request will send."""
@@ -535,11 +541,16 @@ class GodAI(QWidget):
         tool = self.tool_box.currentText() if hasattr(self, "tool_box") else "General Chat"
         previous = self._conversation_context_text(agent, tool)
         billable_prompt = f"{previous}\n{full_prompt}" if previous else full_prompt
+        # The messages send_prompt will build, so the live line, the popup,
+        # the confirmation and the guard show one figure.
+        messages = self._build_chat_request_messages(
+            agent, tool, full_prompt, bool(previous))
 
         estimated_cost, approx_tokens = self.estimate_chat_cost(
             backend,
             model,
-            billable_prompt
+            billable_prompt,
+            messages=messages,
         )
 
         return estimated_cost, approx_tokens, backend, model
@@ -570,14 +581,17 @@ class GodAI(QWidget):
         if backend == "ollama":
             self.live_estimate_label.setText(
                 f"Next request: free · {model} · ~{approx_tokens} tokens")
-        elif backend in {"openai", "deepseek", "kimi", "gemini", "anthropic"}:
+        elif backend in {"openai", "deepseek", "kimi", "gemini", "anthropic",
+                         "qwen"}:
             self.live_estimate_label.setText(
-                f"Next request: ~€{estimated_cost:.2f} · paid · "
-                f"{backend} {model} · ~{approx_tokens} tokens")
+                f"Next request: up to {money_text.up_to(estimated_cost)} · paid · "
+                f"{backend} {model} · ~{approx_tokens:,} tokens + "
+                f"{output_reserve_short(backend, model)}")
         else:
             self.live_estimate_label.setText(
-                f"Next request: ~€{estimated_cost:.2f} · "
-                f"{backend} {model} · ~{approx_tokens} tokens")
+                f"Next request: up to {money_text.up_to(estimated_cost)} · "
+                f"{backend} {model} · ~{approx_tokens:,} tokens + "
+                f"{output_reserve_short(backend, model)}")
 
     def show_cost_estimate_popup(self):
         estimated_cost, approx_tokens, backend, model = self.get_current_cost_estimate()
@@ -596,8 +610,10 @@ class GodAI(QWidget):
                 f"Agent: {self.agent_box.currentText()}\n"
                 f"Backend: {backend}\n"
                 f"Model: {model}\n"
-                f"Approx tokens: {approx_tokens}\n\n"
-                f"Estimated cost: ~€{estimated_cost:.2f}\n"
+                f"Approx tokens: ~{approx_tokens:,} sent + "
+                f"{output_reserve_short(backend, model)} written\n\n"
+                f"Most it can cost: {money_text.up_to(estimated_cost)} "
+                f"(you pay for what it writes)\n"
                 f"⚠ This may use a paid API."
             )
 
@@ -1159,7 +1175,8 @@ class GodAI(QWidget):
         )
 
     def assess_request(self, agent_key: str, provider: str, model: str,
-                       task_text: str, billable_prompt: str | None = None):
+                       task_text: str, billable_prompt: str | None = None, *,
+                       in_tokens: int | None = None):
         """Which provider and model fit *this* request best, against the selection.
 
         Run for every paid text request, at the confirmation. The task is the
@@ -1169,15 +1186,22 @@ class GodAI(QWidget):
         permitted — so the suggestion is never a setup target. None when
         nothing can be compared (an agent with no provider/model pair, or no
         permitted alternative at all).
+
+        `in_tokens` is the input the guard estimated from the request's own
+        messages; every option is priced on it at the full output reserve, so
+        the figures here match the guard's. Without it the input is counted
+        from `billable_prompt` (or the task text).
         """
         if agent_key not in AGENT_SETUP_WIDGETS:
             return None
         task = " ".join(part for part in (
             self._recommendation_task(agent_key), (task_text or "")[:240])
             if part).strip()
-        prompt = billable_prompt if billable_prompt is not None else task_text
+        if in_tokens is None:
+            prompt = billable_prompt if billable_prompt is not None else task_text
+            _cost, in_tokens = self.estimate_chat_cost(provider, model, prompt)
         provider_result, _model_result = self._text_recommendations(
-            agent_key, task, prompt_for_cost=prompt)
+            agent_key, task, in_tokens=in_tokens)
         if provider_result is None or provider_result.fallback:
             return None
         best = provider_result.candidate
@@ -1185,7 +1209,8 @@ class GodAI(QWidget):
         context = self._recommendation_context(agent_key, task)
         selected = text_candidates([provider], {provider: [model]},
                                    self._price_index(), self.ratings)
-        best_cost, _tokens = self.estimate_chat_cost(best.provider, best.model_id, prompt)
+        best_cost = (0.0 if best.provider.casefold() == "ollama"
+                     else max_cost_eur(best.provider, best.model_id, in_tokens) or 0.0)
         # Scored against the same result, so a rating-decided assessment
         # puts the selection on the same best rating and band as the winner.
         engine = self.recommendation_engine
@@ -1234,8 +1259,9 @@ class GodAI(QWidget):
         return (
             f"\n\nAssessment for this request ({who}):\n"
             f"  Best fit: {assessment.best_provider} · {assessment.best_model} — "
-            f"{round(assessment.best_score * 100)}/100, ~€{assessment.best_cost_eur:.2f}\n"
-            f"  Your selection: {mine}, ~€{estimated_cost:.2f}\n\n"
+            f"{round(assessment.best_score * 100)}/100, "
+            f"up to {money_text.up_to(assessment.best_cost_eur)}\n"
+            f"  Your selection: {mine}, up to {money_text.up_to(estimated_cost)}\n\n"
             f"Apply switches to the best fit; you then send again.")
 
     @staticmethod
@@ -1286,8 +1312,8 @@ class GodAI(QWidget):
             f"\n\nAssessment for this request ({who}):\n"
             f"  Best value: {assessment.best_provider} · {assessment.best_model} — "
             f"{rated(assessment.best_rating)} for this work, "
-            f"~€{assessment.best_cost_eur:.2f}\n"
-            f"  Your selection: {yours}, ~€{estimated_cost:.2f}\n"
+            f"up to {money_text.up_to(assessment.best_cost_eur)}\n"
+            f"  Your selection: {yours}, up to {money_text.up_to(estimated_cost)}\n"
             f"  {why}\n  {credit}\n\n"
             f"Apply switches to the best value; you then send again.")
 
@@ -1500,14 +1526,15 @@ class GodAI(QWidget):
         watch = getattr(self, "model_watch", None)
         return watch.last_live(provider) if watch is not None else []
 
-    def _priced_for_request(self, candidates, prompt: str):
-        """Give each text candidate this request's estimated cost in euros,
-        so the engine's budget rule can drop what the guard would refuse."""
-        from services.pricing_catalog import resolve_price_row
-        approx_in = max(1, len(prompt) // 4)
-        approx_out = max(250, int(approx_in * 1.2))
-        from services.per_unit_pricing import eur_per_usd
-        eur = eur_per_usd()
+    def _priced_for_request(self, candidates, in_tokens: int):
+        """Give each text candidate this request's most-it-can-cost in euros,
+        so the engine's budget rule can drop what the guard would refuse.
+
+        The guard's own function on one connection (usage_tracker.max_cost_eur,
+        with the eur rate from the same table), so a candidate the engine keeps
+        is one the guard allows — it used per_unit_pricing's rate and its own
+        output guess before, and the two could disagree.
+        """
         priced = []
         conn = get_connection()
         try:
@@ -1515,17 +1542,15 @@ class GodAI(QWidget):
                 if item.provider.casefold() == "ollama":
                     priced.append(replace(item, estimated_cost=0.0))
                     continue
-                row, _source = resolve_price_row(conn, item.provider, item.model_id)
-                cost = None if row is None else eur * (
-                    approx_in * row["input_per_1m_usd"]
-                    + approx_out * row["output_per_1m_usd"]) / 1_000_000
+                cost = max_cost_eur(item.provider, item.model_id, in_tokens,
+                                    conn=conn)
                 priced.append(replace(item, estimated_cost=cost))
         finally:
             conn.close()
         return priced
 
     def _text_recommendations(self, agent_key: str, task: str | None = None,
-                              prompt_for_cost: str | None = None):
+                              in_tokens: int | None = None):
         widgets = AGENT_SETUP_WIDGETS.get(agent_key)
         if not widgets:
             return None, None
@@ -1569,8 +1594,8 @@ class GodAI(QWidget):
             ))
             for item in candidates
         ]
-        if prompt_for_cost is not None:
-            candidates = self._priced_for_request(candidates, prompt_for_cost)
+        if in_tokens is not None:
+            candidates = self._priced_for_request(candidates, in_tokens)
         profile = profile_for(agent_key)
         base = self._recommendation_context(agent_key, task)
         provider_result = self.recommendation_engine.recommend(profile, candidates, base)
@@ -3533,8 +3558,17 @@ class GodAI(QWidget):
 
         previous = self._conversation_context_text(selected_agent, selected_tool)
         billable_prompt = f"{previous}\n{full_prompt}" if previous else full_prompt
+        # Built before the estimate: the guard prices the messages the worker
+        # will send (system prompt, history, project instructions), not the
+        # typed prompt alone (audit B-F2).
+        try:
+            messages = self._build_chat_request_messages(
+                selected_agent, selected_tool, full_prompt, bool(previous))
+        except Exception as e:
+            QMessageBox.warning(self, "Request failed", str(e))
+            return
         estimated_cost, approx_tokens = self.estimate_chat_cost(
-            final_backend, final_model, billable_prompt)
+            final_backend, final_model, billable_prompt, messages=messages)
 
         api_permissions = {
             "allow_openai": self.allow_openai_checkbox.isChecked(),
@@ -3571,7 +3605,7 @@ class GodAI(QWidget):
             estimated_cost,
             approx_tokens,
             self._assess_safely("chat", final_backend, final_model, raw_text,
-                                billable_prompt),
+                                in_tokens=approx_tokens),
         ):
             return
 
@@ -3582,9 +3616,6 @@ class GodAI(QWidget):
             return
 
         try:
-            messages = self._build_chat_request_messages(
-                selected_agent, selected_tool, full_prompt, bool(previous))
-
             self.pending_agent = selected_agent
             self.pending_tool = selected_tool
             self.pending_backend = final_backend
@@ -3640,23 +3671,41 @@ class GodAI(QWidget):
             QMessageBox.warning(self, "Request failed", str(e))
 
     def confirm_external_api_request(self, backend, model, estimated_cost,
-                                     approx_tokens, assessment=None):
+                                     approx_tokens, assessment=None, *,
+                                     flat=False, partial_billing=False):
         """The paid-request prompt, carrying this request's assessment.
 
         When the assessment found a better fit than the selection, Apply
         switches the agent to it and refuses this send — the user sends again
         deliberately on the new choice, the same rule as the free-local offer:
         a paid request is never silently re-routed.
+
+        A text request shows the most it can cost: its input plus output at
+        the length limit, which is what the guard reserves (owner decision
+        D2); `approx_tokens` is its input. A per-unit request (`flat`) keeps
+        its own line. `partial_billing` marks a render or image batch, which
+        bills the paid steps it finished if it fails or is stopped (D3).
         """
         if backend == "ollama":
             return True
 
+        if flat:
+            cost_lines = (f"Approx tokens: {approx_tokens}\n"
+                          f"Estimated cost/quota impact: ~€{estimated_cost:.2f}")
+        else:
+            cost_lines = (
+                f"Up to {money_text.up_to(estimated_cost)}; you pay for what "
+                f"it writes.\n"
+                f"Based on about {approx_tokens:,} tokens sent and "
+                f"{output_reserve_text(backend, model)}.")
+        if partial_billing:
+            cost_lines += ("\nIf it fails or you stop it, the paid steps "
+                           "already done are recorded.")
         message = (
             f"This request will use an external API.\n\n"
             f"Provider: {backend}\n"
             f"Model: {model}\n"
-            f"Approx tokens: {approx_tokens}\n"
-            f"Estimated cost/quota impact: ~€{estimated_cost:.2f}"
+            f"{cost_lines}"
             f"{self._assessment_text(assessment, estimated_cost)}\n\n"
             f"Continue?"
         )
@@ -3694,11 +3743,11 @@ class GodAI(QWidget):
         return result == QMessageBox.Yes
 
     def _assess_safely(self, agent_key, provider, model, task_text,
-                       billable_prompt=None):
+                       billable_prompt=None, *, in_tokens=None):
         """The assessment must never be the reason a request cannot be sent."""
         try:
             return self.assess_request(agent_key, provider, model, task_text,
-                                       billable_prompt)
+                                       billable_prompt, in_tokens=in_tokens)
         except Exception as exc:
             self._note_failure("assessment", exc)
             return None
@@ -3750,7 +3799,8 @@ class GodAI(QWidget):
 
     def authorize_request(self, agent, provider, model, prompt, tool=None,
                           label=None, flat_cost_eur=None,
-                          assessment=None) -> bool:
+                          assessment=None, *, messages=None,
+                          partial_billing=False) -> bool:
         """Budget-check and confirm one request. False means: do not send it.
 
         `tool` is a registry tool name and is validated as one — pass it only
@@ -3758,6 +3808,13 @@ class GodAI(QWidget):
         The agent panels pick their own mode ("Person", "Deep Scan", …), which
         is not a registry entry: pass that as `label` instead, so it still shows
         up in the run log and Saved Chats without failing the tool check.
+
+        A text request passes the `messages` its worker will send: the guard
+        prices every one of them, at the full output reserve (audit B-F2).
+        Without them it falls back to pricing `prompt` alone, which runs low,
+        so tests/test_request_estimate.py fails any text call site that omits
+        them. `partial_billing` marks a render or image batch that closes
+        with record_partial() on failure or Stop; the confirmation says so.
 
         On success the context record_request() needs is stashed under a fresh
         request token, which is returned. Callers must keep the token and
@@ -3774,7 +3831,8 @@ class GodAI(QWidget):
         if flat_cost_eur is not None:
             estimated_cost, approx_tokens = float(flat_cost_eur), 0
         else:
-            estimated_cost, approx_tokens = self.estimate_chat_cost(provider, model, prompt)
+            estimated_cost, approx_tokens = self.estimate_chat_cost(
+                provider, model, prompt, messages=messages)
 
         # Count what is already authorized but not yet recorded: without it,
         # two concurrent requests could each be validated against the full
@@ -3807,9 +3865,12 @@ class GodAI(QWidget):
         # (assess_media_request), because only it can price each one.
         self.last_applied_assessment = None
         if assessment is None and flat_cost_eur is None:
-            assessment = self._assess_safely(agent, provider, model, prompt)
+            assessment = self._assess_safely(agent, provider, model, prompt,
+                                             in_tokens=approx_tokens)
         if not self.confirm_external_api_request(
-                provider, model, estimated_cost, approx_tokens, assessment):
+                provider, model, estimated_cost, approx_tokens, assessment,
+                flat=flat_cost_eur is not None,
+                partial_billing=partial_billing):
             return False
 
         descriptor = label or tool or "-"
@@ -4266,8 +4327,10 @@ class GodAI(QWidget):
             # No local model, or no daemon answering: there is no free path to
             # offer, and saying otherwise is worse than the plain refusal.
             return False
+        # "Not enough budget left", not "cap reached": nothing was spent,
+        # the request's maximum is simply more than the cap has left.
         choice = QMessageBox.question(
-            self, "Budget cap reached",
+            self, "Not enough budget left",
             f"{reason}\n\nSwitch this agent to {local_models[0]} instead? "
             "It runs on this machine and costs nothing. Press Send again "
             "after the switch.")
@@ -4369,11 +4432,27 @@ class GodAI(QWidget):
         if context is not None:
             context["usage"] = usage
 
+    @staticmethod
+    def _with_stop(entry: dict, usage) -> dict:
+        """A usage entry plus what the cut-off notice reads from the worker's
+        usage: whether the reply stopped at the length limit, and Gemini's
+        thought tokens (services/output_limits.result_notice)."""
+        from services.output_limits import stop_kind
+        usage = usage or {}
+        return {**entry,
+                "stop_reason": stop_kind(usage.get("stop_reason")),
+                "thought_tokens": int(usage.get("thought_tokens") or 0)}
+
     def record_request(self, agent, response, messages=None):
-        """Bill, save and close out a request authorised by authorize_request()."""
+        """Bill, save and close out a request authorised by authorize_request().
+
+        Returns the usage entry, with "stop_reason" and "thought_tokens", so
+        the panel can tell a reply cut at the length limit from a complete
+        one; None when there was nothing to record.
+        """
         context = self._resolve_request(agent, pop=True)
         if context is None:          # never authorised (or already recorded)
-            return
+            return None
 
         entry = self.usage_tracker.log_request(
             agent=context["agent"],
@@ -4416,12 +4495,73 @@ class GodAI(QWidget):
             )
 
         self.load_history_list()
+        return self._with_stop(entry, context["usage"])
 
     def abandon_request(self, agent, reason="error"):
         """Drop a request that failed, so it is not billed and the log closes."""
         context = self._resolve_request(agent, pop=True)
         if context and context["run_id"]:
             self.run_logger.finish(run_id=context["run_id"], status=reason)
+
+    def record_partial(self, token, cost_eur, *, status, error):
+        """Close a failed or stopped render or batch at what it already spent.
+
+        abandon_request() records €0, but a render that fails at assembly has
+        already paid for its script, narration and images, and a retry pays
+        them again while the caps stayed where they were (audit B-F3). This
+        bills `cost_eur` instead: never below 0, never above the reserve the
+        user confirmed (reconciling above it is B-F6), and the whole reserve
+        when the figure is not a finite number. A positive amount becomes one
+        usage row of cost_type "partial" and raises the session total; €0
+        writes no row. Never a Saved Chat. The run closes as `status`
+        ("error", or "cancelled" for a Stop) with "{error}; recorded €X of €Y".
+
+        Token only: an agent name, an unknown token or one already closed is
+        a no-op (None). Returns (recorded, confirmed) in euros.
+        """
+        import math
+
+        if token not in self._pending_requests:
+            return None
+        context = self._resolve_request(token, pop=True)
+        confirmed = float(context.get("estimated_cost") or 0.0)
+        try:
+            cost = float(cost_eur)
+        except (TypeError, ValueError):
+            cost = math.nan
+        recorded = confirmed if not math.isfinite(cost) else min(max(0.0, cost), confirmed)
+        recorded = round(recorded, 6)
+
+        if recorded > 0:
+            self.usage_tracker.log_request(
+                agent=context["agent"],
+                backend=context["provider"],
+                model=context["model"],
+                prompt_text=context["prompt"],
+                response_text="",
+                usage=None,
+                flat_cost_eur=recorded,
+                project=context.get("project"),
+                cost_type="partial",
+            )
+            self.last_request_cost = recorded
+            self.last_tool_name = (f"{context['agent']}/{context['tool']} - "
+                                   f"{context['provider']}")
+            self.session_cost_total += recorded
+            self.session_request_count += 1
+            self.update_usage_labels()
+            self.refresh_all_recommendations()
+
+        if context["run_id"]:
+            self.run_logger.finish(
+                run_id=context["run_id"],
+                status=status,
+                cost_eur=recorded,
+                error=(f"{(error or '').strip()}; recorded "
+                       f"{money_text.paid(recorded)} of "
+                       f"{money_text.up_to(confirmed)}"),
+            )
+        return recorded, confirmed
 
     def run_backend(self, backend, model, messages, prompt):
         if backend == "ollama":
@@ -4540,7 +4680,14 @@ class GodAI(QWidget):
         self.current_chat_agent = self.pending_agent
         self.current_chat_tool = self.pending_tool
         self.current_chat_project = getattr(self, "pending_project", None)
-        self.output_box.append("\n\n[Finished]")
+        # A reply cut at the length limit must never read "[Finished]". The
+        # notice goes beside the answer, not into current_messages, so it is
+        # never saved or sent back as part of the conversation.
+        notice = result_notice(
+            self._with_stop({"backend": self.pending_backend},
+                            getattr(self, "pending_usage", None)),
+            response, "chat")
+        self.output_box.append(f"\n\n{notice or '[Finished]'}")
 
         usage_entry = self.usage_tracker.log_request(
             agent=self.pending_agent,

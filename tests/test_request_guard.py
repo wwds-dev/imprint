@@ -574,19 +574,29 @@ class TestFiverrPanelBillingDecision:
         panel = win.fiverr_panel
         win.fiverr_text_worker = None
         win.fiverr_image_worker = None
-        abandoned = []
+        abandoned, partial = [], []
         monkeypatch.setattr(
             win, "abandon_request",
             lambda token, reason="error": abandoned.append((token, reason)))
+        monkeypatch.setattr(
+            win, "record_partial",
+            lambda token, cost, *, status, error: partial.append(
+                (token, cost, status)) or (0.0, 0.12))
         panel._prompt_token = "prompt-token"
         panel._image_token = "image-token"
+        panel._images_made = 0
 
         panel.stop()
 
         assert panel._prompt_token is None
         assert panel._image_token is None
-        assert abandoned == [
-            ("prompt-token", "stopped"), ("image-token", "stopped")]
+        # The text phase is released; the image batch closes at what the
+        # provider returned (nothing here) as a Stop, not as an abandon
+        # (2026-10-14 billing spec, B-F3).
+        assert abandoned == [("prompt-token", "stopped")]
+        assert partial == [("image-token", 0.0, "cancelled")]
+        assert panel.fiverr_status_label.text() == (
+            "[Stopped] Before the first concept: nothing recorded.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

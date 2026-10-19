@@ -72,6 +72,53 @@ def test_accounts_tab_shows_scopes_and_steps(window):
     assert "PINTEREST_ACCESS_TOKEN" in text
 
 
+def _post_now(window, monkeypatch, typed):
+    """Drive Post on a Reddit draft up to "Post now?", answering No.
+    Returns (questions asked, warnings shown, input prompts seen)."""
+    from PySide6.QtWidgets import QInputDialog, QMessageBox
+
+    class Ready:
+        configured = True
+
+        def publish(self, *a, **k):
+            raise AssertionError("nothing may be posted here")
+
+    panel = window.social_panel
+    monkeypatch.setattr(panel, "_selected_post", lambda: {
+        "id": 1, "platform": "reddit", "status": "draft", "body": "b",
+        "media_path": ""})
+    monkeypatch.setattr(publishing, "publisher_for", lambda key: Ready())
+    prompts = []
+    answers = iter([(typed, True), ("A title", True)])
+    monkeypatch.setattr(QInputDialog, "getText", staticmethod(
+        lambda _p, title, *a, **k: prompts.append(title) or next(answers)))
+    asked, warned = [], []
+    monkeypatch.setattr(QMessageBox, "question", staticmethod(
+        lambda _p, title, text, *a, **k: asked.append((title, text))
+        or QMessageBox.No))
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(
+        lambda _p, title, text, *a, **k: warned.append((title, text))))
+    panel.post_selected()
+    return asked, warned, prompts
+
+
+def test_post_now_names_the_subreddit_it_will_post_to(window, monkeypatch):
+    """Security review P3-5: the confirmation said only "Reddit", so the
+    community a public post lands in was never shown before it went out."""
+    asked, warned, _prompts = _post_now(window, monkeypatch, " R/rust ")
+    assert warned == []
+    assert asked == [("Post now?", "This publishes to r/rust on Reddit from "
+                      "your own account, immediately.\n\nContinue?")]
+
+
+def test_post_now_refuses_a_name_that_is_not_a_subreddit(window, monkeypatch):
+    asked, warned, prompts = _post_now(window, monkeypatch, "r/r/rust")
+    assert asked == [] and prompts == ["Subreddit"]       # no title asked
+    (title, text), = warned
+    assert title == "Not a subreddit"
+    assert "is not a subreddit name" in text
+
+
 def test_reddit_token_requests_only_the_submit_scope(monkeypatch):
     """The guide promises "submit, nothing else"; the password flow mints a
     full-scope token unless the request says otherwise."""

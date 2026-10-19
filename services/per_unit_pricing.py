@@ -19,6 +19,7 @@ Higgsfield all silently bill zero for months.
 from __future__ import annotations
 
 import json
+import math
 
 from services.runtime_paths import resource_base, user_data_base
 
@@ -60,20 +61,43 @@ def _table() -> dict:
     return tables[0] if tables else {}
 
 
-def eur_per_usd() -> float:
+def valid_eur_per_usd(raw) -> float | None:
+    """`raw` as an exchange rate: a finite number above zero, else None.
+
+    A rate of 0, below 0, NaN or infinity would price every request at €0,
+    a negative amount or NaN, and each of those passes every budget cap
+    (audit B-F5; security review P2-2: Settings once saved -0.92).
+    """
     try:
-        from services.database import get_setting
-        override = get_setting("eur_per_usd", "").strip()
-        if override:
-            value = float(override)
-            if value > 0:
-                return value
+        value = float(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def eur_per_usd(conn=None) -> float:
+    """EUR per USD: the Settings value, else config/pricing.json's, else 0.92,
+    each only when it is a valid rate (valid_eur_per_usd).
+
+    The one reader for both halves of the cost model: per-unit work here, and
+    token requests in services/usage_tracker.py, which passes its open
+    connection. Two readers used to disagree on a bad value.
+    """
+    try:
+        if conn is not None:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = 'eur_per_usd'").fetchone()
+            override = row["value"] if row else ""
+        else:
+            from services.database import get_setting
+            override = get_setting("eur_per_usd", "")
+        value = valid_eur_per_usd(override)
+        if value is not None:
+            return value
     except Exception:
         pass
-    try:
-        return float(_table().get("eur_per_usd") or DEFAULT_EUR_PER_USD)
-    except (TypeError, ValueError):
-        return DEFAULT_EUR_PER_USD
+    value = valid_eur_per_usd(_table().get("eur_per_usd"))
+    return DEFAULT_EUR_PER_USD if value is None else value
 
 
 def rate_usd(*path: str) -> float | None:

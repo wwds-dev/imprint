@@ -43,6 +43,7 @@ class FakeHost:
         self.music_worker = None
         self.allowed = False
         self.authorized = []
+        self.authorized_messages = []
         self.recorded = []
         self.abandoned = []
         self.workers = []
@@ -50,8 +51,10 @@ class FakeHost:
     def _note_failure(self, *_args):
         raise AssertionError("Model listing should not fail")
 
-    def authorize_request(self, agent, provider, model, prompt):
+    def authorize_request(self, agent, provider, model, prompt, *,
+                          messages=None):
         self.authorized.append((agent, provider, model, prompt))
+        self.authorized_messages.append(messages)
         return self.allowed
 
     def _new_chat_worker(self, provider, model, messages, prompt):

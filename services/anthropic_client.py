@@ -1,6 +1,7 @@
 import os
 
 from services.api_limits import REQUEST_TIMEOUT_SECONDS, MAX_RETRIES
+from services.output_limits import MAX_OUTPUT_TOKENS, stop_kind
 
 try:
     import anthropic as _sdk
@@ -103,14 +104,16 @@ class AnthropicClientWrapper:
     # called either (the API-keys status card reads key_available() only),
     # and wiring one up would have made an unguarded paid call.
 
-    def stream_chat(self, messages: list, model: str = "claude-sonnet-5-5"):
+    def stream_chat(self, messages: list, model: str = "claude-sonnet-5-5",
+                    max_output_tokens: int = MAX_OUTPUT_TOKENS):
         if not self.client:
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set.\n"
                 "Add it to your .env file and restart the app."
             )
         system, chat_messages = self._split(messages)
-        kwargs = {"model": model, "max_tokens": 8096, "messages": chat_messages}
+        kwargs = {"model": model, "max_tokens": max_output_tokens,
+                  "messages": chat_messages}
         if system:
             kwargs["system"] = system
 
@@ -131,6 +134,8 @@ class AnthropicClientWrapper:
                     final = stream.get_final_message()
                     if final is not None and final.usage is not None:
                         out.usage = _usage(final.usage)
+                    out.stop_reason = stop_kind(
+                        getattr(final, "stop_reason", None))
                 except Exception:
                     final = None    # usage is best-effort; the text streamed
                 _raise_on_refusal(final)
@@ -154,8 +159,10 @@ class AnthropicClientWrapper:
                 "→ Check your usage limits at console.anthropic.com."
             )
         except _sdk.NotFoundError:
+            # `kwargs`, not `model`: this method has no `model`, so a 404
+            # surfaced as a NameError instead of this message.
             raise RuntimeError(
-                f"NotFoundError (404) — Model '{model}' does not exist.\n"
+                f"NotFoundError (404) — Model '{kwargs['model']}' does not exist.\n"
                 "→ Select a different model from the dropdown."
             )
         except _sdk.APIStatusError as e:
@@ -163,14 +170,16 @@ class AnthropicClientWrapper:
                 f"APIStatusError ({e.status_code}) — {e.message}"
             )
 
-    def chat(self, messages: list, model: str = "claude-sonnet-5-5"):
+    def chat(self, messages: list, model: str = "claude-sonnet-5-5",
+             max_output_tokens: int = MAX_OUTPUT_TOKENS):
         if not self.client:
             raise RuntimeError(
                 "ANTHROPIC_API_KEY is not set.\n"
                 "Add it to your .env file and restart the app."
             )
         system, chat_messages = self._split(messages)
-        kwargs = {"model": model, "max_tokens": 8096, "messages": chat_messages}
+        kwargs = {"model": model, "max_tokens": max_output_tokens,
+                  "messages": chat_messages}
         if system:
             kwargs["system"] = system
         try:
@@ -203,7 +212,8 @@ class AnthropicClientWrapper:
                 f"APIStatusError ({e.status_code}) — {e.message}"
             )
         _raise_on_refusal(response)
-        usage = _usage(response.usage)
+        usage = {**_usage(response.usage),
+                 "stop_reason": stop_kind(getattr(response, "stop_reason", None))}
         # content can be empty (max_tokens exhausted before any text block)
         # and can carry more than one text block; indexing [0] crashed on the
         # first case and silently dropped the rest on the second.

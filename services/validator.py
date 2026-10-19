@@ -1,18 +1,36 @@
 from dataclasses import dataclass
 from decimal import Decimal
 
+from services import money_text
 from services.registry import Registry
 
 
 def _money(value: float | int | str) -> Decimal:
-    """Exact decimal for a euro amount.
+    """Exact decimal for a euro amount, to the micro-euro.
 
     Via `str` on purpose: `Decimal(0.1)` keeps the binary error the float
     already carries, while `Decimal(str(0.1))` is exactly 0.1. Without this,
     `1.00 - 0.90` is 0.09999999999999998 and a request estimated at exactly the
     remaining budget is refused — safe, but wrong, and confusing to hit.
+
+    Rounded to six places first, as services/money_text does before it words
+    a figure: a session total summed in floats (0.1 + 0.2 + 0.27 is
+    0.5700000000000001) otherwise refused a €0.43 request against "€0.43
+    left", two equal figures in one refusal.
     """
-    return Decimal(str(value))
+    return Decimal(str(round(float(value), 6)))
+
+
+def _not_sent(estimated_cost, where: str, remedy: str) -> str:
+    """A budget refusal, worded from the figures the check compared.
+
+    Nothing has been spent at this point, so it never says "exceeded" (the
+    old wording did). And it never suggests a shorter prompt: output is
+    reserved at the length limit whatever the prompt, so shortening one
+    barely moves the figure (spec Design, "B-F2 refusal").
+    """
+    return (f"Not sent: this request can cost up to "
+            f"{money_text.up_to(estimated_cost)} and {where}. {remedy}")
 
 
 @dataclass
@@ -103,9 +121,11 @@ class Validator:
             if estimated + _money(agent_daily_cost) > _money(agent_budget):
                 return ValidationResult(
                     False,
-                    f"Agent '{agent_name}' has a budget cap of €{agent_budget:.2f}/day. "
-                    f"€{agent_daily_cost:.4f} is already spent today and this "
-                    f"request is estimated at €{estimated_cost:.4f}.",
+                    _not_sent(estimated_cost,
+                              f"Agent '{agent_name}' has "
+                              f"{money_text.left(_money(agent_budget) - _money(agent_daily_cost))} "
+                              f"left today (of {money_text.paid(agent_budget)})",
+                              "Pick a cheaper or local model."),
                     scope="agent_cap",
                 )
 
@@ -115,8 +135,11 @@ class Validator:
             if estimated > project_remaining:
                 return ValidationResult(
                     False,
-                    f"Project '{project_name}' daily budget exceeded. "
-                    f"Remaining: €{project_remaining:.4f}, request: ~€{estimated_cost:.4f}.",
+                    _not_sent(estimated_cost,
+                              f"Project '{project_name}' has "
+                              f"{money_text.left(project_remaining)} left today "
+                              f"(of {money_text.paid(project_budget)})",
+                              "Pick a cheaper or local model."),
                     scope="project_cap",
                 )
 
@@ -126,8 +149,12 @@ class Validator:
             if estimated > session_remaining:
                 return ValidationResult(
                     False,
-                    f"Session budget exceeded. "
-                    f"Remaining: €{session_remaining:.4f}, request: ~€{estimated_cost:.4f}.",
+                    _not_sent(estimated_cost,
+                              f"your session cap has "
+                              f"{money_text.left(session_remaining)} left "
+                              f"(of {money_text.paid(session_budget)})",
+                              "Pick a cheaper or local model, or raise Session € "
+                              "under Limits and press Save Limits."),
                     scope="session_cap",
                 )
 
@@ -137,8 +164,12 @@ class Validator:
             if estimated > daily_remaining:
                 return ValidationResult(
                     False,
-                    f"Daily budget exceeded. "
-                    f"Remaining: €{daily_remaining:.4f}, request: ~€{estimated_cost:.4f}.",
+                    _not_sent(estimated_cost,
+                              f"today's cap has "
+                              f"{money_text.left(daily_remaining)} left "
+                              f"(of {money_text.paid(daily_budget)})",
+                              "Pick a cheaper or local model, raise Daily € "
+                              "under Limits, or wait until tomorrow."),
                     scope="daily_cap",
                 )
 

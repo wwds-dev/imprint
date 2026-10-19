@@ -157,19 +157,26 @@ def test_ollama_needs_no_permission():
 def test_request_over_session_budget_is_refused():
     result = check(session_cost=0.99, session_budget=1.0, estimated_cost=0.50)
     assert not result.allowed
-    assert "Session budget" in result.reason
+    # Worded per the 2026-10-14 billing spec: nothing was spent, so never
+    # "exceeded"; the maximum and what the cap has left, then the remedy.
+    assert result.scope == "session_cap"
+    assert "your session cap has €0.01 left (of €1.00)" in result.reason
+    assert "exceeded" not in result.reason
 
 
 def test_request_over_daily_budget_is_refused():
     result = check(daily_cost=4.99, daily_budget=5.0, estimated_cost=0.50)
     assert not result.allowed
-    assert "Daily budget" in result.reason
+    assert result.scope == "daily_cap"
+    assert "today's cap has €0.01 left (of €5.00)" in result.reason
+    assert "exceeded" not in result.reason
 
 
 def test_request_over_the_per_agent_cap_is_refused():
     result = check(StubRegistry(agent_budget=0.10), estimated_cost=0.25)
     assert not result.allowed
-    assert "budget cap" in result.reason
+    assert result.scope == "agent_cap"
+    assert "has €0.10 left today (of €0.10)" in result.reason
 
 
 def test_request_exactly_at_the_remaining_budget_is_allowed():
@@ -562,6 +569,7 @@ def test_per_agent_cap_counts_the_day_not_the_request():
     blocked = check(StubRegistry(agent_budget=1.00),
                     estimated_cost=0.25, agent_daily_cost=0.80)
     assert not blocked.allowed
-    assert "budget cap" in blocked.reason
+    # The day's spend is in the figure: €0.20 left of €1.00, not €1.00.
+    assert "has €0.20 left today (of €1.00)" in blocked.reason
     assert check(StubRegistry(agent_budget=1.00),
                  estimated_cost=0.25, agent_daily_cost=0.70).allowed

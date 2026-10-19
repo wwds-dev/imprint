@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QTextEdit, QVBoxLayout, QWidget,
 )
 
+from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
 from agents.manuscript.book_widgets import (
     make_size_box, make_theme_box, make_voice_source_box, populate_voice_box,
@@ -299,6 +300,8 @@ class ManuscriptPanel(QWidget):
         # Status bar
         self.manuscript_status_label = QLabel("")
         self.manuscript_status_label.setObjectName("EstimateLine")
+        # Wraps: a cut-off notice is a sentence.
+        self.manuscript_status_label.setWordWrap(True)
         layout.addWidget(self.manuscript_status_label)
 
         # Aliases retired 2026-09-21: shared wiring resolves controls
@@ -818,7 +821,8 @@ class ManuscriptPanel(QWidget):
         # Keep the token: "manuscript" is shared with the quote-finder and
         # calendar-caption flows. And on refusal, re-enable the button
         # disabled above.
-        token = self.host.authorize_request("manuscript", provider, model, query)
+        token = self.host.authorize_request("manuscript", provider, model, query,
+                                            messages=messages)
         if not token:
             self.manuscript_ask_btn.setEnabled(True)
             self.manuscript_status_label.setText("")
@@ -841,9 +845,9 @@ class ManuscriptPanel(QWidget):
 
     def _on_ask_finished(self, _full_response: str):
         token, self._ask_token = self._ask_token, None
-        if token:
-            self.host.record_request(token, _full_response)
-        self.manuscript_status_label.setText("[Done]")
+        entry = self.host.record_request(token, _full_response) if token else None
+        self.manuscript_status_label.setText(
+            result_notice(entry, _full_response) or "[Done]")
         self.manuscript_ask_btn.setEnabled(True)
 
     def _on_ask_error(self, error: str):
@@ -1336,7 +1340,7 @@ class ManuscriptPanel(QWidget):
         self.manuscript_status_label.setText("[Finding quotes…]")
         self.quote_finder_suggest_btn.setEnabled(False)
         token = self.host.authorize_request(
-            "manuscript", provider, model, truncated)
+            "manuscript", provider, model, truncated, messages=messages)
         if not token:
             self.quote_finder_suggest_btn.setEnabled(True)
             self.manuscript_status_label.setText("")
@@ -1352,15 +1356,17 @@ class ManuscriptPanel(QWidget):
 
     def _on_quotes_found(self, full_response: str):
         token, self._quote_finder_token = self._quote_finder_token, None
-        if token:
-            self.host.record_request(token, full_response)
+        entry = self.host.record_request(token, full_response) if token else None
+        # A list cut at the length limit fails to parse for that reason; say
+        # so rather than blame the response.
+        notice = result_notice(entry, full_response)
         self.quote_finder_suggest_btn.setEnabled(True)
         quotes = self._parse_quote_list(full_response)
         self.quote_finder_list.clear()
         self._quote_finder_short_buttons = []
         if not quotes:
             self.manuscript_status_label.setText(
-                "[Error] Could not parse quotes from response.")
+                notice or "[Error] Could not parse quotes from response.")
             return
         for q in quotes:
             item = QListWidgetItem()
@@ -1368,7 +1374,8 @@ class ManuscriptPanel(QWidget):
             item.setSizeHint(row.sizeHint())
             self.quote_finder_list.addItem(item)
             self.quote_finder_list.setItemWidget(item, row)
-        self.manuscript_status_label.setText(f"[Done] Found {len(quotes)} quotes.")
+        self.manuscript_status_label.setText(
+            notice or f"[Done] Found {len(quotes)} quotes.")
 
     def _on_quotes_error(self, error: str):
         token, self._quote_finder_token = self._quote_finder_token, None
@@ -1544,7 +1551,7 @@ class ManuscriptPanel(QWidget):
         self.manuscript_status_label.setText("[Writing captions…]")
         self.calendar_generate_btn.setEnabled(False)
         token = self.host.authorize_request(
-            "manuscript", provider, model, items_json)
+            "manuscript", provider, model, items_json, messages=messages)
         if not token:
             self.calendar_generate_btn.setEnabled(True)
             self.manuscript_status_label.setText("")
@@ -1561,15 +1568,16 @@ class ManuscriptPanel(QWidget):
     def _on_captions_done(self, full_response: str):
         token = self._calendar_captions_token
         self._calendar_captions_token = None
-        if token:
-            self.host.record_request(token, full_response)
+        entry = self.host.record_request(token, full_response) if token else None
         self.calendar_generate_btn.setEnabled(True)
         captions = self._parse_quote_list(full_response)
         for i, slot in enumerate(self._calendar_slots):
             slot.caption = captions[i] if i < len(captions) else ""
         self._populate_calendar_table()
+        # Cut captions leave the later slots blank: never "[Done]" for that.
         self.manuscript_status_label.setText(
-            f"[Done] {len(self._calendar_slots)}-post calendar generated.")
+            result_notice(entry, full_response)
+            or f"[Done] {len(self._calendar_slots)}-post calendar generated.")
 
     def _on_captions_error(self, error: str):
         token = self._calendar_captions_token

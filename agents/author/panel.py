@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QSizePolicy, QStackedWidget, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
+from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
 from ui.forms import (
     LG, MD, SM, XS, FieldGridLayout, combo, field, form_grid, line_edit, micro,
@@ -633,6 +634,9 @@ class AuthorPanel(QWidget):
         layout.addWidget(self.author_content_stack, 1)
 
         self.author_status_label = QLabel("")
+        # Wraps: a cut-off notice is a sentence, and must not clip at
+        # 125-200% text size.
+        self.author_status_label.setWordWrap(True)
         theme.themed(self.author_status_label,
                      f"font-size: 12px; color: {TEXT_MUTE}; padding: 2px 4px;")
         layout.addWidget(self.author_status_label)
@@ -1032,7 +1036,8 @@ class AuthorPanel(QWidget):
         self.author_stop_btn.setEnabled(True)
         # Keep the token: "author" is shared by the write, publish and
         # market flows, and resolving by name pops whichever is oldest.
-        token = self.host.authorize_request("author", provider, model, prompt)
+        token = self.host.authorize_request("author", provider, model, prompt,
+                                            messages=messages)
         if not token:
             # Refused — re-enable the buttons disabled above.
             self.author_write_btn.setEnabled(True)
@@ -1115,11 +1120,12 @@ class AuthorPanel(QWidget):
 
     def _on_finished(self, full_response: str):
         token, self._write_token = self._write_token, None
-        if token:
-            self.host.record_request(token, full_response)
+        entry = self.host.record_request(token, full_response) if token else None
         self._populate_tabs(full_response)
         word_count = len(self.author_draft_box.toPlainText().split())
-        status = f"[Done] {word_count:,} words"
+        # A draft cut at the length limit must not read "[Done]".
+        status = (result_notice(entry, full_response, "author", words=word_count)
+                  or f"[Done] {word_count:,} words")
         # Count in the text that will actually be published: a clean
         # Continue must not hide chapter one's unverified claims — and a
         # sectioned response must not hide marks routed to other tabs.
@@ -1385,7 +1391,8 @@ class AuthorPanel(QWidget):
             self.author_status_label.setText(
                 "[Busy] The previous request is still finishing — one moment.")
             return
-        token = self.host.authorize_request("author", provider, model, prompt)
+        token = self.host.authorize_request("author", provider, model, prompt,
+                                            messages=messages)
         if not token:
             self.author_pub_generate_btn.setEnabled(True)
             self.author_pub_stop_btn.setEnabled(False)
@@ -1409,10 +1416,10 @@ class AuthorPanel(QWidget):
 
     def _pub_on_finished(self, full_response: str):
         token, self._pub_token = self._pub_token, None
-        if token:
-            self.host.record_request(token, full_response)
+        entry = self.host.record_request(token, full_response) if token else None
         self.author_status_label.setText(
-            f"[Done] {self.author_pub_type_box.currentText()} generated"
+            result_notice(entry, full_response)
+            or f"[Done] {self.author_pub_type_box.currentText()} generated"
         )
         self.author_pub_generate_btn.setEnabled(True)
         self.author_pub_stop_btn.setEnabled(False)
@@ -1505,7 +1512,8 @@ class AuthorPanel(QWidget):
             self.author_status_label.setText(
                 "[Busy] The previous request is still finishing — one moment.")
             return
-        token = self.host.authorize_request("author", provider, model, prompt)
+        token = self.host.authorize_request("author", provider, model, prompt,
+                                            messages=messages)
         if not token:
             self.author_mkt_generate_btn.setEnabled(True)
             self.author_mkt_stop_btn.setEnabled(False)
@@ -1529,10 +1537,10 @@ class AuthorPanel(QWidget):
 
     def _mkt_on_finished(self, full_response: str):
         token, self._mkt_token = self._mkt_token, None
-        if token:
-            self.host.record_request(token, full_response)
+        entry = self.host.record_request(token, full_response) if token else None
         self.author_status_label.setText(
-            f"[Done] {self.author_mkt_platform_box.currentText()} copy generated"
+            result_notice(entry, full_response)
+            or f"[Done] {self.author_mkt_platform_box.currentText()} copy generated"
         )
         self.author_mkt_generate_btn.setEnabled(True)
         self.author_mkt_stop_btn.setEnabled(False)

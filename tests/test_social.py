@@ -378,6 +378,88 @@ def test_reddit_refuses_to_post_without_a_subreddit_and_title(monkeypatch):
         publisher.publish("body", subreddit="books")
 
 
+@pytest.mark.parametrize("typed,sent", [
+    ("rust", "rust"), ("r/rust", "rust"), ("/r/rust/", "rust"),
+    (" R/rust ", "rust"), ("r/rpg", "rpg"), ("/r/rpg", "rpg"),
+    ("R/books", "books"), ("books", "books"),
+    ("relationships", "relationships"),
+])
+def test_reddit_posts_to_the_subreddit_the_user_typed(monkeypatch, typed, sent):
+    """`lstrip("r/")` strips characters, not a prefix: "rust" went to r/ust
+    and "r/rpg" to r/pg, a public post in a community the user never chose
+    (audit X-1). Only one leading "r/" or "/r/" may go."""
+    import requests
+    from agents.social import publishing
+
+    sent_to = []
+
+    class Reply:
+        status_code = 200
+
+        def json(self):
+            return {"json": {"errors": [], "data": {"url": "https://redd.it/x"}}}
+
+    def fake_post(url, **kwargs):
+        sent_to.append(kwargs["data"]["sr"])
+        return Reply()
+
+    publisher = publishing.RedditPublisher()
+    monkeypatch.setattr(publisher, "_token", lambda: "token")
+    monkeypatch.setattr(requests, "post", fake_post)
+    publisher.publish("body", subreddit=typed, title="t")
+    assert sent_to == [sent]
+
+
+@pytest.mark.parametrize("typed", ["", "   ", "r/", "R/", "/r/", "/"])
+def test_reddit_refuses_a_subreddit_that_is_only_a_prefix(monkeypatch, typed):
+    """Refused before the login or the submit goes out, not left for Reddit
+    to answer with a post to some other community."""
+    import requests
+    from agents.social import publishing
+
+    calls = []
+    publisher = publishing.RedditPublisher()
+    monkeypatch.setattr(publisher, "_token",
+                        lambda: calls.append("login") or "token")
+    monkeypatch.setattr(requests, "post",
+                        lambda *args, **kwargs: calls.append("post"))
+    with pytest.raises(publishing.PublishError, match="subreddit"):
+        publisher.publish("body", subreddit=typed, title="t")
+    assert calls == []
+
+
+@pytest.mark.parametrize("typed", [
+    "r/r/rust", "r/ rust", "https://www.reddit.com/r/rust", "reddit.com/r/rust",
+    "rust\n/", "_rust", "a", "x" * 22, "ru st", "rust?sort=new", "r/rust&x=1",
+])
+def test_reddit_refuses_anything_that_is_not_one_subreddit_name(
+        monkeypatch, typed):
+    """Security review P3-5: normalising alone sent "r/r/rust" as "r/rust",
+    "r/ rust" as " rust" and a pasted URL as typed. A name must be 2 to 21
+    letters, digits or underscores, checked before the login."""
+    import requests
+    from agents.social import publishing
+
+    calls = []
+    publisher = publishing.RedditPublisher()
+    monkeypatch.setattr(publisher, "_token",
+                        lambda: calls.append("login") or "token")
+    monkeypatch.setattr(requests, "post",
+                        lambda *args, **kwargs: calls.append("post"))
+    with pytest.raises(publishing.PublishError, match="is not a subreddit name"):
+        publisher.publish("body", subreddit=typed, title="t")
+    assert calls == []
+
+
+@pytest.mark.parametrize("typed,name", [
+    ("a1", "a1"), ("x" * 21, "x" * 21), ("Books_2026", "Books_2026"),
+    ("/r/rust/", "rust"),
+])
+def test_reddit_names_at_the_edges_of_the_rule_are_accepted(typed, name):
+    from agents.social import publishing
+    assert publishing.subreddit_name(typed) == name
+
+
 def test_youtube_refuses_to_upload_without_a_file():
     from agents.social import publishing
 

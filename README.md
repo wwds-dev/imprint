@@ -342,8 +342,9 @@ counts, which tool ran last).
 turns red at 100%. This replaced two lines of prose that gave the cap and the
 remainder and left you to subtract.
 
-**Next request** — the estimate for whatever is currently configured: cost,
-whether it is a paid API, the provider, model and rough token count.
+**Next request** — the most the request currently configured can cost
+("up to €X", rounded up), whether it is a paid API, the provider, model, and
+the tokens it sends plus the output reserve ("+ up to 8,192").
 
 **Limits** — the session and daily caps in euros, and **Save Limits**.
 **Reset session spend** zeroes the session counter only.
@@ -1889,7 +1890,7 @@ finished mp4 against the campaign.
 | Platform | Status |
 |---|---|
 | YouTube | Can post — through vidforge's existing uploader. Needs an OAuth client secret and one browser sign-in. |
-| Reddit | Can post — a personal "script" app on your own account, no review. |
+| Reddit | Can post — a personal "script" app on your own account, no review. The subreddit you type (`books`, `r/books`) must be one name of 2 to 21 letters, digits or underscores, and "Post now?" names it (`r/books`) before anything is sent. |
 | Pinterest | Can post — needs a business account, free to convert to. |
 | X, Instagram, TikTok, Threads, LinkedIn | Drafting only — each needs a paid tier, a linked business account, or an app review Imprint cannot obtain for you. |
 
@@ -2199,13 +2200,46 @@ If any check fails, a `ValidationResult(allowed=False, reason=<explanation>)` is
 
 ### Cost Estimation (Pre-Request)
 
-Before sending, `estimate_chat_cost()` provides a rough estimate based on character count:
+Before sending, the guard works out the **most a text request can cost**
+(`services/usage_tracker.max_cost_eur`, used by `estimate_chat_cost()`,
+`authorize_request()` and the recommendation engine's budget rule, so all three
+agree):
 
-- Input tokens ≈ `(len(prompt) + len(active project instructions)) / 4`
-- Output tokens ≈ `input_tokens × 1.2` (minimum 250)
-- Cost = `total_tokens × price_per_token` for the current provider
+- Input tokens ≈ characters / 4 over **every message the request sends**: the
+  agent's system prompt, context, conversation history, the active project's
+  instructions and your prompt. (Before 2026-10-14 only the prompt was counted.)
+- Output tokens = the **length limit**, 8,192 tokens (`MAX_OUTPUT_TOKENS` in
+  `services/output_limits.py`). Every paid text client now sends this cap, so a
+  reply can never write more. Thinking is reserved on top only where the cap
+  may not include it: DeepSeek up to 65,536 tokens (its documented
+  thinking-mode default; whether its cap includes thinking is not documented),
+  and Qwen up to 8,192, the thinking limit Imprint sends it (`thinking_budget`,
+  `QWEN_THINKING_BUDGET`; the parameter is unverified until a paid run). Kimi
+  reserves the cap alone: its documentation says thinking counts against it.
+  The dialog's "plus up to N for thinking" appears only for DeepSeek and Qwen.
+  For a 100-token prompt that is up to €0.12 on kimi-k3, €0.10 on qwen3.8-max
+  and €0.27 on deepseek-v4-pro.
+- Cost = input at the input rate + the output reserve at the output rate.
 
-This estimate drives three things: the live estimate label in the right rail, the cost estimate popup, and the budget validation checks. It is intentionally conservative.
+You pay for what the model actually writes; the reserve is what the caps hold
+while the request runs. This figure drives the live estimate label, the cost
+estimate popup, the confirmation dialog and the budget checks. All figures are
+two decimals: a maximum rounds up, an amount left rounds down, and a paid
+amount below a cent reads "under €0.01".
+
+### The length limit
+
+A reply that stops at the 8,192-token limit is marked, never shown as
+finished. Chat writes `[Cut off] … To get the rest, send "continue"` instead of
+`[Finished]`; Quill's Write says `[Cut off] N words, stopped at the length
+limit. Press Continue to write more.`; every other panel shows the cut-off line
+in its status instead of `[Done]`. The notice sits beside the text and is never
+saved with it (Saved Chats and the conversation Chat sends next hold the answer
+alone). Chat's **Export Report** exports the whole transcript, so the
+`[Cut off]` line is in the report. A Gemini thinking model can use the whole
+limit thinking: the notice then says so, and an empty answer is still billed.
+A cut-off or empty Stamp image prompt or Herald clip brief stops there: no
+images and no render are requested from it.
 
 ### Work that is not billed per token
 
@@ -2240,14 +2274,27 @@ USD quote to the same budget guard.
 
 ### Confirmation Dialog (Pre-Request)
 
-For any cloud provider, a confirmation dialog is shown before the worker starts, displaying the provider, model, approximate tokens, and estimated cost. The user must click **Yes** to proceed.
+For any cloud provider, a confirmation dialog is shown before the worker starts, displaying the provider, the model and, for a text request, "Up to €X; you pay for what it writes" with the tokens sent and the length limit it is based on. Per-unit work (images, renders, speech) keeps its estimated-cost line; renders and image batches add "If it fails or you stop it, the paid steps already done are recorded." The user must click **Yes** to proceed.
+
+### Failed or stopped renders and image batches
+
+A video render, a Herald clip or a Stamp logo batch that fails or is stopped
+records what it had already paid for (`GodAI.record_partial`): each paid stage
+that started (script, narration, captions) at the line you confirmed, and each
+image actually saved at the per-image rate, never more than the confirmed total.
+Stopping before the script stage, or before the first logo, records nothing. A
+Stamp Stop closes the batch only when its image worker sends its last signal, so
+a concept already returned (or in flight) is billed. The
+row has cost type `partial`, counts against the session, daily, agent and
+project caps, and the Run Log shows `error` or `cancelled` with "recorded €X of
+€Y". A new render starts from the beginning and is paid again.
 
 ### Actual Cost (Post-Request)
 
 After a successful response, `UsageTracker.log_request()` calculates the real cost:
 
 1. Token counts are sourced from the API's usage response if available (field names vary by provider: `input_tokens`, `prompt_tokens`, `prompt_token_count`, etc.). If exact data is unavailable, character-count estimation is used.
-2. The EUR/USD exchange rate and per-model pricing are read from the `pricing` and `settings` tables in the database.
+2. The EUR/USD exchange rate and per-model pricing are read from the `pricing` and `settings` tables in the database. Token and per-unit costs share one rate reader (`services/per_unit_pricing.eur_per_usd`): a rate that is not a finite number above zero falls back to `config/pricing.json`'s, then 0.92, and Settings refuses to save one (or a NaN, infinite or negative budget).
 3. A row is inserted into the `usage` table with timestamp, agent, provider, model, token counts, cost, and cost type (`exact`, `estimated`, or `mixed`).
 
 ### Budget Controls
@@ -2256,7 +2303,7 @@ After a successful response, `UsageTracker.log_request()` calculates the real co
 
 **Daily budget** — Total cloud spend allowed today (per calendar day). Aggregated from the `usage` table.
 
-Budget limits are checked by the validator before each request. They are editable in the right panel's input fields or in the Settings dialog.
+Budget limits are checked by the validator before each request. A refusal says what the request can cost and what the cap has left, e.g. "Not sent: this request can cost up to €0.44 and your session cap has €0.05 left (of €1.00)", and how to proceed. They are editable in the right panel's input fields or in the Settings dialog.
 
 **Save Budget Limits** — Saves the current input field values to the database (settings table) and to the in-memory state. Applied immediately.
 
@@ -2471,7 +2518,7 @@ The SQLite database is stored at `data/imprint.db`. All tables use WAL journal m
 | `output_tokens` | INTEGER | Completion tokens |
 | `total_tokens` | INTEGER | Sum of input + output |
 | `cost_eur` | REAL | Calculated cost in EUR |
-| `cost_type` | TEXT | `exact`, `estimated`, or `mixed` |
+| `cost_type` | TEXT | `exact`, `estimated`, `mixed`, `per_unit`, or `partial` (a failed or stopped render or batch) |
 | `cloud` | INTEGER | 1 if a cloud API was used |
 
 ### `runs`

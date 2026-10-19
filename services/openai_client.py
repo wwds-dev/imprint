@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from openai import OpenAI
 
 from services.api_limits import REQUEST_TIMEOUT_SECONDS, MAX_RETRIES
-from services.stream_usage import UsageStream, cached_input_tokens
+from services.output_limits import MAX_OUTPUT_TOKENS, stop_kind
+from services.stream_usage import UsageStream, cached_input_tokens, note_finish
 from services.media_catalog import OPENAI_IMAGE_MODELS
 
 # Image models offered by the Gigs and Video panels. DALL-E 2/3 were removed
@@ -80,13 +81,18 @@ class OpenAIClientWrapper:
         except Exception:
             return self.KNOWN_MODELS
 
-    def chat(self, messages, model="gpt-4o-mini"):
+    def chat(self, messages, model="gpt-4o-mini",
+             max_output_tokens=MAX_OUTPUT_TOKENS):
         if not self.client:
             raise RuntimeError("OPENAI_API_KEY is not set.")
 
         response = self.client.chat.completions.create(
             model=model,
             messages=messages,
+            # max_completion_tokens, not the deprecated max_tokens: it bounds
+            # visible output AND reasoning, and o-series models reject
+            # max_tokens outright.
+            max_completion_tokens=max_output_tokens,
         )
 
         text = response.choices[0].message.content or ""
@@ -95,6 +101,8 @@ class OpenAIClientWrapper:
             "input_tokens": response.usage.prompt_tokens if response.usage else 0,
             "output_tokens": response.usage.completion_tokens if response.usage else 0,
             "total_tokens": response.usage.total_tokens if response.usage else 0,
+            "stop_reason": stop_kind(
+                getattr(response.choices[0], "finish_reason", None)),
         }
 
         return text, usage
@@ -136,7 +144,8 @@ class OpenAIClientWrapper:
     # The Sora job methods (create/poll/wait/download and OpenAIVideoJob) were
     # removed ahead of OpenAI's scheduled 2026-09-24 Videos API shutdown.
 
-    def stream_chat(self, messages, model="gpt-4o-mini"):
+    def stream_chat(self, messages, model="gpt-4o-mini",
+                    max_output_tokens=MAX_OUTPUT_TOKENS):
         if not self.client:
             raise RuntimeError("OPENAI_API_KEY is not set.")
 
@@ -145,6 +154,7 @@ class OpenAIClientWrapper:
                 stream = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
+                    max_completion_tokens=max_output_tokens,
                     stream=True,
                     # The provider's real token counts arrive in a final
                     # usage-only frame; without this every stream was billed
@@ -165,6 +175,7 @@ class OpenAIClientWrapper:
                     # indexing [0] blindly crashed the stream mid-response.
                     if not chunk.choices:
                         continue
+                    note_finish(out, chunk)
                     delta = chunk.choices[0].delta.content
                     if delta:
                         yield delta

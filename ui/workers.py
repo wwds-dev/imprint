@@ -15,6 +15,7 @@ from PySide6.QtCore import QObject, QThread, Signal
 
 from services.openai_client import DEFAULT_IMAGE_MODEL
 from services.chat_projects import with_project_instructions
+from services.output_limits import stop_kind
 
 
 class ChatWorker(QThread):
@@ -84,16 +85,27 @@ class ChatWorker(QThread):
                 usage = getattr(result, "usage", None) or {
                     "cost_type_override": "stream-estimated"
                 }
+                stop = stop_kind(getattr(result, "stop_reason", None))
 
             # ===== TUPLE (response, usage) =====
             elif isinstance(result, tuple):
                 response, usage = result
+                stop = stop_kind((usage or {}).get("stop_reason"))
                 self._emit_as_tokens(response)
 
             # ===== NORMAL STRING RESPONSE =====
             else:
                 response = result
+                stop = None
                 self._emit_as_tokens(response)
+
+            # A reply cut at the output cap must never look complete: the
+            # stop reason rides on the usage signal, which is emitted before
+            # finished_signal from this thread and so reaches the GUI first.
+            # A reply without a usage frame keeps its estimated cost type.
+            if stop:
+                usage = {**(usage or {"cost_type_override": "estimated"}),
+                         "stop_reason": stop}
 
             # Same outcome for a cancel whichever path served the request:
             # the streaming loop above already routes a cancel to
@@ -253,7 +265,13 @@ class FiverrImageWorker(QThread):
         self._cancel_requested = True
 
     def run(self):
-        self.save_dir.mkdir(parents=True, exist_ok=True)
+        # Every run ends in all_done_signal or error_signal: the panel's Stop
+        # closes the paid request only from that last signal.
+        try:
+            self.save_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            self.error_signal.emit(f"Could not create {self.save_dir}: {e}")
+            return
         paths = []
         for i in range(self.count):
             if self._cancel_requested:
@@ -509,6 +527,13 @@ class VideoWorker(QThread):
     calls `raise_if_cancelled()` between stages and inside the per-scene loops,
     so a cancelled render stops at the next checkpoint rather than being
     killed mid-ffmpeg with a half-written file.
+
+    What a failed or stopped render already paid for crosses to the GUI as
+    `trace_signal`, sent once just before done or error: the stages that
+    began and the scene images saved (agents/video/studio.py
+    partial_render_cost_usd prices it). The panel never receives the build on
+    a failure, and Video and Social clips can render at once, so the trace is
+    taken here rather than read back from the manifest or the image folder.
     """
 
     stage_signal = Signal(str, str)        # stage key, human label
@@ -516,6 +541,7 @@ class VideoWorker(QThread):
     log_signal = Signal(str)
     done_signal = Signal(str, str)         # slug, video path
     error_signal = Signal(str)
+    trace_signal = Signal(dict)            # {"stages": [...], "images": n}
 
     def __init__(self, topic: str = "", overrides: dict | None = None,
                  resume_slug: str = ""):
@@ -525,6 +551,31 @@ class VideoWorker(QThread):
         self.resume_slug = resume_slug.strip()
         self._reporter = None
         self._cancel_requested = False
+        # Written on the worker thread only; handed over as a copy.
+        self._stages: list[str] = []
+        self._images = 0
+        self._image_total = 0
+
+    def _note_stage(self, stage_key: str) -> None:
+        if stage_key not in self._stages:
+            self._stages.append(stage_key)
+        # Any stage after visuals means every scene image was saved.
+        if stage_key != "visuals" and "visuals" in self._stages:
+            self._images = max(self._images, self._image_total)
+
+    def _note_scene(self, done: int, total: int) -> None:
+        # vidforge reports scene k before illustrating it, so reaching it
+        # proves scenes 0..k-1 have their images.
+        self._images = max(self._images, int(done))
+        self._image_total = max(self._image_total, int(total))
+
+    def _note_visuals_left(self) -> None:
+        # Asking for the next stage proves the last scene image was saved,
+        # even when a Stop raises before that stage starts.
+        self._images = max(self._images, self._image_total)
+
+    def trace(self) -> dict:
+        return {"stages": list(self._stages), "images": self._images}
 
     def cancel(self):
         self._cancel_requested = True
@@ -540,8 +591,25 @@ class VideoWorker(QThread):
             worker = self
 
             class QtReporter(base):
+                def begin(self, stage_key, detail=""):
+                    # Before super(): a Stop pressed during the last scene
+                    # image raises inside it, before on_stage records the
+                    # next stage, and that image is saved and paid for.
+                    if (getattr(self, "stage_key", None) == "visuals"
+                            and stage_key != "visuals"):
+                        worker._note_visuals_left()
+                    super().begin(stage_key, detail)
+
+                def substep(self, done, total, detail=""):
+                    # Before super(): a Stop raises inside it, and the
+                    # images up to this scene are already paid for.
+                    if getattr(self, "stage_key", None) == "visuals":
+                        worker._note_scene(done, total)
+                    super().substep(done, total, detail)
+
                 def on_stage(self, stage_key, detail):
                     from agents.video.studio import overall_fraction
+                    worker._note_stage(stage_key)
                     label = dict((k, l) for k, l, _ in video_studio.stages()).get(
                         stage_key, stage_key)
                     worker.stage_signal.emit(stage_key, label)
@@ -568,9 +636,13 @@ class VideoWorker(QThread):
                 reporter=self._reporter,
             )
             self.progress_signal.emit(100, "")
+            self.trace_signal.emit(self.trace())
             self.done_signal.emit(build.slug, str(build.video_path))
 
         except Exception as exc:
+            # Same thread, queued in order: the panel has the trace before
+            # it handles the error.
+            self.trace_signal.emit(self.trace())
             if type(exc).__name__ == "Cancelled":
                 self.error_signal.emit("Cancelled.")
             else:
