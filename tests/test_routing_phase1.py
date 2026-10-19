@@ -166,14 +166,17 @@ def test_assess_local_model_reads_lmstudio_sizes(monkeypatch):
     import main
     import psutil
     window_cls = main.GodAI
-    stub = SimpleNamespace(lmstudio=SimpleNamespace(model_size_bytes=lambda m: 15 * GB),
-                           ollama=SimpleNamespace(model_size_bytes=lambda m: None))
+    # Sizes come from the cached inventory; assessing never asks a server.
+    stub = SimpleNamespace(local_inventory=SimpleNamespace(snapshot=lambda: SimpleNamespace(
+        find=lambda p, m: SimpleNamespace(size_bytes=15 * GB) if p == "lmstudio" else None)),
+        ollama=SimpleNamespace(model_size_bytes=lambda m: None))
     monkeypatch.setattr(psutil, "virtual_memory",
                         lambda: SimpleNamespace(total=24 * GB, available=9 * GB))
     verdict = window_cls.assess_local_model(stub, "dsr1-32b", "lmstudio")
     assert verdict["level"] == "tight" and "free right now" in verdict["message"]
     assert window_cls.assess_local_model(
-        SimpleNamespace(lmstudio=SimpleNamespace(model_size_bytes=lambda m: None)),
+        SimpleNamespace(local_inventory=SimpleNamespace(
+            snapshot=lambda: SimpleNamespace(find=lambda p, m: None))),
         "unknown", "lmstudio") is None
 
 

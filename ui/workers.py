@@ -707,3 +707,32 @@ class KeyProbeWorker(QThread):
         from services.api_keys import run_probe
         ok, note = run_probe(self._kind, self._client)
         self.result_signal.emit(self._kind, ok, note)
+
+
+class LocalDiscoveryWorker(DaemonWorker):
+    """Read LM Studio, Ollama and free memory off the GUI thread.
+
+    Reads and caches only; nothing here holds a Qt object or writes a file, so
+    it is a daemon thread like the model lists.
+    """
+
+    result_signal = Signal(object)
+
+    def __init__(self, lmstudio, ollama, inventory):
+        super().__init__()
+        self._lmstudio, self._ollama, self._inventory = lmstudio, ollama, inventory
+
+    def run(self):
+        self._emit(self.result_signal,
+                   self._inventory.refresh(self._lmstudio, self._ollama))
+
+
+class StartLMStudioWorker(DaemonWorker):
+    """Run `lms server start` off the GUI thread (it can take a minute)."""
+
+    result_signal = Signal(bool, str)
+
+    def run(self):
+        from services.lmstudio_client import LMStudioClient
+        started, message = LMStudioClient.start_server()
+        self._emit(self.result_signal, started, message)

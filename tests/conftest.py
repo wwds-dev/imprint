@@ -186,3 +186,41 @@ def _no_ratings_network(url):
 
 _benchmarks._get_json = _no_ratings_network
 _benchmarks.is_stale = lambda *args, **kwargs: False
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _local_inventory_is_seeded_not_discovered():
+    """What is "on this Mac" must not depend on this Mac.
+
+    Every `LocalInventory` starts pre-seeded with LM Studio off, Ollama empty
+    and 24 GB of memory, and never reports itself stale, so no test reaches a
+    socket or ~/.lmstudio and nothing runs discovery on the GUI thread. Session
+    scope, because module-scoped window fixtures are built before any
+    function-scoped patch would apply. Tests of discovery build their own.
+    """
+    from types import SimpleNamespace
+
+    from services import local_models
+
+    off = SimpleNamespace(server_up=lambda: False, model_details=lambda: [])
+    empty = SimpleNamespace(model_details=lambda: {}, list_models=lambda: [],
+                            loaded_models=lambda: [])
+    real_init = local_models.LocalInventory.__init__
+    real_discover = local_models.discover
+
+    def stubbed(*args, **kwargs):
+        return real_discover(off, empty, memory=lambda: (16e9, 24e9),
+                             lms_binary=lambda: None)
+
+    def seeded(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        self.store(stubbed())
+
+    with pytest.MonkeyPatch.context() as patch:
+        # A live event loop lets the startup discovery fire; it must not read
+        # this Mac either.
+        patch.setattr(local_models, "discover", stubbed)
+        patch.setattr(local_models.LocalInventory, "__init__", seeded)
+        patch.setattr(local_models.LocalInventory, "stale",
+                      lambda self, now=None: False)
+        yield

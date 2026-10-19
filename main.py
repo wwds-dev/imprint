@@ -24,6 +24,7 @@ if "--narrator-worker" in sys.argv:
 from services import providers as provider_registry
 from services.providers import is_local as is_local_provider
 from services.lmstudio_client import LMStudioClient
+from services import local_models
 from services import version as app_version
 from services.runtime_paths import resource_base, user_data_base, ensure_seeded, is_frozen
 ensure_seeded()
@@ -185,7 +186,7 @@ SCAN_NOTE_LABELS = {
 from ui.panels.base import AgentPanel
 from ui.workers import (
     ChatWorker, ModelPullWorker, ModelScanWorker, FiverrImageWorker,
-    RatingsWorker,
+    RatingsWorker, LocalDiscoveryWorker, StartLMStudioWorker,
 )
 from ui.forms import (
     CONTENT_MAX_WIDTH, CONTROL_HEIGHT, HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH,
@@ -199,7 +200,8 @@ from ui.widgets import (
     install_dropdown_system, scrollable,
     let_combos_shrink, RECOMMENDED_ROLE, RECOMMENDATION_REASON_ROLE,
     RECOMMENDATION_SCORE_ROLE, RECOMMENDATION_CONFIDENCE_ROLE,
-    RECOMMENDATION_BADGE_ROLE, NEW_MODEL_ROLE,
+    RECOMMENDATION_BADGE_ROLE, NEW_MODEL_ROLE, SECTION_ROLE, DETAIL_ROLE,
+    LABEL_ROLE,
 )
 from ui.status_cards import (
     ApiKeysStatusCard, ModelNotice, ModelUpdatesCard, ResourceStatusCard,
@@ -238,6 +240,10 @@ class GodAI(QWidget):
 
         self.ollama = OllamaClient(provider_registry.ollama_host())
         self.lmstudio = LMStudioClient()
+        # What is on this Mac. The UI reads the cache only; LocalDiscoveryWorker
+        # is the one place that talks to LM Studio, Ollama and the disk.
+        self.local_inventory = local_models.LocalInventory()
+        self.local_discovery_worker = None
         self.openai = OpenAIClientWrapper()
         self.deepseek = DeepSeekClientWrapper()
         self.kimi = KimiClientWrapper()
@@ -375,6 +381,7 @@ class GodAI(QWidget):
         # real money may be in flight. One event-loop turn later so the
         # first paint is not blocked by job bookkeeping.
         QTimer.singleShot(0, self._resume_provider_jobs)
+        QTimer.singleShot(0, self.start_local_discovery)
         # Model updates: what earlier sessions found and nobody dismissed,
         # then a fresh check a few seconds in — after the first paint and
         # the panels' own model fetches, which matter more.
@@ -654,8 +661,13 @@ class GodAI(QWidget):
         """
         import psutil
 
-        if provider == "lmstudio":
-            size_bytes = self.lmstudio.model_size_bytes(model)
+        known = self.local_inventory.snapshot().find(provider, model)
+        if known is not None:
+            # The cached inventory: this runs on the GUI thread and a runtime
+            # that is down would otherwise block it for the timeout.
+            size_bytes = known.size_bytes
+        elif provider == "lmstudio":
+            size_bytes = None
         elif details is not None:
             size_bytes = self.ollama.size_from_details(details, model)
         else:
@@ -1000,6 +1012,81 @@ class GodAI(QWidget):
         self.get_muse_btn.setEnabled(True)
         QMessageBox.warning(self, "Download Failed", message)
 
+    # ── Local models: discovery, picker rows, BEST FIT candidates ────────────
+
+    def start_local_discovery(self) -> None:
+        """Refresh the local inventory in the background (startup, Settings, Start server)."""
+        worker = self.local_discovery_worker
+        if worker is not None and worker.isRunning():
+            return
+        worker = LocalDiscoveryWorker(self.lmstudio, self.ollama, self.local_inventory)
+        worker.result_signal.connect(self._on_local_discovery)
+        self.local_discovery_worker = worker
+        worker.start()
+
+    def start_lmstudio_server(self) -> None:
+        """`lms server start` in the background; discovery follows when it ends."""
+        worker = getattr(self, "lmstudio_start_worker", None)
+        if worker is not None and worker.isRunning():
+            return
+        worker = StartLMStudioWorker()
+        worker.result_signal.connect(self._on_lmstudio_started)
+        self.lmstudio_start_worker = worker
+        worker.start()
+
+    def _on_lmstudio_started(self, started: bool, message: str) -> None:
+        if started:
+            self.start_local_discovery()
+        else:
+            QMessageBox.warning(self, "LM Studio", message)
+
+    def _on_local_discovery(self, snap) -> None:
+        """On the GUI thread: lists, rows and BEST FIT follow the snapshot."""
+        try:
+            for provider in provider_registry.LOCAL_PROVIDERS:
+                ids = [m.id for m in snap.of(provider)]
+                if ids:
+                    self.model_list_cache[provider] = ids
+                else:
+                    self.model_list_cache.pop(provider, None)
+                if ids:
+                    self._refresh_model_menus(provider, ids)
+            for provider_attr, model_attr in AGENT_SETUP_WIDGETS.values():
+                provider_box = self._find_control(provider_attr)
+                model_box = self._find_control(model_attr)
+                if provider_box is not None and model_box is not None:
+                    self.apply_picker_roles(provider_box.currentText(), model_box)
+            self.refresh_all_recommendations()
+        except Exception as exc:  # noqa: BLE001
+            self._note_failure("local models: refresh", exc)
+        listener = getattr(self, "_local_models_listener", None)
+        if callable(listener):
+            listener(snap)
+
+    def apply_picker_roles(self, provider: str, model_box) -> None:
+        """Section, detail and label data for every row of a model combo.
+
+        The item text stays the model id; the dropdown delegate paints these.
+        """
+        if model_box is None:
+            return
+        if is_local_provider(provider):
+            snap = self.local_inventory.snapshot()
+            rows = {r["id"]: r for r in local_models.picker_entries(snap, provider)}
+            section = local_models.SECTION_LABELS.get(provider, provider)
+            for i in range(model_box.count()):
+                row = rows.get(model_box.itemText(i))
+                model_box.setItemData(i, section, SECTION_ROLE)
+                if row is None:
+                    continue
+                model_box.setItemData(i, row["label"], LABEL_ROLE)
+                model_box.setItemData(i, row["detail"], DETAIL_ROLE)
+                if row["tooltip"]:
+                    model_box.setItemData(i, row["tooltip"], Qt.ToolTipRole)
+        else:
+            for i in range(model_box.count()):
+                model_box.setItemData(i, local_models.CLOUD_SECTION, SECTION_ROLE)
+
     def models_for_provider(self, provider: str, *,
                             raise_errors: bool = False) -> list[str]:
         """Model ids offered by one provider, or [] for an unknown provider.
@@ -1020,6 +1107,11 @@ class GodAI(QWidget):
         client = clients.get(provider)
         if client is None:
             return []
+        if is_local_provider(provider):
+            # Cached inventory only — never a request from the GUI thread.
+            if self.local_inventory.stale():
+                self.start_local_discovery()
+            return [m.id for m in self.local_inventory.snapshot().of(provider)]
         try:
             return list(client.list_models())
         except Exception:
@@ -1580,11 +1672,18 @@ class GodAI(QWidget):
                 providers = [p for p in providers
                              if is_local_provider(p) or p in allowed_cloud]
         selected = provider_box.currentText()
+        # Local models count whatever provider is selected: they used to count
+        # only when their provider was the selected one, so from a cloud
+        # selection a local model could never be BEST FIT.
+        snapshot = self.local_inventory.snapshot()
         # Every provider's live list this session, not just the selected
         # one's: a model a provider released after KNOWN_MODELS was written
         # must be able to win the provider-level BEST FIT too.
         live = {p: models for p in providers
                 if (models := self._best_known_models(p))}
+        for local in provider_registry.LOCAL_PROVIDERS:
+            if local in providers and snapshot.of(local):
+                live[local] = [m.id for m in snapshot.of(local)]
         live[selected] = [model_box.itemText(i) for i in range(model_box.count())]
         candidates = text_candidates(providers, live, self._price_index(),
                                      self.ratings)
@@ -1592,8 +1691,10 @@ class GodAI(QWidget):
             replace(item, available=(
                 bool(item.available and self._provider_permission(item.provider))
                 if not is_local_provider(item.provider.casefold())
-                else bool(selected == item.provider.casefold()
-                          and model_box.property("imprintModelsLive"))
+                else bool(
+                    snapshot.find(item.provider.casefold(), item.model_id)
+                    or (selected == item.provider.casefold()
+                        and model_box.property("imprintModelsLive")))
             ))
             for item in candidates
         ]
@@ -2252,7 +2353,7 @@ class GodAI(QWidget):
         setup.add_field(field("Command", self.command_box))
 
         self.provider_box = QComboBox()
-        self.provider_box.addItems(["ollama", "openai", "deepseek", "kimi", "gemini", "anthropic", "qwen"])
+        self.provider_box.addItems(["ollama", "lmstudio", "openai", "deepseek", "kimi", "gemini", "anthropic", "qwen"])
         setup.add_field(field("Provider", self.provider_box), new_row=True)
 
         # Refresh acts on this list, so it sits against it as an icon; the
@@ -3128,6 +3229,7 @@ class GodAI(QWidget):
                 models = self.models_for_provider(provider)
 
             self.model_box.addItems(models)
+            self.apply_picker_roles(provider, self.model_box)
 
             if previous_model:
                 idx = self.model_box.findText(previous_model)
@@ -3361,6 +3463,7 @@ class GodAI(QWidget):
         if not models:
             models = list(OllamaClient.KNOWN_MODELS)
         self.model_box.addItems(models)
+        self.apply_picker_roles("ollama", self.model_box)
         self.update_live_cost_estimate()
 
     def build_tool_messages(self, selected_tool, full_prompt):

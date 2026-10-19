@@ -74,8 +74,17 @@ def test_settings_dialog_has_searchable_complete_pricing_tables(app, monkeypatch
             self.registry = Registry()
             self.session_budget_eur = 1.0
             self.daily_budget_eur = 5.0
+            from services.local_models import LocalInventory
+            self.local_inventory = LocalInventory()
 
         def update_usage_labels(self): ...
+
+        def start_local_discovery(self): ...
+
+        def start_lmstudio_server(self): ...
+
+        def _find_control(self, name):
+            return None
 
     dialog = show_settings(Host())
     table = dialog.findChild(QTableWidget, "SettingsPricingTable")

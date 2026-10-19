@@ -650,6 +650,30 @@ def show_settings(app):
     show_keys.toggled.connect(toggle_show)
     tabs.addTab(keys_tab, "API keys")
 
+    # Local models (mockup D): what runs on this Mac.
+    from main import AGENT_SETUP_WIDGETS
+    from ui.local_models_page import LocalModelsPage
+
+    def used_by() -> dict:
+        out: dict = {}
+        for key, (provider_attr, model_attr) in AGENT_SETUP_WIDGETS.items():
+            provider_box = app._find_control(provider_attr)
+            model_box = app._find_control(model_attr)
+            if provider_box is not None and model_box is not None:
+                out.setdefault((provider_box.currentText(), model_box.currentText()),
+                               []).append(key.replace("_", " ").title())
+        return out
+
+    local_page = LocalModelsPage(
+        on_refresh=app.start_local_discovery,
+        on_start=app.start_lmstudio_server, parent=dialog)
+    local_page.set_snapshot(app.local_inventory.snapshot(), used_by())
+    app._local_models_listener = lambda snap: local_page.set_snapshot(snap, used_by())
+    dialog.finished.connect(lambda _r: setattr(app, "_local_models_listener", None))
+    tabs.addTab(local_page, "Local models")
+    if app.local_inventory.stale():
+        app.start_local_discovery()
+
     # ── Tab 2: Agents ─────────────────────────────────────────────
     agents_tab = QWidget()
     agents_tab.setObjectName("SettingsPage")

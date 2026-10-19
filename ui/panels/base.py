@@ -87,9 +87,16 @@ class AgentPanel(QObject):
         self.model_box.setProperty("imprintModelsLive", live)
         for model in models:
             self.model_box.addItem(model)
+        self._apply_roles(provider)
         self._restore_selection(keep)
         if client is not None and not live:
             self._request_refresh(provider, client)
+
+    def _apply_roles(self, provider: str) -> None:
+        """Section/detail rows for the picker (local models), when the host has them."""
+        apply = getattr(self.host, "apply_picker_roles", None)
+        if apply is not None:
+            apply(provider, self.model_box)
 
     def _restore_selection(self, wanted: str) -> None:
         """Reselect `wanted`, tolerating dated live ids vs bare seeded names."""
@@ -165,6 +172,7 @@ class AgentPanel(QObject):
         self.model_box.setProperty("imprintModelsLive", True)
         for model in models:
             self.model_box.addItem(model)
+        self._apply_roles(provider)
         self._restore_selection(keep)
         if self.model_box.currentIndex() < 0 and self.model_box.count():
             self.model_box.setCurrentIndex(0)
