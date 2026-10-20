@@ -100,7 +100,7 @@ routes its paid actions compare.
 providers behind your keys have released since Imprint last looked. It checks a
 few seconds after start-up and on **Check now**; model lists are free, so the
 check costs nothing. The first list from a provider is a silent baseline, and
-only chat models are announced.
+only chat models are announced in this part of the tile.
 
 A new model appears at once in every model menu that offers its provider, with
 a quiet **NEW** badge. It is ranked like every other model. The tile says
@@ -111,7 +111,23 @@ To move agents to new models, click the rows to mark them and press
 **Update N selected**. Each agent is assessed for its current task and moves to
 a marked model only where that model wins by at least one point; a marked model
 that wins nowhere stays in the menus and nothing switches. **Dismiss** clears
-the notices without switching anything.
+the chat notices without switching anything.
+
+If a provider stops listing a chat model one of your agents uses, the first
+row says so and names the agents; choose another model in their setup.
+Imprint never switches it for you, and it waits for two missing lists on two
+different days before saying anything.
+
+### Video and image
+
+The tile's **Video and image** section is about the video and image models you
+pay for. It lists new Gemini and Qwen video or image models, but never adds
+them to a menu: the Video menus offer only models Imprint has a working route
+for. It warns when a model Imprint offers is no longer listed, and it shows
+known shutdown dates, such as *Veo 3.1, Fast and Lite: earliest shutdown
+22 October 2026*, as a warning in the last 14 days. Warnings are counted in
+the title (*Model updates · 2 new · 1 warning*). This section has its own
+**Dismiss**; shutdown rows cannot be dismissed.
 
 ## Confidence does and does not mean
 

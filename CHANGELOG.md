@@ -86,6 +86,9 @@ nothing here is a claim about income, sales or publishing results.
   two endpoint overrides blank.
 - The README said the test suite has just over 1,000 tests. It has 1,605, and
   a full run takes 13 to 17 minutes.
+- `tests/test_app_identity.py` failed on the macOS CI runner, whose python.org
+  Python already names its bundle *Python*. The tests now accept that name; the
+  menu-bar bug itself is still open (TODO.md).
 
 ### Security
 - Settings -> API keys refuses a value with a line break, such as a two-line
@@ -93,6 +96,13 @@ nothing here is a claim about income, sales or publishing results.
   written. Before, pasting `ws1`, a new line and `DASHSCOPE_BASE_URL=…` into one
   box could leave a second line in `.env` that Settings read back as
   `DASHSCOPE_BASE_URL`; one more Save made it a setting the app loads at launch.
+- Pinned dependencies raised to the minimum versions that clear the 97
+  pip-audit advisories in nine packages: pypdf 6.19.0 (also in
+  `cloud/requirements.txt`), urllib3 2.8.0, soupsieve 2.9.0, pillow 12.3.0,
+  lxml 6.1.0, anyio 4.14.2, idna 3.18, and new pins for httpx2 and httpcore2
+  2.12.0. No app code changed; reinstall `requirements.txt` into the `.venv`.
+- `.gitleaksignore` pins three more copies of the known settings-key false
+  positive, quoted in `docs/audit/security.md`.
 
 ### Changed
 - The Qwen endpoint note no longer says the international host is in

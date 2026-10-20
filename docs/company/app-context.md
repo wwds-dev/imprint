@@ -16,7 +16,7 @@ Imprint: a macOS desktop app (PySide6) that bundles ten creative/publishing AI a
 ## Commands
 - Install deps: `uv pip install -r requirements.txt -r requirements-dev.txt`
 - Run app: `.venv/bin/python main.py`
-- Run tests: `.venv/bin/python -m pytest -q` (1512 collected via `--collect-only`, 2026-10-14; README says ~90 s; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
+- Run tests: `.venv/bin/python -m pytest -q` (1512 collected via `--collect-only`, 2026-10-14; a full run takes 13 to 17 minutes, README §16.1; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
 - Lint / types: `ruff.toml` (E4, E7, E9, F, B) with a CI ratchet against `docs/company/tooling/baseline.json`; no type checker.
 - Setup checks: `scripts/check_setup.py`, `scripts/check_keys.py`.
 - Build: `./scripts/build_app.sh [--no-install]` (PyInstaller, ad-hoc codesign, installs to /Applications); everyday: `./scripts/install_app.sh` (launcher into this source tree, edits live on relaunch).

@@ -60,6 +60,7 @@ hasn't been done.
 15. [Database Schema](#15-database-schema)
 16. [File & Directory Structure](#16-file--directory-structure)
    - [Tests](#161-tests)
+   - [Dependencies, CI and secret scanning](#162-dependencies-ci-and-secret-scanning)
 17. [First-Run & Migration](#17-first-run--migration)
 18. [Installing and Packaging](#18-installing-and-packaging)
    - [Versioning](#181-versioning)
@@ -2656,9 +2657,15 @@ imprint/
 ├── FORK_PLAN.md                   # Split rationale, carved out of sentinel_ai
 ├── TODO.md                        # Prioritised engineering backlog
 ├── SUGGESTIONS.md                 # Ideas not yet committed to
+├── CHANGELOG.md                   # What changed, newest first, grouped by date
+│                                  #   (generated from git log; see its last section)
 ├── CLAUDE.md                      # Local (untracked) instructions for Claude:
 │                                  #   task-list format and working rules
-├── requirements.txt
+├── requirements.txt               # App dependencies, pinned (see §16.2)
+├── requirements-dev.txt           # pytest, pytest-timeout, pytest-randomly
+├── .github/                       # workflows/quality.yml, workflows/security.yml,
+│                                  #   dependabot.yml (see §16.2)
+├── .gitleaks.toml  .gitleaksignore  # Secret-scan config and audited false positives
 │
 ├── agents/                        # Repo-ready project boundary per agent
 │   ├── catalog.py                 # Umbrella roster, labels, workspaces, recommendations;
@@ -2712,6 +2719,11 @@ imprint/
 │
 │   # agent_factory.py (Forge's LLM spec generator) was removed with the
 │   # security half — see FORK_PLAN.md.
+│
+├── vidforge/                      # Video pipeline behind Reel; also a CLI
+│                                  #   (`python -m vidforge.cli`), see §7.9
+├── cloud/                         # Reading Compass web companion (Cloud Run;
+│                                  #   not deployed), own requirements.txt and README
 │
 ├── providers/                     # Pluggable external capabilities
 │   ├── voice/                     # base.py, mock.py (free system TTS),
@@ -2846,6 +2858,51 @@ print('OK')"
 Run it after any UI move — import success is not enough. Missing imports and
 `hasattr(self, …)` rewrites both fail only at runtime.
 
+### 16.2 Dependencies, CI and secret scanning
+
+The top block of `requirements.txt` pins packages to exact versions; the
+lines below it (`anthropic`, `PySide6`, `google-genai`, `python-pptx`,
+`python-docx`, `reportlab`, `psutil` and vidforge's `PyYAML` and Google
+client libraries) are unpinned and take the newest release at install. `cloud/requirements.txt` is the companion's own list (see
+`cloud/README.md`). On 2026-10-14 both were raised to the
+minimum versions that clear the 97 pip-audit advisories reported against nine
+packages (spec `docs/specs/deps-security-upgrade-2026-10.md`): pypdf 6.19.0
+(in both files), urllib3 2.8.0, soupsieve 2.9.0, pillow 12.3.0, lxml 6.1.0,
+anyio 4.14.2 and idna 3.18, plus explicit pins for `httpx2` and `httpcore2`
+2.12.0, which arrive through the unpinned `anthropic` and would otherwise float.
+No app code changed. After pulling, reinstall into the `.venv`:
+
+```bash
+uv pip install -r requirements.txt -r requirements-dev.txt
+```
+
+Two GitHub Actions workflows run on every push and pull request:
+
+| Workflow | Job | What it does |
+|---|---|---|
+| `quality.yml` | `test` | The full suite under coverage on `macos-latest`, Python 3.11 from `actions/setup-python` |
+| `quality.yml` | `lint` | `ruff`, through `docs/company/tooling/ratchet.py`: the count may not rise above the baseline |
+| `security.yml` | `secrets` | `gitleaks detect` over the whole history with `.gitleaks.toml`; any finding fails the run |
+| `security.yml` | `dependencies` | `pip-audit -r requirements.txt`; reported, not blocking (`continue-on-error`) |
+
+`security.yml` also runs weekly (Mondays 06:17 UTC), and `dependabot.yml`
+proposes weekly pip updates for the root, `vidforge/` and `cloud/`, plus
+GitHub Actions updates. `pip-audit` does not read `cloud/requirements.txt`.
+
+`.gitleaksignore` lists audited false positives by commit, file, rule and
+line. Every entry so far is the same one: SQL in `services/database.py` that
+compares a settings key to a quoted literal, which the `generic-api-key` rule
+reads as an assigned secret, and the copies of it in a test, in an earlier
+revision of `.gitleaksignore` itself and in `docs/audit/security.md`. A
+history rewrite changes the commit ids, so the entries are re-pinned after one.
+
+The CI runner's Python is a python.org framework build, whose interpreter
+already sits inside a bundle named *Python*. `tests/test_app_identity.py`
+therefore accepts either outcome: Imprint's name is written when the process
+has no bundle name, and an existing name is left alone. The visible effect is
+an open bug in TODO.md: a terminal run on such a Python shows *Python* in the
+menu bar (§18).
+
 ---
 
 ## 17. First-Run & Migration
@@ -2925,7 +2982,9 @@ saved. It never kills the app. If the launcher cannot find the checkout or its
 
 `ui/app_identity.py` is only for a terminal run of `python main.py`. It sets
 the menu-bar name and the Dock icon there. The installed app already carries
-its own.
+its own. It leaves any bundle name that is already there alone, so on a
+python.org framework Python (whose interpreter lives in a bundle called
+*Python*) the menu bar still reads *Python*. That is an open bug in TODO.md.
 
 ### 18.1 Versioning
 
@@ -2991,6 +3050,10 @@ inventing a number — a wrong version is worse than an absent one.
 
 Bump `MAJOR` by editing `VERSION` when the app changes shape enough that the
 old number would mislead — the same judgement that made this arc `2`.
+
+What changed between builds is in [CHANGELOG.md](CHANGELOG.md), newest first.
+There are no tags, so it is grouped by date rather than by version; it is
+written from `git log`, and its last section says how to add new dates.
 
 ### The icon
 

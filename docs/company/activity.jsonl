@@ -44,3 +44,5 @@
 {"ts": "2026-10-14T12:51:51", "phase": "document", "state": "start", "spec": "model-watch-media"}
 {"ts": "2026-10-14T13:00:15", "phase": "document", "state": "done", "spec": "model-watch-media"}
 {"ts": "2026-10-14T13:05:20", "phase": "release", "state": "blocked", "spec": "model-watch-media"}
+{"ts": "2026-10-14T16:15:27", "phase": "release", "state": "done", "spec": "model-watch-media"}
+{"ts": "2026-10-14T16:59:03", "phase": "define", "state": "start", "spec": "deps-security-upgrade-2026-10"}
