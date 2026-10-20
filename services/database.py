@@ -952,6 +952,35 @@ def _correct_gemini_zero_pricing(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
+# (backend, model, input, output, cached input) USD per 1M tokens: the fallback
+# seed below, for when config/pricing.json is unreadable. config/pricing.json
+# is the source of truth: tests/test_settings_pricing.py fails if it lacks a
+# row listed here or holds a different rate.
+SEED_FALLBACK_PRICES = [
+    ("anthropic", "claude-fable-5-1",          10.00,  50.00, 0.25),
+    ("anthropic", "claude-opus-5-5",            4.00,  20.00, 0.20),
+    ("anthropic", "claude-sonnet-5-5",          2.00,  10.00, 0.20),
+    ("anthropic", "claude-fable-5",            10.00,  50.00, 1.00),
+    ("anthropic", "claude-opus-5",              5.00,  25.00, 0.50),
+    ("anthropic", "claude-sonnet-5",            2.00,  10.00, 0.20),
+    ("anthropic", "claude-opus-4-8",            5.00,  25.00, 0.50),
+    ("anthropic", "claude-opus-4-7",            5.00,  25.00, 0.50),
+    ("anthropic", "claude-opus-4-6",            5.00,  25.00, 0.50),
+    ("anthropic", "claude-opus-4-5-20251101",   5.00,  25.00, 0.50),
+    ("anthropic", "claude-opus-4-1-20250805",  15.00,  75.00, 1.50),
+    ("anthropic", "claude-sonnet-4-6",          3.00,  15.00, 0.30),
+    ("anthropic", "claude-sonnet-4-5-20250929", 3.00,  15.00, 0.30),
+    ("anthropic", "claude-haiku-4-5-20251001",  1.00,   5.00, 0.10),
+    ("anthropic", "default",                   10.00,  50.00, 0.25),
+    # Qwen via Alibaba Model Studio. Pricing is regional; these are the
+    # international (Singapore) rates, because that is the endpoint the
+    # client defaults to. Frankfurt/Hong Kong/Beijing list qwen3.8-max at
+    # 1.65/4.951 — set DASHSCOPE_BASE_URL (or the workspace ID) and edit the rows to match.
+    ("qwen", "qwen3.8-max",                     2.00,   6.00, 0.00),
+    ("qwen", "default",                         2.00,   6.00, 0.00),
+]
+
+
 def _seed_missing_pricing(conn: sqlite3.Connection) -> None:
     """Insert default pricing rows that may not exist yet (e.g. new providers).
 
@@ -965,29 +994,7 @@ def _seed_missing_pricing(conn: sqlite3.Connection) -> None:
     # The claude-3 family is retired (last one 2026-04-20) and no longer seeded.
     # `default` is the dearest current model, so an unpriced new one is
     # over- rather than under-estimated.
-    defaults = [
-        ("anthropic", "claude-fable-5-1",          10.00,  50.00, 0.25),
-        ("anthropic", "claude-opus-5-5",            4.00,  20.00, 0.20),
-        ("anthropic", "claude-sonnet-5-5",          2.00,  10.00, 0.20),
-        ("anthropic", "claude-fable-5",            10.00,  50.00, 1.00),
-        ("anthropic", "claude-opus-5",              5.00,  25.00, 0.50),
-        ("anthropic", "claude-sonnet-5",            2.00,  10.00, 0.20),
-        ("anthropic", "claude-opus-4-8",            5.00,  25.00, 0.50),
-        ("anthropic", "claude-opus-4-7",            5.00,  25.00, 0.50),
-        ("anthropic", "claude-opus-4-6",            5.00,  25.00, 0.50),
-        ("anthropic", "claude-opus-4-5-20251101",   5.00,  25.00, 0.50),
-        ("anthropic", "claude-opus-4-1-20250805",  15.00,  75.00, 1.50),
-        ("anthropic", "claude-sonnet-4-6",          3.00,  15.00, 0.30),
-        ("anthropic", "claude-sonnet-4-5-20250929", 3.00,  15.00, 0.30),
-        ("anthropic", "claude-haiku-4-5-20251001",  1.00,   5.00, 0.10),
-        ("anthropic", "default",                   10.00,  50.00, 0.25),
-        # Qwen via Alibaba Model Studio. Pricing is regional; these are the
-        # international (Singapore) rates, because that is the endpoint the
-        # client defaults to. Frankfurt/Hong Kong/Beijing list qwen3.8-max at
-        # 1.65/4.951 — set DASHSCOPE_BASE_URL (or the workspace ID) and edit the rows to match.
-        ("qwen", "qwen3.8-max",                     2.00,   6.00, 0.00),
-        ("qwen", "default",                         2.00,   6.00, 0.00),
-    ]
+    defaults = SEED_FALLBACK_PRICES
     for backend, model, inp, out, cached in defaults:
         conn.execute(
             "INSERT OR IGNORE INTO pricing (backend, model, input_per_1m_usd, "

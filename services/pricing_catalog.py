@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from services.providers import is_local as is_local_provider
 from services.recommendations.catalog import known_text_models
 
 
@@ -26,6 +27,7 @@ TEXT_PROVIDERS = (
     "gemini",
     "qwen",
     "ollama",
+    "lmstudio",
 )
 
 PROVIDER_LABELS = {
@@ -36,6 +38,7 @@ PROVIDER_LABELS = {
     "gemini": "Gemini",
     "qwen": "Qwen",
     "ollama": "Ollama",
+    "lmstudio": "LM Studio",
 }
 
 
@@ -89,13 +92,13 @@ def build_token_price_catalog(conn) -> list[TokenPriceEntry]:
         models.update(model for backend, model in exact if backend == provider)
         # Keep the provider default visible because it controls estimates for
         # any live model the app has not learned by name yet.
-        if provider != "ollama" and (provider, "default") in exact:
+        if not is_local_provider(provider) and (provider, "default") in exact:
             models.add("default")
 
         default = exact.get((provider, "default"))
         for model in sorted(models, key=lambda value: (value != "default", value.casefold())):
             row = exact.get((provider, model))
-            if provider == "ollama" and row is None:
+            if is_local_provider(provider) and row is None:
                 catalog.append(TokenPriceEntry(provider, model, None, None, None, "local"))
                 continue
 

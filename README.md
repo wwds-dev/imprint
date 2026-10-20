@@ -786,11 +786,12 @@ Changing the tool updates the live cost estimate and the recommendation label in
 
 ### 6.2 Control Bar — Row 2: Provider & Model
 
-**Provider** (combo box) — Selects the AI provider: `ollama`, `openai`, `deepseek`, `kimi`, `gemini`, `anthropic` or `qwen`. Changing the provider triggers `load_provider_models()` which repopulates the Model combo.
+**Provider** (combo box) — Selects the AI provider: `ollama`, `lmstudio`, `openai`, `deepseek`, `kimi`, `gemini`, `anthropic` or `qwen`. Changing the provider triggers `load_provider_models()` which repopulates the Model combo.
 
 **Model** (combo box) — Selects the specific model for the chosen provider. The list is populated dynamically:
 
-- **Ollama:** fetches the list of locally installed models via `ollama.list_models()`. Falls back to `deepseek-r1:8b` and `deepseek-r1:1.5b` if none are found.
+- **Ollama:** fetches the list of locally installed models via `ollama.list_models()`. Falls back to `deepseek-r1:8b` and `deepseek-r1:1.5b` if none are found. The daemon address comes from `OLLAMA_HOST`.
+- **LM Studio:** with the server on, `/api/v0/models` (state, quantisation, architecture, maximum context); with it off, `~/.lmstudio/models`, listed as *on disk · server off*. See §6.2.1.
 - **Every cloud provider:** queries the provider's live model list when a key is configured, and otherwise falls back to the client's `KNOWN_MODELS` — the offline lists in §9, checked against each provider on 2026-10-07. Retired ids (the claude-3 family, `deepseek-chat`/`deepseek-reasoner`, Gemini 1.5/2.0, `qwen3-max`) are not offered offline. Every offline id has its own row in `config/pricing.json`; `tests/test_settings_pricing.py` fails otherwise.
 
 The last selected model for each provider is saved to `config/settings.json` and restored on the next startup.
@@ -803,15 +804,35 @@ The last selected model for each provider is saved to `config/settings.json` and
 
 ---
 
+#### 6.2.1 Local providers: Ollama and LM Studio
+
+Local is a property of a provider's spec (`services/providers.py`, a byte-identical copy of Sentinel's; `tests/test_providers_drift.py` keeps them equal), not a name check. Ollama and **LM Studio** are the local providers. LM Studio is priced as free (a zero price still means *unknown* for cloud only), scored as private, needs no permission checkbox, never raises the paid-request dialog and is not counted as paid usage; an agent that allows `ollama` allows every local runtime. LM Studio's address is `http://localhost:1234/v1` (`LMSTUDIO_URL` overrides) and chat goes through `/v1/chat/completions`. Before a local model runs, its file size × 1.2 is compared with free memory (`providers.fit_check`): *too big right now* warns, a file that cannot fit this machine is refused. Uncensored, abliterated and Dolphin models are offered in every agent that offers local models and **always tagged** — an amber ABLITERATED or UNCENSORED pill in the dropdown and on the closed picker, with a hover note — derived from the model's name and publisher, never typed in. Local models are rated from evidence only (§6.2.2); one with no rating is never picked by the ranker. The Manuscript and Creator agents still do not offer local providers: their registry rows exclude `ollama` on purpose.
+
+**The picker groups local models** (`services/local_models.py`, identical in Sentinel): sections *On this Mac · LM Studio*, *On this Mac · Ollama* and *Cloud*; each local row shows quant, state (loaded / on disk, loads on first use / on disk, server off / too big now), size, rating (*measured writing 1281 · code 1240*, *base model 1338 − 10*, *measuring… 12/80* or *unrated*) and €0, with the uncensored/abliterated pill on the row and on the closed picker. Discovery runs on a background thread into a cached snapshot, so the GUI never fetches. Local models are BEST FIT candidates whichever provider is selected (an unrated one still never beats a rated one). **Settings → Local models** shows LM Studio/Ollama status, free RAM and a table (model, source, size, state, rating, used by) with **Start server** (`lms server start`, or a hint to start it in LM Studio when `lms` is missing).
+
+#### 6.2.2 Rating local models
+
+`services/local_ratings.py` (byte-identical in Sentinel, with its prompt set `config/local_rating_prompts.json` and its tests; phase 3 of `docs/local_model_routing_plan.html` in the lab root). **Inherited:** an unmodified build of a model LMArena rates (Gemma 3 27B, Qwen3 32B …, matched by name and size) takes that rating less a quantisation penalty — 0 for Q8 and wider, 10 for 4–6 bit, 25 for 3 bit and below or an unknown quant — shown as *rated (base model)*. A fine-tune, merge, distill or abliteration inherits nothing. **Measured:** 80 prompts, 20 each of writing, code, summarising and extraction, answered by the local model and by the best-rated cloud model you have a key for; the cheapest priced cloud model judges each pair in both orders. The share of verdicts becomes a gap with the Elo formula below the reference's LMArena rating, never above it, stored per model, quant and kind of work with reference, judge and date in `data/local_ratings.json` (reference answers are cached for the next model). In the ranker, the ratings fill the candidate's per-tag ratings: writing for *creative* and *longform*, code for *code*, extraction (or the base model's overall rating) for *general*. **A local model is unrated for any tag its evidence does not cover** — it does not fall back to its overall rating — so *analysis* (hard prompts) stays unrated unless a base model covers it, and Chat, Sitebuilder and Manuscript, whose work includes analysis, cannot pick a measured-only local model yet. A rated local model in the 20-point band has a known price of 0 and wins it; a zero cloud price is still unknown. Equal band scores are ordered cheaper first, as Sentinel orders its band. Nothing switches: a rating only moves the BEST FIT badge.
+
+**A new local model is measured once, automatically, on a background QThread** when discovery first sees it and it can run. The request guard's validator is asked first for the whole run (estimate × 1.5), as the Studio Assistant (`chat`, whose registry permissions and daily cap apply): automatically, every cloud provider used must have a key and already be ticked under API permissions; otherwise the model stays unrated, the reason shows on hover, and **Settings → Local models** offers **Measure**, which asks one confirmation for the run. Re-measure is manual. Progress shows as *measuring… 12/80*; every judge and reference call is billed through the usage tracker; the run stops if it spends past what was authorised, and closing the window cancels it.
+
+#### 6.2.3 Hybrid routing: one check per new job
+
+`services/routing_advisor.py` (byte-identical in Sentinel, with its tests, the advice banner `ui/routing_advice.py` and the Settings page `ui/routing_page.py`; phase 4 of `docs/local_model_routing_plan.html` in the lab root). **Settings → Models** sets the routing mode, with an override per agent: *Local, advise per job* (the default), *Suggest local*, *Local first*, *Cloud only*, *Local only*. The Mode box (§6.3) follows it — Local only and Cloud only map across, the other three are *Hybrid allowed* — and a Local only or Cloud only picked in the box still limits the job, whatever the saved mode; applying a recommended setup moves the box without rewriting the saved mode.
+
+When a Studio Assistant job is sent, the advisor compares the selected model with the engine's BEST FIT for that request and names each limit: a **quality gap** (rated more than 20 points below the best for this kind of work), **context** (longer than the local model's loaded context), **not runnable** (LM Studio server off, Ollama down, too big for free memory), or **unmeasured** (no rating yet — it suggests but does not urge). When local is good enough the job runs and the status line says *✓ Ran on … (local) · general 1281, within 37 of best · saved ≈ €0.03 · today €0.41 saved*. When it is not, the job is **held** on a banner above the message box with the recommended model, its cost and time, and three answers — **Switch for this job**, **Always for <kind> jobs**, **Keep local** (absent when local cannot run it). **Nothing changes the agent's selection** (the never-auto-switch rule): a switch is for that one job, and a paid one still goes through the budget check and the paid-request dialog. *Always* becomes a rule per agent and kind of work (`data/routing_rules.json`) that the next such job follows without the banner — the paid-request dialog still asks — and Settings → Models lists the rules with **Remove**. *Suggest local* offers a good-enough local model when a cloud one is selected, with what it would save; *Local first* runs a good-enough rated local model at €0 instead of the cloud selection.
+
+**When a run fails** (server down, out of memory, timeout) the banner offers the engine's next candidates: **Send to <provider>** (through the paid-request dialog) or **Try** a smaller local model. Nothing is resent by itself, a stopped run offers nothing, and **Local only never reaches the cloud**: no cloud suggestion, no cloud fallback, no cloud rule. The Spend rail's **saved local** and **advice spent** blocks show what running local saved today (the estimate for the cloud model the value rule would have picked) and what accepted suggestions spent (`data/routing_savings.json`); hover for the totals. The advisor reads caches only (the engine's candidates, ratings, prices, the local inventory, this session's model lists) and runs on the UI thread without fetching. Only the Studio Assistant is advised so far; the other agents keep their own provider and model.
+
 ### 6.3 Control Bar — Row 3: Execution Mode & API Permissions
 
 **Mode** (combo box) — Controls how the backend is resolved when the Send button is pressed:
 
 | Mode | Behaviour |
 |------|-----------|
-| **Local only** | Always routes to Ollama, regardless of the Provider selection. No API cost. |
+| **Local only** | Always routes to a local provider: the selected one if it is local, otherwise Ollama. No API cost. |
 | **Hybrid allowed** | Uses the selected Provider. Cloud APIs require their checkbox to be enabled. |
-| **Cloud only** | Forces a cloud provider. Ollama is not accepted. Fails immediately if the selected provider's checkbox is not ticked. |
+| **Cloud only** | Forces a cloud provider. Local providers are not accepted. Fails immediately if the selected provider's checkbox is not ticked. |
 
 **OpenAI** (checkbox) — Grants the application permission to call the OpenAI API for this session. Unchecked by default. Must be ticked before any request that would use OpenAI.
 
@@ -1593,6 +1614,7 @@ For a selected ebook (PDF / EPUB / TXT / MOBI / AZW3 — MOBI and AZW3 are conve
 1. Extracts the book's text content.
 2. Chunks it (default 1400 tokens per chunk).
 3. Sends each chunk to the chosen **narrator** — OpenAI `gpt-4o-mini-tts` (voices alloy, marin, cedar, verse, coral, sage), Gemini `gemini-3.8-flash-tts` (Kore, Charon, Aoede, Puck, Leda, Orus, Fenrir, Zephyr) or ElevenLabs `eleven_multilingual_v2` (the account's own voices). OpenAI removes gpt-4o-mini-tts on 2027-01-06, which is why there is a choice.
+The converter and Booth carry that date (`retires`): from 2027-01-06 the default narrator is the first route not retired (Gemini) and OpenAI leaves the menu and the cost comparison, though a book already narrated with it can still be resumed. `config/pricing.json` is the one source for token prices; the fallback seed in `services/database.py` must match it (a test checks).
 4. Concatenates the returned audio into a single MP3 (or per-chapter MP3s).
 5. Writes the output to the configured output folder.
 

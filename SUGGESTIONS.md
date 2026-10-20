@@ -20,6 +20,9 @@ Ideas not yet committed to. Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DON
 | 63 | **A Sentinel-side drift guard for `services/benchmarks.py`.** Imprint's `tests/test_benchmarks_drift.py` fails when the copies diverge, but only when Imprint's suite runs; the converter pair has a guard in each repo. Add the mirror test to Sentinel (it must strip the same three local differences). | testing | XS | IDEA |
 | 64 | **Rank the band on this request's own cost at the paid-request confirmation.** The rating rule orders the models within 20 points of the best by the blended rate (three parts input to one part output). The dialog already prices every route for this request; an output-heavy request (a chapter) can make a different model the cheapest than the blend says. Use the request's estimate there — and score the selection on the same estimate, so the one-point lead still compares like with like. | feature | S | IDEA |
 | 65 | **A Muse ↔ Backstage handoff contract.** Parked here 2026-10-09 from `agents/creator/TODO.md` (readiness gate). The contract today, stated rather than designed: *Muse exports files and text; Backstage imports them by hand; the two apps share no code or data*, and `tests/test_creator_v2.py`'s boundary test enforces the last clause. Whether Backstage should hand Muse a brief, platform policy or outcome summaries as drafting context — and over what seam (export file, shared DB, none) — is a product decision spanning two repos. Nothing a user is promised depends on it. | design | M | parked |
+| 66 | **LM Studio model ids.** With the server off the picker lists `publisher/repo/file.gguf`; with it on, the server's own ids, so a saved default can stop matching once the server starts. Map between them in `LMStudioClient` on the file stem. | bug | S | IDEA |
+| 67 | **One model list across providers.** The picker shows the selected provider's models in sections; mockup A's single list (local and cloud together, choosing one switches the provider) needs the provider and model boxes merged. | feature | M | IDEA |
+| 67 | **Offer Manuscript and Creator local models only if their registry rows ever allow them** — the rows exclude `ollama` on purpose; do not widen them silently. | design | XS | CONSIDERING |
 
 ## Creator agent — next arc
 
@@ -67,6 +70,12 @@ consequences of what just landed rather than new ideas.
 | 8 | Local model provider (Ollama) as a zero-cost fallback when the budget cap is hit. Shipped 2026-09-30 as an offer at the refusal, never a silent re-route; see TODO.md. | feature | L | DONE |
 | 9 | Retry-with-backoff wrapper shared by every provider client, instead of per-client handling | infra | M | IDEA |
 | 10 | Export a run (prompt + response + usage + cost) as a single markdown file for archiving | feature | S | IDEA |
+| 68 | **Measure analysis (hard prompts) for local models.** Only writing, code, summarising and extraction are measured, so Chat, Sitebuilder and Manuscript — whose work includes *analysis* — can never pick a measured-only local model. A short hard-prompt set in `config/local_rating_prompts.json` (shared with Sentinel) would cover it. | feature | M | IDEA |
+| 69 | **Calibrate the local-ratings judge** against cloud pairs LMArena already rates, and record the agreement with each measurement. | quality | M | IDEA |
+| 70 | **Mark a measurement stale when its reference changes** (a better cloud model becomes the reference, or its score moves more than the band); re-measure stays manual. | feature | S | IDEA |
+| 71 | **Learn local speed for the advisor's time estimate.** It uses fixed throughput (12 tokens/s local, 60 cloud); record tokens/s per model from finished runs. | quality | S | IDEA |
+| 72 | **Keep local as a rule.** Only *Always* (switch) is remembered; a *Keep local for this kind* rule would stop repeat banners for an unmeasured model the user trusts. | feature | S | IDEA |
+| 73 | **Context windows for cloud candidates.** Imprint's catalog scores context as 0-1, so the advisor checks context only for local models (from LM Studio's loaded context); a real window per cloud model would let it name a too-long prompt for those too. | quality | S | IDEA |
 
 ## Done
 

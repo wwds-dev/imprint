@@ -10,9 +10,10 @@ from PySide6.QtCore import QEvent, QObject, Qt, QRect, QPoint, QPointF, QSize
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QComboBox, QLayout, QProxyStyle,
-    QPushButton, QScrollArea, QStyle, QStyledItemDelegate, QVBoxLayout, QWidget,
+    QPushButton, QScrollArea, QStyle, QStyledItemDelegate, QToolTip, QVBoxLayout, QWidget,
 )
 
+from services.providers import uncensored_tag
 from ui.style import ACCENT, ELEVATED, TEXT, TEXT_DIM, TEXT_MUTE
 from ui import theme
 
@@ -39,6 +40,48 @@ RECOMMENDATION_BADGE_ROLE = int(Qt.ItemDataRole.UserRole) + 105
 # BEST FIT; when a model is both, BEST FIT wins the slot and the tooltip says
 # it is new.
 NEW_MODEL_ROLE = int(Qt.ItemDataRole.UserRole) + 106
+# Local model rows (services/local_models.py). The item's text stays the model
+# id (panels read currentText() back as the model name); what a person reads
+# is a section heading, a friendlier label and a muted detail line.
+SECTION_ROLE = int(Qt.ItemDataRole.UserRole) + 107
+DETAIL_ROLE = int(Qt.ItemDataRole.UserRole) + 108
+LABEL_ROLE = int(Qt.ItemDataRole.UserRole) + 109
+
+
+# Models with their safety tuning removed are offered everywhere and must be
+# tagged wherever one is named (owner's decision, 2026-10-19). The tag comes
+# from the model's name (services/providers.py), so a new download is tagged
+# with nobody remembering to. It is warning-amber, never the accent: BEST FIT is
+# advice, this is a fact about the model.
+TAG_TONE = "#d9a441"
+TAG_NOTES = {
+    "abliterated": "Abliterated: this model's refusal behaviour was removed. "
+                   "It will answer requests a standard model declines.",
+    "uncensored": "Uncensored: this model was tuned not to refuse. "
+                  "It will answer requests a standard model declines.",
+}
+TAG_WIDTH = 96
+
+
+def paint_tag(painter: QPainter, font: QFont, text: str, right: int,
+              centre_y: int, width: int | None = None) -> None:
+    """A warning pill whose right edge is at `right`."""
+    from PySide6.QtGui import QFontMetrics
+    width = width or QFontMetrics(font).horizontalAdvance(text) + 16
+    pill = QRect(right - width, centre_y - 9, width, 18)
+    tone = QColor(TAG_TONE)
+    fill, edge = QColor(tone), QColor(tone)
+    fill.setAlpha(30)
+    edge.setAlpha(140)
+    painter.save()
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+    painter.setFont(font)
+    painter.setPen(QPen(edge, 1))
+    painter.setBrush(fill)
+    painter.drawRoundedRect(pill, 8, 8)
+    painter.setPen(tone)
+    painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, text)
+    painter.restore()
 
 
 class DropdownProxyStyle(QProxyStyle):
@@ -59,6 +102,20 @@ class DropdownProxyStyle(QProxyStyle):
             return 0
         return super().styleHint(hint, option, widget, returnData)
 
+    def drawComplexControl(self, control, option, painter, widget=None):  # noqa: N802
+        super().drawComplexControl(control, option, painter, widget)
+        if control != QStyle.ComplexControl.CC_ComboBox \
+                or not isinstance(widget, QComboBox):
+            return
+        tag = uncensored_tag(widget.currentText())
+        if not tag:
+            return
+        font = QFont(widget.font())
+        font.setPointSizeF(max(8.0, font.pointSizeF() - 2.0))
+        font.setWeight(QFont.Weight.DemiBold)
+        paint_tag(painter, font, tag.upper(), widget.width() - 30,
+                  widget.height() // 2)
+
 
 class DropdownItemDelegate(QStyledItemDelegate):
     """Paint a compact menu card with an unmistakable selected state."""
@@ -67,20 +124,54 @@ class DropdownItemDelegate(QStyledItemDelegate):
     HORIZONTAL_PADDING = 14
     CHECK_SPACE = 34
     BADGE_SPACE = 72
+    HEADER_HEIGHT = 26
+
+    @staticmethod
+    def section_heading(index) -> str:
+        """The section title to draw above this row, or "" when it continues one."""
+        heading = index.data(SECTION_ROLE)
+        if not heading:
+            return ""
+        if index.row() > 0:
+            previous = index.sibling(index.row() - 1, index.column())
+            if previous.isValid() and previous.data(SECTION_ROLE) == heading:
+                return ""
+        return str(heading)
+
+    @staticmethod
+    def row_text(index) -> str:
+        return str(index.data(LABEL_ROLE)
+                   or index.data(Qt.ItemDataRole.DisplayRole) or "")
 
     def sizeHint(self, option, index):  # noqa: N802 - Qt API
         base = super().sizeHint(option, index)
-        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
+        text = self.row_text(index)
         width = option.fontMetrics.horizontalAdvance(text)
+        detail = str(index.data(DETAIL_ROLE) or "")
+        if detail:
+            width += option.fontMetrics.horizontalAdvance(detail) + 24
         badge_space = self.BADGE_SPACE \
             if index.data(RECOMMENDED_ROLE) or index.data(NEW_MODEL_ROLE) else 0
+        if uncensored_tag(str(index.data(Qt.ItemDataRole.DisplayRole) or "")):
+            badge_space += TAG_WIDTH + 6
         # QStyledItemDelegate's width can be the popup viewport's current width
         # (640px before layout on macOS). Only the content should influence the
         # horizontal hint; retain the base hint solely for row height.
+        header = self.HEADER_HEIGHT if self.section_heading(index) else 0
         return QSize(
             width + self.HORIZONTAL_PADDING * 2 + self.CHECK_SPACE + badge_space,
-            max(base.height(), self.ROW_HEIGHT),
+            max(base.height(), self.ROW_HEIGHT) + header,
         )
+
+    def helpEvent(self, event, view, option, index):  # noqa: N802 - Qt API
+        tag = uncensored_tag(str(index.data(Qt.ItemDataRole.DisplayRole) or ""))
+        if not tag or event is None:
+            return super().helpEvent(event, view, option, index)
+        tip = str(index.data(Qt.ItemDataRole.ToolTipRole) or "")
+        QToolTip.showText(event.globalPos(),
+                          f"{tip}\n\n{TAG_NOTES[tag]}" if tip else TAG_NOTES[tag],
+                          view)
+        return True
 
     @staticmethod
     def _wash(color: str, alpha: int) -> QColor:
@@ -92,7 +183,21 @@ class DropdownItemDelegate(QStyledItemDelegate):
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
-        row = option.rect.adjusted(5, 2, -5, -2)
+        heading = self.section_heading(index)
+        top = option.rect
+        if heading:
+            head_font = QFont(option.font)
+            head_font.setPointSizeF(max(8.0, head_font.pointSizeF() - 2.0))
+            head_font.setWeight(QFont.Weight.DemiBold)
+            painter.setFont(head_font)
+            painter.setPen(_c(TEXT_MUTE))
+            painter.drawText(
+                QRect(top.left() + self.HORIZONTAL_PADDING, top.top(),
+                      top.width() - self.HORIZONTAL_PADDING, self.HEADER_HEIGHT),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                heading.upper())
+            top = top.adjusted(0, self.HEADER_HEIGHT, 0, 0)
+        row = top.adjusted(5, 2, -5, -2)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         enabled = bool(option.state & QStyle.StateFlag.State_Enabled)
@@ -131,19 +236,47 @@ class DropdownItemDelegate(QStyledItemDelegate):
         painter.setPen(text_color if enabled else _c(TEXT_MUTE))
         is_new = bool(index.data(NEW_MODEL_ROLE)) and not recommended
         badge_space = self.BADGE_SPACE if recommended or is_new else 0
+        text = self.row_text(index)
+        tag = uncensored_tag(str(index.data(Qt.ItemDataRole.DisplayRole) or ""))
+        if tag:
+            badge_space += TAG_WIDTH + 6
+        detail = str(index.data(DETAIL_ROLE) or "")
+        detail_width = (option.fontMetrics.horizontalAdvance(detail) + 16
+                        if detail else 0)
+        badge_space += detail_width
         text_rect = QRect(
             text_left,
             row.top(),
             max(0, row.right() - text_left - self.CHECK_SPACE - badge_space),
             row.height(),
         )
-        text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
         painter.drawText(
             text_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
             option.fontMetrics.elidedText(
                 text, Qt.TextElideMode.ElideRight, text_rect.width()),
         )
+
+        if detail:
+            used = (self.BADGE_SPACE if recommended or is_new else 0) \
+                + ((TAG_WIDTH + 6) if tag else 0)
+            painter.setFont(option.font)
+            painter.setPen(_c(TEXT_MUTE))
+            painter.drawText(
+                QRect(text_left, row.top(),
+                      row.right() - self.CHECK_SPACE - used - 6 - text_left,
+                      row.height()),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                detail)
+
+        if tag:
+            tag_font = QFont(option.font)
+            tag_font.setPointSizeF(max(8.0, tag_font.pointSizeF() - 2.0))
+            tag_font.setWeight(QFont.Weight.DemiBold)
+            used = self.BADGE_SPACE if recommended or is_new else 0
+            paint_tag(painter, tag_font, tag.upper(),
+                      row.right() - self.CHECK_SPACE - used - 6,
+                      row.center().y(), TAG_WIDTH)
 
         if recommended:
             badge = QRect(row.right() - self.CHECK_SPACE - 66,
@@ -193,6 +326,8 @@ _DROPDOWN_STYLE: DropdownProxyStyle | None = None
 _DROPDOWN_POLISHER: QObject | None = None
 POPUP_MIN_WIDTH = 180
 POPUP_MAX_WIDTH = 480
+# Rows that carry a detail line (local models: state, size, rating, €0) need room.
+POPUP_DETAIL_MAX_WIDTH = 760
 POPUP_FRAME_WIDTH = 12
 
 
@@ -219,7 +354,11 @@ def polish_combo(combo: QComboBox, visible_chars: int = 8) -> None:
     if not isinstance(combo.itemDelegate(), DropdownItemDelegate):
         combo.setItemDelegate(DropdownItemDelegate(combo))
     view.setMouseTracking(True)
-    view.setUniformItemSizes(True)
+    rows = range(combo.count())
+    has_sections = any(combo.itemData(i, SECTION_ROLE) for i in rows)
+    has_detail = any(combo.itemData(i, DETAIL_ROLE) for i in rows)
+    # A section header makes the first row of each section taller.
+    view.setUniformItemSizes(not has_sections)
     content_width = max(
         (view.sizeHintForColumn(column) for column in range(view.model().columnCount())),
         default=0,
@@ -230,7 +369,7 @@ def polish_combo(combo: QComboBox, visible_chars: int = 8) -> None:
     field_width = combo.width() if combo.isVisible() else natural
     minimum = 120 if combo.objectName() == "CompactCombo" else POPUP_MIN_WIDTH
     popup_width = min(
-        POPUP_MAX_WIDTH,
+        POPUP_DETAIL_MAX_WIDTH if has_detail else POPUP_MAX_WIDTH,
         max(minimum, field_width, content_width),
     )
     view.setFixedWidth(popup_width)

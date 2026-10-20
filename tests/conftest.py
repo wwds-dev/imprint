@@ -186,3 +186,84 @@ def _no_ratings_network(url):
 
 _benchmarks._get_json = _no_ratings_network
 _benchmarks.is_stale = lambda *args, **kwargs: False
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _local_inventory_is_seeded_not_discovered():
+    """What is "on this Mac" must not depend on this Mac.
+
+    Every `LocalInventory` starts pre-seeded with LM Studio off, Ollama empty
+    and 24 GB of memory, and never reports itself stale, so no test reaches a
+    socket or ~/.lmstudio and nothing runs discovery on the GUI thread. Session
+    scope, because module-scoped window fixtures are built before any
+    function-scoped patch would apply. Tests of discovery build their own.
+    """
+    from types import SimpleNamespace
+
+    from services import local_models
+
+    off = SimpleNamespace(server_up=lambda: False, model_details=lambda: [])
+    empty = SimpleNamespace(model_details=lambda: {}, list_models=lambda: [],
+                            loaded_models=lambda: [])
+    real_init = local_models.LocalInventory.__init__
+    real_discover = local_models.discover
+
+    def stubbed(*args, **kwargs):
+        return real_discover(off, empty, memory=lambda: (16e9, 24e9),
+                             lms_binary=lambda: None)
+
+    def seeded(self, *args, **kwargs):
+        real_init(self, *args, **kwargs)
+        self.store(stubbed())
+
+    with pytest.MonkeyPatch.context() as patch:
+        # A live event loop lets the startup discovery fire; it must not read
+        # this Mac either.
+        patch.setattr(local_models, "discover", stubbed)
+        patch.setattr(local_models.LocalInventory, "__init__", seeded)
+        patch.setattr(local_models.LocalInventory, "stale",
+                      lambda self, now=None: False)
+
+        # Building a window must never start a measurement run (the tests that
+        # check the automatic trigger switch it back on), and the window's
+        # rating store must not read this Mac's measured ratings: a store
+        # outside the temp folder (tmp_path) is kept in memory only.
+        import tempfile
+        from pathlib import Path
+        from services import local_ratings
+
+        patch.setattr(local_ratings, "AUTOMATIC", False)
+        real_store_init = local_ratings.RatingStore.__init__
+        temp_root = str(Path(tempfile.gettempdir()).resolve())
+
+        def memory_store(self, path):
+            if path is not None and not str(Path(path).resolve()).startswith(temp_root):
+                path = None
+            real_store_init(self, path)
+
+        patch.setattr(local_ratings.RatingStore, "__init__", memory_store)
+        yield
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _settings_and_routing_files_are_temporary(tmp_path_factory):
+    """The tracked config/settings.json and the routing rules and savings
+    files in data/ are never written by a test.
+
+    Several paths save the whole settings dict (a model pick, the routing
+    mode in Settings → Models or the Mode box), and the suite used to leave
+    the tracked file modified. Each test session works on a copy instead.
+    """
+    import shutil
+
+    import main
+
+    root = tmp_path_factory.mktemp("settings")
+    copy = root / "settings.json"
+    if main.SETTINGS_FILE.is_file():
+        shutil.copyfile(main.SETTINGS_FILE, copy)
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(main, "SETTINGS_FILE", copy)
+        patch.setattr(main, "ROUTING_RULES_FILE", root / "routing_rules.json")
+        patch.setattr(main, "ROUTING_SAVINGS_FILE", root / "routing_savings.json")
+        yield

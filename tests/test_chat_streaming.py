@@ -55,7 +55,7 @@ def test_run_backend_prefers_the_stream_for_every_provider(
                 stream_chat=lambda *a, **k: sentinel, chat=blocking))
         if backend == "ollama":
             monkeypatch.setattr(window, "assess_local_model",
-                                lambda model: None)
+                                lambda model, provider="ollama": None)
         result = window.run_backend(backend, "some-model",
                                     [{"role": "user", "content": "hi"}], "hi")
         assert result is sentinel, f"{backend} did not stream"

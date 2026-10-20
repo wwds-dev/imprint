@@ -46,3 +46,4 @@
 {"ts": "2026-10-14T13:05:20", "phase": "release", "state": "blocked", "spec": "model-watch-media"}
 {"ts": "2026-10-14T16:15:27", "phase": "release", "state": "done", "spec": "model-watch-media"}
 {"ts": "2026-10-14T16:59:03", "phase": "define", "state": "start", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-10-19T20:44:17", "phase": "build", "state": "done", "spec": "local-model-routing"}

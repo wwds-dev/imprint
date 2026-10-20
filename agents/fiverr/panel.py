@@ -137,7 +137,7 @@ class FiverrPanel(QWidget):
         self.fiverr_panel_base = AgentPanel(
             host, "fiverr",
             providers=("anthropic", "openai", "deepseek", "kimi", "gemini",
-                       "qwen", "ollama"),
+                       "qwen", "ollama", "lmstudio"),
             default_provider="anthropic")
         self.fiverr_provider_box = self.fiverr_panel_base.provider_box
         self.fiverr_model_box = self.fiverr_panel_base.model_box

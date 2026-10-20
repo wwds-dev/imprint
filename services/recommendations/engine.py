@@ -21,6 +21,7 @@ Two rules decide, and the result says which (`RecommendationResult.basis`):
 
 from __future__ import annotations
 
+from services.providers import is_local as is_local_provider
 from .models import AgentProfile, Candidate, RecommendationContext, RecommendationResult
 
 # Rating points a candidate may sit below the best-rated one and still count
@@ -118,6 +119,12 @@ class RecommendationEngine:
                                result.reference, result.band)
         return self._score(profile, item, context)
 
+    def request_tags(self, profile: AgentProfile,
+                     context: RecommendationContext) -> list[str]:
+        """The kinds of work this request is rated on: the agent's tags plus
+        those its own words name (the routing advisor's kind of job)."""
+        return self._tags(profile, context)
+
     def request_rating(self, profile: AgentProfile, item: Candidate,
                        context: RecommendationContext) -> float | None:
         """The candidate's public rating for this request's kinds of work."""
@@ -130,9 +137,16 @@ class RecommendationEngine:
             score, item = pair
             rating = (self._request_rating(item, self._tags(profile, context))
                       if reference is not None else None)
-            # Equal scores: the better rated first (Sentinel's tie-break),
-            # then a fixed order of ids that is never reported as a win.
-            return (score, rating if rating is not None else float("-inf"),
+            # Equal scores under the rating rule: the cheaper first, as
+            # Sentinel orders the band by price. Cost efficiency saturates
+            # at 1.0 for any very cheap cloud model, so without this a free
+            # local model tied one and lost on rating. Then the better rated
+            # (Sentinel's tie-break), then a fixed order of ids that is never
+            # reported as a win.
+            price = item.price_per_1m
+            cheaper = (-price if price is not None else float("-inf")) \
+                if reference is not None else 0.0
+            return (score, cheaper, rating if rating is not None else float("-inf"),
                     item.provider.casefold(), item.model_id.casefold())
         if reference is None:
             scored = ((self._score(profile, item, context), item) for item in items)
@@ -178,7 +192,7 @@ class RecommendationEngine:
             return round(UNRATED_CEILING * self._score(profile, item, context), 6)
         if rating >= best - band:
             known = item.price_per_1m is not None and (
-                item.price_per_1m > 0 or item.provider.casefold() == "ollama")
+                item.price_per_1m > 0 or is_local_provider(item.provider))
             return round(0.50 + 0.50 * (item.cost_efficiency if known else 0.0), 6)
         edge = best - band
         below = 2.0 / (1.0 + 10 ** ((edge - rating) / 400.0))

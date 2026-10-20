@@ -124,7 +124,7 @@ class FakeUsageTracker:
         self.today_total = 0.0
 
     def calculate_cost_eur(self, backend, model, inp, out):
-        return 0.0 if backend == "ollama" else 0.01
+        return 0.0 if backend in ("ollama", "lmstudio") else 0.01
 
     def get_today_total(self):
         return self.today_total
@@ -303,14 +303,16 @@ class TestAuthorizeRequest:
         win.authorize_request("author", "openai", "gpt-4o", "hi")
         assert win.run_logger.started[0]["tool"] == "-"
 
-    def test_ollama_is_authorised_without_a_confirmation_dialog(self, win, monkeypatch):
+    @pytest.mark.parametrize("provider", ["ollama", "lmstudio"])
+    def test_a_local_provider_is_authorised_without_a_confirmation_dialog(
+            self, win, monkeypatch, provider):
         from PySide6.QtWidgets import QMessageBox
 
         def explode(*a, **k):
             raise AssertionError("local model must not prompt for API confirmation")
 
         monkeypatch.setattr(QMessageBox, "question", explode)
-        assert win.authorize_request("author", "ollama", "llama3", "hi")
+        assert win.authorize_request("author", provider, "llama3", "hi")
 
 
 class TestRecordRequest:

@@ -23,6 +23,7 @@ import os
 import re
 from datetime import date
 
+from services.providers import is_local as is_local_provider
 from services.model_watch import is_chat_model
 
 from .models import Candidate
@@ -55,6 +56,7 @@ _PROVIDER_DEFAULTS = {
     "gemini":       (0.82, 0.80, 0.78, 0.82, 0.86),
     "qwen":         (0.82, 0.76, 0.67, 0.72, 0.94),
     "ollama":       (0.66, 0.70, 1.00, 0.48, 0.62),
+    "lmstudio":     (0.66, 0.70, 1.00, 0.48, 0.62),
 }
 
 _PROVIDER_TASKS = {
@@ -73,6 +75,8 @@ _PROVIDER_TASKS = {
              "longform": .87, "structured": .88},
     "ollama": {"general": .68, "creative": .70, "analysis": .72,
                "code": .72, "privacy": 1.0},
+    "lmstudio": {"general": .68, "creative": .70, "analysis": .72,
+                 "code": .72, "privacy": 1.0},
 }
 
 
@@ -80,7 +84,7 @@ def provider_configured(provider: str) -> bool | None:
     provider = provider.casefold()
     if provider == "local":
         return True
-    if provider == "ollama":
+    if is_local_provider(provider):
         # Unknown local tags must not beat a usable cloud fallback merely
         # because they need no API key.  The GUI can promote Ollama candidates
         # to available when its live list contains them.
@@ -153,11 +157,11 @@ def text_candidate(provider: str, model_id: str,
         tasks["code"] = .98
     if words & {"reasoner", "r1"}:
         tasks["analysis"] = .97
-    if key == "ollama":
+    if is_local_provider(key):
         privacy = 1.0
     else:
         privacy = 0.10
-    if price is not None and key != "ollama":
+    if price is not None and not is_local_provider(key):
         cost = price_efficiency(*price)
 
     task_quality, evidence, credit, scores = {}, {}, "", {}
@@ -168,7 +172,7 @@ def text_candidate(provider: str, model_id: str,
     # Blended like price_efficiency. Zero is no price at all for a cloud
     # model (the table filters it out anyway); Ollama is free and unrated.
     blended = (0.75 * price[0] + 0.25 * price[1]) if price is not None else None
-    if key == "ollama":
+    if is_local_provider(key):
         blended = 0.0
     elif blended is not None and blended <= 0:
         blended = None

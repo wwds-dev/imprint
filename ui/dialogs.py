@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QTextBrowser, QVBoxLayout, QWidget,
 )
 
+from services.providers import SUPPORTED as SUPPORTED_PROVIDERS
 from services import api_keys
 from services.anthropic_client import AnthropicClientWrapper
 from services.database import get_connection, get_setting, save_setting
@@ -71,8 +72,7 @@ def show_cost_history(app):
     filter_row.setSpacing(SM)
 
     provider_filter = QComboBox()
-    provider_filter.addItems(["all", "ollama", "openai", "deepseek", "kimi",
-                              "gemini", "anthropic", "qwen"])
+    provider_filter.addItems(["all", *SUPPORTED_PROVIDERS])
     provider_filter.setMinimumWidth(180)
     filter_row.addWidget(field("Provider", provider_filter))
 
@@ -649,6 +649,45 @@ def show_settings(app):
 
     show_keys.toggled.connect(toggle_show)
     tabs.addTab(keys_tab, "API keys")
+
+    # Local models (mockup D): what runs on this Mac.
+    from main import AGENT_SETUP_WIDGETS
+    from ui.local_models_page import LocalModelsPage
+
+    def used_by() -> dict:
+        out: dict = {}
+        for key, (provider_attr, model_attr) in AGENT_SETUP_WIDGETS.items():
+            provider_box = app._find_control(provider_attr)
+            model_box = app._find_control(model_attr)
+            if provider_box is not None and model_box is not None:
+                out.setdefault((provider_box.currentText(), model_box.currentText()),
+                               []).append(key.replace("_", " ").title())
+        return out
+
+    local_page = LocalModelsPage(
+        on_refresh=app.start_local_discovery,
+        on_start=app.start_lmstudio_server, parent=dialog,
+        on_measure=lambda model: app.start_local_measure(model, automatic=False),
+        ratings=getattr(app, "local_ratings", None))
+    local_page.set_snapshot(app.local_inventory.snapshot(), used_by())
+    app._local_models_listener = lambda snap: local_page.set_snapshot(snap, used_by())
+    dialog.finished.connect(lambda _r: setattr(app, "_local_models_listener", None))
+    tabs.addTab(local_page, "Local models")
+    if app.local_inventory.stale():
+        app.start_local_discovery()
+
+    # ── Models: routing mode, per-agent overrides, remembered rules ───
+    from main import AGENT_PRETTY_NAMES
+    from services.routing_advisor import RoutingRules
+    from ui.routing_page import RoutingModesPage
+    models_page = RoutingModesPage(
+        getattr(app, "settings", None) if isinstance(getattr(app, "settings", None), dict) else {},
+        {key: AGENT_PRETTY_NAMES.get(key, key.replace("_", " ").title())
+         for key in AGENT_SETUP_WIDGETS},
+        getattr(app, "routing_rules", None) or RoutingRules(),
+        getattr(app, "savings_tally", None),
+        on_change=getattr(app, "apply_routing_settings", None), parent=dialog)
+    tabs.addTab(models_page, "Models")
 
     # ── Tab 2: Agents ─────────────────────────────────────────────
     agents_tab = QWidget()
