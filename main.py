@@ -5065,8 +5065,8 @@ class GodAI(QWidget):
         Only for token-priced text work (a video render or TTS book has no
         local equivalent), only when the refusing reason is a budget cap
         (a permissions refusal must stay a refusal), only when this agent's
-        panel actually offers ollama, and never when ollama itself was the
-        refused provider. The switch flips the agent's provider box and
+        panel actually offers a local runtime, and never when a local
+        provider was itself the refused one. The switch flips the agent's provider box and
         picks a local model — authorization still returns False, so the
         user re-sends deliberately on the free model rather than the guard
         silently re-routing a paid request.
@@ -5089,55 +5089,53 @@ class GodAI(QWidget):
         model_box = self._find_control(widgets[1])
         if provider_box is None or model_box is None:
             return False
-        if provider_box.findText("ollama") < 0:
-            return False
-        # Installed models only, and ask the daemon rather than trusting the
-        # session cache. KNOWN_MODELS is a list of names for populating a
-        # dropdown, not a claim that any of them are pulled — its first entry
-        # is a 21 GB Muse Glimmer build. Before this, an offer made before
-        # anything had fetched ollama's live list switched the agent to that
-        # build, and "it runs on this machine and costs nothing" turned into
-        # model-not-found on the next Send.
-        local_models = self._installed_local_models()
-        if not local_models:
-            # No local model, or no daemon answering: there is no free path to
+        # Installed models only, from the local inventory (what the runtimes
+        # actually listed, never KNOWN_MODELS: its first entry is a 21 GB Muse
+        # Glimmer build, and offering a name nothing has pulled turns "runs on
+        # this machine and costs nothing" into model-not-found on the next
+        # Send). Any local runtime this agent's panel offers counts.
+        found = [(p, m) for p, m in self._installed_local_models()
+                 if provider_box.findText(p) >= 0]
+        if not found:
+            # No local model, or no runtime answering: there is no free path to
             # offer, and saying otherwise is worse than the plain refusal.
             return False
+        local_provider, local_model = found[0]
+        label = provider_registry.get(local_provider).label or local_provider
         choice = QMessageBox.question(
             self, "Budget cap reached",
-            f"{reason}\n\nSwitch this agent to {local_models[0]} instead? "
+            f"{reason}\n\nSwitch this agent to {local_model} ({label}) instead? "
             "It runs on this machine and costs nothing. Press Send again "
             "after the switch.")
         if choice != QMessageBox.Yes:
             return False
-        provider_box.setCurrentText("ollama")
-        index = self._find_model_index(model_box, local_models[0])
+        provider_box.setCurrentText(local_provider)
+        index = self._find_model_index(model_box, local_model)
         if index < 0:
-            # The box has not been repopulated for ollama yet. Add the model
-            # rather than leaving a cloud model selected under provider
-            # "ollama", which would read as a free route and is not one.
-            model_box.addItem(local_models[0])
+            # The box has not been repopulated for this runtime yet. Add the
+            # model rather than leaving a cloud model selected under a local
+            # provider, which would read as a free route and is not one.
+            model_box.addItem(local_model)
             index = model_box.count() - 1
         model_box.setCurrentIndex(index)
-        self._set_route_result(agent, "ollama",
+        self._set_route_result(agent, local_provider,
                                model_box.currentText())
         return True
 
-    def _installed_local_models(self) -> list[str]:
-        """Local models that are actually pulled, in the daemon's own order.
+    def _installed_local_models(self) -> list[tuple[str, str]]:
+        """(provider, model) for every local model that can run, best first.
 
-        One call, on localhost, with the client's 5s connect timeout: a dead
-        daemon costs that once and then no offer is made. The session cache is
-        only trusted to the extent the daemon confirms it, because the cache is
-        seeded from whatever a panel last managed to fetch — including the
-        offline fallback names.
+        Read from the cached inventory, so no request leaves the GUI thread.
+        Models that cannot fit this machine are left out; ones already loaded
+        come first, then Ollama before LM Studio (what the fallback used
+        before LM Studio existed).
         """
-        try:
-            installed = self.ollama.list_models()
-        except Exception as exc:
-            self._note_failure("local fallback: list models", exc)
-            return []
-        return [model for model in installed if model]
+        snap = self.local_inventory.snapshot()
+        order = {p: i for i, p in enumerate(provider_registry.LOCAL_PROVIDERS)}
+        usable = [m for m in snap.models if m.fit != "too_big" and m.id]
+        usable.sort(key=lambda m: (not m.loaded, m.fit == "tight",
+                                   order.get(m.provider, 99)))
+        return [(m.provider, m.id) for m in usable]
 
     def _reserved_in_flight_eur(self) -> float:
         """Estimates of every authorized-but-unresolved request."""

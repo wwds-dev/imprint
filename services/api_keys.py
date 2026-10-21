@@ -301,7 +301,7 @@ def _client(kind: str):
     return C()
 
 
-PROBES: tuple[str, ...] = ("anthropic", "openai", "gemini", "deepseek", "kimi", "qwen", "ollama")
+PROBES: tuple[str, ...] = ("anthropic", "openai", "gemini", "deepseek", "kimi", "qwen", "ollama", "lmstudio")
 
 
 def _names_for_probe(kind: str) -> tuple[str, ...]:
@@ -328,6 +328,9 @@ def prepare_probe(kind: str, values: dict[str, str] | None = None):
         if kind == "ollama":
             from services.ollama_client import OllamaClient
             return OllamaClient(), ""
+        if kind == "lmstudio":
+            from services.lmstudio_client import LMStudioClient
+            return LMStudioClient(), ""
         if kind not in PROBES:
             return None, "no probe"
         if not any(os.environ.get(n) for n in _names_for_probe(kind)):
@@ -350,6 +353,14 @@ def run_probe(kind: str, client) -> tuple[bool, str]:
     provider's error can echo the request.
     """
     try:
+        if kind == "lmstudio":
+            # list_models() answers from the disk when the server is off, which
+            # would make a stopped server read as reachable.
+            if not client.server_up():
+                return False, "server off — start it in LM Studio or Settings → Local models"
+            models = client.list_models()
+            return bool(models), (f"{len(models)} model(s)" if models
+                                  else "server up but no model downloaded")
         if kind == "ollama":
             models = client.list_models()
             return bool(models), (f"{len(models)} model(s) pulled"
