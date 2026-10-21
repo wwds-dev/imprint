@@ -241,13 +241,18 @@ class VideoPanel(QWidget):
         self.hide()
 
     # ── selection and constraints ───────────────────────────────────────
-    def _visual_provider_changed(self, provider: str):
-        """List only media models that have a real execution path."""
+    def _offered_models(self):
+        """The media models on offer today, by the host's clock (a test pins it)."""
         from services.media_catalog import offered_models
 
+        today = getattr(self.host, "_media_today", None)
+        return offered_models(today().isoformat() if today else None)
+
+    def _visual_provider_changed(self, provider: str):
+        """List only media models that have a real execution path."""
         self.video_visual_model_box.blockSignals(True)
         self.video_visual_model_box.clear()
-        for option in offered_models():
+        for option in self._offered_models():
             if option.provider == provider:
                 self.video_visual_model_box.addItem(option.label, option)
         self.video_visual_model_box.blockSignals(False)
@@ -398,7 +403,6 @@ class VideoPanel(QWidget):
         """
         from agents.video import video_studio
         from services.media_catalog import direct_video_cost_usd
-        from services.media_catalog import offered_models
         from services.per_unit_pricing import eur_per_usd
 
         if selection is None:
@@ -411,7 +415,7 @@ class VideoPanel(QWidget):
             seconds = int(text) if text.isdigit() else None
         rate = eur_per_usd()
         options = []
-        for model in offered_models():
+        for model in self._offered_models():
             direct = model.kind == "direct_video"
             if direct and not clip:
                 continue

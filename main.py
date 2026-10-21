@@ -2123,7 +2123,8 @@ class GodAI(QWidget):
 
         duration_text = length_box.currentText().rstrip("s")
         duration = int(duration_text) if duration_text.isdigit() else None
-        candidates = [media_candidate(item, duration) for item in offered_models()]
+        candidates = [media_candidate(item, duration)
+                      for item in offered_models(self._media_today().isoformat())]
         candidates = [
             replace(item, available=bool(
                 item.available and self._provider_permission(item.provider)))
