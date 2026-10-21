@@ -184,7 +184,8 @@ class WebdesignPanel(QWidget):
         prompt = "\n".join(prompt_parts)
 
         # A denied or cancelled paid request must not strand Generate disabled.
-        if not self.host.authorize_request("webdesign", provider, model, prompt):
+        if not self.host.authorize_request("webdesign", provider, model, prompt,
+                                           resume=self.generate):
             return
         messages = self.host.agent_instances["webdesign"].build_messages(prompt)
         self._clear_displays()
@@ -223,7 +224,7 @@ class WebdesignPanel(QWidget):
         self.webdesign_copy_btn.setEnabled(True)
 
     def _on_error(self, error: str):
-        self.host.abandon_request("webdesign")
+        self.host.abandon_request("webdesign", error=error)
         self.webdesign_html_box.setPlainText(f"[Error] {error}")
         self.webdesign_status_label.setText("Error.")
         self._set_idle()

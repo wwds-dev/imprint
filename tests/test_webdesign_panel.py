@@ -50,7 +50,7 @@ class FakeHost:
     def _note_failure(self, *_args):
         raise AssertionError("Model listing should not fail")
 
-    def authorize_request(self, agent, provider, model, prompt):
+    def authorize_request(self, agent, provider, model, prompt, resume=None):
         self.authorized.append((agent, provider, model, prompt))
         return self.allowed
 

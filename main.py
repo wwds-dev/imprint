@@ -27,6 +27,7 @@ from services.lmstudio_client import LMStudioClient
 from services import local_models
 from services import local_ratings
 from services import routing_advisor
+from ui.panel_routing import PanelRouting
 from services import version as app_version
 from services.runtime_paths import resource_base, user_data_base, ensure_seeded, is_frozen
 ensure_seeded()
@@ -294,6 +295,7 @@ class GodAI(QWidget):
         # Hybrid routing: one advice per new job, rules, savings (phase 4).
         self.routing_rules = routing_advisor.RoutingRules(ROUTING_RULES_FILE)
         self.savings_tally = routing_advisor.SavingsTally(ROUTING_SAVINGS_FILE)
+        self.panel_routing = PanelRouting(self)     # the text agents beyond Chat
         self._held_job = None       # a job the advice banner is holding
         self._job = None            # the Chat job in flight, for failover/tally
         self.monitor = ResourceMonitor()
@@ -4387,8 +4389,13 @@ class GodAI(QWidget):
 
     def authorize_request(self, agent, provider, model, prompt, tool=None,
                           label=None, flat_cost_eur=None,
-                          assessment=None) -> bool:
+                          assessment=None, resume=None) -> bool:
         """Budget-check and confirm one request. False means: do not send it.
+
+        `resume` is the method that restarts the panel's action. A text agent
+        that passes it is looked at by the routing advisor first (ui/panel_routing.py):
+        when the selected model falls short the job is held on the panel's
+        banner and this returns False, exactly as for a refused request.
 
         `tool` is a registry tool name and is validated as one — pass it only
         when the request really runs a registered tool (the chat panel does).
@@ -4405,6 +4412,10 @@ class GodAI(QWidget):
         teaser. Every flow in this file keeps its token now; do not add a
         new by-name call site.
         """
+        if (resume is not None and flat_cost_eur is None
+                and self.panel_routing.advise(agent, provider, model, prompt,
+                                              tool=tool or label or "", resume=resume) is False):
+            return False
         # `flat_cost_eur` is for work billed per unit rather than per token —
         # an image, a video render, a minute of speech. Without it the guard
         # prices those at zero and they slip past the caps entirely.
@@ -5213,6 +5224,7 @@ class GodAI(QWidget):
         )
 
         self.last_request_cost = entry.get("cost_eur", entry.get("estimated_cost", 0.0))
+        self.panel_routing.finished(context["agent"], self.last_request_cost)
         self.last_tool_name = f"{context['agent']}/{context['tool']} - {context['provider']}"
         self.session_cost_total += entry.get("estimated_cost", 0.0)
         self.session_request_count += 1
@@ -5243,11 +5255,14 @@ class GodAI(QWidget):
 
         self.load_history_list()
 
-    def abandon_request(self, agent, reason="error"):
-        """Drop a request that failed, so it is not billed and the log closes."""
+    def abandon_request(self, agent, reason="error", error=None):
+        """Drop a request that failed, so it is not billed and the log closes.
+        A failure (not a stop) offers the routing advisor's next candidate."""
         context = self._resolve_request(agent, pop=True)
         if context and context["run_id"]:
             self.run_logger.finish(run_id=context["run_id"], status=reason)
+        if context and reason == "error":
+            self.panel_routing.offer_failover(context["agent"], error)
 
     def run_backend(self, backend, model, messages, prompt):
         """Send one request to `backend`, dispatching on its registry spec.

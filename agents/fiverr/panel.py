@@ -381,7 +381,8 @@ class FiverrPanel(QWidget):
         # image request that follows it, plus the delivery/gig text flows.
         token = self.host.authorize_request(
             "fiverr", provider, model,
-            messages[-1]["content"] if messages else "")
+            messages[-1]["content"] if messages else "",
+            resume=self.generate_logos)
         if not token:
             # Refused — re-enable the buttons disabled above, or the panel
             # stays stuck until restart.
@@ -561,7 +562,7 @@ class FiverrPanel(QWidget):
         # covers them.
         token, self._prompt_token = self._prompt_token, None
         if token:
-            self.host.abandon_request(token)
+            self.host.abandon_request(token, error=error)
         self.fiverr_status_label.setText(f"Error: {error}")
         self._reset_buttons()
 
@@ -581,7 +582,8 @@ class FiverrPanel(QWidget):
         self.fiverr_tabs.setCurrentIndex(1)
         token = self.host.authorize_request(
             "fiverr", provider, model,
-            messages[-1]["content"] if messages else "")
+            messages[-1]["content"] if messages else "",
+            resume=self.write_delivery)
         if not token:
             self._reset_buttons()
             return
@@ -625,7 +627,8 @@ class FiverrPanel(QWidget):
         self.fiverr_tabs.setCurrentIndex(2)
         token = self.host.authorize_request(
             "fiverr", provider, model,
-            messages[-1]["content"] if messages else "")
+            messages[-1]["content"] if messages else "",
+            resume=self.write_gig)
         if not token:
             self._reset_buttons()
             return
