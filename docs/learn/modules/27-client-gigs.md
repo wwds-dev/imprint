@@ -90,7 +90,7 @@ the callout brings you back to that step.
 **Time:** about 25 minutes, plus whatever the real client takes to respond.
 **Cost:** up to three text requests — the image-prompt build, the delivery
 message and the gig description — each shows its estimate and you approve it
-before anything is sent (free with a local Ollama model); plus the logo
+before anything is sent (free with a local Ollama or LM Studio model); plus the logo
 images, a second paid request billed per image by the image model's provider
 — OpenAI, Gemini or Qwen. The per-image price comes from
 `config/pricing.json`, sits beside **Generate Logos**, and is approved the
@@ -135,7 +135,7 @@ into any field you left empty — anything you type yourself always wins.
 
 ### Step 3 — Choose the models
 
-Pick a text provider and model; choose Ollama if you want the text requests
+Pick a text provider and model; choose Ollama or LM Studio if you want the text requests
 to stay on your Mac and cost nothing. The image model is a separate choice,
 and its provider is the one that makes and bills the images, whatever text
 provider you picked:

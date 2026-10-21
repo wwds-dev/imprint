@@ -113,4 +113,4 @@ and `pytest tests/test_fiverr_orders.py`.
   price-sensitive and needs fast turnaround rather than maximum quality —
   and a `provider_affinity` table ranking OpenAI (.98) above Anthropic
   (.94), Gemini (.90), Qwen (.84), Kimi (.82), DeepSeek (.80), with Ollama
-  (.68) included as a local fallback option.
+  and LM Studio (.68 each) included as local fallback options.

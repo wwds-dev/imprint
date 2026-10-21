@@ -107,7 +107,7 @@ in the callout brings you back to that step.
 **Time:** about 15 minutes in Imprint, plus the minute on the platform when you
 post, and a short return visit later for the numbers. **Cost:** one text
 request in Imprint — you see its estimate and approve it before anything is
-sent (free with a local Ollama model). Posting by hand costs nothing. **Make a
+sent (free with a local Ollama or LM Studio model). Posting by hand costs nothing. **Make a
 Clip** starts a paid video render with its own cost confirmation; this recipe
 never touches it.
 
@@ -143,7 +143,7 @@ Variants:   2
 Specifics:  out Tuesday; paperback and ebook; first chapter free on the site
 ```
 
-Below the row, pick a provider and model for the writing. Choose Ollama if the
+Below the row, pick a provider and model for the writing. Choose Ollama or LM Studio if the
 request should stay on your Mac and cost nothing.
 
 [Show me](show:social_platform_box)

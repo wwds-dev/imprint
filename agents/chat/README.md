@@ -18,5 +18,5 @@ budget checks. See `docs/learn/modules/19-assistant.md` for the operating path.
   tagged `general`, `analysis`, `structured`, using the engine's default
   weighting (no quality/cost/etc. overrides) with broad provider affinity
   (Anthropic and OpenAI 0.94, Gemini and DeepSeek 0.88, Qwen and Kimi 0.86,
-  Ollama 0.72). Discovered by `agents.recommendation_profiles.profile_for("chat")`
+  Ollama and LM Studio 0.72). Discovered by `agents.recommendation_profiles.profile_for("chat")`
   for the visible Assistant workspace.

@@ -38,7 +38,7 @@ brings you back to that step.
 
 **Time:** about 20 minutes. **Cost:** one text request in Imprint — you see
 its estimate and approve it before anything is sent (free with a local
-Ollama model) — plus the song credits in your own Suno account, which Imprint
+Ollama or LM Studio model) — plus the song credits in your own Suno account, which Imprint
 neither sees nor tracks.
 
 ### Step 1 — Set the artist basics
@@ -58,7 +58,7 @@ Target audience:        late-night lo-fi listeners, 20–35, studying or commuti
 ### Step 2 — Choose who writes the lyrics
 
 Pick a provider and model. **BEST FIT** marks the recommended choice for this
-task; any model that writes well is fine. Choose Ollama if you want the
+task; any model that writes well is fine. Choose Ollama or LM Studio if you want the
 request to stay on your Mac and cost nothing.
 
 [Show me](show:music_provider_box)

@@ -58,15 +58,18 @@ material, and inspect the Run Log for its provider, status, and recorded cost.
 ## Cost, cancellation, and gates
 
 Cloud requests send the conversation context to the selected provider. Local
-Ollama requests stay on the machine. Permissions and budget checks run before
+Ollama and LM Studio requests stay on the machine. Permissions and budget checks run before
 the request, but stopping after submission cannot guarantee a provider charge
 will be reversed. Keep sensitive source material out of cloud context unless
 that disclosure is authorised.
 
 ## Common failures
 
-**No model appears:** check the provider key or local Ollama service, then
-refresh the model list.
+**No model appears:** check the provider key or the local Ollama or LM Studio
+server (Settings → Local models shows both), then refresh the model list.
+**The job is held on a banner above the message box:** routing advice found
+the selected model not good enough for this job; choose one of its answers —
+see [Best Fit](12-best-fit.md#routing-modes-and-per-job-advice).
 **A request is blocked:** read the exact reason; inspect permissions and budget
 before retrying.
 **The answer ignores earlier constraints:** start a clean project or restate the
@@ -93,7 +96,7 @@ control it names and rings it; **Back to lesson** in the callout brings you
 back to that step.
 
 **Time:** about 15 minutes. **Cost:** one text request — you see its estimate
-and approve it before anything is sent (free with a local Ollama model). A
+and approve it before anything is sent (free with a local Ollama or LM Studio model). A
 resend is a second request and shows a second estimate.
 
 ### Step 1 — Start a clean project
@@ -144,7 +147,7 @@ default, not a verdict.
 
 Pick a provider and model. **BEST FIT** marks the recommended entry in both
 dropdowns, and its hover text says why; any capable model handles this task.
-Choose Ollama if you want the request to stay on your Mac and cost nothing —
+Choose Ollama or LM Studio if you want the request to stay on your Mac and cost nothing —
 a cloud provider also needs its checkbox ticked in the row below and a Mode
 that allows cloud.
 
@@ -153,7 +156,7 @@ that allows cloud.
 ### Step 5 — Check the price before sending
 
 Click **Estimate Cost**: provider, model, approximate tokens, and the
-estimated cost in euros — or "local execution" for Ollama. The same number
+estimated cost in euros — or "local execution" for Ollama and LM Studio. The same number
 sits live in the right rail as **Next request**, and it moves as you edit the
 prompt. It is an estimate of the request you are about to make, not a
 measurement of anything.

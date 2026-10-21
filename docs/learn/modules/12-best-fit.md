@@ -129,6 +129,43 @@ known shutdown dates, such as *Veo 3.1, Fast and Lite: earliest shutdown
 the title (*Model updates · 2 new · 1 warning*). This section has its own
 **Dismiss**; shutdown rows cannot be dismissed.
 
+## Local models: Ollama and LM Studio
+
+Ollama and **LM Studio** are the local providers. Their requests stay on your
+Mac, cost €0, need no API-permission checkbox and never raise the paid-request
+dialog. The model menu groups models as *On this Mac · LM Studio*, *On this
+Mac · Ollama* and *Cloud*; each local row shows quantisation, state (*loaded*,
+*on disk, loads on first use*, *on disk, server off* or *too big now*), size
+and rating. Uncensored, abliterated and Dolphin models always carry an amber
+pill. A model too big for free memory right now warns; one that cannot fit
+this machine is refused.
+
+A local model is ranked on evidence only. An unmodified build of a model
+LMArena rates inherits that rating less a quantisation penalty (*base model*).
+A new model is measured once in the background against your best-rated cloud
+model (*measuring… 12/80*) — automatically only when the cloud providers it
+needs already have a key and a ticked permission; otherwise use **Measure** in
+**Settings → Local models**, which asks one confirmation for the run. That page
+also shows server status, free memory and **Start server**. An unrated local
+model never beats a rated one; a rated one inside the 20-point band costs €0
+and wins it. A rating only moves the BEST FIT badge — nothing switches.
+
+## Routing modes and per-job advice
+
+**Settings → Models** sets a routing mode, with an override per agent:
+*Local, advise per job* (the default), *Suggest local*, *Local first*,
+*Cloud only* and *Local only*. So far only the Studio Assistant is advised.
+When a job's selected model is not good enough for it — rated more than 20
+points below the best, too long for its context, or not runnable right now —
+the job is held on a banner above the message box with the recommended model,
+its cost and time, and up to three answers: **Switch for this job**,
+**Always for <kind> jobs** and **Keep local**. Nothing changes the agent's
+selection, and a paid switch still goes through the paid-request dialog.
+*Always* rules are listed under **Remembered choices** with **Remove**. If a
+local run fails, the banner offers **Send to <provider>** or a smaller local
+model; nothing is resent by itself, and **Local only** never reaches the
+cloud. The Spend rail's **saved local** shows what running locally saved today.
+
 ## Confidence does and does not mean
 
 Recommendation confidence describes the completeness and separation of local
@@ -172,6 +209,8 @@ marks it **Not rated yet**, and it competes once a daily ratings check finds
 it rated.  
 **Update selected switched nothing:** none of the marked models won for any
 agent's current task; they stay selectable in the menus.  
+**A local model shows *server off*:** start LM Studio's server with **Start
+server** in Settings → Local models (or in LM Studio itself), then refresh.  
 
 ## Next action
 
