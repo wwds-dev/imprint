@@ -75,3 +75,9 @@
 {"ts": "2026-10-19T12:22:47", "phase": "secure", "state": "done", "spec": "audit-p1-billing"}
 {"ts": "2026-10-19T12:22:47", "phase": "build", "state": "start", "spec": "audit-p1-billing"}
 {"ts": "2026-10-19T12:51:22", "phase": "build", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-22T01:08:32", "phase": "release", "state": "start"}
+{"ts": "2026-10-22T01:10:35", "phase": "release", "state": "blocked"}
+{"ts": "2026-10-22T01:15:26", "phase": "build", "state": "start"}
+{"ts": "2026-10-22T01:24:36", "phase": "build", "state": "done"}
+{"ts": "2026-10-22T01:25:33", "phase": "release", "state": "start"}
+{"ts": "2026-10-22T01:27:42", "phase": "release", "state": "done"}
