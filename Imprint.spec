@@ -4,6 +4,7 @@
 Build:   .venv/bin/pyinstaller --noconfirm Imprint.spec
 Output:  dist/Imprint.app
 """
+import json
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
@@ -23,6 +24,14 @@ hiddenimports = [
     "vidforge.history",
     "vidforge.youtube",
 ]
+
+# Modules chosen by name at run time (importlib.import_module / __import__):
+# agents/recommendation_profiles.py loads agents.<key>.recommendations and
+# services/recommendations/catalog.py loads services.<provider>_client. Static
+# analysis of main.py cannot see either, so bundle both packages whole.
+# tests/test_spec_hiddenimports.py guards this.
+for _pkg in ("agents", "services"):
+    hiddenimports += collect_submodules(_pkg)
 
 # SDKs / libs with data files or plugin discovery that static analysis can miss.
 for pkg in ("google.genai", "tiktoken", "anthropic", "openai", "certifi",
@@ -131,6 +140,13 @@ coll = COLLECT(
     name="Imprint",
 )
 
+# The bundle's version is derived like the badge (services/version.py):
+# VERSION (major) + the build count stamped into _build_info.json, never typed.
+_MAJOR = Path("VERSION").read_text().strip()
+_BUILD_INFO = Path("_build_info.json")
+_BUILD = json.loads(_BUILD_INFO.read_text()).get("build") if _BUILD_INFO.is_file() else None
+BUNDLE_VERSION = f"{_MAJOR}.{_BUILD}" if _BUILD is not None else _MAJOR
+
 app = BUNDLE(
     coll,
     name="Imprint.app",
@@ -139,8 +155,8 @@ app = BUNDLE(
     info_plist={
         "CFBundleName": "Imprint",
         "CFBundleDisplayName": "Imprint",
-        "CFBundleShortVersionString": "1.0.1",
-        "CFBundleVersion": "1.0.1",
+        "CFBundleShortVersionString": BUNDLE_VERSION,
+        "CFBundleVersion": BUNDLE_VERSION,
         "NSHighResolutionCapable": True,
         "NSRequiresAquaSystemAppearance": False,   # allow dark mode
         "LSMinimumSystemVersion": "12.0",

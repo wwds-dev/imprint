@@ -6,6 +6,8 @@ parent and to read the handful of members it needs — and shows the dialog. The
 bodies are moved verbatim; only the receiver was renamed from `self` to `app`.
 """
 
+import html
+
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QFrame,
@@ -23,13 +25,13 @@ from services.gemini_client import GeminiClientWrapper
 from services.kimi_client import KimiClientWrapper
 from services.media_catalog import DIRECT_VIDEO_USD_PER_SECOND, MODELS as MEDIA_MODELS
 from services.openai_client import OpenAIClientWrapper
-from services.per_unit_pricing import rate_usd
+from services.per_unit_pricing import rate_usd, valid_eur_per_usd
 from services.qwen_client import QwenClientWrapper
 from services.pricing_catalog import (
     PROVIDER_LABELS, build_token_price_catalog,
 )
 from services.registry import Registry
-from services.validator import Validator
+from services.validator import Validator, valid_budget_eur
 from ui import theme
 from ui.style import (
     ACCENT, ACCENT_WASH, BG, BORDER, ELEVATED, SUNKEN, SURFACE, TEXT,
@@ -57,6 +59,11 @@ def appearance_intro() -> str:
         "means the same thing in every theme, so a destructive action stays "
         "red, a paid step stays amber, and an informational note stays blue."
     )
+
+
+def _cell(value) -> str:
+    """One table cell's text, escaped for the HTML these logs render."""
+    return html.escape(str(value))
 
 
 def show_cost_history(app):
@@ -114,17 +121,19 @@ def show_cost_history(app):
 
         rows = ""
         for e in reversed(filtered[-200:]):
+            # Every field is escaped: model names come from provider listings
+            # and the dialog renders HTML.
             rows += f"""
             <tr>
-                <td>{e.get('timestamp', '')}</td>
-                <td>{e.get('agent', '')}</td>
-                <td>{e.get('backend', '')}</td>
-                <td>{e.get('model', '')}</td>
-                <td>{e.get('input_tokens', 0)}</td>
-                <td>{e.get('output_tokens', 0)}</td>
-                <td>{e.get('total_tokens', 0)}</td>
+                <td>{_cell(e.get('timestamp', ''))}</td>
+                <td>{_cell(e.get('agent', ''))}</td>
+                <td>{_cell(e.get('backend', ''))}</td>
+                <td>{_cell(e.get('model', ''))}</td>
+                <td>{_cell(e.get('input_tokens', 0))}</td>
+                <td>{_cell(e.get('output_tokens', 0))}</td>
+                <td>{_cell(e.get('total_tokens', 0))}</td>
                 <td>€{float(e.get('cost_eur', e.get('estimated_cost', 0.0))):.2f}</td>
-                <td>{e.get('cost_type', '')}</td>
+                <td>{_cell(e.get('cost_type', ''))}</td>
             </tr>
             """
 
@@ -262,20 +271,22 @@ def show_run_log(app):
         for e in reversed(filtered[-300:]):
             status_val = e.get("status", "")
             color = {"success": "#3cff88", "error": "#ff5555", "cancelled": "#ffaa00"}.get(status_val, "#ffffff")
-            error_cell = f'<span style="color:#ff5555">{e.get("error", "")}</span>' if e.get("error") else ""
+            # Every field is escaped: an error carries provider text, and a
+            # partial-billing close appends "recorded €X of €Y" to it.
+            error_cell = f'<span style="color:#ff5555">{_cell(e.get("error", ""))}</span>' if e.get("error") else ""
             rows += f"""
             <tr>
-                <td>{e.get("timestamp", "")}</td>
-                <td>{e.get("run_id", "")}</td>
-                <td>{e.get("agent", "")}</td>
-                <td>{e.get("tool", "")}</td>
-                <td>{e.get("provider", "")}</td>
-                <td>{e.get("model", "")}</td>
-                <td><span style="color:{color}">{status_val}</span></td>
-                <td>{e.get("input_tokens", 0)}</td>
-                <td>{e.get("output_tokens", 0)}</td>
+                <td>{_cell(e.get("timestamp", ""))}</td>
+                <td>{_cell(e.get("run_id", ""))}</td>
+                <td>{_cell(e.get("agent", ""))}</td>
+                <td>{_cell(e.get("tool", ""))}</td>
+                <td>{_cell(e.get("provider", ""))}</td>
+                <td>{_cell(e.get("model", ""))}</td>
+                <td><span style="color:{color}">{_cell(status_val)}</span></td>
+                <td>{_cell(e.get("input_tokens", 0))}</td>
+                <td>{_cell(e.get("output_tokens", 0))}</td>
                 <td>€{float(e.get("cost_eur", 0.0)):.4f}</td>
-                <td>{e.get("duration_sec", 0.0)}s</td>
+                <td>{_cell(e.get("duration_sec", 0.0))}s</td>
                 <td>{error_cell}</td>
             </tr>
             """
@@ -1010,11 +1021,21 @@ def show_settings(app):
         except Exception as exc:
             errors.append(f"API keys: could not write {api_keys.env_path()} ({exc}).")
 
-        # General
-        try:
-            eur = float(eur_input.text().strip())
-            sess = float(sess_input.text().strip())
-            daily = float(daily_input.text().strip())
+        # General. A rate of 0, below 0, NaN or infinity prices every request
+        # at €0, a negative amount or NaN, and a NaN or infinite budget never
+        # refuses anything: each would switch the caps off without a word.
+        # Any bad field keeps all three as they were. Save Limits in the
+        # right rail checks the budgets with the same function.
+        eur = valid_eur_per_usd(eur_input.text())
+        sess = valid_budget_eur(sess_input.text())
+        daily = valid_budget_eur(daily_input.text())
+        if eur is None:
+            errors.append("General: EUR per USD must be a number above zero, "
+                          "such as 0.92. The General settings were not saved.")
+        elif sess is None or daily is None:
+            errors.append("General: Session and Daily budgets must be numbers "
+                          "of 0 or more. The General settings were not saved.")
+        else:
             save_setting("eur_per_usd", str(eur))
             save_setting("session_budget_eur", str(sess))
             save_setting("daily_budget_eur", str(daily))
@@ -1024,8 +1045,6 @@ def show_settings(app):
                 app.session_budget_input.setText(str(sess))
             if hasattr(app, "daily_budget_input"):
                 app.daily_budget_input.setText(str(daily))
-        except ValueError:
-            errors.append("General: invalid number in EUR rate or budget fields.")
 
         # Agents
         with get_connection() as conn:

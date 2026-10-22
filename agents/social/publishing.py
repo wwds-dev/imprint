@@ -17,6 +17,7 @@ Support), never from the database, and are never logged.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -72,6 +73,48 @@ class Publisher:
 
     def publish(self, body: str, media_path: str = "", **kwargs) -> PublishResult:
         raise NotImplementedError
+
+
+def _subreddit_name(subreddit: str) -> str:
+    """The bare name from what the user typed: "r/rust", "/r/rust/",
+    " R/rust " and "rust" all mean "rust".
+
+    Exactly one leading "r/" or "/r/" goes, in either case. This used to be
+    `lstrip("r/")`, which strips characters rather than a prefix, so "rust"
+    posted to r/ust and "r/rpg" to r/pg: a public post in the wrong community
+    (audit X-1).
+    """
+    name = subreddit.strip()
+    for prefix in ("/r/", "r/"):
+        if name[:len(prefix)].lower() == prefix:
+            name = name[len(prefix):]
+            break
+    return name.strip("/")
+
+
+# Reddit's own rule for a community name: 2 to 21 letters, digits or
+# underscores, not starting with an underscore.
+_SUBREDDIT_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_]{1,20}$")
+
+
+def subreddit_name(typed: str) -> str:
+    """The subreddit a post will go to, from what the user typed; raises
+    PublishError for anything that is not one community's name.
+
+    Normalising alone let "r/r/rust" through as "r/rust", "r/ rust" as
+    " rust" and a pasted URL as typed (security review P3-5). Checked before
+    any login, and the panel shows the result in its "Post now?" question.
+    """
+    name = _subreddit_name(typed or "")
+    if not name:
+        raise PublishError("Reddit needs a subreddit to post to.",
+                           safe_to_retry=True)
+    if not _SUBREDDIT_RE.fullmatch(name):      # "$" alone allows a final "\n"
+        raise PublishError(
+            f"\"{typed.strip()}\" is not a subreddit name. Type one name, "
+            "such as books or r/books: 2 to 21 letters, digits or "
+            "underscores.", safe_to_retry=True)
+    return name
 
 
 class RedditPublisher(Publisher):
@@ -138,9 +181,9 @@ class RedditPublisher(Publisher):
                 title: str = "", **_kwargs) -> PublishResult:
         import requests
 
-        if not subreddit:
-            raise PublishError("Reddit needs a subreddit to post to.",
-                               safe_to_retry=True)
+        # Checked after normalising: "r/" or "/" alone names no subreddit,
+        # and "r/r/rust" or a URL is not one.
+        subreddit = subreddit_name(subreddit or "")
         if not title:
             raise PublishError("Reddit needs a title.", safe_to_retry=True)
 
@@ -148,7 +191,7 @@ class RedditPublisher(Publisher):
             "https://oauth.reddit.com/api/submit",
             headers={"Authorization": f"bearer {self._token()}",
                      "User-Agent": self.USER_AGENT},
-            data={"sr": subreddit.lstrip("r/").strip("/"),
+            data={"sr": subreddit,
                   "kind": "self", "title": title[:300], "text": body,
                   "api_type": "json"},
             timeout=60,

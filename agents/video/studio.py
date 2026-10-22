@@ -279,7 +279,7 @@ def pre_estimate(cfg) -> dict[str, float]:
     """
     if not _load():
         return {"script": 0.0, "narration": 0.0, "images": 0.0,
-                "captions": 0.0, "total": 0.0}
+                "captions": 0.0, "per_image": 0.0, "total": 0.0}
 
     seconds = int(cfg.get("script.target_seconds", 480))
     wpm = int(cfg.get("script.words_per_minute", 155))
@@ -307,6 +307,7 @@ def pre_estimate(cfg) -> dict[str, float]:
             reserve = 0.06
         images = (scenes + 1) * reserve
     else:
+        reserve = 0.0
         images = 0.0
     whisper = ((words / wpm) * 0.006
                if cfg.get("captions.enabled")
@@ -318,7 +319,88 @@ def pre_estimate(cfg) -> dict[str, float]:
         "narration": round(tts, 3),
         "images": round(images, 3),
         "captions": round(whisper, 3),
+        # One scene image (or the thumbnail) at the rate `images` reserves,
+        # so a failed render can bill the images it saved (B-F3).
+        "per_image": round(reserve, 4),
         "scenes": scenes,
         "words": int(words),
         "total": round(script_cost + tts + images + whisper, 2),
     }
+
+
+# Pipeline stage → the pre_estimate line it bills when it has started.
+_STAGE_LINES = (("script", "script"), ("voice", "narration"),
+                ("captions", "captions"))
+
+
+def _billed(estimate: dict, trace: dict | None) -> tuple[list, int]:
+    stages = set((trace or {}).get("stages") or ())
+    lines = [(line, float(estimate.get(line) or 0.0))
+             for stage, line in _STAGE_LINES if stage in stages]
+    images = max(0, int((trace or {}).get("images") or 0))
+    if "thumbnail" in stages:
+        images += 1
+    return lines, images
+
+
+def partial_render_cost_usd(estimate: dict, trace: dict | None) -> float:
+    """What a failed or stopped pipeline render has already paid for, in USD.
+
+    Owner decision D3: each paid stage that started bills its whole line from
+    `pre_estimate` (script, narration, captions), and images, about 90% of a
+    render, bill per image actually saved (plus the thumbnail once its stage
+    began) at the per-image reserve. Never above the confirmed total;
+    reconciling above it is B-F6. A Stop before the pipeline began its script
+    stage has no stages, so it costs nothing.
+    """
+    lines, images = _billed(estimate, trace)
+    cost = sum(usd for _line, usd in lines)
+    cost += images * float(estimate.get("per_image") or 0.0)
+    return round(max(0.0, min(cost, float(estimate.get("total") or 0.0))), 6)
+
+
+def partial_render_notice(estimate: dict, trace: dict | None, *,
+                          recorded_eur: float, confirmed_eur: float,
+                          eur_rate: float, error: str,
+                          stopped: bool) -> tuple[str, str]:
+    """(status line, log line) for a render that failed or was stopped.
+
+    Worded per the spec's Design ("B-F3 failed or stopped render"): one
+    status line with the recorded and confirmed euros, and one `[Billing]`
+    log line itemising them — which also says a retry pays again, because
+    resuming a render is not offered.
+    """
+    from services import money_text
+
+    lines, images = _billed(estimate, trace)
+    stages = set((trace or {}).get("stages") or ())
+    per_image = float(estimate.get("per_image") or 0.0)
+    with_images = per_image > 0 and "visuals" in stages
+    image_total = int(estimate.get("scenes") or 0) + 1
+    of = f"{money_text.paid(recorded_eur)} of {money_text.up_to(confirmed_eur)}"
+    reason = (error or "").strip().rstrip(".")
+
+    if not stages:
+        status = ("[Stopped] Before any paid step: nothing recorded." if stopped
+                  else f"[Error] {reason}. Before any paid step: nothing recorded.")
+        log = (f"[Billing] Nothing recorded of {money_text.up_to(confirmed_eur)} "
+               "confirmed: no paid step had started.")
+        return status, log
+
+    parts = [line for line, _usd in lines]
+    if with_images:
+        parts.append(f"{images} of {image_total} images")
+    if stopped:
+        what = (f"{images} of {image_total} images" if with_images
+                else ", ".join(parts))
+        status = f"[Stopped] After {what}: {of} recorded."
+    else:
+        status = f"[Error] {reason}. {of} recorded ({', '.join(parts)})."
+
+    items = [f"{line} {money_text.paid(usd * eur_rate)}" for line, usd in lines]
+    if with_images:
+        items.append(f"{images} images × {money_text.paid(per_image * eur_rate)}")
+    log = (f"[Billing] Recorded {money_text.paid(recorded_eur)} of "
+           f"{money_text.up_to(confirmed_eur)} confirmed: {', '.join(items)}. "
+           "A new render starts from the beginning and is paid again.")
+    return status, log

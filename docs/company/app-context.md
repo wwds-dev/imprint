@@ -16,7 +16,7 @@ Imprint: a macOS desktop app (PySide6) that bundles ten creative/publishing AI a
 ## Commands
 - Install deps: `uv pip install -r requirements.txt -r requirements-dev.txt`
 - Run app: `.venv/bin/python main.py`
-- Run tests: `.venv/bin/python -m pytest -q` (1512 collected via `--collect-only`, 2026-10-14; a full run takes 13 to 17 minutes, README §16.1; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
+- Run tests: `.venv/bin/python -m pytest -q` (1826+ collected via `--collect-only`, 2026-10-19; a full run takes 13 to 17 minutes, README §16.1; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
 - Lint / types: `ruff.toml` (E4, E7, E9, F, B) with a CI ratchet against `docs/company/tooling/baseline.json`; no type checker.
 - Setup checks: `scripts/check_setup.py`, `scripts/check_keys.py`.
 - Build: `./scripts/build_app.sh [--no-install]` (PyInstaller, ad-hoc codesign, installs to /Applications); everyday: `./scripts/install_app.sh` (launcher into this source tree, edits live on relaunch).
@@ -47,8 +47,8 @@ Imprint: a macOS desktop app (PySide6) that bundles ten creative/publishing AI a
 - Packaging: ad-hoc signed only (no notarization found); the live launcher executes this source tree. Dependencies: `requirements.txt` has several unpinned packages. `pip-audit` runs in `.github/workflows/security.yml` (non-blocking); it cannot audit the unpinned lines.
 
 ## Test bar
-- Layout: flat `tests/test_*.py` (1512 collected), shared `tests/conftest.py`; `tests/TEST_PLAN.md` defines tiers T0-T6. Suite runs in an isolated DB; no test may touch `data/imprint.db`.
-- Last recorded (2026-10-14, full run with `-p no:randomly`): 1506 passed, 6 skipped.
+- Layout: flat `tests/test_*.py` (1826 collected), shared `tests/conftest.py`; `tests/TEST_PLAN.md` defines tiers T0-T6. Suite runs in an isolated DB; no test may touch `data/imprint.db`.
+- Last recorded (2026-10-19, full run with `--randomly-seed=5`): 1820 passed, 6 skipped, 6 subtests passed (7 min 39 s).
 - Coverage target: none found. Flaky = any order-dependent hang or failure under `pytest-randomly`; a wedge is a bug, not a retry. No xdist (Qt).
 - CI: `.github/workflows/quality.yml` (tests with coverage on macOS; ruff lint ratchet on Ubuntu), `.github/workflows/security.yml` (gitleaks secret scan, blocking; pip-audit, not blocking; also weekly), `.github/dependabot.yml` (weekly: pip for root, `vidforge/`, `cloud/`; GitHub Actions). Whether runs pass on GitHub: UNVERIFIED.
 

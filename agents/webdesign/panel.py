@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QPushButton, QSizePolicy, QTabWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
+from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
 from ui.forms import LG, MD, SM, StatBlock, combo, field, line_edit, primary, section
 from ui.panels.base import AgentPanel
@@ -126,6 +127,8 @@ class WebdesignPanel(QWidget):
         actions.addStretch()
         self.webdesign_status_label = QLabel("")
         self.webdesign_status_label.setObjectName("EstimateLine")
+        # Wraps: a cut-off notice is a sentence.
+        self.webdesign_status_label.setWordWrap(True)
         actions.addWidget(self.webdesign_status_label)
         layout.addLayout(actions)
 
@@ -183,11 +186,13 @@ class WebdesignPanel(QWidget):
         prompt_parts.append(f"\nBrief:\n{brief}")
         prompt = "\n".join(prompt_parts)
 
+        # Built first: the guard prices the messages the worker will send.
+        messages = self.host.agent_instances["webdesign"].build_messages(prompt)
         # A denied or cancelled paid request must not strand Generate disabled.
         if not self.host.authorize_request("webdesign", provider, model, prompt,
+                                           messages=messages,
                                            resume=self.generate):
             return
-        messages = self.host.agent_instances["webdesign"].build_messages(prompt)
         self._clear_displays()
         self.last_response = ""
         self.webdesign_status_label.setText("Generating...")
@@ -213,11 +218,12 @@ class WebdesignPanel(QWidget):
         self.webdesign_html_box.moveCursor(QTextCursor.End)
 
     def _on_finished(self, response: str):
-        self.host.record_request("webdesign", response)
+        entry = self.host.record_request("webdesign", response)
         self.last_response = response
         self._populate_tabs(response)
         self._update_indicators(response)
-        self.webdesign_status_label.setText("Generation complete.")
+        self.webdesign_status_label.setText(
+            result_notice(entry, response) or "Generation complete.")
         self._set_idle()
         self.webdesign_save_btn.setEnabled(True)
         self.webdesign_export_btn.setEnabled(True)

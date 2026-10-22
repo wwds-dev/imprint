@@ -34,6 +34,7 @@ from services.database import get_connection
 from services.higgsfield_client import (
     ContentPolicyError, HiggsfieldClient, check_prompt,
 )
+from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
 
 # Teaser routes. Each takes the persona's reference images: Higgsfield
@@ -239,12 +240,17 @@ class CreatorPanel(QWidget):
         actions.addStretch()
         self.creator_status_label = QLabel("")
         self.creator_status_label.setObjectName("EstimateLine")
+        # Wraps: a cut-off notice is a sentence.
+        self.creator_status_label.setWordWrap(True)
+        # Both show provider error text: never render it as markup.
+        self.creator_status_label.setTextFormat(Qt.PlainText)
         actions.addWidget(self.creator_status_label)
         layout.addLayout(actions)
 
         self.creator_video_status = QLabel("")
         self.creator_video_status.setObjectName("EstimateLine")
         self.creator_video_status.setWordWrap(True)
+        self.creator_video_status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.creator_video_status)
 
         # ── Tabs ────────────────────────────────────────────────────────
@@ -658,7 +664,8 @@ class CreatorPanel(QWidget):
         # flow, and resolving by name can bill the teaser's flat cost
         # against this text response (and leave the render unbilled).
         token = self.host.authorize_request("creator", provider, model,
-                                            messages[-1]["content"], label=kind)
+                                            messages[-1]["content"], label=kind,
+                                            messages=messages)
         if not token:
             return
         self._draft_token = token
@@ -675,19 +682,25 @@ class CreatorPanel(QWidget):
         worker = self.host._new_chat_worker(provider, model, messages, "")
         self.host.creator_worker = worker
         worker.finished_signal.connect(self._on_finished)
+        # Real token counts and the stop reason; without this every draft
+        # was billed on the chars/4 estimate (audit B-F8) and a cut-off
+        # draft looked complete.
+        worker.usage_signal.connect(
+            lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_error)
         worker.start()
 
     def _on_finished(self, response: str):
         self.creator_output.setPlainText(response)
         token, self._draft_token = self._draft_token, None
-        if token:
-            self.host.record_request(token, response)
+        entry = self.host.record_request(token, response) if token else None
         self._last_generation_cost_eur = float(self.host.last_request_cost or 0)
         self.creator_generate_btn.setEnabled(True)
         self.creator_stop_btn.setEnabled(False)
         self.creator_stop_btn.hide()
-        self.creator_status_label.setText("Draft ready — review before posting.")
+        self.creator_status_label.setText(
+            result_notice(entry, response)
+            or "Draft ready — review before posting.")
 
     def _on_error(self, error: str):
         token, self._draft_token = self._draft_token, None

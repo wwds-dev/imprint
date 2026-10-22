@@ -8,6 +8,7 @@ from google.genai import types as genai_types
 
 from services.api_limits import REQUEST_TIMEOUT_MS
 from services.media_catalog import GEMINI_VIDEO_MODELS
+from services.output_limits import MAX_OUTPUT_TOKENS, stop_kind
 
 VIDEO_REQUEST_TIMEOUT_MS = 900_000
 
@@ -66,6 +67,48 @@ def one_attempt_client(api_key: str, timeout_ms: int | None = None,
     client.interactions.sdk_configuration.retry_config = RetryConfig(
         "none", None, False)
     return client
+
+
+def _usage(meta) -> dict:
+    """Token counts from a `usage_metadata`, as the usage tracker reads them.
+
+    google-genai 2.21.0 counts thinking apart from the answer: total = prompt
+    + candidates + tool-use prompt + thoughts. Google bills thoughts at the
+    output rate, so reading `candidates_token_count` alone recorded about a
+    sixth of a thinking model's bill (audit B-F1). `prompt_token_count`
+    already includes any cached content, which makes
+    `cached_content_token_count` the slice of it the tracker bills at the
+    cached rate. Every field can come back None.
+    """
+    def count(name: str) -> int:
+        return int(getattr(meta, name, 0) or 0) if meta is not None else 0
+
+    return {
+        "input_tokens": count("prompt_token_count"),
+        "output_tokens": (count("candidates_token_count")
+                          + count("thoughts_token_count")),
+        "cached_input_tokens": count("cached_content_token_count"),
+    }
+
+
+def _text_config(max_output_tokens: int):
+    """The output cap. Gemini's `max_output_tokens` bounds the whole response
+    including thought tokens, so a thinking model can hit it while still
+    thinking: the reply comes back short or empty and is billed anyway."""
+    return genai_types.GenerateContentConfig(max_output_tokens=max_output_tokens)
+
+
+def _finish(response) -> str | None:
+    """"length" when the first candidate stopped at the cap, else None."""
+    candidates = getattr(response, "candidates", None) or []
+    return stop_kind(getattr(candidates[0], "finish_reason", None)
+                     if candidates else None)
+
+
+def _thought_tokens(meta) -> int:
+    """Thinking tokens, kept apart for the cut-off notice; `_usage` already
+    bills them as output."""
+    return int(getattr(meta, "thoughts_token_count", 0) or 0) if meta is not None else 0
 
 
 # Inline image data rides inside one request, capped by the API at 20 MB.
@@ -180,7 +223,8 @@ class GeminiClientWrapper:
         return sorted({name for name in names
                        if valid_model_id(name) and is_media_model(name)})
 
-    def chat(self, messages, model="gemini-2.5-flash"):
+    def chat(self, messages, model="gemini-2.5-flash",
+             max_output_tokens=MAX_OUTPUT_TOKENS):
         if not self.client:
             raise RuntimeError("GEMINI_API_KEY is not set.")
 
@@ -192,6 +236,7 @@ class GeminiClientWrapper:
         response = self.client.models.generate_content(
             model=model,
             contents=prompt,
+            config=_text_config(max_output_tokens),
         )
 
         text = response.text or ""
@@ -199,9 +244,10 @@ class GeminiClientWrapper:
         usage_metadata = getattr(response, "usage_metadata", None)
 
         usage = {
-            "input_tokens": getattr(usage_metadata, "prompt_token_count", 0) if usage_metadata else 0,
-            "output_tokens": getattr(usage_metadata, "candidates_token_count", 0) if usage_metadata else 0,
+            **_usage(usage_metadata),
             "total_tokens": getattr(usage_metadata, "total_token_count", 0) if usage_metadata else 0,
+            "thought_tokens": _thought_tokens(usage_metadata),
+            "stop_reason": _finish(response),
         }
 
         return text, usage
@@ -387,7 +433,8 @@ class GeminiClientWrapper:
             raise RuntimeError("Gemini returned an empty video file.")
         return data
     
-    def stream_chat(self, messages, model="gemini-2.5-flash"):
+    def stream_chat(self, messages, model="gemini-2.5-flash",
+                    max_output_tokens=MAX_OUTPUT_TOKENS):
         if not self.client:
             raise RuntimeError("GEMINI_API_KEY is not set.")
 
@@ -401,6 +448,7 @@ class GeminiClientWrapper:
                 stream = self.client.models.generate_content_stream(
                     model=model,
                     contents=prompt,
+                    config=_text_config(max_output_tokens),
                 )
 
                 for chunk in stream:
@@ -409,10 +457,15 @@ class GeminiClientWrapper:
                     # billed on the chars/4 estimate.
                     meta = getattr(chunk, "usage_metadata", None)
                     if meta is not None:
-                        out.usage = {
-                            "input_tokens": getattr(meta, "prompt_token_count", 0) or 0,
-                            "output_tokens": getattr(meta, "candidates_token_count", 0) or 0,
-                        }
+                        out.usage = {**_usage(meta),
+                                     "thought_tokens": _thought_tokens(meta)}
+                    # The last chunk with a candidate carries the finish
+                    # reason; earlier ones have none yet, and a later one
+                    # without it must not clear it.
+                    if getattr(chunk, "candidates", None):
+                        stop = _finish(chunk)
+                        if stop is not None:
+                            out.stop_reason = stop
                     text = getattr(chunk, "text", "")
                     if text:
                         yield text

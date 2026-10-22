@@ -54,17 +54,44 @@ def test_a_normal_reply_still_returns_its_text():
         [{"role": "user", "content": "hello"}], model="claude-sonnet-5-5")
     assert text == "Hi."
     assert usage == {"input_tokens": 100, "output_tokens": 20,
-                     "cached_input_tokens": 0}
+                     "cached_input_tokens": 0, "stop_reason": None}
 
 
 def test_cache_reads_are_counted_as_input_and_named_as_cached():
     _text, usage = _wrapper(_message("Hi.", read=900, written=50)).chat(
         [{"role": "user", "content": "hello"}], model="claude-sonnet-5-5")
     assert usage == {"input_tokens": 1050, "output_tokens": 20,
-                     "cached_input_tokens": 900}
+                     "cached_input_tokens": 900, "stop_reason": None}
 
 
 def test_the_offline_list_carries_no_retired_model():
     assert not [m for m in ac.AnthropicClientWrapper.KNOWN_MODELS
                 if m.startswith("claude-3")]
     assert "claude-opus-5-5" in ac.AnthropicClientWrapper.KNOWN_MODELS
+
+
+@pytest.mark.parametrize("mode", ["stream", "chat"])
+def test_a_missing_model_names_it_instead_of_raising_name_error(mode):
+    """The stream's 404 handler read an undefined `model` (pyflakes F821), so
+    a retired model id surfaced as NameError rather than the advice to pick
+    another one."""
+    import anthropic
+    import httpx
+
+    def not_found(**kwargs):
+        request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+        raise anthropic.NotFoundError(
+            "model: claude-gone-1", response=httpx.Response(404, request=request),
+            body=None)
+
+    wrapper = ac.AnthropicClientWrapper.__new__(ac.AnthropicClientWrapper)
+    wrapper.client = types.SimpleNamespace(messages=types.SimpleNamespace(
+        create=not_found, stream=not_found))
+    messages = [{"role": "user", "content": "hello"}]
+    with pytest.raises(RuntimeError,
+                       match=r"NotFoundError \(404\) — Model 'claude-gone-1' "
+                             r"does not exist"):
+        if mode == "stream":
+            "".join(wrapper.stream_chat(messages, model="claude-gone-1"))
+        else:
+            wrapper.chat(messages, model="claude-gone-1")

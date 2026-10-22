@@ -277,7 +277,10 @@ def test_budget_refusal_and_no_key(app, monkeypatch):
     _allow(app, monkeypatch)
     monkeypatch.setattr(app, "daily_budget_eur", 0.0)
     assert not app.start_local_measure(DOLPHIN, automatic=True)
-    assert "budget" in app.local_rating_store.entry(DOLPHIN)["reason"].lower()
+    # The guard's refusal wording changed with the billing audit: it names the
+    # cap and what is left rather than the word "budget".
+    reason = app.local_rating_store.entry(DOLPHIN)["reason"].lower()
+    assert "not sent" in reason and "cap" in reason and "left" in reason
     _allow(app, monkeypatch, key=False)
     assert not app.start_local_measure(DOLPHIN, automatic=True)
     assert "API key" in app.local_rating_store.entry(DOLPHIN)["reason"]

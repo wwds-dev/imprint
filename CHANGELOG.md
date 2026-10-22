@@ -24,6 +24,61 @@ nothing here is a claim about income, sales or publishing results.
 
 ## 2026-10-14
 
+### Fixed
+- Budget caps now hold for text requests. Every paid text client (OpenAI,
+  DeepSeek, Kimi, Qwen, Gemini, Anthropic) sends one output cap of 8,192 tokens,
+  and the guard reserves that much output plus every message the request sends
+  (system prompt, context, history, project instructions), not the typed prompt
+  alone. Before, five clients sent no cap and one request could run past what was
+  left of a budget many times over. DeepSeek also reserves up to 65,536 thinking
+  tokens; Qwen is sent a thinking limit of 8,192 and reserves that on top (the
+  parameter name is unverified until a paid run); Kimi reserves the cap alone,
+  because its thinking counts against it. A 100-token prompt is "up to" €0.12
+  on kimi-k3 (which a reserve of 65,536 for every Kimi model had refused under
+  the default €1.00 session cap), €0.10 on qwen3.8-max and €0.27 on
+  deepseek-v4-pro.
+- A video render, Herald clip or Stamp logo batch that fails or is stopped now
+  records what it already paid for (each started paid step at its confirmed
+  line, each saved image at the per-image rate, never more than you confirmed)
+  as a `partial` row in Cost History, and the Run Log says "recorded €X of €Y".
+  Before, it recorded €0 and a retry paid everything again under the same caps.
+  Stopping before the first paid step still records nothing.
+- Muse drafts report their real token counts (they were billed on an estimate).
+- A cut-off or empty Stamp image prompt or Herald clip brief no longer goes on
+  to a paid image batch or render (an empty clip topic rendered the next topic
+  from topics.txt).
+- Stopping a Stamp batch closes it only when the image worker's last signal
+  arrives, so images it had already returned are billed; a video Stop during
+  the last scene image counts that image.
+- A Gemini stream that reported the length limit no longer loses it to a later
+  chunk; a refusal can no longer show the same figure twice ("up to €0.43 …
+  €0.43 left").
+- Token and per-unit pricing read one EUR/USD rate, and a rate of 0, below 0,
+  NaN or infinity falls back to 0.92 instead of making requests free or
+  negative. Settings refuses to save such a rate. Settings and **Save Limits**
+  both refuse a NaN, infinite or negative Session or Daily budget and keep the
+  old limits (Save Limits took "inf", which removed the cap, and "nan", which
+  made every paid request fail).
+- Reddit: a subreddit must be one valid name ("r/r/rust", "r/ rust" or a URL is
+  refused before login), and "Post now?" names it (`r/rust`).
+- Run Log, Cost History, the Video log and the agents' status lines show
+  provider and error text as text, not HTML.
+- An Anthropic 404 during a stream names the missing model instead of raising
+  a NameError.
+
+### Changed
+- The paid-request dialog shows "Up to €X; you pay for what it writes" and the
+  tokens it is based on; renders and image batches add that finished paid steps
+  are recorded if they fail or are stopped. The live line and the Cost Estimate
+  popup use the same "up to" figure.
+- A budget refusal says "Not sent: this request can cost up to €X and your
+  session cap has €Y left (of €Z)" and what to do, instead of "Session budget
+  exceeded". The local-model offer is titled "Not enough budget left".
+- A reply that stops at the length limit shows "[Cut off] …" beside the text
+  instead of "[Finished]" or "[Done]"; Quill points at Continue.
+- Video and Stamp Stop messages say what was recorded ("[Stopped] After 10 of 35
+  images: €0.73 of €2.11 recorded."); Stamp's errors use the `[Error]` tag.
+
 ### Added
 - Settings -> API keys has a **Qwen workspace ID** field (`DASHSCOPE_WORKSPACE_ID`,
   Singapore only). Entering the ID sends Qwen chat to

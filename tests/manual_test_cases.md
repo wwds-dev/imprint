@@ -261,7 +261,7 @@ estimate. Send that request from Quill.
 
 **What to verify:**
 - [ ] The request is refused with the cap reason stated
-- [ ] A dialog titled **Budget cap reached** offers the local model and says it
+- [ ] A dialog titled **Not enough budget left** offers the local model and says it
       "runs on this machine and costs nothing"
 - [ ] It **names the model** it will switch to, e.g. `llama3.1:8b` — not a vague
       "the local model" you cannot check

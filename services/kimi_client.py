@@ -2,7 +2,8 @@ import os
 from openai import OpenAI
 
 from services.api_limits import REQUEST_TIMEOUT_SECONDS, MAX_RETRIES
-from services.stream_usage import UsageStream, cached_input_tokens
+from services.output_limits import MAX_OUTPUT_TOKENS, stop_kind
+from services.stream_usage import UsageStream, cached_input_tokens, note_finish
 
 
 class KimiClientWrapper:
@@ -56,13 +57,18 @@ class KimiClientWrapper:
         models = sorted(m.id for m in result.data)
         return models if models else self.KNOWN_MODELS
 
-    def chat(self, messages, model="kimi-k2.7-code"):
+    def chat(self, messages, model="kimi-k2.7-code",
+             max_output_tokens=MAX_OUTPUT_TOKENS):
         if not self.client:
             raise RuntimeError("KIMI_API_KEY is not set.")
 
         response = self.client.chat.completions.create(
             model=model,
             messages=messages,
+            # The OpenAI-compatible name. Kimi's thinking-model doc says
+            # reasoning counts against it, so the guard reserves no
+            # thinking on top (services/output_limits.py).
+            max_tokens=max_output_tokens,
         )
 
         text = response.choices[0].message.content or ""
@@ -71,6 +77,8 @@ class KimiClientWrapper:
             "input_tokens": response.usage.prompt_tokens if response.usage else 0,
             "output_tokens": response.usage.completion_tokens if response.usage else 0,
             "total_tokens": response.usage.total_tokens if response.usage else 0,
+            "stop_reason": stop_kind(
+                getattr(response.choices[0], "finish_reason", None)),
             "cached_input_tokens": cached_input_tokens(response.usage),
         }
 
@@ -80,7 +88,8 @@ class KimiClientWrapper:
         messages = [{"role": "user", "content": prompt}]
         return self.chat(messages=messages, model=model)
 
-    def stream_chat(self, messages, model="kimi-k2.7-code"):
+    def stream_chat(self, messages, model="kimi-k2.7-code",
+                    max_output_tokens=MAX_OUTPUT_TOKENS):
         if not self.client:
             raise RuntimeError("KIMI_API_KEY is not set.")
 
@@ -89,6 +98,7 @@ class KimiClientWrapper:
                 stream = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
+                    max_tokens=max_output_tokens,
                     stream=True,
                     # The provider's real token counts arrive in a final
                     # usage-only frame; without this every stream was billed
@@ -109,6 +119,7 @@ class KimiClientWrapper:
                     # indexing [0] blindly crashed the stream mid-response.
                     if not chunk.choices:
                         continue
+                    note_finish(out, chunk)
                     delta = chunk.choices[0].delta.content
                     if delta:
                         yield delta

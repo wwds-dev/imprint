@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout, QWidget,
 )
 
+from services.output_limits import result_notice
 from agents.social.agent import (
     ANGLES, SUBJECT_KINDS, build_clip_brief_messages, build_post_messages,
     over_limit, split_variants,
@@ -60,6 +61,11 @@ class SocialPanel(QWidget):
         self._write_token = None
         self._brief_token = None
         self._clip_video_token = None
+        # What the clip render was confirmed at and what it has done, so a
+        # failure bills the paid steps it finished (audit B-F3).
+        self._clip_estimate: dict = {}
+        self._clip_eur_rate = 0.0
+        self._clip_trace: dict | None = None
         self._pending_clip = ("tiktok", 30)
         # Visual route chosen through the paid-request assessment (Apply);
         # empty means vidforge's configured visuals.
@@ -184,6 +190,10 @@ class SocialPanel(QWidget):
         actions.addStretch()
         self.social_status_label = QLabel("")
         self.social_status_label.setObjectName("EstimateLine")
+        # Wraps: cut-off and billing notices are sentences.
+        self.social_status_label.setWordWrap(True)
+        # It shows provider error text: never render it as markup.
+        self.social_status_label.setTextFormat(Qt.PlainText)
         actions.addWidget(self.social_status_label)
         layout.addLayout(actions)
 
@@ -452,7 +462,7 @@ class SocialPanel(QWidget):
         token = self.host.authorize_request("social", provider, model,
                                             messages[-1]["content"],
                                             label=f"{platform.key} post",
-                                            resume=self.write)
+                                            messages=messages, resume=self.write)
         if not token:
             return
         self._write_token = token
@@ -472,13 +482,13 @@ class SocialPanel(QWidget):
 
     def _on_written(self, response: str):
         token, self._write_token = self._write_token, None
-        if token:
-            self.host.record_request(token, response)
+        entry = self.host.record_request(token, response) if token else None
         variants = split_variants(response)
         separator = "\n\n" + "—" * 30 + "\n\n"
         self.social_draft_box.setPlainText(separator.join(variants))
         self.social_status_label.setText(
-            f"{len(variants)} variant(s) — edit, then Save to Schedule")
+            result_notice(entry, response)
+            or f"{len(variants)} variant(s) — edit, then Save to Schedule")
         self._reset_buttons()
         self.social_tabs.setCurrentIndex(0)
 
@@ -541,7 +551,7 @@ class SocialPanel(QWidget):
         token = self.host.authorize_request("social", provider, model,
                                             messages[-1]["content"],
                                             label="clip brief",
-                                            resume=self.make_clip)
+                                            messages=messages, resume=self.make_clip)
         if not token:
             return
         self._brief_token = token
@@ -565,10 +575,20 @@ class SocialPanel(QWidget):
         from ui.workers import VideoWorker
 
         token, self._brief_token = self._brief_token, None
-        if token:
-            self.host.record_request(token, brief)
+        entry = self.host.record_request(token, brief) if token else None
         platform_key, seconds = self._pending_clip
         topic = brief.strip().split("\n")[0][:300]
+        # A brief cut at the length limit (or a Gemini answer that is all
+        # thinking) must not become a paid render, and an empty topic would
+        # make vidforge render the next topic from topics.txt instead.
+        notice = result_notice(entry, brief)
+        if notice or not topic.strip():
+            self.social_status_label.setText(
+                f"Clip: {notice}" if notice else
+                "Clip: [Error] The clip brief came back empty; nothing was "
+                "rendered.")
+            self._clip_done()
+            return
 
         aspect = ("Square 1:1" if platform_key == "pinterest"
                   else "Vertical 9:16")
@@ -576,7 +596,8 @@ class SocialPanel(QWidget):
                      **self._clip_visuals}
         cfg = video_studio.load_config(overrides)
         estimate = video_studio.pre_estimate(cfg)
-        cost_eur = round(estimate["total"] * eur_per_usd(), 4)
+        eur_rate = eur_per_usd()
+        cost_eur = round(estimate["total"] * eur_rate, 4)
 
         confirm = QMessageBox.question(
             self, "Render this clip?",
@@ -595,7 +616,7 @@ class SocialPanel(QWidget):
         video_token = self.host.authorize_request(
             "video", "openai", "vidforge-pipeline", topic,
             label=f"{platform_key} clip", flat_cost_eur=cost_eur,
-            assessment=assessment)
+            assessment=assessment, partial_billing=True)
         if not video_token:
             if (assessment is not None
                     and self.host.last_applied_assessment is assessment):
@@ -606,6 +627,11 @@ class SocialPanel(QWidget):
             self._clip_done()
             return
         self._clip_video_token = video_token
+        # Kept as confirmed: a failure is billed on these, not on a later
+        # config or exchange rate.
+        self._clip_estimate = dict(estimate)
+        self._clip_eur_rate = eur_rate
+        self._clip_trace = None
 
         self.social_status_label.setText("Rendering clip — see the Video tab")
         self.host.social_worker = None
@@ -614,8 +640,9 @@ class SocialPanel(QWidget):
         clip_worker.progress_signal.connect(
             lambda pct, detail: self.social_status_label.setText(
                 f"Rendering clip… {pct}%"))
+        clip_worker.trace_signal.connect(self._on_clip_trace)
         clip_worker.done_signal.connect(self._on_clip_rendered)
-        clip_worker.error_signal.connect(self._on_clip_error)
+        clip_worker.error_signal.connect(self._on_clip_render_error)
         clip_worker.start()
 
     @staticmethod
@@ -678,8 +705,44 @@ class SocialPanel(QWidget):
                 angle=self.social_angle_box.currentText())
             self.refresh_schedule()
         self.social_status_label.setText(f"Clip ready — {Path(path).name}")
+        self.social_status_label.setToolTip("")
         self._clip_done()
         self.host.refresh_video_library()
+
+    def _on_clip_trace(self, trace: dict) -> None:
+        self._clip_trace = dict(trace or {})
+
+    def _on_clip_render_error(self, error: str):
+        """The clip render failed: record what it had already paid for.
+
+        Owner decision D3, the same rule as the Video tab: each paid stage
+        that started at its confirmed line, each saved image at the
+        per-image rate, never above the confirmed total. The brief was
+        recorded when it arrived. The clip render has no Stop, so this is
+        always a failure.
+        """
+        from agents.video import video_studio
+
+        token, self._clip_video_token = self._clip_video_token, None
+        if not token:
+            self._on_clip_error(error)
+            return
+        trace, self._clip_trace = self._clip_trace, None
+        estimate, rate = self._clip_estimate, self._clip_eur_rate
+        cost = video_studio.partial_render_cost_usd(estimate, trace) * rate
+        result = self.host.record_partial(token, cost, status="error",
+                                          error=error)
+        if result is None:
+            status, log = f"[Error] {error}", ""
+        else:
+            status, log = video_studio.partial_render_notice(
+                estimate, trace, recorded_eur=result[0],
+                confirmed_eur=result[1], eur_rate=rate, error=error,
+                stopped=False)
+        self.social_status_label.setText(f"Clip: {status}")
+        # Social has no log pane; the itemised line stays one hover away.
+        self.social_status_label.setToolTip(log)
+        self._clip_done()
 
     def _on_clip_error(self, error: str):
         # The error can arrive from either stage: brief (its token pending)
@@ -955,15 +1018,24 @@ class SocialPanel(QWidget):
             return
 
         extra: dict = {}
+        where = platform.name if platform else post["platform"]
         if post["platform"] == "reddit":
             subreddit, ok = QInputDialog.getText(
                 self, "Subreddit", "Post to which subreddit? (without r/)")
             if not ok or not subreddit.strip():
                 return
+            # The name it will post to, checked now and shown in "Post now?":
+            # a public post in the wrong community cannot be taken back.
+            try:
+                subreddit = publishing.subreddit_name(subreddit)
+            except publishing.PublishError as exc:
+                QMessageBox.warning(self, "Not a subreddit", str(exc))
+                return
             title, ok = QInputDialog.getText(self, "Title", "Post title:")
             if not ok or not title.strip():
                 return
-            extra = {"subreddit": subreddit.strip(), "title": title.strip()}
+            extra = {"subreddit": subreddit, "title": title.strip()}
+            where = f"r/{subreddit} on {where}"
         elif post["platform"] == "pinterest":
             board_id, ok = QInputDialog.getText(self, "Board", "Pinterest board id:")
             if not ok or not board_id.strip():
@@ -978,7 +1050,7 @@ class SocialPanel(QWidget):
 
         confirm = QMessageBox.question(
             self, "Post now?",
-            f"This publishes to {platform.name if platform else post['platform']} "
+            f"This publishes to {where} "
             f"from your own account, immediately.\n\nContinue?",
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if confirm != QMessageBox.Yes:

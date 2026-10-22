@@ -85,7 +85,8 @@ class PanelRouting:
         return banner
 
     # ── Before the job ──────────────────────────────────────────────────────
-    def advise(self, agent, provider, model, prompt, *, tool="", resume=None) -> bool:
+    def advise(self, agent, provider, model, prompt, *, tool="", resume=None,
+               messages=None) -> bool:
         """True: carry on as selected. False: the job is held on the banner,
         refused there, or restarted on a remembered rule's model."""
         if resume is None or not self.eligible(agent):
@@ -101,7 +102,8 @@ class PanelRouting:
         host = self.host
         try:
             context = host._advisor_context(agent, tool, prompt, prompt,
-                                            provider.casefold(), model)
+                                            provider.casefold(), model,
+                                            messages=messages)
         except Exception as exc:  # noqa: BLE001 - advice must never block a run
             host._note_failure("routing advisor", exc)
             return True

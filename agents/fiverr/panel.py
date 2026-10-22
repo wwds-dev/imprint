@@ -23,6 +23,8 @@ from PySide6.QtWidgets import (
 from services.openai_client import (
     DEFAULT_IMAGE_MODEL,
 )
+from services import money_text
+from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
 from ui.panels.base import AgentPanel
@@ -57,6 +59,13 @@ class FiverrPanel(QWidget):
         self.host = host
         self._prompt_token = None
         self._image_token = None
+        # The image run behind _image_token: a failed or stopped batch bills
+        # the concepts the provider returned at the per-image rate it was
+        # confirmed at (audit B-F3).
+        self._image_rate = 0.0
+        self._image_count = 0
+        self._images_made = 0
+        self._image_stop_requested = False
         self._pending_count = 0
         self._pending_brief: dict = {}
         self._image_paths: list = []
@@ -196,6 +205,8 @@ class FiverrPanel(QWidget):
         self.fiverr_status_label = QLabel("Idle")
         self.fiverr_status_label.setObjectName("EstimateLine")
         self.fiverr_status_label.setWordWrap(True)
+        # Both status lines show provider error text: never as markup.
+        self.fiverr_status_label.setTextFormat(Qt.PlainText)
         layout.addWidget(self.fiverr_status_label)
 
         # ── Results ─────────────────────────────────────────────────────
@@ -212,7 +223,10 @@ class FiverrPanel(QWidget):
         self.fiverr_preview_status = QLabel(
             "No logos yet — fill in the brief and generate.")
         self.fiverr_preview_status.setObjectName("EstimateLine")
-        preview_top.addWidget(self.fiverr_preview_status)
+        # Wraps: a failed or stopped batch reports what it recorded.
+        self.fiverr_preview_status.setWordWrap(True)
+        self.fiverr_preview_status.setTextFormat(Qt.PlainText)
+        preview_top.addWidget(self.fiverr_preview_status, 1)
         preview_top.addStretch()
         self.fiverr_save_images_btn = quiet("Save All Images")
         self.fiverr_save_images_btn.setEnabled(False)
@@ -382,7 +396,7 @@ class FiverrPanel(QWidget):
         token = self.host.authorize_request(
             "fiverr", provider, model,
             messages[-1]["content"] if messages else "",
-            resume=self.generate_logos)
+            messages=messages, resume=self.generate_logos)
         if not token:
             # Refused — re-enable the buttons disabled above, or the panel
             # stays stuck until restart.
@@ -425,8 +439,18 @@ class FiverrPanel(QWidget):
         from ui.workers import FiverrImageWorker
 
         token, self._prompt_token = self._prompt_token, None
-        if token:
-            self.host.record_request(token, image_prompt)
+        entry = self.host.record_request(token, image_prompt) if token else None
+        # A prompt cut at the length limit (or a Gemini answer that is all
+        # thinking) must not be paid for again as images, and an empty one
+        # describes nothing.
+        notice = result_notice(entry, image_prompt)
+        if notice or not image_prompt.strip():
+            line = notice or ("[Error] The image prompt came back empty; no "
+                              "images were requested.")
+            self.fiverr_status_label.setText(line)
+            self.fiverr_preview_status.setText(line)
+            self._reset_buttons()
+            return
         image_prompt = image_prompt.strip()
         count = self._pending_count
         brief = self._pending_brief
@@ -465,7 +489,8 @@ class FiverrPanel(QWidget):
             "fiverr", provider, image_model,
             f"{count} logo concepts: {image_prompt[:200]}",
             label="logo images",
-            flat_cost_eur=image_cost, assessment=assessment)
+            flat_cost_eur=image_cost, assessment=assessment,
+            partial_billing=True)
         if not image_token:
             if (assessment is not None
                     and self.host.last_applied_assessment is assessment):
@@ -477,14 +502,23 @@ class FiverrPanel(QWidget):
             self._reset_buttons()
             return
         self._image_token = image_token
+        self._image_rate = image_cost / count if count else 0.0
+        self._image_count = count
+        self._images_made = 0
+        self._image_stop_requested = False
 
         worker = FiverrImageWorker(
             self.host.openai, image_prompt, count, save_dir,
             image_model=image_model)
         self.host.fiverr_image_worker = worker
-        worker.image_ready_signal.connect(self._on_image_ready)
-        worker.all_done_signal.connect(self._on_all_done)
-        worker.error_signal.connect(self._on_image_error)
+        # Bound to this run's token, so a late signal from an earlier run
+        # can never count toward (or close) this one.
+        worker.image_ready_signal.connect(
+            lambda path, index, t=image_token: self._on_image_ready(path, index, t))
+        worker.all_done_signal.connect(
+            lambda paths, t=image_token: self._on_all_done(paths, t))
+        worker.error_signal.connect(
+            lambda error, t=image_token: self._on_image_error(error, t))
         worker.status_signal.connect(self.fiverr_status_label.setText)
         worker.start()
 
@@ -499,7 +533,11 @@ class FiverrPanel(QWidget):
             self.host._note_failure("fiverr: open order", exc)
         self.refresh_orders()
 
-    def _on_image_ready(self, path: str, index: int) -> None:
+    def _on_image_ready(self, path: str, index: int, token=None) -> None:
+        if token is not None and token != self._image_token:
+            return          # a late signal from a run that is already closed
+        # The provider returned it: on a failure or Stop it is billed.
+        self._images_made += 1
         lbl = QLabel()
         pixmap = QPixmap(path)
         if not pixmap.isNull():
@@ -516,12 +554,16 @@ class FiverrPanel(QWidget):
             f"Concept {index + 1} ready — {Path(path).name}")
         self.fiverr_tabs.setCurrentIndex(0)
 
-    def _on_all_done(self, paths: list) -> None:
+    def _on_all_done(self, paths: list, token=None) -> None:
+        if token is not None and token != self._image_token:
+            return
         self._image_paths = paths
         self.fiverr_status_label.setText(f"Done — {len(paths)} logo(s) generated.")
         # Closes out the image request authorised in _on_prompt_ready,
-        # billing the per-image cost it was authorised against.
+        # billing the per-image cost it was authorised against. A Stop that
+        # came after the last concept changes nothing: all were made.
         token, self._image_token = self._image_token, None
+        self._image_stop_requested = False
         if token:
             self.host.record_request(token, f"{len(paths)} logo images")
         self._reset_buttons()
@@ -538,15 +580,15 @@ class FiverrPanel(QWidget):
                 self.host._note_failure("fiverr: attach logos", exc)
             self.refresh_orders()
 
-    def _on_image_error(self, error: str) -> None:
-        # A failed render still consumed whatever it managed before failing,
-        # but the authorised amount was for the full set — release it rather
-        # than bill for images that were never produced.
-        token, self._image_token = self._image_token, None
-        if token:
-            self.host.abandon_request(token)
-        self.fiverr_status_label.setText(f"Error: {error}")
-        self.fiverr_preview_status.setText(f"[Error] {error}")
+    def _on_image_error(self, error: str, token=None) -> None:
+        if token is not None and token != self._image_token:
+            return
+        # Also the end of a Stop: the worker exits with "Cancelled." once the
+        # concept in flight has come back, so that one is billed too.
+        stopped = self._image_stop_requested
+        line = self._close_image_run(error, stopped=stopped)
+        self.fiverr_status_label.setText(line)
+        self.fiverr_preview_status.setText(line)
         self._reset_buttons()
         if self._order_id is not None:
             from agents.fiverr import orders
@@ -583,7 +625,7 @@ class FiverrPanel(QWidget):
         token = self.host.authorize_request(
             "fiverr", provider, model,
             messages[-1]["content"] if messages else "",
-            resume=self.write_delivery)
+            messages=messages, resume=self.write_delivery)
         if not token:
             self._reset_buttons()
             return
@@ -603,11 +645,11 @@ class FiverrPanel(QWidget):
 
     def _on_delivery_done(self, _full: str) -> None:
         token, self._prompt_token = self._prompt_token, None
-        if token:
-            self.host.record_request(token, _full)
+        entry = self.host.record_request(token, _full) if token else None
         self._attach_to_order(delivery_text=self.fiverr_delivery_box
                               .toPlainText(), event="delivery written")
-        self.fiverr_status_label.setText("Delivery message ready.")
+        self.fiverr_status_label.setText(
+            result_notice(entry, _full) or "Delivery message ready.")
         self._reset_buttons()
 
     # ── gig description ─────────────────────────────────────────────────
@@ -628,7 +670,7 @@ class FiverrPanel(QWidget):
         token = self.host.authorize_request(
             "fiverr", provider, model,
             messages[-1]["content"] if messages else "",
-            resume=self.write_gig)
+            messages=messages, resume=self.write_gig)
         if not token:
             self._reset_buttons()
             return
@@ -648,11 +690,11 @@ class FiverrPanel(QWidget):
 
     def _on_gig_done(self, _full: str) -> None:
         token, self._prompt_token = self._prompt_token, None
-        if token:
-            self.host.record_request(token, _full)
+        entry = self.host.record_request(token, _full) if token else None
         self._attach_to_order(gig_text=self.fiverr_gig_box.toPlainText(),
                               event="gig listing written")
-        self.fiverr_status_label.setText("Gig description ready.")
+        self.fiverr_status_label.setText(
+            result_notice(entry, _full) or "Gig description ready.")
         self._reset_buttons()
 
     # ── stop / save / clear ─────────────────────────────────────────────
@@ -880,21 +922,66 @@ class FiverrPanel(QWidget):
                 f"Known client — brand kit loaded from "
                 f"{(order['updated_at'] or '')[:10]}.")
 
+    def _close_image_run(self, error: str, *, stopped: bool) -> str:
+        """Close the image request at the concepts the provider returned.
+
+        Owner decision D3: a failed or stopped batch bills each image made
+        at the per-image rate it was confirmed at, never more than the
+        confirmed total; nothing made, nothing recorded. Returns the status
+        line (spec Design, "B-F3 … Fiverr").
+        """
+        token, self._image_token = self._image_token, None
+        self._image_stop_requested = False
+        made, count = self._images_made, self._image_count
+        result = None
+        if token:
+            result = self.host.record_partial(
+                token, made * self._image_rate,
+                status="cancelled" if stopped else "error", error=error)
+        recorded, confirmed = result if result else (0.0, 0.0)
+        money = (f"{money_text.paid(recorded)} of "
+                 f"{money_text.up_to(confirmed)} recorded"
+                 if recorded > 0 else "nothing recorded")
+        if stopped:
+            if not made:
+                return "[Stopped] Before the first concept: nothing recorded."
+            return f"[Stopped] {made} of {count} concepts made; {money}."
+        reason = (error or "").strip().rstrip(".")
+        return f"[Error] {reason}. {made} of {count} concepts made; {money}."
+
     def stop(self) -> None:
         image_worker = self.host.fiverr_image_worker
-        if image_worker is not None and image_worker.isRunning():
+        images_running = image_worker is not None and image_worker.isRunning()
+        if images_running:
             image_worker.cancel()
         text_worker = self.host.fiverr_text_worker
         if text_worker is not None and text_worker.isRunning():
             text_worker.cancel()
         # Release whatever this panel has pending — a stopped run must not
         # leave an authorized request dangling for the next flow to clobber.
-        for attr in ("_prompt_token", "_image_token"):
-            token = getattr(self, attr)
-            setattr(self, attr, None)
-            if token:
-                self.host.abandon_request(token, reason="stopped")
-        self.fiverr_status_label.setText("Stopped.")
+        token, self._prompt_token = self._prompt_token, None
+        if token:
+            self.host.abandon_request(token, reason="stopped")
+        if self._image_token and image_worker is not None:
+            # Closed only by the worker's own last signal (all done, or the
+            # error or "Cancelled." it exits with), never here: a running
+            # worker finishes the concept in flight, already paid for, and
+            # a worker that has just finished may still have its images and
+            # that last signal queued for this thread. Closing on
+            # isRunning() billed 1 of 4 concepts made (security review
+            # P3-1). The buttons stay disabled until then.
+            self._image_stop_requested = True
+            self.fiverr_stop_btn.setEnabled(False)
+            self.fiverr_status_label.setText(
+                "Stopping after this concept… concepts already made are "
+                "recorded.")
+            return
+        if self._image_token:
+            line = self._close_image_run("Stopped", stopped=True)
+            self.fiverr_status_label.setText(line)
+            self.fiverr_preview_status.setText(line)
+        else:
+            self.fiverr_status_label.setText("[Stopped]")
         self._reset_buttons()
 
     def save_images(self) -> None:

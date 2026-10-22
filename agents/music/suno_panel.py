@@ -4,12 +4,13 @@ import shutil
 from pathlib import Path
 from uuid import uuid4
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QPushButton, QSpinBox, QComboBox, QListWidget,
     QFileDialog, QMessageBox, QApplication)
 
+from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
 
 
@@ -70,6 +71,8 @@ class SunoPanel(QWidget):
         layout.addLayout(row)
         self.status = QLabel("Double-click an imported track to listen in your audio player.")
         self.status.setWordWrap(True)
+        # It shows provider error text: never render it as markup.
+        self.status.setTextFormat(Qt.PlainText)
         layout.addWidget(self.status)
         self.albums.activated.connect(self.load)
         self.refresh()
@@ -193,22 +196,23 @@ class SunoPanel(QWidget):
         prompt = (f"Create {self.count.value()} original songs for {self.title.text()}. "
                   f"Artist: {panel.music_artist_input.text()}. Genre: {panel.music_genre_box.currentText()}. "
                   f"Brief: {self.brief.toPlainText()}")
-        if not model or not host.authorize_request("music", provider, model, prompt):
-            return
         system = ("Draft a coherent song or album package for manual creation in Suno. "
                   "For each numbered track give a title, a short distinct style prompt, and complete original "
                   "lyrics with verse/chorus/bridge labels, or an instrumental arrangement if requested. "
                   "Include track order and a consistent album direction. Do not claim audio was generated. "
                   "Finish with simple instructions to paste each track into Suno, review variants, download "
                   "per the user's account permissions, and import audio into Imprint. Do not invent API access.")
+        # Built first: the guard prices the messages the worker will send.
+        messages = [{"role": "system", "content": system},
+                    {"role": "user", "content": prompt}]
+        if not model or not host.authorize_request("music", provider, model, prompt,
+                                                   messages=messages):
+            return
         self.output.clear()
         self.generate.setEnabled(False)
         self.setEnabled(False)
         panel.music_analyse_btn.setEnabled(False)
-        self.worker = host._new_chat_worker(
-            provider, model,
-            [{"role": "system", "content": system},
-             {"role": "user", "content": prompt}], prompt)
+        self.worker = host._new_chat_worker(provider, model, messages, prompt)
         host.music_worker = self.worker
         self.worker.usage_signal.connect(lambda usage: host.note_request_usage("music", usage))
         self.worker.finished_signal.connect(self.complete)
@@ -218,9 +222,12 @@ class SunoPanel(QWidget):
 
     def complete(self, text):
         self.setEnabled(True)
-        self.host.record_request("music", text)
+        entry = self.host.record_request("music", text)
         self.output.setPlainText(text)
         self.save()
+        notice = result_notice(entry, text)
+        if notice:
+            self.status.setText(notice)
         self.generate.setEnabled(True)
         self.host.music_panel.music_analyse_btn.setEnabled(True)
 

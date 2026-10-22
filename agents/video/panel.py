@@ -13,6 +13,7 @@ notice instead of a form, aliases nothing onto the host, and every public
 method is a no-op.
 """
 
+import html
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QUrl
@@ -50,6 +51,13 @@ class VideoPanel(QWidget):
         self.host = host
         self._request_token = None
         self._render_project_id = None
+        # A pipeline render's confirmed estimate, the exchange rate it was
+        # confirmed at, and what the worker reports it has done: a failure or
+        # Stop bills the paid steps it finished from these (audit B-F3).
+        self._render_estimate: dict = {}
+        self._render_eur_rate = 0.0
+        self._render_trace: dict | None = None
+        self._stop_requested = False
         self._resume_started = False
         self._external_context: dict = {}
         self._active_kind = ""
@@ -167,6 +175,8 @@ class VideoPanel(QWidget):
         self.video_status_label = QLabel("Idle")
         self.video_status_label.setObjectName("EstimateLine")
         self.video_status_label.setWordWrap(True)
+        # It shows provider error text: never render it as markup.
+        self.video_status_label.setTextFormat(Qt.PlainText)
         render.addWidget(self.video_status_label)
 
         self.video_log = QTextEdit()
@@ -500,7 +510,8 @@ class VideoPanel(QWidget):
                     f"Enable {selection.provider} in the API permissions row "
                     "first.")
                 return
-        cost_eur = round(estimate["total"] * eur_per_usd(), 4)
+        eur_rate = eur_per_usd()
+        cost_eur = round(estimate["total"] * eur_rate, 4)
         assessment = self._assessment(selection, topic, cost_eur)
         # Keep the token: the Social clip flow also authorizes under
         # "video", and resolving by name pops whichever request is oldest.
@@ -508,7 +519,8 @@ class VideoPanel(QWidget):
             "video", "openai", "vidforge-pipeline",
             topic or "next topic from topics.txt",
             label=self.video_format_box.currentText().lower(),
-            flat_cost_eur=cost_eur, assessment=assessment)
+            flat_cost_eur=cost_eur, assessment=assessment,
+            partial_billing=True)
         if not token:
             if self._applied(assessment):
                 self.render()      # the new route, with its own estimate
@@ -516,6 +528,10 @@ class VideoPanel(QWidget):
         self._request_token = token
         self._render_project_id = self.host.pending_request_snapshot(token).get(
             "project")
+        self._render_estimate = dict(estimate)
+        self._render_eur_rate = eur_rate
+        self._render_trace = None
+        self._stop_requested = False
 
         self._begin("pipeline", can_cancel=True)
 
@@ -525,6 +541,7 @@ class VideoPanel(QWidget):
             lambda _key, label: self.video_status_label.setText(f"{label}…"))
         worker.progress_signal.connect(self._on_progress)
         worker.log_signal.connect(self.video_log.append)
+        worker.trace_signal.connect(self._on_trace)
         worker.done_signal.connect(self._on_done)
         worker.error_signal.connect(self._on_error)
         worker.start()
@@ -838,7 +855,58 @@ class VideoPanel(QWidget):
             self.video_log.append(
                 "[Warning] Video saved, but its Project link could not be stored.")
 
+    def _on_trace(self, trace: dict) -> None:
+        self._render_trace = dict(trace or {})
+
+    def _log_text(self, text: str) -> None:
+        """Append untrusted text (a provider's error) to the log as text.
+
+        QTextEdit.append() renders anything that looks like HTML, so an
+        error body with markup showed as markup (code review P3-5).
+        html.escape alone is not enough: append() treats a line with no tag
+        as plain text and would then show "&amp;" for "&". The span makes
+        it rich text every time, so the escaped line shows exactly what was
+        sent.
+        """
+        self.video_log.append(
+            "<span style='white-space:pre-wrap'>"
+            + html.escape(str(text)).replace("\n", "<br>") + "</span>")
+
+    def _on_pipeline_error(self, error: str) -> None:
+        """A pipeline render failed or was stopped: record what it paid for.
+
+        Owner decision D3: each paid stage that started bills its confirmed
+        line, each saved scene image the per-image rate, never above the
+        confirmed total, and a Stop before the script stage bills nothing.
+        The trace arrives before this from the worker's thread.
+        """
+        from agents.video import video_studio
+
+        token, self._request_token = self._request_token, None
+        self._render_project_id = None
+        trace, self._render_trace = self._render_trace, None
+        stopped, self._stop_requested = self._stop_requested, False
+        estimate, rate = self._render_estimate, self._render_eur_rate
+        self._log_text(error)
+        result = None
+        if token:
+            cost = video_studio.partial_render_cost_usd(estimate, trace) * rate
+            result = self.host.record_partial(
+                token, cost, status="cancelled" if stopped else "error",
+                error=error)
+        if result is None:
+            self._reset(f"[Error] {error}")
+            return
+        status, log = video_studio.partial_render_notice(
+            estimate, trace, recorded_eur=result[0], confirmed_eur=result[1],
+            eur_rate=rate, error=error, stopped=stopped)
+        self.video_log.append(log)
+        self._reset(status)
+
     def _on_error(self, error: str):
+        if self._active_kind == "pipeline":
+            self._on_pipeline_error(error)
+            return
         external = self._active_kind in {
             "higgsfield", "gemini-video", "qwen-video"}
         provider_completed = (
@@ -889,7 +957,7 @@ class VideoPanel(QWidget):
                 "saves the result.")
         elif not provider_completed:
             self._close_job_row(billed=False, error=error)
-        self.video_log.append(error)
+        self._log_text(error)
         self._reset(f"[Error] {error}")
 
     # ── startup reconciliation of jobs that outlived the process ────────
@@ -1133,11 +1201,16 @@ class VideoPanel(QWidget):
         if self.host.video_worker is not None:
             if self._active_kind == "higgsfield-estimate":
                 self._external_context["cancel_requested"] = True
+            if self._active_kind == "pipeline":
+                # The run closes as "cancelled", billing what it finished.
+                self._stop_requested = True
             self.host.video_worker.cancel()
             if self._active_kind.startswith("higgsfield"):
                 self.video_status_label.setText("Requesting cancellation…")
             else:
-                self.video_status_label.setText("Cancelling after this stage…")
+                self.video_status_label.setText(
+                    "Stopping after this step… paid steps already done are "
+                    "recorded.")
 
     # ── library ─────────────────────────────────────────────────────────
     def refresh_library(self):

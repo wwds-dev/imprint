@@ -44,6 +44,43 @@
 {"ts": "2026-10-14T12:51:51", "phase": "document", "state": "start", "spec": "model-watch-media"}
 {"ts": "2026-10-14T13:00:15", "phase": "document", "state": "done", "spec": "model-watch-media"}
 {"ts": "2026-10-14T13:05:20", "phase": "release", "state": "blocked", "spec": "model-watch-media"}
+{"ts": "2026-10-14T16:03:08", "phase": "define", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:10:57", "phase": "define", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:10:58", "phase": "define", "state": "blocked", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:13:45", "phase": "design", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:13:45", "phase": "build", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:14:03", "phase": "build", "state": "start", "spec": "audit-p1-billing"}
 {"ts": "2026-10-14T16:15:27", "phase": "release", "state": "done", "spec": "model-watch-media"}
+{"ts": "2026-10-14T16:17:38", "phase": "design", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:18:08", "phase": "architect", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:29:00", "phase": "architect", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:31:19", "phase": "architect", "state": "blocked", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:53:14", "phase": "build", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:55:54", "phase": "build", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T16:56:08", "phase": "build", "state": "start", "spec": "audit-p1-billing"}
 {"ts": "2026-10-14T16:59:03", "phase": "define", "state": "start", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-10-14T17:59:11", "phase": "build", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T18:00:20", "phase": "review", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T18:00:21", "phase": "verify", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T18:00:21", "phase": "secure", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T18:56:26", "phase": "review", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T18:56:27", "phase": "verify", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T18:56:27", "phase": "secure", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-14T18:56:27", "phase": "build", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T11:37:52", "phase": "build", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T11:53:43", "phase": "build", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T11:55:17", "phase": "review", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T11:55:17", "phase": "verify", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T11:55:17", "phase": "secure", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T12:22:47", "phase": "review", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T12:22:47", "phase": "verify", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T12:22:47", "phase": "secure", "state": "done", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T12:22:47", "phase": "build", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-10-19T12:51:22", "phase": "build", "state": "done", "spec": "audit-p1-billing"}
 {"ts": "2026-10-19T20:44:17", "phase": "build", "state": "done", "spec": "local-model-routing"}
+{"ts": "2026-10-22T01:08:32", "phase": "release", "state": "start"}
+{"ts": "2026-10-22T01:10:35", "phase": "release", "state": "blocked"}
+{"ts": "2026-10-22T01:15:26", "phase": "build", "state": "start"}
+{"ts": "2026-10-22T01:24:36", "phase": "build", "state": "done"}
+{"ts": "2026-10-22T01:25:33", "phase": "release", "state": "start"}
+{"ts": "2026-10-22T01:27:42", "phase": "release", "state": "done"}
