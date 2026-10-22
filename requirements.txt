@@ -32,7 +32,7 @@ typing_extensions==4.15.0
 urllib3==2.8.0
 anthropic
 python-pptx        # slide generation (.pptx export)
-PySide6             # desktop GUI
+PySide6==6.11.2             # desktop GUI
 google-genai         # Gemini provider
 psutil               # resource monitor
 python-docx           # manuscript DOCX export (book_exporter)
