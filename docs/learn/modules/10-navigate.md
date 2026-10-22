@@ -31,7 +31,9 @@
    dedicated agent exposes them.
 5. Open **API keys**. This is readiness/status, not a place to paste secrets.
    Below it, **Model updates** lists models your providers released since
-   Imprint last looked; its title shows the count (*Model updates · 2 new*).
+   Imprint last looked, and under **Video and image** any removed video or
+   image models and known shutdown dates; its title shows the counts
+   (*Model updates · 2 new · 1 warning*).
    See [Best Fit](12-best-fit.md#new-models) before switching to one.
 6. Inspect session/daily limits, Cost History, and Run Log before a long job.
 7. Use the header **Docs** for an agent's technical sheet and **Learning

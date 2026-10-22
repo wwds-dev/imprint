@@ -48,10 +48,13 @@ class AgentHost(Protocol):
 
     def authorize_request(self, agent: str, provider: str, model: str,
                           prompt: str, tool: str | None = None,
-                          label: str | None = None, *,
+                          label: str | None = None,
+                          resume: Any = None, *,
                           messages: list | None = None,
                           partial_billing: bool = False) -> Any:
-        """Falsy means the request must not be sent.
+        """Falsy means the request must not be sent. `resume` restarts the
+        panel's action; a text agent that passes it is routing-advised first
+        (ui/panel_routing.py), and a held job comes back falsy.
 
         Truthy is a request token; hand it back to record_request() or
         abandon_request() to name the exact run, or pass the agent name and let
@@ -67,8 +70,10 @@ class AgentHost(Protocol):
         entry, whose "stop_reason" says whether the reply was cut off."""
         ...
 
-    def abandon_request(self, agent: str, reason: str = "error") -> None:
-        """Drop a failed request so it is not billed."""
+    def abandon_request(self, agent: str, reason: str = "error",
+                        error: str | None = None) -> None:
+        """Drop a failed request so it is not billed. `error` is why, for the
+        routing advisor's failover offer."""
         ...
 
     def record_partial(self, token, cost_eur: float, *, status: str,

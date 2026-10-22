@@ -61,7 +61,7 @@ authorization and run history. Live preview remains future work.
   to weight this agent: task tags `("code", "structured", "analysis")`,
   `quality_weight=.45`, `reliability_weight=.25`, and a `provider_affinity`
   table ranking providers for this agent's work (openai .98, anthropic .96,
-  kimi .94, deepseek .92, qwen .88, gemini .86, ollama .70). Imprint reads this
+  kimi .94, deepseek .92, qwen .88, gemini .86, ollama .70, lmstudio .70). Imprint reads this
   to pick a backing model per provider availability/preference, independent of
   the `WebdesignAgent` class itself.
 

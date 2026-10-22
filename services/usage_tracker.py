@@ -1,4 +1,5 @@
 from datetime import datetime
+from services.providers import is_local as is_local_provider
 from services.database import get_connection
 
 # Every backend that costs money. The cloud flag used to hardcode only
@@ -54,7 +55,7 @@ def max_cost_eur(backend: str, model: str, in_tokens: int,
     from services.output_limits import reserved_output_tokens
     from services.pricing_catalog import resolve_price_row
 
-    if backend == "ollama":
+    if is_local_provider(backend):
         return 0.0
     own = conn is None
     if own:
@@ -119,7 +120,7 @@ class UsageTracker:
         cached rate is known the slice bills at the full input rate, so an
         unknown provider is never under-estimated.
         """
-        if backend == "ollama":
+        if is_local_provider(backend):
             return 0.0
 
         with get_connection() as conn:

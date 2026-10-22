@@ -146,7 +146,7 @@ class FiverrPanel(QWidget):
         self.fiverr_panel_base = AgentPanel(
             host, "fiverr",
             providers=("anthropic", "openai", "deepseek", "kimi", "gemini",
-                       "qwen", "ollama"),
+                       "qwen", "ollama", "lmstudio"),
             default_provider="anthropic")
         self.fiverr_provider_box = self.fiverr_panel_base.provider_box
         self.fiverr_model_box = self.fiverr_panel_base.model_box
@@ -396,7 +396,7 @@ class FiverrPanel(QWidget):
         token = self.host.authorize_request(
             "fiverr", provider, model,
             messages[-1]["content"] if messages else "",
-            messages=messages)
+            messages=messages, resume=self.generate_logos)
         if not token:
             # Refused — re-enable the buttons disabled above, or the panel
             # stays stuck until restart.
@@ -604,7 +604,7 @@ class FiverrPanel(QWidget):
         # covers them.
         token, self._prompt_token = self._prompt_token, None
         if token:
-            self.host.abandon_request(token)
+            self.host.abandon_request(token, error=error)
         self.fiverr_status_label.setText(f"Error: {error}")
         self._reset_buttons()
 
@@ -625,7 +625,7 @@ class FiverrPanel(QWidget):
         token = self.host.authorize_request(
             "fiverr", provider, model,
             messages[-1]["content"] if messages else "",
-            messages=messages)
+            messages=messages, resume=self.write_delivery)
         if not token:
             self._reset_buttons()
             return
@@ -670,7 +670,7 @@ class FiverrPanel(QWidget):
         token = self.host.authorize_request(
             "fiverr", provider, model,
             messages[-1]["content"] if messages else "",
-            messages=messages)
+            messages=messages, resume=self.write_gig)
         if not token:
             self._reset_buttons()
             return

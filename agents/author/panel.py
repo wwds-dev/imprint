@@ -247,7 +247,7 @@ class AuthorPanel(QWidget):
 
         self.author_panel_base = AgentPanel(
             host, "author",
-            providers=("ollama", "openai", "deepseek", "kimi", "gemini",
+            providers=("ollama", "lmstudio", "openai", "deepseek", "kimi", "gemini",
                        "anthropic", "qwen"),
             default_provider="anthropic")
         self.author_provider_box = self.author_panel_base.provider_box
@@ -1011,7 +1011,7 @@ class AuthorPanel(QWidget):
         )
 
     def _start_worker(self, provider: str, model: str, prompt: str,
-                      recent_draft_text: str = ""):
+                      recent_draft_text: str = "", resume=None):
         agent = self.host.agent_instances["author"]
         consistency_context = self._build_consistency_context(recent_draft_text)
         evidence = self._build_evidence_block()
@@ -1039,9 +1039,12 @@ class AuthorPanel(QWidget):
         # Keep the token: "author" is shared by the write, publish and
         # market flows, and resolving by name pops whichever is oldest.
         token = self.host.authorize_request("author", provider, model, prompt,
-                                            messages=messages)
+                                            messages=messages, resume=resume)
         if not token:
-            # Refused — re-enable the buttons disabled above.
+            # Refused or held on the routing banner: the draft Write cleared
+            # comes back, and the buttons disabled above are re-enabled.
+            if recent_draft_text:
+                self.author_draft_box.setPlainText(recent_draft_text)
             self.author_write_btn.setEnabled(True)
             self.author_continue_btn.setEnabled(True)
             self.author_stop_btn.setEnabled(False)
@@ -1072,7 +1075,8 @@ class AuthorPanel(QWidget):
         self.author_draft_box.clear()
         self._last_response = ""
         prompt = self._build_prompt(direction)
-        self._start_worker(provider, model, prompt, recent_draft_text=existing)
+        self._start_worker(provider, model, prompt, recent_draft_text=existing,
+                           resume=self.write)
 
     def continue_draft(self):
         direction = self.author_direction_input.text().strip()
@@ -1101,7 +1105,7 @@ class AuthorPanel(QWidget):
         prompt = self._build_prompt(continuation_note)
         # Recent draft text is already embedded in full inside `continuation_note` above —
         # don't pass it again here, that would just duplicate it in the prompt.
-        self._start_worker(provider, model, prompt)
+        self._start_worker(provider, model, prompt, resume=self.continue_draft)
 
     def _on_token(self, token: str):
         self._last_response += token
@@ -1147,7 +1151,7 @@ class AuthorPanel(QWidget):
     def _on_error(self, error: str):
         token, self._write_token = self._write_token, None
         if token:
-            self.host.abandon_request(token)
+            self.host.abandon_request(token, error=error)
         self.author_status_label.setText(f"[Error] {error}")
         self.author_write_btn.setEnabled(True)
         self.author_continue_btn.setEnabled(True)
@@ -1394,7 +1398,7 @@ class AuthorPanel(QWidget):
                 "[Busy] The previous request is still finishing — one moment.")
             return
         token = self.host.authorize_request("author", provider, model, prompt,
-                                            messages=messages)
+                                            messages=messages, resume=self.pub_generate)
         if not token:
             self.author_pub_generate_btn.setEnabled(True)
             self.author_pub_stop_btn.setEnabled(False)
@@ -1430,7 +1434,7 @@ class AuthorPanel(QWidget):
     def _pub_on_error(self, error: str):
         token, self._pub_token = self._pub_token, None
         if token:
-            self.host.abandon_request(token)
+            self.host.abandon_request(token, error=error)
         self.author_status_label.setText(f"[Error] {error}")
         self.author_pub_generate_btn.setEnabled(True)
         self.author_pub_stop_btn.setEnabled(False)
@@ -1515,7 +1519,7 @@ class AuthorPanel(QWidget):
                 "[Busy] The previous request is still finishing — one moment.")
             return
         token = self.host.authorize_request("author", provider, model, prompt,
-                                            messages=messages)
+                                            messages=messages, resume=self.mkt_generate)
         if not token:
             self.author_mkt_generate_btn.setEnabled(True)
             self.author_mkt_stop_btn.setEnabled(False)
@@ -1551,7 +1555,7 @@ class AuthorPanel(QWidget):
     def _mkt_on_error(self, error: str):
         token, self._mkt_token = self._mkt_token, None
         if token:
-            self.host.abandon_request(token)
+            self.host.abandon_request(token, error=error)
         self.author_status_label.setText(f"[Error] {error}")
         self.author_mkt_generate_btn.setEnabled(True)
         self.author_mkt_stop_btn.setEnabled(False)

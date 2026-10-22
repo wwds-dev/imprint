@@ -94,7 +94,7 @@ class MusicPanel(QWidget):
         layout.addWidget(section("Model"))
         self.music_panel_base = AgentPanel(
             host, "music",
-            providers=("ollama", "openai", "deepseek", "kimi", "gemini",
+            providers=("ollama", "lmstudio", "openai", "deepseek", "kimi", "gemini",
                        "anthropic", "qwen"),
             default_provider="anthropic")
         self.music_provider_box = self.music_panel_base.provider_box

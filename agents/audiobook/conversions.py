@@ -46,8 +46,8 @@ def remaining_fraction(row) -> float:
 
 def open_job(*, source_path: str, output_path: str, voice: str,
              chunk_tokens: int, estimate_eur: float, project=None,
-             reset_progress: bool = False, provider: str = "openai",
-             model: str = "gpt-4o-mini-tts") -> dict:
+             reset_progress: bool = False, provider: str = "",
+             model: str = "") -> dict:
     """Reuse the book's unfinished row (keeping billed_eur) or create one.
 
     run_baseline records where this run starts, so its own spend can be
@@ -56,6 +56,12 @@ def open_job(*, source_path: str, output_path: str, voice: str,
     invalid): the chunk counts restart at zero — billed_eur is history
     and always survives.
     """
+    if not provider:
+        # No route named: the one the converter would run today, never a
+        # hardcoded model that its provider may have removed.
+        from services.narrator.converter import TTS_PROVIDERS, default_tts_provider
+        provider = default_tts_provider()
+        model = model or TTS_PROVIDERS[provider]["model"]
     now = _now()
     existing = find_open(source_path, output_path)
     with get_connection() as conn:

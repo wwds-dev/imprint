@@ -77,7 +77,7 @@ class WebdesignPanel(QWidget):
         layout.addWidget(section("Model"))
         self.webdesign_panel_base = AgentPanel(
             host, "webdesign",
-            providers=("ollama", "openai", "deepseek", "kimi", "gemini",
+            providers=("ollama", "lmstudio", "openai", "deepseek", "kimi", "gemini",
                        "anthropic", "qwen"),
             default_provider="anthropic",
         )
@@ -190,7 +190,8 @@ class WebdesignPanel(QWidget):
         messages = self.host.agent_instances["webdesign"].build_messages(prompt)
         # A denied or cancelled paid request must not strand Generate disabled.
         if not self.host.authorize_request("webdesign", provider, model, prompt,
-                                           messages=messages):
+                                           messages=messages,
+                                           resume=self.generate):
             return
         self._clear_displays()
         self.last_response = ""
@@ -229,7 +230,7 @@ class WebdesignPanel(QWidget):
         self.webdesign_copy_btn.setEnabled(True)
 
     def _on_error(self, error: str):
-        self.host.abandon_request("webdesign")
+        self.host.abandon_request("webdesign", error=error)
         self.webdesign_html_box.setPlainText(f"[Error] {error}")
         self.webdesign_status_label.setText("Error.")
         self._set_idle()

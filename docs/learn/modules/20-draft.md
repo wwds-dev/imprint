@@ -17,7 +17,7 @@
 |---|---|---|
 | Project bar | Title, Author, Type, Genre, Tone, Point of View | Stable identity and creative constraints; Type changes available tasks |
 | Book Profile | Hook, Target reader, Comp titles, Publishing path, Save Profile | Reusable authoritative context for Write, Publish, and Market |
-| Compose | Task, Direction, Provider, Model, Write, Continue, Stop | One bounded generation; Continue extends current draft context |
+| Compose | Direction (full row); Task, Provider, Model; Write, Continue, Stop on the row below | One bounded generation; Continue extends current draft context |
 | Working tabs | Draft, Outline, Characters, World Notes, Chapters; Sources (Non-Fiction only) | Editable manuscript/context plus a derived heading navigator; listed sources switch on citation rules and `[UNSOURCED]` marks |
 | Document actions | Save Draft, Author name, export format, Export Book | Persist current text and produce EPUB/DOCX/PDF from recognised chapters |
 | Mode switch | Write, Publish & Market; Publish/Market sub-tabs | Draft prose versus packaging and launch-copy tasks |
@@ -97,7 +97,7 @@ the callout brings you back to that step.
 
 **Time:** about 15 minutes. **Cost:** one text request in Imprint — you see
 its estimate and approve it before anything is sent (free with a local
-Ollama model). The notes, sources and save in the other steps cost nothing.
+Ollama or LM Studio model). The notes, sources and save in the other steps cost nothing.
 
 ### Step 1 — Set the project identity
 
@@ -195,7 +195,7 @@ interview notes.
 ### Step 6 — Choose who writes
 
 Pick a provider and model. **BEST FIT** marks the recommended choice for this
-task; any capable model is fine. Choose Ollama if the chapter should stay on
+task; any capable model is fine. Choose Ollama or LM Studio if the chapter should stay on
 your Mac and the request should cost nothing.
 
 [Show me](show:author_provider_box)

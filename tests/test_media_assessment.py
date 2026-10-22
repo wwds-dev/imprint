@@ -25,6 +25,7 @@ Run with:  pytest tests/test_media_assessment.py -v
 
 import os
 import sys
+from datetime import date
 
 import pytest
 
@@ -64,6 +65,17 @@ def generous_budget(request, monkeypatch):
     if "window" not in request.fixturenames:
         return
     window = request.getfixturevalue("window")
+    # These tests rank the three Veo 3.1 routes, which Google shuts down on
+    # 2026-10-22; pin the day before so the ranking is still what is tested.
+    # (test_veo_shutdown_leaves_the_menus_on_its_date covers the date itself.)
+    monkeypatch.setattr(window, "_media_today", lambda: date(2026, 10, 21))
+    from services.recommendations import catalog
+
+    class _Day(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 10, 21)
+    monkeypatch.setattr(catalog, "date", _Day)
     monkeypatch.setattr(window, "session_budget_eur", 1000.0)
     monkeypatch.setattr(window, "daily_budget_eur", 1000.0)
 
@@ -99,6 +111,9 @@ def _pump(app, n=6):
 def _select_video(app, window, provider, model_id, length):
     panel = window.video_panel
     panel.video_visual_provider_box.setCurrentText(provider)
+    # The menu is rebuilt only when the provider changes; rebuild it so it
+    # reflects the clock this test pinned, whatever an earlier test left.
+    panel._visual_provider_changed(provider)
     _pump(app)
     box = panel.video_visual_model_box
     index = next(i for i in range(box.count())
@@ -406,3 +421,23 @@ def test_a_shut_down_model_leaves_the_menus_and_the_ranking_on_its_date():
     after = offered_models(today="2026-10-22")
     assert veo not in after
     assert find_model("Gemini", "gemini-omni-1.1-flash") in after
+
+
+def test_reel_menu_and_candidates_drop_veo_on_its_shutdown_day(app, window, monkeypatch):
+    """The Reel menu, the assessment and the model watch all read the host's clock."""
+    from services.recommendations import catalog
+
+    class _Day(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 10, 22)
+    monkeypatch.setattr(catalog, "date", _Day)
+    monkeypatch.setattr(window, "_media_today", lambda: date(2026, 10, 22))
+    panel = window.video_panel
+    panel.video_visual_provider_box.setCurrentText("Gemini")
+    panel._visual_provider_changed("Gemini")     # the box may already read Gemini
+    _pump(app)
+    shown = [panel.video_visual_model_box.itemData(i).model_id
+             for i in range(panel.video_visual_model_box.count())]
+    assert shown and not any(m.startswith("veo-3.1") for m in shown)
+    assert not any(m.startswith("veo-3.1") for m in window._offered_media_ids("Gemini"))

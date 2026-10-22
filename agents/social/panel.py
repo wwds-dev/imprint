@@ -143,7 +143,7 @@ class SocialPanel(QWidget):
         self.social_panel_base = AgentPanel(
             host, "social",
             providers=("anthropic", "openai", "deepseek", "kimi", "gemini",
-                       "qwen", "ollama"),
+                       "qwen", "ollama", "lmstudio"),
             default_provider="anthropic")
         self.social_provider_box = self.social_panel_base.provider_box
         self.social_model_box = self.social_panel_base.model_box
@@ -462,7 +462,7 @@ class SocialPanel(QWidget):
         token = self.host.authorize_request("social", provider, model,
                                             messages[-1]["content"],
                                             label=f"{platform.key} post",
-                                            messages=messages)
+                                            messages=messages, resume=self.write)
         if not token:
             return
         self._write_token = token
@@ -495,7 +495,7 @@ class SocialPanel(QWidget):
     def _on_write_error(self, error: str):
         token, self._write_token = self._write_token, None
         if token:
-            self.host.abandon_request(token)
+            self.host.abandon_request(token, error=error)
         self.social_status_label.setText(f"[Error] {error}")
         self._reset_buttons()
 
@@ -551,7 +551,7 @@ class SocialPanel(QWidget):
         token = self.host.authorize_request("social", provider, model,
                                             messages[-1]["content"],
                                             label="clip brief",
-                                            messages=messages)
+                                            messages=messages, resume=self.make_clip)
         if not token:
             return
         self._brief_token = token

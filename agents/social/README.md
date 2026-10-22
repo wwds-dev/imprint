@@ -47,7 +47,7 @@ tests/test_social_onboarding.py` (the second pins the scopes-and-steps contract)
   `AgentProfile` from `services.recommendations`) with the provider
   recommendation engine: task tags `social`/`marketing`/`creative`, weighted
   toward cost (.21) and speed (.19), with per-provider affinity scores from
-  openai (.98) down to ollama (.68).
+  openai (.98) down to ollama and lmstudio (.68 each).
 - `store.py` — campaign/post persistence, observed metrics and cadence.
 - `queue.py` — one durable delivery job per post, atomic claim, local
   idempotency, safe/uncertain retry states and restart reconciliation.

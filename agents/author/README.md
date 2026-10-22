@@ -37,7 +37,17 @@ remain at the location chosen by the user, including after Project deletion.
 - `panel.py` — `AuthorPanel`, the manuscript workbench: the project bar and
   Book Profile, the Write page (compose deck, manuscript/outline/characters/
   world tabs, chapters tab, a Sources tab in Non-Fiction mode only, document
-  bar), and the Publish & Market sub-pages. The whole panel scrolls below its
+  bar), and the Publish & Market sub-pages. Since the aligned-form pass
+  (2026-10-19, `2f8b242`) Compose is a `FieldGridLayout(columns=3)`:
+  **Direction** takes the full row, **Task**, **Provider** and **Model**
+  share the next as equal columns, and the Write/Continue/Stop actions sit
+  on their own row below at every width (the old single 3:1:1:2 strip cut
+  model names to a few characters, and the width-dependent re-stacking is
+  gone). Publish and Market use the same three-column grid with
+  **Extra Notes** spanning two columns. The next-step banner stays hidden
+  until there is a tip, instead of showing an empty teal bar. The Provider
+  menu offers Ollama, LM Studio, OpenAI, DeepSeek, Kimi, Gemini, Anthropic
+  (default) and Qwen. The whole panel scrolls below its
   minimum height (a `ScrollContent` in `ui/widgets.scrollable()`) instead of
   squeezing the editor; nothing inside it scrolls on its own,
   each of the three flows (write/continue, publish, market) keeping its own
@@ -68,7 +78,8 @@ remain at the location chosen by the user, including after Project deletion.
   tagged `creative`, `longform`, `editing`, weighted heavily toward quality
   (0.48) and context (0.16) over cost (0.08), with affinity across most
   providers (Anthropic 1.0, OpenAI 0.86, Gemini 0.82, Qwen 0.82, Kimi 0.80,
-  DeepSeek 0.74, Ollama 0.66). Discovered by
+  DeepSeek 0.74, Ollama 0.66, LM Studio 0.66 — the local server added in
+  routing phase 1, `0c0efcb`). Discovered by
   `agents.recommendation_profiles.profile_for("author")`.
 
 User guidance: `docs/agents/author.md`.

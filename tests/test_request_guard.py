@@ -124,7 +124,7 @@ class FakeUsageTracker:
         self.today_total = 0.0
 
     def calculate_cost_eur(self, backend, model, inp, out):
-        return 0.0 if backend == "ollama" else 0.01
+        return 0.0 if backend in ("ollama", "lmstudio") else 0.01
 
     def get_today_total(self):
         return self.today_total
@@ -303,14 +303,16 @@ class TestAuthorizeRequest:
         win.authorize_request("author", "openai", "gpt-4o", "hi")
         assert win.run_logger.started[0]["tool"] == "-"
 
-    def test_ollama_is_authorised_without_a_confirmation_dialog(self, win, monkeypatch):
+    @pytest.mark.parametrize("provider", ["ollama", "lmstudio"])
+    def test_a_local_provider_is_authorised_without_a_confirmation_dialog(
+            self, win, monkeypatch, provider):
         from PySide6.QtWidgets import QMessageBox
 
         def explode(*a, **k):
             raise AssertionError("local model must not prompt for API confirmation")
 
         monkeypatch.setattr(QMessageBox, "question", explode)
-        assert win.authorize_request("author", "ollama", "llama3", "hi")
+        assert win.authorize_request("author", provider, "llama3", "hi")
 
 
 class TestRecordRequest:
@@ -609,19 +611,26 @@ class TestLocalFallbackOffer:
     The guard never silently re-routes: it flips the agent's provider box
     and still returns False, so the user re-sends deliberately on ollama.
 
-    Every test here stubs the Ollama daemon. The offer asks it which models
-    are actually pulled, so without the stub these tests would pass or fail
-    depending on whether the developer happens to be running ollama — and
-    would quietly stop covering the offer at all on a machine without it.
+    Every test here seeds the local inventory. The offer reads which models
+    are actually installed from it (since 2026-10-21, so no request leaves the
+    GUI thread), and without the seed these tests would pass or fail depending
+    on whether the developer happens to be running ollama — and would quietly
+    stop covering the offer at all on a machine without it.
     """
 
     INSTALLED = ["llama3.1:8b", "deepseek-r1:8b"]
 
     @pytest.fixture(autouse=True)
-    def _daemon(self, win, monkeypatch):
-        """A daemon with two models pulled, unless a test says otherwise."""
-        monkeypatch.setattr(win.ollama, "list_models",
-                            lambda: list(self.INSTALLED))
+    def _daemon(self, win):
+        """An inventory with two Ollama models, unless a test says otherwise."""
+        from services import local_models as lm
+        before = win.local_inventory.snapshot()
+        win.local_inventory.store(lm.Snapshot(
+            models=tuple(lm.LocalModel("ollama", m, m, size_bytes=5_000_000_000)
+                         for m in self.INSTALLED),
+            ollama_up=True, ram_free_bytes=16e9, ram_total_bytes=24e9))
+        yield
+        win.local_inventory.store(before)
 
     def _cap_budget(self, win):
         win.session_budget_eur = 0.01
@@ -798,7 +807,8 @@ class TestLocalFallbackOffer:
         plain refusal: the user accepts, re-sends, and fails."""
         from PySide6.QtWidgets import QMessageBox
         self._cap_budget(win)
-        monkeypatch.setattr(win.ollama, "list_models", lambda: [])
+        from services import local_models as lm
+        win.local_inventory.store(lm.Snapshot(ollama_up=True))
         asked, warned = [], []
         monkeypatch.setattr(QMessageBox, "question",
                             staticmethod(lambda *a, **k: asked.append(a)
@@ -816,10 +826,9 @@ class TestLocalFallbackOffer:
         from PySide6.QtWidgets import QMessageBox
         self._cap_budget(win)
 
-        def dead():
-            raise OSError("connection refused")
-
-        monkeypatch.setattr(win.ollama, "list_models", dead)
+        # A runtime that is down discovers nothing: an empty snapshot.
+        from services import local_models as lm
+        win.local_inventory.store(lm.Snapshot(errors=("Ollama: refused",)))
         asked, warned = [], []
         monkeypatch.setattr(QMessageBox, "question",
                             staticmethod(lambda *a, **k: asked.append(a)
@@ -840,8 +849,10 @@ class TestLocalFallbackOffer:
         offered model is added to it."""
         from PySide6.QtWidgets import QMessageBox
         self._cap_budget(win)
-        monkeypatch.setattr(win.ollama, "list_models",
-                            lambda: ["qwen2.5:7b"])        # not in the box
+        from services import local_models as lm
+        win.local_inventory.store(lm.Snapshot(
+            models=(lm.LocalModel("ollama", "qwen2.5:7b", "qwen2.5:7b"),),
+            ollama_up=True))                                # not in the box
         monkeypatch.setattr(QMessageBox, "question",
                             staticmethod(lambda *a, **k: QMessageBox.Yes))
         monkeypatch.setattr(QMessageBox, "warning",

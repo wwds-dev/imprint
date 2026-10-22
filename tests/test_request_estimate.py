@@ -178,7 +178,9 @@ def win(_window, db, monkeypatch):
     monkeypatch.setattr(w, "load_history_list", lambda: None)
     monkeypatch.setattr(w, "update_usage_labels", lambda: None)
     # No daemon in the suite: the local-model offer must find nothing.
-    monkeypatch.setattr(w.ollama, "list_models", lambda: [])
+    from services import local_models as lm
+    w.local_inventory.store(lm.Snapshot(models=(), ram_free_bytes=16e9,
+                                        ram_total_bytes=24e9))
     w.shown = {"question": [], "warning": []}
     monkeypatch.setattr(QMessageBox, "question", staticmethod(
         lambda *a, **k: w.shown["question"].append(a[2]) or QMessageBox.Yes))
@@ -525,7 +527,12 @@ def test_no_refusal_says_exceeded_or_suggests_a_shorter_prompt(case):
 def test_the_local_offer_title_says_not_enough_left(win, monkeypatch):
     from PySide6.QtWidgets import QMessageBox
     titles = []
-    monkeypatch.setattr(win.ollama, "list_models", lambda: ["llama3.1:8b"])
+    from services import local_models as lm
+    win.local_inventory.store(lm.Snapshot(
+        models=(lm.LocalModel(provider="ollama", id="llama3.1:8b",
+                              name="llama3.1:8b", size_bytes=5e9, loaded=True,
+                              fit="ok"),),
+        ram_free_bytes=16e9, ram_total_bytes=24e9))
     monkeypatch.setattr(QMessageBox, "question", staticmethod(
         lambda parent, title, *a, **k: titles.append(title) or QMessageBox.No))
     prompt, messages = _d2_messages()
@@ -595,9 +602,20 @@ def settings_dialog(app, db, tmp_path, monkeypatch):
             self.registry = Registry()
             self.session_budget_eur = 1.0
             self.daily_budget_eur = 5.0
+            from services.local_models import LocalInventory
+            self.local_inventory = LocalInventory()
 
         def update_usage_labels(self):
             pass
+
+        def start_local_discovery(self):
+            pass
+
+        def start_lmstudio_server(self):
+            pass
+
+        def _find_control(self, _name):
+            return None
 
     host = Host()
     dialog = show_settings(host)

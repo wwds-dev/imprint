@@ -102,5 +102,5 @@ releases feed the next plan's prompt. See `SUNO_WORKFLOW.md`.
   `marketing`, using the engine's default quality/reliability/cost/speed
   weights (no overrides passed), and only overriding `provider_affinity` —
   ranking Anthropic (.98) above OpenAI (.91), Gemini (.88), Qwen (.83),
-  Kimi (.82), DeepSeek (.78), with Ollama (.68) included as a local
-  fallback option.
+  Kimi (.82), DeepSeek (.78), with Ollama and LM Studio (.68 each)
+  included as local fallback options.

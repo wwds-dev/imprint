@@ -2,7 +2,7 @@
 
 @AGENTS.md
 
-`AGENTS.md` is the company pipeline (installed from `software_company`); app facts are in `docs/company/app-context.md`. The rules below are this app's own and win on conflict.
+`AGENTS.md` is the company pipeline (installed from `foundry`); app facts are in `docs/company/app-context.md`. The rules below are this app's own and win on conflict.
 
 ## Task lists
 - `TODO.md` and `SUGGESTIONS.md` in this folder feed the Lab Projects Monitor. Keep their existing format exactly.
@@ -21,7 +21,7 @@
 - Run: `.venv/bin/python -m pytest -q` (about 90 s; `QT_QPA_PLATFORM=offscreen` is forced by `tests/conftest.py`). `pytest-randomly` shuffles order, so an order-dependent failure is a bug. CI mirrors this in `.github/workflows/quality.yml`.
 
 ## Shared Foundry files
-- Commit only your own changes in shared Foundry files (`apps.md`, `audits/*`, dashboard files in `software_company`). Other sessions have uncommitted edits there; stage by name.
+- Commit only your own changes in shared Foundry files (`apps.md`, `audits/*`, dashboard files in `foundry`). Other sessions have uncommitted edits there; stage by name.
 - The converter and benchmarks files are shared with Sentinel and must stay in sync. Do not change one side alone. `tests/test_benchmarks_drift.py` is the guard.
 
 ## Current goal

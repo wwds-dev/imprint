@@ -33,7 +33,7 @@ lesson, opens the control it names and rings it; **Back to lesson** in the
 callout brings you back to that step.
 
 **Time:** about 25 minutes. **Cost:** one text request — you see its estimate
-and approve it before anything is sent (free with a local Ollama model).
+and approve it before anything is sent (free with a local Ollama or LM Studio model).
 Hosting and a domain are separate and not part of this recipe.
 
 ### Step 1 — Choose the kind of page
@@ -80,7 +80,7 @@ scripts, cookie banners, external fonts.
 ### Step 4 — Choose who writes the code
 
 Pick a provider and model. **BEST FIT** marks the recommended choice for this
-task. Larger models write cleaner, more complete pages; a local Ollama model
+task. Larger models write cleaner, more complete pages; a local Ollama or LM Studio model
 is free but may need a second try.
 
 [Show me](show:webdesign_provider_box)

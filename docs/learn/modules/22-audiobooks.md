@@ -15,8 +15,8 @@
 
 | Tab | Controls | Meaning |
 |---|---|---|
-| Convert | Book list, input folder, output folder, Narrator, Voice, Chunk tokens, Start, Refresh List, Stop, progress/log | Extract, chunk, narrate, and assemble; completed chunks may survive a stop |
-| Listen | Rescan, library, Listen, Start Over, Show in Finder | Play completed audio and persist progress keyed to its full path |
+| Convert | Book list, input folder, Save converted audio, output folder, Narrator, Voice, Chunk size (tokens), Format, Convert audiobook, Refresh List, Use Project Book, Stop, progress, Conversion log | Extract, chunk, narrate, and assemble; completed chunks may survive a stop |
+| Listen | Rescan, library, Save listening progress, Listen, Start Over, Show in Finder | Play completed audio and persist progress keyed to its full path |
 | Player | Chapters & marks, Add mark, Speed, Sleep, ±30s | Jump to embedded chapters or saved marks, adjust speed, and pause after 15–60 minutes |
 
 ## Worked run
@@ -27,8 +27,9 @@
    trade-off: larger chunks reduce joins but increase the impact of one failure.
 4. Read the automatic cost state. If price or extracted length is unknown, do
    not infer zero cost.
-5. Press **Start** once and follow extraction, chunks, narration, assembly, and
-   output messages in the log.
+5. Press **Convert audiobook** once and follow extraction, chunks, narration,
+   assembly, and output messages in the **Conversion log** (collapsed under the
+   status line; click it to expand).
 6. Listen to beginning, one join, difficult names, and the ending. Inspect the
    MP3 in Finder.
 7. In Listen, pause, leave, return, and verify progress resumes. **Start Over**
@@ -166,6 +167,9 @@ API permissions row. The Voice menu follows the narrator — ElevenLabs lists
 your account's own voices — so open it to see Imprint's best-fit default
 before overriding it. Keep one narrator for the whole book: chunks are cached
 per narrator, so switching midway means starting over at full cost.
+From 6 January 2027 the OpenAI narrator is no longer offered in the Narrator
+menu or the cost assessment, and Gemini becomes the default — choose Gemini
+or ElevenLabs for a book you start close to that date.
 
 1400 is a stable chunk default; smaller chunks recover more easily if one
 request fails, at the price of more joins. MP3 copies the narrated chunks
@@ -183,7 +187,8 @@ approve the estimated euro amount from Step 2 — nothing is sent until you do.
 The same dialog assesses this book on every narrator you can run, each with
 its price; if another wins by at least a point, **Apply** switches to it and
 asks again — it never starts the run by itself. Then watch the progress
-bar and the log walk through extraction, chunks, narration and assembly until
+bar — and the converter's own output in **Conversion log** under the status
+line, if you expand it — walk through extraction, chunks, narration and assembly until
 the status reads `[Done] Audiobook created successfully.` A **Stop** button
 is visible while the run is live. Be clear about what Stop does: it ends the
 run, but the chunks already narrated were real paid requests — they are
