@@ -4,7 +4,7 @@ openai>=1.60
 python-dotenv>=1.0
 PyYAML>=6.0
 Pillow>=10.3
-requests>=2.32
+requests>=2.34.2
 python-pptx==1.0.2  # course PowerPoint generation
 
 # optional: only needed when script.provider = "anthropic"
