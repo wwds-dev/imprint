@@ -26,8 +26,6 @@ fastest way to waste money is to automate output before anyone has wanted it.
 | **Estimate / Spend** | Expected request cost, last cost, session and daily totals. | Set caps before a long job. Treat “not priced” as unknown, not free. |
 | **System / Routing / API keys** | Readiness and diagnostic state. | Look here first when a button is disabled or a provider is missing. |
 
-![The Write workspace](img/workspace-draft.png)
-
 ## Four things to configure once
 
 ### 1. Provider access

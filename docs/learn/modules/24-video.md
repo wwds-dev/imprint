@@ -3,8 +3,6 @@
 > **Outcome:** choose an implemented visual route, render one bounded video,
 > monitor it safely, and find the accepted output without blind retries.
 
-![Video workspace](../img/agent-video.png)
-
 ## Prerequisites
 
 - The nested vidforge project is present and importable.

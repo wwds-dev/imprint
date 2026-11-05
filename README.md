@@ -1,7 +1,6 @@
 # Imprint — Documentation
 
 
-![Screenshot](docs/screenshot.png)
 **Version:** `v2.xxx` in the header bar, derived rather than typed — see [§18.1 Versioning](#181-versioning).  
 **Stack:** Python 3.11+ · PySide6 · SQLite · Ollama · Anthropic · OpenAI · DeepSeek · Gemini
 

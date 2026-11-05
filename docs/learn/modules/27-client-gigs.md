@@ -3,8 +3,6 @@
 > **Outcome:** prepare one bounded client deliverable with explicit acceptance,
 > revision, cost, and delivery boundaries.
 
-![Client Gigs workspace](../img/agent-fiverr.png)
-
 ## Prerequisites
 
 - Written client brief, authorised source assets, delivery format, deadline,

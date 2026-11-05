@@ -3,8 +3,6 @@
 > **Outcome:** produce an approved section that remains consistent with a saved
 > project profile and can be recovered or exported.
 
-![Draft workspace](../img/workspace-draft.png)
-
 ## Prerequisites
 
 - One project for this book or long-form work.

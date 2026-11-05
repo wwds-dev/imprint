@@ -3,8 +3,6 @@
 > **Outcome:** move one reviewed campaign asset from brief to a traceable draft,
 > schedule state, and supported/manual posting decision.
 
-![Social workspace](../img/agent-social.png)
-
 ## Prerequisites
 
 - One project/campaign, audience, offer, and measurable next action.

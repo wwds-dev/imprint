@@ -3,8 +3,6 @@
 > **Outcome:** move an approved manuscript through one traceable packaging,
 > promotional-asset, scheduling, or sales-data task.
 
-![Publish workspace](../img/agent-manuscript.png)
-
 ## Prerequisites
 
 - Final or deliberately versioned manuscript/metadata.

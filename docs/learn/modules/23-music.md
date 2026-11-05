@@ -5,8 +5,6 @@
 > checklist. Earnings figures are scenarios with assumptions, never
 > “realistic” predictions.
 
-![Music workspace](../img/agent-music.png)
-
 ## Prerequisites
 
 - Rights/credits for the recording, composition, samples, artwork, likenesses,

@@ -3,8 +3,6 @@
 > **Outcome:** build, save and browser-test one responsive page against a
 > written client or business acceptance checklist.
 
-![Site Builder workspace](../img/agent-webdesign.png)
-
 ## Prerequisites
 
 - One page goal, audience, CTA, required content, brand constraints, and output

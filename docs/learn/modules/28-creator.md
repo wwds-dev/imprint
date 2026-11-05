@@ -3,8 +3,6 @@
 > **Outcome:** create one campaign asset, keep public actions human-controlled,
 > and land it on a plan you can act from.
 
-![Muse workspace](../img/agent-creator.png)
-
 ## Prerequisites
 
 - A content profile: a handle or project name and the platform or venture it
@@ -32,8 +30,6 @@
 | Stop | Stops active text generation locally where possible |
 
 ## Four output tabs
-
-![The Muse plan calendar](../img/agent-creator-calendar.png)
 
 | Tab | How to use it |
 |---|---|

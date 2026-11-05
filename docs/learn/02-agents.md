@@ -34,8 +34,6 @@ will this route, which keys exist, and how much has been spent?
 
 ## Author → Quill (`author`)
 
-![Draft workspace](img/workspace-draft.png)
-
 The Draft agent creates and maintains long-form writing. It has one persistent
 Book Profile and three stages: Write, Publish, and Market.
 
@@ -78,8 +76,6 @@ scene by scene → edit → generate packaging from the approved manuscript.
 
 ## Author → Press (`manuscript`)
 
-![Publisher agent](img/agent-manuscript.png)
-
 This is the post-draft agent: owned sales data, quote assets, shorts, a content
 calendar, and publishing tasks.
 
@@ -114,16 +110,12 @@ Listen to a sample before converting an entire book.
 
 ### Listen tab
 
-![Audiobook library](img/agent-audiobook-listen.png)
-
 **Rescan** refreshes the library. **Listen / Pause**, ±30 seconds, the scrubber,
 and speed control operate the selected file. **Start Over** deliberately clears
 its saved position; **Show in Finder** reveals the file. Position is stored by
 path every few seconds and completed books restart next time.
 
 ## Audio + Music → Label (`music`)
-
-![Music planning](img/agent-music.png)
 
 Music is a release-planning agent, not an audio generator.
 
@@ -141,8 +133,6 @@ Items marked **AI OUTPUT — COPY-PASTE READY** are drafts. Items marked **HUMAN
 ACTION REQUIRED** are real accounts, registrations, rights checks, or uploads.
 
 ## Video + Ads → Reel (`video`)
-
-![Video generator](img/agent-video.png)
 
 Video supports two production routes: a narrated pipeline assembled from scene
 images, and direct video models that return one short clip.
@@ -182,8 +172,6 @@ direct clip.
 
 ## Social → Herald (`social`)
 
-![Social workspace](img/agent-social.png)
-
 | Control | Meaning |
 |---|---|
 | **Campaign / New / Save** | One promoted subject and its saved context. |
@@ -204,8 +192,6 @@ Nothing publishes unattended.
 
 ## Web → Sitebuilder (`webdesign`)
 
-![Site Builder](img/agent-webdesign.png)
-
 | Control | Meaning |
 |---|---|
 | **Brief** | Page, component, content, interactions, and acceptance criteria. |
@@ -221,8 +207,6 @@ and with real copy. Generated code is a starting implementation, not a deploy
 approval.
 
 ## Brand Design → Stamp (`fiverr`)
-
-![Client Gigs](img/agent-fiverr.png)
 
 | Control | Meaning |
 |---|---|
@@ -240,8 +224,6 @@ Do not present raw generations as finished identity work. Check legibility,
 trademark conflicts, originality, formats, and the buyer's actual brief.
 
 ## Brand Content → Muse (`creator`)
-
-![Creator workspace](img/agent-creator.png)
 
 Muse is shared production for books, music and ventures. It deliberately
 drafts; it does not impersonate a human or publish unattended.
