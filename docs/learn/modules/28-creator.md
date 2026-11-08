@@ -26,7 +26,7 @@
 | Channel | Appears for `promo` only — the off-platform funnel the post is written for |
 | Brief / Provider / Model / Draft | Bounded content request and local Best Fit route |
 | Add to Calendar | Saves reviewed output as a prepared schedule item |
-| Teaser route / Generate/Cancel Teaser | Paid SFW promotional render from Higgsfield Seedance 2.5, Gemini Omni 1.1 Flash or Qwen Wan 3.0; Cancel applies to Higgsfield only |
+| Teaser renderer / Generate/Cancel Teaser | Paid SFW promotional render from Higgsfield Seedance 2.5, Gemini Omni 1.1 Flash or Qwen Wan 3.0; Cancel applies to Higgsfield only |
 | Stop | Stops active text generation locally where possible |
 
 ## Four output tabs
@@ -225,7 +225,7 @@ anything as live.
 ### Step 8 — Optional: render a teaser
 
 With the calendar item still selected — the finished render attaches to it —
-pick a route in the menu beside **Generate Teaser**: Higgsfield · Seedance
+pick a route in **Teaser renderer**, beside Provider and Model: Higgsfield · Seedance
 2.5, Gemini · Omni 1.1 Flash or Qwen · Wan 3.0. Each uses the character's
 reference images (Omni takes up to three, Wan up to ten); Omni and Wan make a
 5-second vertical clip. The route needs its provider's keys in Imprint's

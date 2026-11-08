@@ -154,17 +154,26 @@ and wins it. A rating only moves the BEST FIT badge — nothing switches.
 
 **Settings → Models** sets a routing mode, with an override per agent:
 *Local, advise per job* (the default), *Suggest local*, *Local first*,
-*Cloud only* and *Local only*. So far only the Studio Assistant is advised.
+*Cloud only* and *Local only*. Five agents are advised: the Studio
+Assistant, Quill (Draft), Herald (Social), Sitebuilder and Stamp (Client
+Gigs). Muse and Press (which offer no local model), Label's music plans and
+Suno drafts, and every media request (audiobooks, video and images, billed
+per unit) are not advised.
 When a job's selected model is not good enough for it — rated more than 20
 points below the best, too long for its context, or not runnable right now —
-the job is held on a banner above the message box with the recommended model,
-its cost and time, and up to three answers: **Switch for this job**,
-**Always for <kind> jobs** and **Keep local**. Nothing changes the agent's
-selection, and a paid switch still goes through the paid-request dialog.
-*Always* rules are listed under **Remembered choices** with **Remove**. If a
-local run fails, the banner offers **Send to <provider>** or a smaller local
-model; nothing is resent by itself, and **Local only** never reaches the
-cloud. The Spend rail's **saved local** shows what running locally saved today.
+the job is held on a banner with the recommended model, its cost and time,
+and up to three answers: **Switch for this job**, **Always for <kind> jobs**
+and **Keep local** (**Keep <model>** when a cloud model is selected), plus
+**Cancel**. The Assistant's banner sits above the message box and never
+changes its selection. On the other four the banner sits at the top of the
+agent's panel, and an answer puts the chosen model in that panel's Provider
+and Model boxes and runs the action again. Either way a paid switch still
+goes through the paid-request dialog and the caps. *Always* rules are listed
+under **Remembered choices** with **Remove**; when one applies, the panel
+switches its boxes and says so in its status line. If a run fails, the
+banner offers **Send to <provider>** or **Try <smaller local model>**;
+nothing is resent by itself, and **Local only** never reaches the cloud.
+The Spend rail's **saved local** shows what running locally saved today.
 
 ## Confidence does and does not mean
 

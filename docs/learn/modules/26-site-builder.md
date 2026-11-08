@@ -85,7 +85,10 @@ is free but may need a second try.
 
 ### Step 5 — Generate
 
-Click **Generate** and approve the estimate. Code streams into the HTML tab.
+Click **Generate** and approve the estimate. (If the routing advice banner
+appears at the top of the panel instead, the job is held until you answer
+it; a switch puts the recommended model in Provider and Model and generates
+again, through the same approval.) Code streams into the HTML tab.
 When it finishes, the three numbers above the tabs fill in:
 **responsive** (did it add mobile rules), **framework used** and **lines of
 code**. For this brief expect *responsive: yes* and a few hundred lines.

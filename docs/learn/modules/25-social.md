@@ -106,8 +106,9 @@ in the callout brings you back to that step.
 post, and a short return visit later for the numbers. **Cost:** one text
 request in Imprint — you see its estimate and approve it before anything is
 sent (free with a local Ollama or LM Studio model). Posting by hand costs nothing. **Make a
-Clip** starts a paid video render with its own cost confirmation; this recipe
-never touches it.
+Clip** starts a paid video render with its own cost confirmation — if it
+fails, the paid steps it had finished are recorded — and this recipe never
+touches it.
 
 ### Step 1 — Create the campaign
 
@@ -150,6 +151,9 @@ request should stay on your Mac and cost nothing.
 
 Click **Write Posts**. Imprint shows the estimate; approve it. After a few
 seconds the Draft tab fills with two variants separated by a long dash line.
+If the routing advice banner appears at the top of the panel instead, the job
+is held until you answer it; a switch puts the recommended model in Provider
+and Model and writes again, through the same approval.
 
 **Good result:** two genuinely different openings on the same offer, each
 within the limit, and no invented reviews, quotes or figures — the drafter is
@@ -204,7 +208,9 @@ browser, paste, read it once as a stranger would, and post it yourself. Back in
 Imprint, click **Mark Posted**. That records your own verification that the
 post exists — a statement you make, not an API receipt — so make it true.
 (**Post Now** exists only for configured, ready integrations, and even there it
-confirms each single post before publishing from your account.)
+confirms each single post before publishing from your account. On Reddit it
+first checks the subreddit you type — `books` or `r/books` — and names
+`r/<name>` in that confirmation.)
 
 [Show me](show:social_mark_posted_btn)
 

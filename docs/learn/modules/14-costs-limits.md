@@ -36,6 +36,28 @@ Project instructions add input tokens to each request and are included in the
 preflight estimate. The project cap only counts locally recorded spend tagged
 to that project; it is not a separate provider account or a provider invoice.
 
+## Text requests: the most a reply can cost
+
+Every text reply stops at a length limit of 8,192 tokens. The paid-request
+dialog shows the most the request can cost — *Up to €X; you pay for what it
+writes* — priced from everything that will be sent plus a full-length reply,
+and the caps reserve that amount. A reply that reaches the limit is
+incomplete, and the status line says so instead of *Done*: **[Cut off]**,
+with **Press Continue to write more** in Draft, *send "continue"* in the
+Assistant, or *ask for less or split the task* elsewhere. A Gemini model
+can spend part of the limit thinking; if it spends all of it, the line reads
+**[No answer]** and the request is still billed.
+
+## Renders and image batches that fail or stop
+
+A video render (Reel, or Herald's **Make a Clip**) and a Client Gigs logo
+batch say in their approval that the paid steps already done are recorded if
+the job fails or you stop it. They are: each started render stage at its
+confirmed line and each image actually made at the confirmed per-image rate,
+never more than the amount you confirmed, and nothing if no paid step had
+started. The status line gives both figures (*€x of €y recorded*); Reel's log
+itemises them. A new render starts from the beginning and is paid again.
+
 ## Effective accepted-output cost
 
 ```text
@@ -62,7 +84,10 @@ acceptance checklist.
 **Budget blocks the action:** reduce duration, quantity, input, or model cost;
 do not remove the guardrail reflexively.  
 **Stop was pressed but a charge remains:** accepted asynchronous jobs may be
-non-cancellable; Stop is not a refund.  
+non-cancellable, and a stopped render or batch records the steps it finished;
+Stop is not a refund.  
+**A reply ends mid-sentence:** it reached the 8,192-token limit; the status
+line says **[Cut off]**. Continue, or ask for less.  
 **Token cost looks complete:** image, speech, video, acquisition, platform,
 contractor, refund, and human-time costs may still dominate.
 

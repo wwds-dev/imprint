@@ -25,6 +25,19 @@ authorization and run history. Live preview remains future work.
   leaves Generate available. Host-control aliases were retired 2026-09-21:
   shared wiring resolves controls through `host._find_control()`, and
   `HOST_CONTROLS` stays as the published contract of what the panel owns.
+  The Provider menu offers Ollama, LM Studio, OpenAI, DeepSeek, Kimi,
+  Gemini, Anthropic (default) and Qwen. Since 2026-10-21 (`44c6b18`)
+  **Generate** passes `resume=self.generate` and the messages it will send
+  to `host.authorize_request()`: the guard prices all of them, and the
+  routing advisor (`ui/panel_routing.py`) may hold the job on an advice
+  banner at the top of the panel; an answer puts the chosen model in the
+  Provider and Model boxes and runs Generate again, so the paid-request
+  dialog and caps still decide. A failed run passes its error to
+  `abandon_request(error=…)` for the advisor's failover offer. Since the
+  audit P1 fixes (`12604e9`) the status line wraps, and a reply cut at the
+  8,192-token length limit shows the `[Cut off] … the result is incomplete`
+  notice from `services/output_limits.result_notice()` instead of
+  "Generation complete."
 
 - **`export.py`** — Qt-free structured export and pre-export validation.
   `split_project(full_html)` returns `{filename: content}`: inline `<style>`

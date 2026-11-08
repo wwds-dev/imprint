@@ -76,16 +76,20 @@ usually changes style more than usefulness.
 First identify the route:
 
 - **Narrated pipeline:** cancellation occurs at a stage boundary. The current
-  stage may finish before stopping.
+  stage may finish before stopping. A failed or stopped render records the
+  paid steps it finished, never more than you confirmed; the log's
+  `[Billing]` line itemises them.
 - **Higgsfield:** cancellation may work while queued; processing jobs may need
   to finish.
-- **Gemini Omni, Veo, or Wan:** the integration may have no safe provider
-  cancellation after submission. Imprint keeps polling and saves the paid result.
+- **Gemini Omni, Veo, or Wan:** a Wan job still queued can be cancelled at the
+  provider (the status then says nothing was charged). Otherwise Stop stops
+  watching: the job stays tracked, and Imprint (or its next launch) saves and
+  bills the paid result once.
 
 Keep Imprint and the connection available for provider outputs with temporary
 download URLs. Check the Library and output folder before submitting another
-job. A disabled Stop button can be an honest indication that the provider has
-already accepted non-cancellable work.
+job. Stop never cancels work the provider has already accepted and cannot
+cancel; it only stops watching it.
 
 ## Video fails before rendering
 

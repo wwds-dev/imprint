@@ -25,8 +25,10 @@ and `pytest tests/test_video_jobs.py` (job persistence, resume and the Stop cont
 - `panel.py` — owns the Render/Library workspace, provider/model constraints,
   preflight estimates, exact request tokens, pipeline and direct-provider
   lifecycles, safe cancellation semantics, progress, errors and the shared
-  vidforge output library. The model menu lists `offered_models()`, so the
-  three Veo 3.1 previews (`retires="2026-10-22"`) leave the menu and the
+  vidforge output library. The model menu lists `offered_models()` for the
+  host's own day (`_offered_models()` reads `host._media_today()`, which a
+  test pins; `28686f6`), so the three Veo 3.1 previews
+  (`retires="2026-10-22"`) left the menu, its price table and the
   assessment on Google's shutdown date while a job already in flight is
   still collected. Since 2026-10-07 a scene route can be Gemini (Nano
   Banana 2.1 / Pro) or Qwen (Qwen Image 3.0 / Pro) as well as GPT Image;
@@ -62,6 +64,19 @@ and `pytest tests/test_video_jobs.py` (job persistence, resume and the Stop cont
   detached only after the create POST was acknowledged, so a job id arriving
   late from the submission window is still persisted rather than stranding
   the job as `lost`. Higgsfield keeps its queued-vs-processing cancel path.
+  A pipeline render (audit B-F3, owner decision D3, `12604e9`) is
+  authorised with `partial_billing=True`; the panel keeps the confirmed
+  estimate and exchange rate, and the worker's `trace_signal` reports the
+  stages started and scene images saved. When it fails or is stopped,
+  `_on_pipeline_error()` records what it had already paid for through
+  `host.record_partial()` — each started stage at its confirmed line, each
+  saved image at the per-image rate, never above the confirmed total, and
+  nothing before the script stage — and the log gains one itemised
+  `[Billing]` line ("A new render starts from the beginning and is paid
+  again."). Stop on a pipeline render reads "Stopping after this step…
+  paid steps already done are recorded." and closes the run as
+  `cancelled`. Provider error text goes into the log through `_log_text()`
+  (escaped, never rendered as markup) and the status label is plain text.
   Host-control aliases were retired 2026-09-21: the panel no longer
   mirrors its widgets onto the umbrella (`HOST_CONTROLS`
   stays only as the published contract of what it owns); the umbrella now
@@ -138,6 +153,12 @@ and `pytest tests/test_video_jobs.py` (job persistence, resume and the Stop cont
     `image_reserve_usd()`, which reads the image model's own provider table
     in `config/pricing.json`) for per-image pricing when
     `visuals.source == "ai"`.
+  - `pre_estimate()` also returns `per_image` (one scene image or the
+    thumbnail at the reserve rate). `partial_render_cost_usd(estimate,
+    trace)` is what a failed or stopped render already paid for, capped at
+    the estimate's total, and `partial_render_notice()` words its status
+    line and `[Billing]` log line; the Video and Social panels both use
+    them.
   - `stages()`, `reporter_base()`, `cancelled_error()`,
     `overall_fraction()` — expose vidforge's progress-reporting contract
     (stage list, `Reporter` base class, `Cancelled` exception, overall

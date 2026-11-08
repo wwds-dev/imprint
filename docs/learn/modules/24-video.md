@@ -14,8 +14,8 @@
   scene-image model — GPT Image, Nano Banana or Qwen Image — for an assembled
   video. A Gemini or Qwen scene route needs that provider's key and
   permission as well as OpenAI's, which still writes and narrates the script.
-- Google shuts the Veo 3.1 previews down on 22 October 2026 and names Gemini
-  Omni as the replacement; from that day Veo leaves the menus and the
+- Google shut the Veo 3.1 previews down on 22 October 2026 and names Gemini
+  Omni as the replacement; from that day Veo is gone from the menus and the
   assessment, though a job already in flight is still collected.
 
 ## Control atlas
@@ -76,7 +76,12 @@ works for every direct provider, but it only cancels at the provider where that
 is possible before rendering starts (a queued Wan or Higgsfield job). For an
 accepted Veo/Gemini job, or one already rendering, Stop stops watching: the
 budget reservation stays, the provider may still bill, and the next launch
-saves the result and bills it once. Humans approve paid submission and public
+saves the result and bills it once. An assembled (pipeline) render that fails
+or is stopped records the paid steps it finished — each started stage at its
+confirmed line, each saved scene image at the per-image rate, never more than
+you confirmed — and the log adds one `[Billing]` line itemising them; Stop
+there reads *Stopping after this step…*. A new render starts from the
+beginning and is paid again. Humans approve paid submission and public
 release.
 
 ## Verification
@@ -154,9 +159,9 @@ Choose **Gemini Omni 1.1 Flash**. The moment a direct model is selected,
 **Format** locks itself to *Social clip*, and the note under the dropdowns
 says what this model actually does — here, fast text-to-video with generated
 audio, with the length expressed in the prompt. BEST FIT in this list is
-scoped to the provider you just chose. Until 22 October 2026 the list also
-shows the Veo 3.1 previews, each with its shutdown note; Omni is the model
-Google names as their replacement, which is why this recipe uses it.
+scoped to the provider you just chose. The Veo 3.1 previews left the list
+on 22 October 2026, Google's shutdown date; Omni is the model Google names
+as their replacement, which is why this recipe uses it.
 
 [Show me](show:video_visual_model_box)
 

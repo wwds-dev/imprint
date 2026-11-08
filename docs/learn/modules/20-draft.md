@@ -202,7 +202,13 @@ your Mac and the request should cost nothing.
 
 Click **Write** once. Imprint shows the request's estimate; approve it, and
 the chapter streams into the Draft tab. **Stop** cancels locally, but work
-the provider has already accepted may still bill.
+the provider has already accepted may still bill. If the routing advice
+banner appears at the top of the panel instead, the job is held: read why,
+then **Switch for this job**, **Always for <kind> jobs**, **Keep local** or
+**Cancel** — a switch puts the recommended model in Provider and Model and
+writes again, through the same approval. A chapter that reaches the length
+limit ends with **[Cut off] N words, stopped at the length limit. Press
+Continue to write more.** in the status line instead of **[Done]**.
 
 **Good result:** the chapter follows the direction, sourced facts carry their
 citation in parentheses, and anything the sources do not cover wears

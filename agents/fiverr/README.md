@@ -52,6 +52,28 @@ and `pytest tests/test_fiverr_orders.py`.
   edited` event per changed field (`_flush_order_edits()`; loading an order's
   own text is not an edit). Before that, only the streamed draft was ever
   stored, so a reloaded order showed text the user had never sent.
+  The text Provider menu offers Anthropic (default), OpenAI, DeepSeek, Kimi,
+  Gemini, Qwen, Ollama and LM Studio. Since 2026-10-21 (`44c6b18`) the
+  three text requests — the logo prompt (**Generate Logos**), **Delivery
+  Message** and **Gig Description** — pass `resume=` and their messages to
+  `host.authorize_request()`: the guard prices every message, and the
+  routing advisor (`ui/panel_routing.py`) may hold the job on an advice
+  banner at the top of the panel; an answer puts the chosen model in the
+  Provider and Model boxes and runs the action again. The image batch is
+  media and is never advised. Since the audit P1 fixes (`12604e9`): both
+  status lines wrap and show provider text as plain text; a delivery or
+  gig text cut at the 8,192-token length limit shows the `[Cut off]`
+  notice; a cut or empty image prompt stops there, so no images are bought
+  for it. The image request is authorised with `partial_billing=True` and
+  remembers its per-image rate: a failed or stopped batch closes through
+  `_close_image_run()` → `host.record_partial()` at the concepts the
+  provider returned, never above the confirmed total, and says so ("[Error]
+  <reason>. N of M concepts made; €x of €y recorded." or "[Stopped] N of M
+  concepts made; …"). Stop
+  during a batch no longer closes the request itself: it reads "Stopping
+  after this concept…" and the worker's own last signal closes the run, so
+  the concept in flight is counted. The image signals are bound to their
+  run's token, so a late signal from an earlier run is ignored.
   The workers themselves stay on the host so the umbrella's global Stop and
   shutdown sweeps keep seeing them. The old `setattr(host, name, ...)` alias
   loop that mirrored every `HOST_CONTROLS` widget onto the umbrella was

@@ -93,6 +93,18 @@ Run focused coverage with `pytest tests/test_book_pipeline.py tests/test_manuscr
   below (KDP/PublishDrive ingest in Overview and Connections, quote/shorts/
   calendar generation in their own tabs) and the Quote Finder's Project-draft/
   approved-version/export/submission-ledger flow described above.
+  approved-version/export/submission-ledger flow described above.
+
+  Since the audit P1 fixes (`12604e9`, 2026-10-19) the three text flows
+  (Ask, quote suggestions, calendar captions) pass the messages they send
+  to `host.authorize_request()`, so the guard reserves the whole prompt at
+  the 8,192-token output cap. The status line wraps and shows provider text
+  as plain text, and a reply cut at that limit never reads `[Done]`: it
+  shows the `[Cut off]` notice from `services/output_limits.result_notice()`
+  — also in place of "Could not parse quotes" when a cut list fails to
+  parse, and in place of "calendar generated" when cut captions leave later
+  slots blank. Press offers no local provider (Anthropic, OpenAI, DeepSeek,
+  Kimi, Gemini, Qwen) and is never routing-advised (`ui/panel_routing.py`).
 
   Overview details: a **sync strip** under the toolbar
   (`manuscript_sync_label`) shows each integration's last outcome —

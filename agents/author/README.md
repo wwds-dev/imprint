@@ -72,6 +72,22 @@ remain at the location chosen by the user, including after Project deletion.
   umbrella (`HOST_CONTROLS` stays only as the published contract of what it
   owns); the next-step advisor now reads this panel directly, with a `None`
   guard for when it has not been built yet.
+  Since 2026-10-21 (`44c6b18`) Write, Continue, Publish and Market pass
+  `resume=` and their full `messages` to `host.authorize_request()`: the
+  guard prices every message the worker will send, and the routing advisor
+  (`ui/panel_routing.py`) may hold the job on an advice banner at the top
+  of this panel (**Switch for this job**, **Always for <kind> jobs**,
+  **Keep local** or **Keep <model>**, and **Cancel**). An answer puts the
+  chosen model in the Provider and Model boxes and runs the action again,
+  so the paid-request dialog and the caps still decide; a held or refused
+  Write puts back the draft it had cleared. A failed run hands its error
+  to `abandon_request(error=…)`, which may offer a failover on the same
+  banner (never sent by itself). Since the audit P1 fixes (`12604e9`) the
+  status line wraps, shows provider text as plain text, and a reply that
+  stopped at the 8,192-token length limit no longer reads `[Done]`:
+  `services/output_limits.result_notice()` makes Write/Continue say
+  "[Cut off] N words, stopped at the length limit. Press Continue to write
+  more." and Publish/Market say the result is incomplete.
 - `book_exporter.py` — chapter detection (`split_into_chapters()`,
   `find_chapter_offsets()`) and EPUB/DOCX/PDF export (`export_book()`).
 - `recommendations.py` — exports `RECOMMENDATION_PROFILE` (an `AgentProfile`)

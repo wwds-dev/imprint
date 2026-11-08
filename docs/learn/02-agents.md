@@ -155,7 +155,7 @@ images, and direct video models that return one short clip.
 |---|---|---|
 | **OpenAI GPT Image 2.5 / GPT Image 2** | Scene images assembled into narrated long-form or clips. | OpenAI |
 | **Gemini Omni 1.1 Flash** | Direct 3–10-second 720p clip with audio. | Google/Gemini |
-| **Veo 3.1 / Fast / Lite** | Direct 4, 6, or 8-second 720p operation. | Google/Gemini |
+| **Veo 3.1 / Fast / Lite** | Retired: gone from the menus since Google's shutdown on 22 October 2026; a job already in flight is still collected. | Google/Gemini |
 | **Wan 3.0 / Prime / 2.7** | Direct 2–30-second 720p task, model dependent. | DashScope/Qwen |
 | **Higgsfield Seedance** | Direct clip after an exact provider quote. | Higgsfield key ID + secret |
 | **Pexels** | Stock scene visuals for the narrated pipeline. | Pexels |

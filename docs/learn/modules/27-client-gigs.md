@@ -171,8 +171,12 @@ also opens an order for this client automatically and logs the run.
 **Good result:** the business name is spelled correctly, the mark reads at
 small sizes, and it holds up on light and dark backgrounds. **Weak result:**
 misspelled text or clip-art clutter — tighten the Notes and generate again,
-knowing a re-run is a new paid request. A failed render releases the amount
-that was authorised for it.
+knowing a re-run is a new paid request. If the batch fails or you press
+**Stop**, the concepts already made are recorded at the confirmed per-image
+price and nothing more ("2 of 4 concepts made; €x of €y recorded"); Stop
+waits for the concept in flight. If the routing advice banner appears at the
+top of the panel before the prompt step, the text request is held until you
+answer it; the image batch itself is never advised.
 
 [Show me](show:fiverr_generate_btn)
 

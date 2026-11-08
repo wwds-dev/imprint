@@ -68,7 +68,11 @@ releases feed the next plan's prompt. See `SUNO_WORKFLOW.md`.
   downloaded audio into `data/music_library` (via
   `services.runtime_paths.user_data_base()`) without moving the originals.
   Each album folder holds its audio plus an `album.json` recording title,
-  brief, lyrics/prompts and track order. See `SUNO_WORKFLOW.md`.
+  brief, lyrics/prompts and track order. See `SUNO_WORKFLOW.md`. The draft
+  request builds its system + user messages before the guard, so the guard
+  prices exactly what is sent; its status line shows provider text as plain
+  text, and a draft cut at the 8,192-token length limit says so
+  (`services/output_limits.result_notice()`, audit P1 fixes `12604e9`).
 
 - **`panel.py`** — the Music workspace's form, provider/model pair, action row,
   six result tabs, and guarded request/result lifecycle. The umbrella composes
@@ -83,6 +87,13 @@ releases feed the next plan's prompt. See `SUNO_WORKFLOW.md`.
   exists, prefilled from stored numbers) so the user picks the plan that
   actually shipped and enters streams / revenue (USD) / notes; an all-blank
   entry records nothing.
+  entry records nothing. Since the audit P1 fixes (`12604e9`) Generate
+  builds its messages before `host.authorize_request()` and passes them, so
+  the guard reserves the whole prompt at the 8,192-token output cap; the
+  status line wraps, and a plan cut at that limit shows the `[Cut off]`
+  notice instead of "Plan complete". Music is not routing-advised: it
+  passes no `resume=`, although its Provider menu offers Ollama and
+  LM Studio.
 
 - **`plans.py`** — structured release plans in the `music_release_plans`
   table (schema in `services/database.py`), Qt-free. `save_plan()` stores

@@ -60,6 +60,12 @@ tests/test_social_onboarding.py` (the second pins the scopes-and-steps contract)
   then the steps and the required credential keys, and returns an empty
   string for drafting-only platforms so no steps are invented. Reddit's token
   request sends `scope=submit`, so the minted token matches the stated grant.
+  `subreddit_name(typed)` (audit X-1, `12604e9`) turns what the user typed
+  into the community a post goes to: exactly one leading `r/` or `/r/` is
+  removed, in any case, and the result must be 2 to 21 letters, digits or
+  underscores not starting with `_`, or a `PublishError` names the problem.
+  The old `lstrip("r/")` stripped characters, so "rust" posted to r/ust.
+  `RedditPublisher` checks the name again before any login.
 - `panel.py` — the complete Social workspace and guarded request lifecycles.
   Its Accounts tab lists every platform as ready or drafting only and, for
   each connectable platform (ready ones included, so what was consented to
@@ -68,3 +74,21 @@ tests/test_social_onboarding.py` (the second pins the scopes-and-steps contract)
   the user the platform notes are general knowledge, not checked against
   current terms; only the three posting platforms' terms are verified before
   a publishing test pass.
+  a publishing test pass.
+  Since 2026-10-21 (`44c6b18`) **Write Posts** and **Make a Clip**'s brief
+  pass `resume=` and their messages to `host.authorize_request()`: the
+  guard prices every message, and the routing advisor
+  (`ui/panel_routing.py`) may hold the job on an advice banner at the top
+  of the panel; an answer puts the chosen model in the Provider and Model
+  boxes and runs the action again. Since the audit P1 fixes (`12604e9`):
+  the status line wraps and shows provider text as plain text; variants or
+  a clip brief cut at the 8,192-token length limit show the `[Cut off]`
+  notice, and a cut or empty brief is never sent on as a paid render. The
+  clip render is authorised with `partial_billing=True`: it keeps the
+  confirmed estimate and exchange rate, the worker's `trace_signal` reports
+  the stages and images done, and a failed render records what it already
+  paid for (`video_studio.partial_render_cost_usd()`, owner decision D3)
+  through `host.record_partial()`, never above the confirmed total, with
+  the itemised `[Billing]` line as the status tooltip. **Post Now** on
+  Reddit validates the subreddit first and names `r/<name>` in its
+  confirmation.

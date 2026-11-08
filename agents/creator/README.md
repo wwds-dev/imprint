@@ -78,7 +78,9 @@ Calendar and Media default to all work under the selected account; each has a
   (whose token rides in its own job context) — so nothing resolves a
   request by agent name alone. Since 2026-10-07 (`fb3d67b`) the teaser has
   three routes in `TEASER_ROUTES`, chosen in `creator_video_route_box` and
-  remembered under `creator_teaser_route`: Higgsfield Seedance 2.5
+  remembered under `creator_teaser_route` — since the aligned-form pass
+  (`2f8b242`) a **Teaser renderer** field beside Provider and Model, no
+  longer a compact dropdown squeezed into the action row: Higgsfield Seedance 2.5
   (image-to-video from the first reference image), Gemini Omni 1.1 Flash
   (reference-to-video, up to three images inline) and Qwen Wan 3.0
   (reference-to-video, up to ten). Omni and Wan make a 5-second vertical
@@ -92,7 +94,17 @@ Calendar and Media default to all work under the selected account; each has a
   to look up) or a Wan submission whose id never came back is marked
   `lost`, released and surfaced — never billed on a guess.
   The Voice/character tab reads and writes
-  through `profile.py`. The old
+  through `profile.py`; its Tone / Emoji / Length / Never say inputs are a
+  two-column `form_grid` and the character fields (Appearance, Backstory,
+  Personality, Never does, Seed) a `FieldGridLayout`, labels above inputs
+  like the rest of the panel. Since the audit P1 fixes (`12604e9`) the
+  drafting request passes its messages to the guard (priced at the
+  8,192-token output cap), its worker's `usage_signal` reports real token
+  counts and the stop reason (audit B-F8: every draft used to be billed on
+  the chars/4 estimate), and a draft cut at the length limit shows the
+  `[Cut off]` notice instead of "Draft ready"; both status lines show
+  provider text as plain text. Muse offers no local provider and is never
+  routing-advised (`NEVER_ADVISED` in `ui/panel_routing.py`). The old
   `setattr(host, name, ...)` alias loop that mirrored every `HOST_CONTROLS`
   widget onto the umbrella was retired 2026-09-21 (commit `8de6d7c`) — shared
   code that used to read `window.<control>` directly now goes through
