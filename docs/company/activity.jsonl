@@ -1,0 +1,7 @@
+{"ts": "2026-10-14T17:01:02", "phase": "define", "state": "done", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-10-14T17:01:02", "phase": "build", "state": "start", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-10-14T17:02:12", "phase": "review", "state": "done", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-10-14T17:05:03", "phase": "secure", "state": "start", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-10-14T17:05:55", "phase": "secure", "state": "done", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-10-14T17:33:41", "phase": "verify", "state": "done", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-10-14T17:39:51", "phase": "release", "state": "start", "spec": "deps-security-upgrade-2026-10"}
