@@ -18,8 +18,10 @@ listing. Nobody pays for the app and it takes no payment; it spends the user's o
 under the request guard. Personal data: the user's manuscripts, voice and API keys stay on the
 Mac; text and audio go to the model providers the user enables. Markets: `UNVERIFIED`. The README
 describes selling what the agents produce and the audiobook part was once meant to be sold on its
-own, so a paid release (`commercial`) is plausible later and goes through Comply first. The other
-honest option is to make the repo private and set `internal`.
+own, so a paid release (`commercial`) is plausible later and goes through Comply first. The owner's recorded intent
+(2026-10-10, the Lab Monitor's `dashboards/lab_monitor/app_readiness.json`) is to offer the app itself to customers: that is
+`commercial`, a later raise through Comply (how customers pay for AI usage is still open). The
+other honest option today is to make the repo private and set `internal`.
 
 ## Stack
 - Python 3.11 (`.venv` is 3.11.15); PySide6 (unpinned) GUI; SQLite (WAL) in `services/database.py`.
