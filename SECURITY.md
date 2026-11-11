@@ -1,5 +1,3 @@
-<!-- Owner: enable GitHub's private vulnerability reporting for wwds-dev/imprint (Settings > Code security > Private vulnerability reporting); the form linked below does not work until then. Delete this comment afterwards. -->
-
 # Security
 
 Imprint is free, open-source software maintained by one person. It handles API keys for several paid providers, imports untrusted documents (PDF, EPUB, DOCX) and renders model output,
