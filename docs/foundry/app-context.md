@@ -9,8 +9,8 @@ Imprint: a macOS desktop app (PySide6) that bundles ten creative/publishing AI a
 ## Distribution
 tier: public
 
-Status: proposed by agent, not yet confirmed by the owner (2026-11-11). To confirm, delete this
-line; to change the tier, edit `tier:` first. Release stays stopped while this line is here.
+Status: tier confirmed by the owner on 2026-11-11 ("confirm all nine tiers"). An agent proposed it
+the same day from the evidence below; raising it later goes through Comply first.
 
 Evidence: the repo `wwds-dev/imprint` is public (checked 2026-11-11), which makes the source
 available to anyone; it has no `LICENSE`, no GitHub release, no download page and no store
