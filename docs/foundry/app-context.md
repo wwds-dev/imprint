@@ -69,6 +69,34 @@ other honest option today is to make the repo private and set `internal`.
 - Coverage target: none found. Flaky = any order-dependent hang or failure under `pytest-randomly`; a wedge is a bug, not a retry. No xdist (Qt).
 - CI: `.github/workflows/quality.yml` (tests with coverage on macOS; ruff lint ratchet on Ubuntu), `.github/workflows/security.yml` (gitleaks secret scan, blocking; pip-audit, not blocking; also weekly), `.github/dependabot.yml` (weekly: pip for root, `vidforge/`, `cloud/`; GitHub Actions). Whether runs pass on GitHub: UNVERIFIED.
 
+## Models used
+Inventory from the code on 2026-11-11 (Foundry v9). Every cloud route is off until the user
+enters that provider's key (Settings > API keys, written to `.env` by `services/api_keys.py`);
+local models run through Ollama or LM Studio on this Mac. Model ids are as written in the code
+and config, with defaults; the user picks the chat model, and the BEST FIT ranking reads public
+LMArena ratings. Prompts can carry manuscript text, which may name real people: personal data in
+the user's own content goes to whichever provider the user chose.
+
+| Provider | Model | What data it receives | Local? | Where in the code |
+|---|---|---|---|---|
+| Ollama | user-selected; default `deepseek-r1:8b` (`config/settings.json`) | chat and agent prompts, manuscript text | yes (`127.0.0.1:11434`, `services/providers.py:41`) | `services/ollama_client.py` |
+| LM Studio | user-selected from the loaded models | chat and agent prompts, manuscript text | yes (`localhost:1234/v1`, `services/providers.py:42`) | `services/lmstudio_client.py` |
+| OpenAI | chat: user-selected; images: `gpt-image-2.5-flare` (default, `services/openai_client.py:18`), `gpt-image-2.5-sunburst`, `gpt-image-2`; narration: `gpt-4o-mini-tts` (default route, retired by OpenAI on 2027-01-06) | chat prompts and manuscript text; image prompts; whole chapters as text for audiobook narration | no | `services/openai_client.py`, `services/narrator/converter.py` |
+| Anthropic | user-selected; default `claude-sonnet-5-5` (`services/anthropic_client.py:64`) | chat and agent prompts, manuscript text | no | `services/anthropic_client.py` |
+| DeepSeek | default `deepseek-flash`; `deepseek-v4-pro` | chat prompts | no | `services/deepseek_client.py` |
+| Kimi (Moonshot) | default `kimi-k3` (`config/settings.json`) | chat prompts | no | `services/kimi_client.py` |
+| Alibaba DashScope (Qwen, Wan) | chat default `qwen3.8-max`; images `qwen-image-3.0`; video `wan3.0-video` and variants (`services/media_catalog.py`) | chat prompts; image and video prompts, possibly a source image | no | `services/qwen_client.py`, `services/image_generation.py` |
+| Google Gemini | chat user-selected; images `gemini-nano-banana-2.1`, `gemini-3-pro-image`; video `veo-3.1-*`, `gemini-omni-1.1-flash`; narration `gemini-3.8-flash-tts` | chat prompts and manuscript text; image and video prompts; chapter text for narration | no | `services/gemini_client.py`, `services/image_generation.py`, `services/narrator/converter.py` |
+| ElevenLabs | narration `eleven_multilingual_v2` (`services/narrator/converter.py:51`); Shorts voice `eleven_flash_v2_5`; voice "Rachel" | chapter or Shorts script text | no | `services/narrator/converter.py`, `providers/voice/elevenlabs.py` |
+| Higgsfield (Seedance) | `seedance-2.5` (default), `seedance-2.0`, `seedance-1.0-lite` | video prompts, possibly a source image | no (`api.higgsfield.ai`) | `services/higgsfield_client.py` |
+| vidforge (Video mode) | script `gpt-5.6-terra` or `claude-opus-5`; images `gpt-image-2.5-flare`; voice `gpt-4o-mini-tts`; captions `whisper-1` (`vidforge/config.yaml`) | the topic and the script; the app's own generated narration audio for caption timing (no user voice) | no | `vidforge/vidforge/llm.py`, `visuals.py`, `voice.py`, `captions.py:63` |
+| Hugging Face (LMArena ratings) | dataset `lmarena-ai/leaderboard-dataset`; not a model call | nothing user-specific: a GET with User-Agent "Imprint"; snapshot fallback `config/lmarena_snapshot.json` | no | `services/benchmarks.py` |
+
+Not reachable from the UI as far as the code shows: HeyGen and Synthesia avatar clients
+(`providers/avatar/`, imported nowhere else). No embeddings, music-generation API (Suno is a link
+the user opens) or microphone transcription. Each cloud client's model-list probe sends only the
+key. Non-model recipients of user content: YouTube, Reddit, Pinterest, PublishDrive, Pexels.
+
 ## Invariants
 - No paid call outside the request guard; new per-unit paid paths must be added to it.
 - Never print, copy or commit `.env` values or keys; no secrets in this public repo.
