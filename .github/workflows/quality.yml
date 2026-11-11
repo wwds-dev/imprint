@@ -30,4 +30,4 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install ruff
       - name: Lint ratchet
-        run: python docs/company/tooling/ratchet.py ruff ruff check --no-cache --quiet --output-format=concise --exit-zero .
+        run: python docs/foundry/tooling/ratchet.py ruff ruff check --no-cache --quiet --output-format=concise --exit-zero .

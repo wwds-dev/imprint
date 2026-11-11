@@ -5,7 +5,7 @@ Date: 2026-10-12. Measured report-only; no application source, tests or existing
 ## Added files
 `ruff.toml`, `.gitleaks.toml`, `.githooks/pre-commit` (executable, not activated), `.github/dependabot.yml`
 (pip `/`, `/vidforge`, `/cloud`, github-actions), `.github/workflows/quality.yml`, `.github/workflows/security.yml`,
-`docs/company/tooling/` (incl. `baseline.json`, which must be committed with the rest), this file.
+`docs/foundry/tooling/` (incl. `baseline.json`, which must be committed with the rest), this file.
 
 ## Measurements
 | Check | Command | Result |

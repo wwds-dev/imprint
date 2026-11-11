@@ -6,6 +6,21 @@ true. Agents treat the **Invariants** as hard rules.
 ## Product
 Imprint: a macOS desktop app (PySide6) that bundles ten creative/publishing AI agents (chat, author, manuscript/Press, audiobook/Booth, music, video, social/Herald, creator, fiverr, webdesign; roster in `agents/catalog.py`) for one author/creator user. Forked from `sentinel_ai` (see `FORK_PLAN.md`). It calls local (Ollama) and paid cloud models, so it must never spend money outside the request guard, never claim income or results it cannot show, and never post/publish without the user's action. Current goal (CLAUDE.md): agents deliver what they promise, then a QA campaign.
 
+## Distribution
+tier: public
+
+Status: proposed by agent, not yet confirmed by the owner (2026-11-11). To confirm, delete this
+line; to change the tier, edit `tier:` first. Release stays stopped while this line is here.
+
+Evidence: the repo `wwds-dev/imprint` is public (checked 2026-11-11), which makes the source
+available to anyone; it has no `LICENSE`, no GitHub release, no download page and no store
+listing. Nobody pays for the app and it takes no payment; it spends the user's own API keys
+under the request guard. Personal data: the user's manuscripts, voice and API keys stay on the
+Mac; text and audio go to the model providers the user enables. Markets: `UNVERIFIED`. The README
+describes selling what the agents produce and the audiobook part was once meant to be sold on its
+own, so a paid release (`commercial`) is plausible later and goes through Comply first. The other
+honest option is to make the repo private and set `internal`.
+
 ## Stack
 - Python 3.11 (`.venv` is 3.11.15); PySide6 (unpinned) GUI; SQLite (WAL) in `services/database.py`.
 - Providers: Ollama, Anthropic (unpinned), openai 2.31.0, DeepSeek, Gemini (google-genai), Kimi, Qwen/DashScope, Higgsfield, ElevenLabs; httpx 0.28.1, requests 2.33.1, pydantic 2.13.0, tiktoken 0.12.0.
@@ -17,7 +32,7 @@ Imprint: a macOS desktop app (PySide6) that bundles ten creative/publishing AI a
 - Install deps: `uv pip install -r requirements.txt -r requirements-dev.txt`
 - Run app: `.venv/bin/python main.py`
 - Run tests: `.venv/bin/python -m pytest -q` (1826+ collected via `--collect-only`, 2026-10-19; a full run takes 13 to 17 minutes, README §16.1; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
-- Lint / types: `ruff.toml` (E4, E7, E9, F, B) with a CI ratchet against `docs/company/tooling/baseline.json`; no type checker.
+- Lint / types: `ruff.toml` (E4, E7, E9, F, B) with a CI ratchet against `docs/foundry/tooling/baseline.json`; no type checker.
 - Setup checks: `scripts/check_setup.py`, `scripts/check_keys.py`.
 - Build: `./scripts/build_app.sh [--no-install]` (PyInstaller, ad-hoc codesign, installs to /Applications); everyday: `./scripts/install_app.sh` (launcher into this source tree, edits live on relaunch).
 - Release smoke checklist: UNVERIFIED as a single list; use `tests/manual_test_cases.md` (UAT) plus launch, one agent action, quit, relaunch with DB/projects intact, header version badge matches `v<VERSION>.<git count>`.

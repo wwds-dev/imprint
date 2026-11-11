@@ -32,7 +32,7 @@ QWEN_THINKING_BUDGET = 8192
 # `max_completion_tokens` and Gemini's `max_output_tokens` are documented to
 # include reasoning, so they need no extra term (spec D4).
 #
-# Sources: docs/company/radar-notes/2026-10-14-feature-billing.md and the
+# Sources: docs/foundry/radar-notes/2026-10-14-feature-billing.md and the
 # review loop 1 decision in docs/specs/audit-p1-billing.md.
 # - deepseek: 65,536. DeepSeek documents the default `max_tokens` as 64K in
 #   thinking mode (128K only with reasoning_effort=max, which Imprint never

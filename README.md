@@ -2952,7 +2952,7 @@ Two GitHub Actions workflows run on every push and pull request:
 | Workflow | Job | What it does |
 |---|---|---|
 | `quality.yml` | `test` | The full suite under coverage on `macos-latest`, Python 3.11 from `actions/setup-python` |
-| `quality.yml` | `lint` | `ruff`, through `docs/company/tooling/ratchet.py`: the count may not rise above the baseline |
+| `quality.yml` | `lint` | `ruff`, through `docs/foundry/tooling/ratchet.py`: the count may not rise above the baseline |
 | `security.yml` | `secrets` | `gitleaks detect` over the whole history with `.gitleaks.toml`; any finding fails the run |
 | `security.yml` | `dependencies` | `pip-audit -r requirements.txt`; reported, not blocking (`continue-on-error`) |
 

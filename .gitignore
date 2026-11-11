@@ -53,3 +53,6 @@ _build_info.json
 # output ("a sunset" fixtures) committed by accident; they are left in place
 # rather than deleted from someone else's project, but no new ones follow them.
 /data/chats/
+
+# The legal pack lives in the Foundry HQ (private repo); this path is a link to it.
+/docs/legal
