@@ -33,6 +33,8 @@ data/lmarena_ratings.tmp
 screenshots/
 .claude/*
 !.claude/settings.json
+!.claude/agents/
+!.claude/commands/
 
 # Build artifacts
 dist/
