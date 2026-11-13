@@ -31,7 +31,8 @@ data/model_watch.json
 data/lmarena_ratings.json
 data/lmarena_ratings.tmp
 screenshots/
-.claude/
+.claude/*
+!.claude/settings.json
 
 # Build artifacts
 dist/
