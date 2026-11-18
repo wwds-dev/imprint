@@ -1,6 +1,6 @@
 # Spec: One-click release (approved manuscript → release kit overnight)
 
-Status: **Define approved by the owner 2026-11-18 (freeze exception granted); Design and Architect in progress.** Source: `SUGGESTIONS.md` #79 (portfolio review 2026-11-18). Priority: not set (owner). Product-manager playbook: `status: current`, last-reviewed 2026-10-14.
+Status: **Define and Architect approved by the owner 2026-11-18 (freeze exception granted). Next: Plan, then slice 1 Build.** Source: `SUGGESTIONS.md` #79 (portfolio review 2026-11-18). Priority: not set (owner). Product-manager playbook: `status: current`, last-reviewed 2026-10-14.
 
 > **Feature freeze (2026-10-09) applies.** `TODO.md` allows bug fixes, tests and wording only until `tests/READINESS_GATE.md` §3 A–E are ticked on one commit. This feature needs an explicit owner exception, like local-model routing got on 2026-10-21. Declining it is a valid outcome of this gate.
 >
@@ -585,6 +585,9 @@ The label is "Release kit v<version> · <file name>" (D6). The provenance sideca
 8. **One kit running at a time;** paused kits for other Projects may wait. *Recommend: yes.*
 9. **Agent and project caps count job reservations** for every other request while a kit holds money; ordinary single requests stay as today (their own gap, F3, to TODO). *Recommend: yes.*
 10. **Decision 7 extended to per-unit items:** an ElevenLabs Short whose outcome is unknown after a crash is recorded at its maximum and marked Verify. *Recommend: yes (slice 3).*
+
+### Owner decisions (2026-11-18, Architect gate)
+The owner approved all ten A10 recommendations in chat on 2026-11-18 in the words "Approve as recommended" (`docs/foundry/approvals.jsonl`). In short: ADR 0005 accepted; the budget day is the day of approval or latest resume, and a later-day resume re-checks that day's caps; slice 1's local-only, dialog-free entry point and job columns count as "no guard change"; quotes use 12 × 2,500-character passages, at most 20 verbatim quotes of up to 280 characters; keep-awake through `caffeinate -i -w <pid>`; the Shorts default stays `system` for slice 1 Build and QA with notice N2, and the publishing default is decided before any kit Short is posted (lawyer trigger T2); slice 1 records AI facts only, embedded marking waits for lawyer trigger T1 before slice 2; one kit runs at a time; job reservations count in other requests' agent and project caps (gap F3 for single requests goes to TODO); decision 7 extends to per-unit items in slice 3.
 
 ## Risks
 - **The guard change is the riskiest part.** A job-level reservation that leaks, double-counts or survives a cancel would spend money outside what was approved. Mitigation: Architect gate, contract test 6, mutation checks on the reservation logic.

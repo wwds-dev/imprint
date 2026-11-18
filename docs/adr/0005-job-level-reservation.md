@@ -1,6 +1,6 @@
 # ADR 0005: Job-level reservation in the request guard
 
-Status: **Proposed, awaiting owner approval at the Architect gate** (architect, 2026-11-18). Spec: `docs/specs/one-click-release.md`, section "Architecture (architect, 2026-11-18)", A1–A3. Amends one clause of ADR 0004 (see Decision).
+Status: **Accepted** by the owner at the Architect gate, 2026-11-18 ("Approve as recommended"); proposed by architect the same day. Spec: `docs/specs/one-click-release.md`, section "Architecture (architect, 2026-11-18)", A1–A3. Amends one clause of ADR 0004 (see Decision).
 
 ## Context
 Today the request guard confirms each paid request on its own.

@@ -299,6 +299,7 @@ was independently re-verified against the code before filing.
 - [ ] `P3` `infra` `@ai` One shared retry-with-backoff wrapper across providers, replacing per-client handling
 - [ ] `P3` `feature` `@ai` Export a run — prompt, response, usage, cost — as a single markdown file
 - [x] `P3` `feature` `@me` **Decide at the Define gate on one-click release (SUGGESTIONS #79).** Spec `docs/specs/one-click-release.md` (2026-11-18, branch `claude/spec-one-click-release-33b040`, not merged): answer its 11 open questions, starting with whether the 2026-10-09 freeze gets an exception. Paid stages stay untestable until the rejected `.env` keys are replaced.
+- [ ] `P2` `bug` `@ai` **Agent and project caps ignore money already reserved by open requests** (gap F3, `main.py:4517-4530`, found at the one-click-release Architect gate 2026-11-18). The job reservation closes it for release kits only; single requests still check agent and project caps against recorded spend alone.
 
 ---
 
