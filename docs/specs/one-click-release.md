@@ -6,7 +6,7 @@ Status: **Define approved by the owner 2026-11-18 (freeze exception granted); De
 >
 > **No paid stage can be tested today.** `TODO.md` P1 `@me`: the Anthropic, Gemini and DeepSeek keys in `.env` are rejected by their providers (found 2026-10-09), and `OPENAI_API_KEY` is unset. Every Booth narration route is paid (OpenAI, Gemini, ElevenLabs). Until that owner item is done, only the free stages can run for real; paid stages can be built and tested only against fakes.
 
-`/radar-check` and the read-only legal consult ran after the Define gate (owner decision 10); findings in `docs/audit/one-click-release-radar.md` and `docs/audit/one-click-release-legal-consult.md`.
+`/radar-check` and the read-only legal consult ran after the Define gate (owner decision 10); findings in `docs/foundry/radar-notes/2026-11-18-one-click-release.md` and `docs/audit/one-click-release-legal-consult.md`.
 
 ## Problem
 Who: one author with a finished book in a Project.
@@ -151,6 +151,145 @@ Answered by the owner in chat on 2026-11-18; Define approved in the owner's word
 11. **Build slice 1 (the free path) first**, before the rejected keys are replaced. Architect still designs the slice-2 guard change.
 
 Not decided at this gate: the `SUGGESTIONS.md` #79 status (left at IDEA; the owner did not ask to change it) and the spec's priority.
+
+## Design (ux-designer, 2026-11-18)
+Playbook `ux-designer`: `status: current`, last-reviewed 2026-11-11. Read: `ui/forms.py`, `ui/theme.py`, `ui/project_overview.py`, `services/money_text.py`, `services/validator.py` (refusal wording), `agents/audiobook/panel.py` (`start_conversion`, `resume_pending_conversions`), `agents/manuscript/panel.py` (approved-version row), `main.py` (`authorize_request`, `confirm_external_api_request`, `_assessment_text`). **UNVERIFIED:** `docs/audit/one-click-release-radar.md` and `-legal-consult.md` are not in this worktree, so no copy below is checked against them (for example an AI-disclosure line). Euro figures in examples are illustrative.
+
+**The user's question:** "What will this make, what is the most it can cost, and can I leave it overnight?" **The one primary figure:** the total maximum, "Up to €7.69", or "No charge" when every step runs on this Mac.
+
+**Wording rules** (as the guard already does): a maximum is "up to €x" (`money_text.up_to`, rounds up); an amount left is "€x left" (`money_text.left`, rounds down); a recorded amount uses `money_text.paid` ("under €0.01", never "€0.00"). Never "estimated", never "exceeded" (nothing is spent at a refusal). Short sentences. No claim of income, sales, reach or results. Agents by codename (Press, Booth). Layout is the aligned form: `section()` headings, `field()` labels above inputs, spacing 4/8/16/24, 32-px controls. Colour: `WARNING` for a paid line, `DANGER` for a blocking reason, muted for local; every state is also a word.
+
+### D1. Entry point
+- **Start:** a **Make Release Kit…** button in Press, Quote Finder tab, on the approved-version row right after "Export Approved…" (`agents/manuscript/panel.py:344-378`). The kit uses the version selected in that row's combo.
+- **Project Overview** stays read-only (its docstring says so). Its summary line gains "Release kit: none" / "v3 running, step 2 of 8" / "v3 paused, needs you" / "v3 made 19 Nov", and a **Release Kits…** button that opens the window in D3.
+- When this Project has a running or paused kit, the Press button reads **Open Release Kit…** and opens D3 instead.
+- When the button is disabled, the reason is a visible note under the row (`field_note`) and the button's accessible description. A tooltip alone is not enough: a disabled button cannot take keyboard focus.
+
+| Condition | Note text |
+|---|---|
+| No Project selected | "Select a Project to make a release kit." |
+| No approved version | "Approve the Write draft first. A release kit is made only from an approved version." |
+| Selected version has an empty title or byline | "Version 3 has no title or byline. Set them in the Project, then approve a new version." (same rule and words as `export_approved`) |
+| A kit is running for another Project | "A release kit is running for <Project>. One kit runs at a time." |
+
+### D2. The one confirmation screen: "Make Release Kit"
+A modal dialog. It is not a `QMessageBox` because each row needs its own controls. The dialog is about 720 px wide and shows, top to bottom:
+
+1. **Primary figure** (`StatValue` style): "Up to €7.69", caption "TOTAL MAXIMUM FOR THIS KIT". All local: "No charge", caption "EVERY STEP RUNS ON THIS MAC".
+2. **Source:** "From <Project>, approved version 3 · 84,210 words · <Title> by <Byline>".
+3. **Output folder:** the path and a **Change…** button. By default it is a new folder named `<Title>_v3_<date>` under the folder Export Approved already uses (`user_data_base()`). Note: "A new folder. Nothing in it is overwritten."
+4. **STEPS** table, one row per step. Columns: Step · Route · Basis · Maximum.
+
+| # | Step | Route (default) | Basis shown | Maximum |
+|---|---|---|---|---|
+| 1 | EPUB | "EbookLib, on this Mac" | "1 file from version 3" | local, no charge |
+| 2 | Audiobook | route and voice combos; Booth's current route and voice | "512,300 characters · about 9 h 40 min of audio" | up to €7.69 |
+| 3 | Quotes | model combo; first local model | "Up to 20 quotes from 12 passages across the whole book · replies capped at 8,192 tokens each" | local, no charge |
+| 4 | Calendar | "4 weeks (28 days)" (fixed text), Start date (as Press Calendar: today), chips TikTok / Instagram / Pinterest, all on | "56 posts: 22 Shorts, 34 graphic posts" | local, no charge |
+| 5 | Quote graphics | "On this Mac" | "One per unique quote: up to 20" | local, no charge |
+| 6 | Shorts | voice combo; "On-device voice (macOS)" | "22 Shorts, narration up to <max> characters each" | local, no charge |
+| 7 | Captions and CSV | model combo; first local model | "56 captions in one request · reply capped at 8,192 tokens" | local, no charge |
+| 8 | Link and report | "On this Mac" | "Every file linked to <Project>" | local, no charge |
+
+   Passage count and maximum quote length are Architect's numbers. Any change on this screen re-estimates the whole screen.
+5. **Assessment** under each paid row, in the guard's own words (`_assessment_text`, `_media_assessment_text`, `_rating_assessment_text`):
+   - Best fit: "Assessment: your choice is the best fit among the providers you have permitted (82/100)."
+   - Not best: "Assessment: best fit is Gemini · gemini-3.8-flash-tts, up to €3.90. Your choice: 74/100, up to €7.69." followed by an **Apply** button.
+   - Apply switches that row's route and re-estimates. It never sends. The line then reads "Applied: Gemini · gemini-3.8-flash-tts. Figures updated. Nothing was sent." Focus returns to that row's route combo.
+6. **CAPS AFTER THIS KIT** table (shown only when something is paid). Columns: Cap · Left now · This kit reserves · Left after. Rows: Session; Today (18 Nov); Booth; Press; Project "<name>". A cap that is not set reads "no cap set". A row that cannot hold the kit reads "Not enough" in its last cell. Note: "The whole maximum is reserved against today's cap, even for steps that run after midnight. A step that may run after midnight is priced at the higher of today's and tomorrow's rate."
+7. **Notes** (micro text):
+   - "Steps run one at a time, in this order."
+   - "Imprint keeps this Mac awake until the kit finishes or pauses. The display may sleep. Keep the Mac plugged in with the lid open." Architect: confirm that the chosen power assertion does not hold the Mac awake with the lid closed.
+   - "If a route or a price would change, the kit pauses and waits for you. It never switches route by itself and never asks during the night."
+   - "Nothing is posted, scheduled or submitted. The calendar is a CSV file."
+8. **Buttons:** Cancel · **Start**. Start is labelled "Start" when everything is local and "Start (up to €7.69)" when something is paid. Any blocking reason sits on one line above the buttons, starting "Cannot start:".
+
+| State | What the screen shows | Start |
+|---|---|---|
+| Estimating (on open, after any change) | Figure "Estimating…"; Maximum cells "…"; note "Counting the book and checking prices." | disabled |
+| All local | "No charge". Instead of the caps table: "No cap is used: no step calls a paid provider." | "Start" |
+| One paid line (default from slice 2) | "Up to €7.69"; caps table | "Start (up to €7.69)" |
+| Cannot be priced | Maximum cell "cannot be priced"; figure "Cannot be priced: Audiobook"; "Cannot start: Audiobook cannot be priced. ElevenLabs · eleven_multilingual_v2 has no rate in config/pricing.json, and 0 means unknown, not free. Add a rate in Settings → Pricing, or choose another route." With more than one: "Cannot be priced: Audiobook, Captions and CSV." | disabled |
+| A cap cannot hold the total | That row reads "Not enough"; "Cannot start: this kit can cost up to €12.40, and today's cap has €5.00 left (of €10.00). Choose cheaper or local routes, or raise Daily € under Limits." Each cap uses the validator's own remedy. The message names the first failing cap in the validator's order; every failing row is marked. | disabled |
+| Key missing / provider switched off | "Cannot start: the OpenAI route needs OPENAI_API_KEY, which is not set. Add it in Settings, then restart Imprint, or choose another route." / "Cannot start: OpenAI is switched off under API permissions." | disabled |
+| No local model answers | "Cannot start: no local model answered. Start Ollama or LM Studio, then press Check again." A **Check again** button appears. | disabled |
+| Output folder unusable | "Cannot start: <folder> already has files. Choose a new folder." / "Cannot start: Imprint cannot write to <folder>." | disabled |
+| Caps or prices changed while open | When Start is pressed, the screen re-validates. If anything moved, it stays open: "Caps or prices changed since this screen opened. Check the figures, then press Start again." | enabled after refresh |
+| **Slice 1** | The Audiobook row stays visible so the kit's shape is honest: Route "Not included", Basis "Narration is always paid, and this screen cannot approve paid steps yet. Narrate in Booth.", Maximum "—". The Quotes and Captions combos list local models only; the Shorts voice is on-device only. Note under the table: "This version runs local steps only. Cloud models and ElevenLabs are not offered here." Figure "No charge"; no caps table. | "Start" |
+
+### D3. Running: the "Release Kits" window
+- A non-modal window. It opens on Start (the confirmation closes), from **Open Release Kit…** in Press, from **Release Kits…** in Project Overview, and at launch (D4). Closing it never stops a kit. A note while running says so: "Closing this window does not stop the kit."
+- **Headline:** "Step 2 of 8: Audiobook". Caption: "<Project> v3 · started 22:14". Under it, the step's own progress as a bar *and* text: "Chapter 4 of 31".
+- **Step table** (Step · State · Spent · Line). States in words: Waiting, Running, Done, Done earlier (verified on resume), Paused, Incomplete, Verify, Not included. Spent uses `paid`; Line is "up to €7.69" or "local, no charge".
+- Note while running: "This Mac stays awake while the kit runs. The display may sleep." When the kit ends or pauses: "This Mac may sleep again."
+- **Stop** (shown only while running) has no confirmation, because it deletes nothing. First it shows "Stopping after the current item…", then "Paused by you. Finished steps stay done. Resume continues from Shorts." During Audiobook the stop line is "Stopping Audiobook. Narrated chapters are kept and recorded." Other buttons: Show Folder, Close.
+- **Quitting Imprint while a kit runs** (the owner is present, so a dialog is fine). Title "A release kit is running". Text "Quitting pauses it. Finished work is kept, and you can resume next time you open Imprint." Buttons: **Keep Running** (default, Escape) and Quit and Pause. UNVERIFIED: how cleanly the narrator subprocess stops on quit is Architect's to confirm.
+
+### D4. Resume list on launch
+- At launch, if any kit is unfinished, the Release Kits window opens once: non-modal, no sound. Launching the app is the owner's own action, so this is not a night-time prompt.
+- Each unfinished kit row reads "<Project> v3 · started 18 Nov, 22:14 · paused at Shorts". The detail below it:
+  - "Done: EPUB, Audiobook, Quotes, Calendar, Quote graphics."
+  - "Left: Shorts, Captions and CSV, Link and report."
+  - "Left to spend: up to €3.10 of the €7.69 you approved." (all local: "Left to spend: nothing, every remaining step is local.")
+  - The pause reason from D5.
+- **Resume** is one click with no dialog, and stays within the original approval. It first shows "Checking finished files…" (file present, SHA matches) and skips verified steps ("Done earlier").
+- **Session cap cannot hold the rest:** an inline line under the row: "Cannot resume yet: this kit still needs up to €3.10, and your session cap has €2.00 left (of €5.00). Raise Session € under Limits and press Save Limits, then press Resume." Resume stays enabled; each press checks again.
+- **A finished file is missing or changed:**
+  - Local step: "Quote graphics will run again: 2 of its files are missing or changed." Resume stays the action.
+  - Paid step: "The audiobook file is missing or changed. Making it again costs up to €7.69, so it needs a new approval." Action: Review and Approve…
+- **Discard** (secondary button) asks first. Title "Discard this release kit?". Text "Nothing more will run for it. Files already made stay in <folder> and stay linked to <Project>. Spending already recorded stays recorded." Buttons Discard and **Cancel** (default, Escape).
+- **Review and Approve…** opens D2 titled "Approve Remaining Steps". Finished steps show as "Done" with no controls, and only the remaining steps are priced and reserved. This is a new approval.
+
+### D5. Paused states (no dialog at night)
+Each pause appears only in the Release Kits window and in the report, plus the Press and Overview status line "Release kit v3 paused, needs you". The power assertion is released. There is one action per state.
+
+| Cause | Message | Action |
+|---|---|---|
+| Retired model | "Paused before Audiobook: OpenAI retired gpt-4o-mini-tts on 6 Jan 2027. Nothing was sent on it. Choose another route to continue." | Review and Approve… |
+| Route unavailable | "Paused during Quotes: Ollama did not answer (connection refused). Nothing more was sent. Start it, then resume." For a paid route: "OpenAI refused the request (key rejected)." | Resume |
+| Price rose above the line | "Paused before Audiobook: its rate in config/pricing.json rose since you approved. It can now cost up to €8.40, above its approved €7.69. Nothing was sent." | Review and Approve… |
+| A step would exceed its line | "Paused during Captions and CSV: the request is larger than approved (up to €0.52 against its €0.40 line). Nothing was sent." | Review and Approve… |
+| Routing-advisor hold | "Paused before Quotes: the routing advisor says <model> may fall short for this step (<advisor's reason>). Nothing was sent. Keep it or choose another model." | Review and Approve… |
+| Cap refusal mid-run | "Paused before Captions and CSV: your session cap has €1.00 left (of €5.00), and this step can cost up to €1.40. Nothing was sent. Raise Session € under Limits and press Save Limits, then resume." The validator's wording and remedy, per cap. | Resume |
+| Crash during a paid text step | State **Verify**. "Needs checking: Imprint stopped while Captions and CSV was waiting for Anthropic's reply. Whether it was charged is unknown, so it is recorded at its maximum, €0.40. Compare with your Anthropic usage page. This step runs again only after you approve it again." | Review and Approve… |
+| Booth settings changed since an interrupted book | "Paused before Audiobook: Booth has an unfinished narration of this book with other settings (Gemini, voice Kore, chunk size 2,000; 12 of 31 chapters saved). The kit will not choose between them for you." In the re-approval, the Audiobook row then offers "Reuse the 12 saved chapters (original settings)" or "Start again with these settings (whole book at full cost)", the same choice as Booth's own dialog. | Review and Approve… |
+| Mac slept / Imprint quit | "Interrupted: Imprint closed or the Mac slept during Shorts. 9 of 22 Shorts are made and kept." For Audiobook: "Narrated chapters are kept; you pay only for the rest." UNVERIFIED: whether sleep can be told apart from a quit; until it can, the wording names both. | Resume |
+
+### D6. Job report
+- **Where:** the window shows it when the kit finishes, and through **Show Report** on any kit. It is saved as `release-kit-report.md` in the output folder, rewritten at every pause and at the end, and linked to the Project (kind `release_kit_report`). Kit files appear in Overview's Files tab labelled "Release kit v3 · <file name>".
+- **Content (headings and lines as written):**
+  - Title line: "Release kit: <Title>, version 3"
+  - "Project: <name> · source SHA-256 <first 12 characters> · 84,210 words"
+  - "Started 18 Nov 2026, 22:14 · ended 19 Nov 2026, 03:52 · <state>". State is one of: "Made", "Made, with items to check", "Paused", "Discarded".
+  - A table with columns Step · Route (provider · model · voice) · Result · Cost · Approved line. Example rows: "Done, 31 chapters"; "Incomplete, 42 of 56 captions"; "€7.12 | up to €7.69"; "local, no charge"; "€0.40 (at maximum, check)".
+  - "Total recorded: €7.12 of up to €7.69 approved."
+  - **Incomplete:** for example "Captions and CSV: 14 of 56 posts have no caption. The reply stopped at the 8,192-token limit. Write them in Press → Calendar, or approve this step again." Any truncation applied to stay within a bound is also listed, for example "Shorts: 3 quotes were shortened to <max> characters for narration."
+  - **Check:** each Verify item with its recorded maximum and the provider whose usage page to compare.
+  - **Files:** each path, all linked to <Project>.
+  - Last line: "Nothing was posted, scheduled or submitted."
+
+### D7. Accessibility and keyboard (WCAG 2.2 AA by analogy, per playbook)
+- **Confirmation, focus order:**
+  1. Output folder Change…
+  2. Each step row, top to bottom; within a row, route, then voice, then Apply.
+  3. Calendar Start date.
+  4. Platform chips.
+  5. Check again (when shown).
+  6. Cancel.
+  7. Start.
+
+  Initial focus is the first editable control (Audiobook route; in slice 1, the Quotes model). Start is the default button, so Return starts, as in the guard's dialog; when Start is disabled, Return does nothing. **Escape = Cancel**: nothing is reserved or written.
+- **Release Kits window:** initial focus goes to the selected kit's one action (Stop, Resume or Review and Approve…). **Escape closes the window and never stops or discards.** Cmd-period = Stop while running. In Discard and quit-while-running, the safe button is the default and Escape chooses it.
+- **Accessible names:**
+  - Combos: "Audiobook route", "Audiobook voice", "Quotes model", "Shorts voice", "Captions model", "Calendar start date".
+  - Apply buttons: "Apply suggested route for Audiobook".
+  - Each step row reads as one string: "Audiobook, OpenAI gpt-4o-mini-tts, voice alloy, up to €7.69".
+  - Start's description: "Starts all 8 steps. Up to €7.69 in total."
+  - Progress bar: "Audiobook progress, chapter 4 of 31".
+
+  Spoken announcements of state changes (`QAccessibleAnnouncementEvent`) need Qt 6.8 or later; the installed PySide6 version is unpinned, so this is UNVERIFIED. Without it, the headline label's text change is the signal.
+- **Colour is never the only signal:** each state is a word; paid lines say "up to €"; blocked rows say "Not enough" or "cannot be priced"; every blocking reason is a sentence.
+- **Contrast:** text needs at least 4.5:1. The progress-bar fill against its track, focus rings and control borders need at least 3:1. The app has no contrast test today (`tests/test_theme.py` computes no luminance ratio), which the playbook requires: a QA item for Verify. Controls are 32 px, above the 24-px minimum target. Money figures and reasons wrap and are never cut off, down to a 640-px-wide window.
 
 ## Risks
 - **The guard change is the riskiest part.** A job-level reservation that leaks, double-counts or survives a cancel would spend money outside what was approved. Mitigation: Architect gate, contract test 6, mutation checks on the reservation logic.
