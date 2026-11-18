@@ -54,7 +54,32 @@ controls through `GodAI._find_control()`.
 - [x] `P1` `feature` `@ai` **Phase 1 of the local-model routing plan (2026-10-19): provider registry and LM Studio.** Ports Sentinel's design: `services/providers.py` and `services/lmstudio_client.py` are byte-identical in both repos (`tests/test_providers_drift.py`, no allowed differences). All 20 `== "ollama"` comparisons in `main.py`, `catalog.py`, `engine.py`, `ratings.py`, `pricing_catalog.py`, `validator.py`, `usage_tracker.py` became `is_local()`, so a second local provider is priced free, scored private, permission-free and never opens the paid-request dialog; the four remaining are Ollama-only features and a test pins them. `run_backend` dispatches by spec; `load_provider_models` asks `models_for_provider` instead of its seven-branch chain; Ollama follows `OLLAMA_HOST`. LM Studio is in every panel that offers Ollama (not Manuscript or Creator, whose registry rows exclude local on purpose) with `/api/v0/models` discovery and the disk fallback; the BEST FIT availability test now requires the candidate's own provider to be the selected one, not just any local one. The memory check is generalised (`fit_check`, ×1.2). Uncensored/abliterated models carry an amber pill in the dropdown delegate and on the closed combo (`DropdownProxyStyle.drawComplexControl`). Registry allow-lists treat local runtimes as one group. ADR `docs/adr/0002-provider-registry.md`; `tests/test_routing_phase1.py`, `tests/test_providers_registry.py`. Not exercised against a live LM Studio server (`lms` is not installed on this Mac); the client is tested against recorded API shapes. **Not done here:** the "Start LM Studio server" action is wired in Sentinel only — Imprint's local-fallback offer (`_offer_local_fallback`) is still Ollama-only (phase 2).
 - [x] `P1` `feature` `@ai` **Phase 4 of the local-model routing plan (2026-10-19): hybrid routing.** Ports Sentinel's design: `services/routing_advisor.py`, `ui/routing_advice.py`, `ui/routing_page.py`, `tests/test_routing_advisor.py` (byte-identical, drift-tested). One advice per Studio Assistant job naming each limit (quality gap outside the 20-point band, context, not runnable, unmeasured — suggests, does not urge) with cost and time; five modes with per-agent overrides in **Settings → Models**, which also lists and removes *Always* rules; banner holds the job (Switch for this job / Always / Keep local); status line after a local run; failover offer from the engine's ranking (never sent by itself; Local only never offers cloud); savings tally in the Spend rail. The agent's selection is never changed and every paid choice goes through the paid-request dialog. `_text_recommendations` split into `_text_candidates_for` (shared by BEST FIT, the assessment and the advisor); `RecommendationEngine.request_tags`. The suite no longer writes the tracked `config/settings.json` (session fixture). `tests/test_routing_phase4.py`, ADR `docs/adr/0004-hybrid-routing.md`. Not run against a live LM Studio.
 - [x] `P2` `feature` `@ai` **Routing advisor for the other text agents (2026-10-21, owner-directed despite the freeze).** Quill, Herald, Sitebuilder and Stamp pass `resume=` to `authorize_request` → `ui/panel_routing.py`: banner on the panel, an answer re-runs the action with the model in the panel's boxes (paid-request dialog and caps still decide), rules per agent+kind in `data/routing_rules.json`, failover offer from `abandon_request(error=…)`, savings tally from `record_request`. Muse, Press, Booth and all per-unit media requests are excluded on purpose. `tests/test_routing_panels.py`. Not run against a live LM Studio.
-- [ ] `P1` `testing` `@ai` **Code-level readiness audit (promises vs code).** Check every promise in the README, `docs/agents/*.md` and `docs/foundry/app-context.md` against the code (all 10 agents, the request guard and billing paths, vidforge, publishing); classify each Delivered / Narrower / Stub / Needs a live check; findings to `docs/audit/` and this file. Own chat, Opus high, ~45–90 min. Requested 2026-11-18 after the lab-wide doc sweep.
+- [x] `P1` `testing` `@ai` **Code-level readiness audit (promises vs code).** Check every promise in the README, `docs/agents/*.md` and `docs/foundry/app-context.md` against the code (all 10 agents, the request guard and billing paths, vidforge, publishing); classify each Delivered / Narrower / Stub / Needs a live check; findings to `docs/audit/` and this file. Own chat, Opus high, ~45–90 min. Requested 2026-11-18 after the lab-wide doc sweep. Done 2026-11-18: `docs/audit/code-readiness-audit-2026-11-18.md`. Verdict: not ready (five blockers, QB-1 to QB-5); new items below, reasoning under Detail §7.
+- [ ] `P0` `bug` `@ai` `agent:author` **Quill's Write empties the autosaved Draft, and Revise sees only its last 3,000 characters.** Audit QB-1. `agents/author/panel.py:1073-1074` clears the Draft; outline, character and world replies also stay in it (`:1263-1268`). The draft is not restored on error or Stop (`:1151`, `:1160`), and autosave persists the loss (`:672-677`). Revise tasks send only `[-3000:]` (`:983-985`).
+- [ ] `P1` `bug` `@ai` `agent:audiobook` **Booth authorizes only the "remaining" share after the source text changed, while the converter re-narrates the whole book.** Audit QB-2. `agents/audiobook/panel.py:706-712`; `conversions.py:39-44`; `converter.py:657-665`. Store a text hash on the conversion row; a mismatch means a full-cost authorize.
+- [ ] `P1` `bug` `@ai` `agent:social` **A Herald clip is authorized as "openai" while its scene images can go to Gemini or Qwen.** Audit QB-3. `agents/social/panel.py:616-619`; it lacks the Video tab's provider check (`agents/video/panel.py:488-512`). A clip can spend on a provider whose permission box is unticked.
+- [ ] `P1` `docs` `@ai` **Add the promised "Deliberate limitations" section to every agent sheet.** Audit QB-5; readiness gate §3 A. `docs/agents/overview.md:48-51` promises it; none of the twelve sheets has it. Source the rows from the audit's Narrower and Stub findings.
+- [ ] `P1` `bug` `@ai` **The Reading Compass cloud worker narrates whole books outside any guard.** Audit QH-1. `cloud/reading_compass.py:387-430`, `:573-617`: no cap, no estimate acknowledgment, no usage record; a failed job re-queues and pays again. Add a cap and an acknowledged estimate, or state the exception in app-context.
+- [ ] `P1` `bug` `@ai` `agent:video` **Stopping a Gemini Omni render discards the paid clip, though the status line says the next launch saves it.** Audit QH-2. `ui/workers.py:394-409`; `services/gemini_client.py:416-419`; `agents/video/workers.py:63-75`.
+- [ ] `P1` `bug` `@ai` `agent:manuscript` **Press Ask claims KDP, metadata and store-status access it does not have, and Connections says "connected" for an unverified key.** Audit QH-5. `agents/manuscript/agent.py:5-20`; `panel.py:102`, `:646-668`, `:726-727`.
+- [ ] `P2` `bug` `@ai` `agent:social` **Pinterest cannot post from the panel: there is no image picker, and the clip MP4 is sent as `image/png`.** Audit QH-3. `agents/social/publishing.py:340-343`. Fix it or narrow the Herald promise.
+- [ ] `P2` `bug` `@ai` `agent:social` **YouTube reads "ready to post" for any `client_secret*.json`, but the uploader needs `client_secret.json`.** Audit QH-4. `agents/social/publishing.py:243-255`; `vidforge/vidforge/youtube.py:35-43`.
+- [ ] `P2` `bug` `@ai` `agent:audiobook` **Booth Stop loses the in-flight paid chunks and reports a failure.** Audit QH-6. `agents/audiobook/panel.py:1133-1143`, `:884-960`; `conversions.py:119-130`. Related QM-7: no ledger row means €0 is recorded (`panel.py:789-798`). Related QM-8: M4B after an existing MP3 re-narrates without a warning (`:671-679`).
+- [ ] `P2` `bug` `@ai` **Automatic local-model measurement makes paid cloud calls without a confirmation, and its ceiling is not reserved in flight.** Audit QM-1. `services/local_ratings.py:56`; `main.py:1159-1169`, `:1201-1239`, `:1294-1305`.
+- [ ] `P2` `bug` `@ai` **Paid SDK clients retry on top of their own retry loops.** Audit QM-5. vidforge: up to 9 attempts per call (`visuals.py:25,79`, `voice.py:18`, `llm.py:21`). Booth's converter: OpenAI without `max_retries` (`converter.py:181`) on `RETRIES=2`, plus a Gemini encode failure that re-bills (`:788-808`). The converter is a shared copy: change every copy in one session.
+- [ ] `P2` `bug` `@ai` `agent:video` **Short clips run about twice their length and are under-reserved.** Audit QM-6. `vidforge/vidforge/script.py:108-111`; `agents/video/studio.py:286-288`.
+- [ ] `P2` `bug` `@ai` `agent:creator` **Muse's Omni and Wan teasers skip the content-policy check.** Audit QM-9. `agents/creator/panel.py:1117` (Higgsfield only), `:1213-1301`.
+- [ ] `P2` `bug` `@ai` **Press Refresh and Herald posting run network calls on the UI thread.** Audit QM-11. `agents/manuscript/panel.py:717-732`; `agents/social/panel.py:1071-1076`.
+- [ ] `P2` `bug` `@ai` `agent:manuscript` **Press Shorts can start twice over one worker; KDP ingest with the wrong headers reads as zero and "ok".** Audit QM-12, QM-13. `agents/manuscript/panel.py:1085-1103`, `:1424-1450`, `:1535-1550`; `kdp_csv_parser.py:100-134`.
+- [ ] `P2` `bug` `@ai` `agent:video` **vidforge's voice uses `gpt-4o-mini-tts`, which OpenAI removes on 2027-01-06.** Audit QM-17. `vidforge/config.yaml:28`, `vidforge/vidforge/voice.py:33`. Booth already handles the date.
+- [ ] `P2` `docs` `@ai` `agent:fiverr` **Stamp invents a "5-star reputation" and fixed prices and promises vector files; Quill's market output has no "verify" line.** Audit QM-18. `agents/fiverr/agent.py:3,19,26,38`; `agents/author/agent.py`.
+- [ ] `P3` `bug` `@ai` `agent:manuscript` **Press's Period selector is never read.** Audit QM-10. `agents/manuscript/panel.py:129-131`, `:725`.
+- [ ] `P3` `bug` `@ai` `agent:social` **Schedule Drafts overwrites the status of posted and needs-review posts.** Audit QM-14. `agents/social/panel.py:785-816`.
+- [ ] `P3` `bug` `@ai` `agent:music` **Muse and Suno both resolve their requests by the name "music", so concurrent runs bill each other.** Audit QM-15. `agents/music/panel.py:211,240,269`; `suno_panel.py:208,225,236`. Sitebuilder uses the same by-name pattern.
+- [ ] `P3` `bug` `@ai` **A Higgsfield quote of exactly $0 passes the guard as free.** Audit QM-3. `services/higgsfield_client.py:388`. Treat 0 as an invalid estimate.
+- [ ] `P3` `docs` `@ai` **State that the vidforge CLI is outside the app's guard, and drop its removed commands from the README.** Audit QM-16. `vidforge/README.md:109-160`.
+- [ ] `P3` `bug` `@ai` **The narrator converter hard-codes `/Users/as/Documents/Files/Narrator`.** `services/narrator/converter.py:30`, against the lab rule. Shared copy: fix every copy in one session.
+- [ ] `P3` `docs` `@ai` **Doc drift found by the audit.** `main.py` is 6,511 lines (this file and app-context say about 4,400). CLAUDE.md's "about 90 s" suite. app-context names `api_limits.py` as the guard. README's old agent names and its OpenAI-only Booth text. The iPhone manual's missing "Open Imprint web agent" entry. The stale B-F4 line refs. The "PySide6 pin" item, whose commit `7754eec` is already on `main`.
 - [ ] `P1` `test` `@me` Try the routing advisor on Quill, Herald, Sitebuilder and Stamp with a real LM Studio model (never run live): Switch / Always / Keep local, the paid-request dialog after a switch, and the failover offer after a failed run.
 - [ ] `P3` `feature` `@ai` Show a dot on an agent's rail entry while it holds a job on the advice banner (SUGGESTIONS #74).
 - [ ] `P3` `test` `@ai` Stabilise `tests/test_routing_phase3.py::test_closing_the_window_cancels_a_running_measurement`: it failed once in a full run (1125 s) and passed alone twice; timing under suite load.
@@ -535,6 +560,42 @@ edge cases that file does not reach, one of which pins a float-precision quirk �
 `1.00 - 0.90 == 0.09999999999999998`, so a request estimated at exactly the
 remaining budget is refused. It fails safe, and a switch to `Decimal` should
 flip it.
+
+---
+
+## 7. Code-level readiness audit (2026-11-18)
+
+Full report: `docs/audit/code-readiness-audit-2026-11-18.md` (IDs QB, QH, QM). Read-only, at
+`63cefbf`; nothing was run against a provider. Verdict: **not ready for the QA campaign.**
+The blockers:
+
+- QB-1 Quill data loss.
+- QB-2 Booth under-authorization after a source edit.
+- QB-3 Herald clip permission bypass.
+- QB-4 rejected keys, `@me` (existing item).
+- QB-5 the missing "Deliberate limitations" sections that gate §3 A requires.
+
+Why QB-1 is P0: the Draft is the manuscript itself. Every change to it is autosaved
+(`agents/author/panel.py:672-677`), and `write()` clears it before the request is even sent
+(`:1073-1074`). So an outline request, a provider error or a Stop leaves the project with the
+reply, or nothing, in place of the book. A "Revise / Improve" on a long draft replaces the whole
+draft with a revision of its last 3,000 characters (`:983-985`). The tests never stream into the
+Draft, which is why the suite is green. Fix with a streaming test first.
+
+Why QB-2 and QB-3 are blockers rather than P2 billing gaps: both are paid calls the guard never
+authorized, triggered by ordinary actions (fix a typo, then Start; choose a Gemini image model
+for a clip). The campaign runs with live keys. The other billing items (B-F4 to B-F7) stay P2:
+the guard still asks for confirmation and caps each request; it only books the amount wrong.
+
+Leads re-checked:
+
+- B-F5's rate half is fixed; its unknown-price half is narrowed (audit QM-3).
+- B-F4 and B-F7 are confirmed with current line refs (QM-2, QM-4).
+- K-P2-1 and K-P2-2 are confirmed.
+- `main.py` is 6,511 lines, not about 4,400.
+
+Not confirmed: the Seedance-lite `.env` values, which the audit did not read. Owner checks with
+real keys: the audit's list "Checks only the owner can run".
 
 ---
 
