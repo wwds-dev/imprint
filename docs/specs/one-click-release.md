@@ -1,12 +1,12 @@
 # Spec: One-click release (approved manuscript → release kit overnight)
 
-Status: **Proposal, Define phase, 2026-11-18. Not approved.** Source: `SUGGESTIONS.md` #79 (portfolio review 2026-11-18). Priority: not set (owner). Product-manager playbook: `status: current`, last-reviewed 2026-10-14.
+Status: **Define approved by the owner 2026-11-18 (freeze exception granted); Design and Architect in progress.** Source: `SUGGESTIONS.md` #79 (portfolio review 2026-11-18). Priority: not set (owner). Product-manager playbook: `status: current`, last-reviewed 2026-10-14.
 
 > **Feature freeze (2026-10-09) applies.** `TODO.md` allows bug fixes, tests and wording only until `tests/READINESS_GATE.md` §3 A–E are ticked on one commit. This feature needs an explicit owner exception, like local-model routing got on 2026-10-21. Declining it is a valid outcome of this gate.
 >
 > **No paid stage can be tested today.** `TODO.md` P1 `@me`: the Anthropic, Gemini and DeepSeek keys in `.env` are rejected by their providers (found 2026-10-09), and `OPENAI_API_KEY` is unset. Every Booth narration route is paid (OpenAI, Gemini, ElevenLabs). Until that owner item is done, only the free stages can run for real; paid stages can be built and tested only against fakes.
 
-Not run in this session: `/radar-check` and the read-only legal consult, both of which AGENTS.md lists for Define. They are cheap to run before Architect if the owner grants the exception (see open question 10).
+`/radar-check` and the read-only legal consult ran after the Define gate (owner decision 10); findings in `docs/audit/one-click-release-radar.md` and `docs/audit/one-click-release-legal-consult.md`.
 
 ## Problem
 Who: one author with a finished book in a Project.
@@ -135,6 +135,22 @@ New Qt-free stage functions extracted from `agents/audiobook/panel.py` and `agen
 9. **Parallel stages:** allow quotes, graphics and Shorts to run while narration runs, if Architect shows it is safe, or keep it strictly sequential?
 10. **Process:** run `/radar-check` and the read-only legal consult before Architect? The legal consult would cover disclosure of AI-generated narration and images where the owner later publishes them. That is a question for a person to decide, not an agent's opinion.
 11. **Keys:** the paid slices cannot be verified until the rejected keys are replaced (`TODO.md` P1 `@me`). Is slice 1 alone worth building before that?
+
+## Owner decisions (2026-11-18, Define gate)
+Answered by the owner in chat on 2026-11-18; Define approved in the owner's words "Approve Define" (`docs/foundry/approvals.jsonl`).
+1. **Freeze exception: granted** for this feature (like local-model routing, 2026-10-21).
+2. **Calendar window: keep 4 weeks** (28 days, what exists). No 30-day option.
+3. **Quote coverage: sample the whole book**, in fixed-size windows spread across the approved version, not the first 30,000 characters only.
+4. **Graphics: one per unique quote.** Each graphic slot points to its quote's graphic.
+5. **Default routes: local by default.** Quotes and captions pre-select a local model, Shorts the on-device voice; the audiobook is the only paid line by default. Cloud routes stay selectable on the one screen.
+6. **Daily cap: the approval day's.** The whole approved total is reserved against the daily cap of the day the owner approves; the job does not pause at midnight.
+7. **Crash in a paid text stage: record at its maximum, mark "verify", and re-run only after a new approval.**
+8. **Keep the Mac awake** with a power assertion while a job runs; released when the job ends or pauses.
+9. **Strictly sequential stages.** No stage runs in parallel with narration.
+10. **Radar check and legal consult: run before Architect.**
+11. **Build slice 1 (the free path) first**, before the rejected keys are replaced. Architect still designs the slice-2 guard change.
+
+Not decided at this gate: the `SUGGESTIONS.md` #79 status (left at IDEA; the owner did not ask to change it) and the spec's priority.
 
 ## Risks
 - **The guard change is the riskiest part.** A job-level reservation that leaks, double-counts or survives a cancel would spend money outside what was approved. Mitigation: Architect gate, contract test 6, mutation checks on the reservation logic.
