@@ -79,6 +79,13 @@ consequences of what just landed rather than new ideas.
 | 72 | **Keep local as a rule.** Only *Always* (switch) is remembered; a *Keep local for this kind* rule would stop repeat banners for an unmeasured model the user trusts. | feature | S | IDEA |
 | 73 | **Context windows for cloud candidates.** Imprint's catalog scores context as 0-1, so the advisor checks context only for local models (from LM Studio's loaded context); a real window per cloud model would let it name a too-long prompt for those too. | quality | S | IDEA |
 | 74 | **A held panel job is invisible once you leave the tab.** The banner lives on the agent's panel; nothing on the agent rail says a job is waiting. Put a dot on the rail entry while it holds one. | UX | S | IDEA |
+| 78 | Navigate by work, not by agent: a project moves through Write, Produce, Package, Publish and Promote, and the agents become steps (builds on #42) (portfolio review 2026-11-18) | design | XL | IDEA |
+| 79 | One-click release: a finished manuscript becomes EPUB, audiobook, quote graphics, shorts and a 30-day calendar as one overnight job with one cost estimate and one approval (portfolio review 2026-11-18) | feature | L | IDEA |
+| 80 | One release calendar in place of the three (Press Calendar, Herald, Muse) (portfolio review 2026-11-18) | design | M | IDEA |
+| 81 | Move Stamp and Sitebuilder out of the app; they are freelance-gig tools apart from the book and music core (portfolio review 2026-11-18) | design | M | IDEA |
+| 82 | Collapse the routing, ratings and model-update panels into "Auto" plus one cost preview, with the detail in Settings (portfolio review 2026-11-18) | design | M | IDEA |
+| 83 | A persistent series and voice bible shared by Quill, Booth and Press, so style and characters carry across books (portfolio review 2026-11-18) | feature | M | IDEA |
+| 84 | Translated editions narrated in the same voice (portfolio review 2026-11-18) | feature | L | IDEA |
 
 ## Done
 
