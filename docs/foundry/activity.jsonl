@@ -91,3 +91,9 @@
 {"ts": "2026-10-22T01:24:36", "phase": "build", "state": "done"}
 {"ts": "2026-10-22T01:25:33", "phase": "release", "state": "start"}
 {"ts": "2026-10-22T01:27:42", "phase": "release", "state": "done"}
+{"ts": "2026-11-18T12:34:36", "phase": "define", "state": "start", "spec": "one-click-release"}
+{"ts": "2026-11-18T12:36:33", "phase": "define", "state": "done", "spec": "one-click-release"}
+{"ts": "2026-11-18T17:31:29", "phase": "design", "state": "start", "spec": "one-click-release"}
+{"ts": "2026-11-18T17:37:05", "phase": "design", "state": "done", "spec": "one-click-release"}
+{"ts": "2026-11-18T17:37:09", "phase": "architect", "state": "start", "spec": "one-click-release"}
+{"ts": "2026-11-18T17:48:41", "phase": "architect", "state": "done", "spec": "one-click-release"}
