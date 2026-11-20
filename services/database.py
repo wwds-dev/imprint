@@ -55,7 +55,11 @@ CREATE TABLE IF NOT EXISTS usage (
     cost_eur      REAL NOT NULL DEFAULT 0.0,
     cost_type     TEXT NOT NULL DEFAULT 'estimated',
     cloud         INTEGER NOT NULL DEFAULT 0,
-    project       TEXT NOT NULL DEFAULT ''
+    project       TEXT NOT NULL DEFAULT '',
+    -- A release kit's item, so a second row for one item is impossible
+    -- (ux_usage_job_item, created in _add_missing_columns).
+    job_id        TEXT NOT NULL DEFAULT '',
+    job_item      TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS projects (
@@ -160,7 +164,8 @@ CREATE TABLE IF NOT EXISTS runs (
     output_tokens  INTEGER NOT NULL DEFAULT 0,
     cost_eur       REAL NOT NULL DEFAULT 0.0,
     duration_sec   REAL NOT NULL DEFAULT 0.0,
-    error          TEXT
+    error          TEXT,
+    job_id         TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS pricing (
@@ -463,7 +468,88 @@ CREATE TABLE IF NOT EXISTS audiobook_conversions (
     status        TEXT NOT NULL DEFAULT 'running',
     error         TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL,
-    updated_at    TEXT NOT NULL
+    updated_at    TEXT NOT NULL,
+    job_id        TEXT NOT NULL DEFAULT ''
+);
+
+-- Release kits (docs/specs/one-click-release.md, A4): one approved job that
+-- makes an EPUB, quote graphics, Shorts and a calendar from an approved
+-- version. The ledger is the job's memory across quits and crashes.
+-- status: running -> paused | made | made_check; paused -> running | discarded
+CREATE TABLE IF NOT EXISTS release_jobs (
+    id                   TEXT PRIMARY KEY,
+    project_id           TEXT REFERENCES projects(id) ON DELETE SET NULL,
+    version              INTEGER NOT NULL DEFAULT 0,
+    source_sha256        TEXT NOT NULL DEFAULT '',
+    title                TEXT NOT NULL DEFAULT '',
+    byline               TEXT NOT NULL DEFAULT '',
+    words                INTEGER NOT NULL DEFAULT 0,
+    characters           INTEGER NOT NULL DEFAULT 0,
+    project_instructions TEXT NOT NULL DEFAULT '',
+    output_dir           TEXT NOT NULL DEFAULT '',
+    status               TEXT NOT NULL DEFAULT 'running',
+    pause_reason         TEXT NOT NULL DEFAULT '',
+    pause_detail         TEXT NOT NULL DEFAULT '',
+    approved_total_eur   REAL NOT NULL DEFAULT 0.0,
+    budget_day           TEXT NOT NULL DEFAULT '',
+    approval_seq         INTEGER NOT NULL DEFAULT 0,
+    created_at           TEXT NOT NULL,
+    started_at           TEXT NOT NULL DEFAULT '',
+    ended_at             TEXT NOT NULL DEFAULT '',
+    updated_at           TEXT NOT NULL
+);
+
+-- Append-only: what the owner approved, as shown.
+CREATE TABLE IF NOT EXISTS release_job_approvals (
+    job_id       TEXT NOT NULL REFERENCES release_jobs(id) ON DELETE CASCADE,
+    seq          INTEGER NOT NULL,
+    approved_at  TEXT NOT NULL,
+    budget_day   TEXT NOT NULL DEFAULT '',
+    total_eur    REAL NOT NULL DEFAULT 0.0,
+    plan_json    TEXT NOT NULL DEFAULT '{}',
+    start_label  TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (job_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS release_job_stages (
+    job_id       TEXT NOT NULL REFERENCES release_jobs(id) ON DELETE CASCADE,
+    stage        TEXT NOT NULL,
+    ordinal      INTEGER NOT NULL,
+    agent        TEXT NOT NULL DEFAULT '',
+    provider     TEXT NOT NULL DEFAULT '',
+    model        TEXT NOT NULL DEFAULT '',
+    voice        TEXT NOT NULL DEFAULT '',
+    route_kind   TEXT NOT NULL DEFAULT 'local',
+    line_eur     REAL NOT NULL DEFAULT 0.0,
+    recorded_eur REAL NOT NULL DEFAULT 0.0,
+    spend_state  TEXT NOT NULL DEFAULT 'none',
+    status       TEXT NOT NULL DEFAULT 'waiting',
+    result_json  TEXT NOT NULL DEFAULT '{}',
+    conversion_id INTEGER,
+    attempt      INTEGER NOT NULL DEFAULT 1,
+    detail       TEXT NOT NULL DEFAULT '',
+    started_at   TEXT NOT NULL DEFAULT '',
+    ended_at     TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (job_id, stage)
+);
+
+CREATE TABLE IF NOT EXISTS release_job_items (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id        TEXT NOT NULL REFERENCES release_jobs(id) ON DELETE CASCADE,
+    stage         TEXT NOT NULL,
+    item_key      TEXT NOT NULL,
+    state         TEXT NOT NULL DEFAULT 'planned',
+    granted_eur   REAL NOT NULL DEFAULT 0.0,
+    recorded_eur  REAL NOT NULL DEFAULT 0.0,
+    usage_id      INTEGER,
+    output_path   TEXT NOT NULL DEFAULT '',
+    output_sha256 TEXT NOT NULL DEFAULT '',
+    output_kind   TEXT NOT NULL DEFAULT '',
+    artifact_id   INTEGER,
+    ai_json       TEXT NOT NULL DEFAULT '{}',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL,
+    UNIQUE (job_id, stage, item_key)
 );
 
 -- One client order for the Client Gigs workspace: the brief, the brand
@@ -567,6 +653,10 @@ CREATE INDEX IF NOT EXISTS idx_project_artifacts_project
     ON project_artifacts(project_id, recorded_at);
 
 CREATE INDEX IF NOT EXISTS idx_usage_timestamp ON usage(timestamp);
+-- One release kit runs at a time; paused kits may wait.
+CREATE UNIQUE INDEX IF NOT EXISTS ux_release_jobs_one_running
+    ON release_jobs(status) WHERE status = 'running';
+CREATE INDEX IF NOT EXISTS idx_release_jobs_project ON release_jobs(project_id);
 CREATE INDEX IF NOT EXISTS idx_runs_timestamp  ON runs(timestamp);
 CREATE INDEX IF NOT EXISTS idx_runs_run_id     ON runs(run_id);
 """
@@ -698,10 +788,16 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
             ("byline", "TEXT NOT NULL DEFAULT ''"),
             ("brief", "TEXT NOT NULL DEFAULT ''"),
         ],
-        "usage": [("project", "TEXT NOT NULL DEFAULT ''")],
+        "usage": [
+            ("project", "TEXT NOT NULL DEFAULT ''"),
+            ("job_id", "TEXT NOT NULL DEFAULT ''"),
+            ("job_item", "TEXT NOT NULL DEFAULT ''"),
+        ],
+        "runs": [("job_id", "TEXT NOT NULL DEFAULT ''")],
         "audiobook_conversions": [
             ("provider", "TEXT NOT NULL DEFAULT 'openai'"),
             ("model", "TEXT NOT NULL DEFAULT 'gpt-4o-mini-tts'"),
+            ("job_id", "TEXT NOT NULL DEFAULT ''"),
         ],
         "pricing": [("cached_input_per_1m_usd", "REAL NOT NULL DEFAULT 0.0")],
         "creator_content": [
@@ -740,6 +836,12 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_creator_video_jobs_project "
         "ON creator_video_jobs(project_id)")
+    # After the columns exist: SCHEMA runs first and cannot index a column an
+    # old database does not have yet. One usage row per release-kit item.
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ux_usage_job_item "
+        "ON usage(job_id, job_item) WHERE job_id != ''")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_usage_job ON usage(job_id)")
     conn.commit()
 
 

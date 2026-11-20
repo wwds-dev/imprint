@@ -222,3 +222,159 @@ def test_the_retired_creator_columns_are_never_written():
     for name in RETIRED["creator_content"]:
         assert name not in written, (
             f"creator_content.{name} is retired but an INSERT writes it")
+
+
+# ── Release kits (spec one-click-release, A4): additive migration ───────────
+
+# The three tables the kit adds columns to, frozen as they were before the
+# kit (2026-11-18, at 3e0a761). init_db must bring them up without touching
+# their rows or the cap totals read from them.
+PRE_KIT_DDL = """
+CREATE TABLE usage (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp     TEXT NOT NULL,
+    agent         TEXT NOT NULL DEFAULT '',
+    backend       TEXT NOT NULL DEFAULT '',
+    model         TEXT NOT NULL DEFAULT '',
+    input_tokens  INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    total_tokens  INTEGER NOT NULL DEFAULT 0,
+    cost_eur      REAL NOT NULL DEFAULT 0.0,
+    cost_type     TEXT NOT NULL DEFAULT 'estimated',
+    cloud         INTEGER NOT NULL DEFAULT 0,
+    project       TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE runs (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id         TEXT NOT NULL UNIQUE,
+    timestamp      TEXT NOT NULL,
+    agent          TEXT NOT NULL DEFAULT '',
+    tool           TEXT NOT NULL DEFAULT '',
+    provider       TEXT NOT NULL DEFAULT '',
+    model          TEXT NOT NULL DEFAULT '',
+    mode           TEXT NOT NULL DEFAULT '',
+    prompt_summary TEXT NOT NULL DEFAULT '',
+    status         TEXT NOT NULL DEFAULT 'running',
+    input_tokens   INTEGER NOT NULL DEFAULT 0,
+    output_tokens  INTEGER NOT NULL DEFAULT 0,
+    cost_eur       REAL NOT NULL DEFAULT 0.0,
+    duration_sec   REAL NOT NULL DEFAULT 0.0,
+    error          TEXT
+);
+CREATE TABLE audiobook_conversions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    source_path   TEXT NOT NULL,
+    output_path   TEXT NOT NULL,
+    voice         TEXT NOT NULL DEFAULT '',
+    chunk_tokens  INTEGER NOT NULL DEFAULT 0,
+    provider      TEXT NOT NULL DEFAULT 'openai',
+    model         TEXT NOT NULL DEFAULT 'gpt-4o-mini-tts',
+    estimate_eur  REAL NOT NULL DEFAULT 0.0,
+    billed_eur    REAL NOT NULL DEFAULT 0.0,
+    chunks_done   INTEGER NOT NULL DEFAULT 0,
+    chunks_total  INTEGER NOT NULL DEFAULT 0,
+    run_baseline  INTEGER NOT NULL DEFAULT 0,
+    project       TEXT,
+    status        TEXT NOT NULL DEFAULT 'running',
+    error         TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL,
+    updated_at    TEXT NOT NULL
+);
+"""
+
+KIT_TABLES = ("release_jobs", "release_job_approvals", "release_job_stages",
+              "release_job_items")
+
+
+def _pre_kit_database(path: Path) -> None:
+    from datetime import datetime
+    today = datetime.now().date().isoformat()
+    conn = sqlite3.connect(path)
+    conn.executescript(PRE_KIT_DDL)
+    conn.executemany(
+        "INSERT INTO usage (timestamp, agent, backend, model, cost_eur, project) "
+        "VALUES (?,?,?,?,?,?)",
+        [(f"{today}T09:00:00", "manuscript", "openai", "m", 0.25, "book"),
+         (f"{today}T10:00:00", "audiobook", "openai", "m", 1.50, "book"),
+         (f"{today}T11:00:00", "manuscript", "ollama", "l", 0.0, "")])
+    conn.execute(
+        "INSERT INTO runs (run_id, timestamp, agent) VALUES ('r1', ?, 'manuscript')",
+        (f"{today}T09:00:00",))
+    conn.execute(
+        "INSERT INTO audiobook_conversions (source_path, output_path, "
+        "created_at, updated_at) VALUES ('a.epub', 'a.m4b', 'now', 'now')")
+    conn.commit()
+    conn.close()
+
+
+def _totals():
+    from services.usage_tracker import UsageTracker
+    tracker = UsageTracker()
+    return (tracker.get_today_total(),
+            tracker.get_agent_today_total("manuscript"),
+            tracker.get_agent_today_total("audiobook"),
+            tracker.get_project_today_total("book"))
+
+
+def test_a_pre_kit_database_gains_the_release_kit_ledger_unchanged(db):
+    _pre_kit_database(db)
+    conn = sqlite3.connect(db)
+    conn.row_factory = sqlite3.Row
+    before_rows = [tuple(r) for r in conn.execute("SELECT * FROM usage")]
+    conn.close()
+    before = _totals()
+    assert before == (1.75, 0.25, 1.5, 1.75)
+
+    database.init_db()
+    database.init_db()   # idempotent
+
+    conn = sqlite3.connect(db)
+    tables = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table'")}
+    assert set(KIT_TABLES) <= tables
+    indexes = {r[0] for r in conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='index'")}
+    assert {"ux_usage_job_item", "idx_usage_job",
+            "ux_release_jobs_one_running"} <= indexes
+    assert {"job_id", "job_item"} <= set(_columns(db, "usage"))
+    assert "job_id" in _columns(db, "runs")
+    assert "job_id" in _columns(db, "audiobook_conversions")
+    # Old rows keep every value and read job_id ''.
+    assert [r[0] for r in conn.execute("SELECT job_id FROM usage")] == ["", "", ""]
+    assert [r[0] for r in conn.execute("SELECT job_id FROM runs")] == [""]
+    assert [r[0] for r in conn.execute(
+        "SELECT job_id FROM audiobook_conversions")] == [""]
+    after_rows = [tuple(r)[:12] for r in conn.execute("SELECT * FROM usage")]
+    assert after_rows == before_rows
+    conn.close()
+    assert _totals() == before
+
+
+def test_one_usage_row_per_release_kit_item_and_free_rows_unaffected(db):
+    database.init_db()
+    conn = sqlite3.connect(db)
+    insert = ("INSERT INTO usage (timestamp, agent, job_id, job_item) "
+              "VALUES ('2026-11-20T01:00:00', 'manuscript', ?, ?)")
+    conn.execute(insert, ("job1", "quotes:request#1"))
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(insert, ("job1", "quotes:request#1"))
+    conn.execute(insert, ("job1", "quotes:request#2"))
+    conn.execute(insert, ("job2", "quotes:request#1"))
+    # Rows outside a kit (job_id '') are never constrained.
+    conn.execute(insert, ("", ""))
+    conn.execute(insert, ("", ""))
+    conn.commit()
+    conn.close()
+
+
+def test_only_one_release_kit_can_be_running(db):
+    database.init_db()
+    conn = sqlite3.connect(db)
+    insert = ("INSERT INTO release_jobs (id, status, created_at, updated_at) "
+              "VALUES (?, ?, 'now', 'now')")
+    conn.execute(insert, ("a", "running"))
+    conn.execute(insert, ("b", "paused"))
+    conn.execute(insert, ("c", "paused"))
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(insert, ("d", "running"))
+    conn.close()
