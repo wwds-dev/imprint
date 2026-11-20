@@ -39,7 +39,7 @@ def test_long_book_gets_twelve_ordered_bounded_windows_across_the_book():
     windows = qf.sample_windows(text)
     assert len(windows) == 12
     assert [w.index for w in windows] == list(range(1, 13))
-    for a, b in zip(windows, windows[1:]):
+    for a, b in zip(windows, windows[1:], strict=False):
         assert a.start < b.start
         assert a.end <= b.start
     for w in windows:

@@ -38,12 +38,18 @@ def render_short(
     output_path: Path,
     use_elevenlabs: bool = False,
     voice_id: str = "default",
+    voice_provider=None,
 ) -> Path:
-    """Narrate `quote` and combine with the static `image_path` into a vertical MP4."""
+    """Narrate `quote` and combine with the static `image_path` into a vertical MP4.
+
+    `voice_provider` names the voice explicitly (the release kit's route is a
+    job field, legal L1); without it the voice is chosen from the
+    environment as before.
+    """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     audio_path = output_path.with_suffix(".mp3")
 
-    provider = get_voice_provider(use_elevenlabs)
+    provider = voice_provider or get_voice_provider(use_elevenlabs)
     provider.synthesize(quote, str(audio_path), VoiceConfig(voice_id=voice_id))
 
     _ffmpeg(
