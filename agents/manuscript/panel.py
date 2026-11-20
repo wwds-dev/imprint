@@ -12,7 +12,6 @@ flows (Ask, quote suggestions, calendar captions, ElevenLabs narration),
 so nothing here resolves a request by agent name.
 """
 
-import csv
 import os
 import re
 import sqlite3
@@ -1508,7 +1507,6 @@ class ManuscriptPanel(QWidget):
         return quotes
 
     def generate_calendar(self):
-        import json
         quotes = self._calendar_quotes_from_finder()
         if not quotes:
             QMessageBox.warning(
@@ -1546,8 +1544,8 @@ class ManuscriptPanel(QWidget):
             return
         self._calendar_slots = slots
 
-        items = [{"quote": s.quote, "platform": s.platform.lower()} for s in slots]
-        items_json = json.dumps(items)
+        from agents.manuscript.calendar_export import caption_items
+        items_json = caption_items(slots)
         agent = self.host.agent_instances["manuscript"]
         messages = agent.build_calendar_caption_messages(items_json)
         self.manuscript_status_label.setText("[Writing captions…]")
@@ -1572,9 +1570,8 @@ class ManuscriptPanel(QWidget):
         self._calendar_captions_token = None
         entry = self.host.record_request(token, full_response) if token else None
         self.calendar_generate_btn.setEnabled(True)
-        captions = self._parse_quote_list(full_response)
-        for i, slot in enumerate(self._calendar_slots):
-            slot.caption = captions[i] if i < len(captions) else ""
+        from agents.manuscript.calendar_export import apply_captions
+        apply_captions(self._calendar_slots, full_response)
         self._populate_calendar_table()
         # Cut captions leave the later slots blank: never "[Done]" for that.
         self.manuscript_status_label.setText(
@@ -1689,11 +1686,7 @@ class ManuscriptPanel(QWidget):
         )
         if not path:
             return
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Date", "Platform", "Format", "Quote", "Caption"])
-            for slot in self._calendar_slots:
-                writer.writerow([slot.day.strftime("%Y-%m-%d"), slot.platform,
-                                 slot.format, slot.quote, slot.caption])
+        from agents.manuscript.calendar_export import write_calendar_csv
+        write_calendar_csv(self._calendar_slots, path)
         self.manuscript_status_label.setText(
             f"[Done] Exported calendar to {Path(path).name}")
