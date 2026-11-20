@@ -281,7 +281,8 @@ class ReleaseKitsWindow(QWidget):
             return
         box = QMessageBox(self)
         box.setWindowTitle("Discard this release kit?")
-        box.setText(f"Nothing more will run for it. Files already made stay in "
+        box.setText("Discard this release kit?")
+        box.setInformativeText(f"Nothing more will run for it. Files already made stay in "
                     f"{job['output_dir']} and stay linked to "
                     f"{self._name(job['project_id'])}. Spending already recorded stays "
                     "recorded.")

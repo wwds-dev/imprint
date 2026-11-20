@@ -165,13 +165,20 @@ class ReleaseKitDriver(QObject):
 
     def _run_unit(self, fn, on_done, on_error) -> None:
         if self.run_inline:
+            job_id = self.job_id
+
+            def still(callback, value):
+                # As on the threaded path: a result that arrives after the
+                # kit left `running` (Quit and Pause) is not used.
+                if self.job_id == job_id:
+                    callback(value)
             try:
                 result = fn()
             except Exception as exc:
                 message = str(exc) or exc.__class__.__name__
-                self._schedule(lambda: on_error(message))
+                self._schedule(lambda: still(on_error, message))
                 return
-            self._schedule(lambda: on_done(result))
+            self._schedule(lambda: still(on_done, result))
             return
         worker = StageItemWorker(fn)
         self._worker = worker

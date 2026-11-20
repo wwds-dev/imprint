@@ -419,3 +419,88 @@ def test_the_threaded_driver_runs_each_item_on_a_worker_and_leaves_none(kit):
     assert seen_threads == {False}             # never on the GUI thread
     assert window.release_kit_worker is None
     assert len(calls["short"]) == 22
+
+
+@pytest.mark.parametrize("exit_path,expected", [
+    ("made", ("made", "")),
+    ("made_check", ("made_check", "")),
+    ("user_stop", ("paused", "user_stop")),
+    ("route_unavailable", ("paused", "route_unavailable")),
+    ("item_failed", ("paused", "item_failed")),
+    ("no_quotes", ("paused", "no_quotes")),
+    ("quit", ("paused", "quit")),
+])
+def test_every_exit_from_running_releases_keep_awake_and_writes_the_report(
+        kit, exit_path, expected):
+    from services.release_kit import ledger
+    window, driver, dialogs, calls = kit
+    backend = window.run_backend
+
+    if exit_path == "made_check":          # captions cut short → Incomplete
+        def short_captions(provider, model, messages, prompt):
+            reply = backend(provider, model, messages, prompt)
+            return reply if "quotable" in messages[-1]["content"] else '["only one"]'
+        window.run_backend = short_captions
+    elif exit_path == "user_stop":
+        driver.render["epub"] = (lambda f: lambda *a: (driver.stop(), f(*a))[1])(
+            driver.render["epub"])
+    elif exit_path == "route_unavailable":
+        window.run_backend = lambda *a: (_ for _ in ()).throw(OSError("refused"))
+    elif exit_path == "item_failed":
+        driver.render["graphic"] = lambda *a: (_ for _ in ()).throw(
+            RuntimeError("no font"))
+    elif exit_path == "no_quotes":
+        window.run_backend = lambda *a: '["Nothing like the book."]'
+    elif exit_path == "quit":
+        driver.render["graphic"] = (lambda f: lambda *a: (
+            driver.stop_now("quit"), f(*a))[1])(driver.render["graphic"])
+
+    window.manuscript_panel.start_release_kit()
+    (job,) = ledger.list_jobs("book-a")
+    assert (job["status"], job["pause_reason"]) == expected, job["pause_detail"]
+    assert driver.keep_awake.acquired == 1
+    assert driver.keep_awake.released == 1 and not driver.keep_awake.held
+    assert not driver.is_running()
+    report_path = Path(job["output_dir"]) / "release-kit-report.md"
+    assert report_path.is_file()
+    assert not any(ctx.get("job_id") for ctx in window._pending_requests.values())
+    if exit_path == "made_check":
+        assert "Captions and CSV: 55 of 56 posts have no caption." in \
+            report_path.read_text(encoding="utf-8")
+
+
+def test_quitting_while_a_kit_runs_asks_once_and_keep_running_keeps_it(
+        kit, monkeypatch):
+    from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
+    from services.release_kit import ledger
+    from services.release_kit.plan import KitPlan
+    window, driver, dialogs, calls = kit
+    plan = KitPlan("book-a", "Salt Road", 1, "T", "B", "s", 1, 1, "")
+    job_id = ledger.create_job(plan, plan_json={"kit": plan.to_json()},
+                               start_label="Start")
+    driver.job_id = job_id                   # as if mid-run
+    driver.keep_awake.acquire()
+    choice = {}
+
+    def pick(self):
+        dialogs.append(self.text())
+        wanted = choice["button"]
+        choice["clicked"] = next(b for b in self.buttons() if b.text() == wanted)
+        return 0
+    monkeypatch.setattr(QMessageBox, "exec", pick)
+    monkeypatch.setattr(QMessageBox, "clickedButton",
+                        lambda self: choice.get("clicked"))
+
+    choice["button"] = "Keep Running"
+    event = QCloseEvent()
+    window.closeEvent(event)
+    assert not event.isAccepted()
+    assert ledger.get_job(job_id)["status"] == "running"
+    assert dialogs == ["A release kit is running"]
+
+    choice["button"] = "Quit and Pause"
+    window.closeEvent(QCloseEvent())
+    job = ledger.get_job(job_id)
+    assert (job["status"], job["pause_reason"]) == ("paused", "quit")
+    assert driver.keep_awake.released == 1

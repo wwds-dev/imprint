@@ -6423,9 +6423,13 @@ class GodAI(QWidget):
         driver = self.release_kit_driver
         if driver is not None and driver.is_running():
             box = QMessageBox(self)
+            # macOS ignores a message box's window title: the title is the
+            # main text and the detail is the informative text.
             box.setWindowTitle("A release kit is running")
-            box.setText("Quitting pauses it. Finished work is kept, and you "
-                        "can resume next time you open Imprint.")
+            box.setText("A release kit is running")
+            box.setInformativeText(
+                "Quitting pauses it. Finished work is kept, and you can resume "
+                "next time you open Imprint.")
             keep = box.addButton("Keep Running", QMessageBox.RejectRole)
             box.addButton("Quit and Pause", QMessageBox.AcceptRole)
             box.setDefaultButton(keep)
