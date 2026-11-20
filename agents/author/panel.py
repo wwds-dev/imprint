@@ -40,6 +40,23 @@ from ui import theme
 from ui.style import TEXT_MUTE
 from ui.widgets import ScrollContent, scrollable
 
+# Draft safety (audit QB-1, docs/specs/quill-draft-safety.md). Every Write
+# task is one of three kinds: prose adds after the Draft, notes go only to
+# their tab, revise replaces exactly the text it was given — and nothing
+# reaches the Draft or a tab until the reply is complete, except prose,
+# which streams in after the existing text.
+NOTES_TASKS = {"Generate Outline": "outline", "Develop Characters": "characters",
+               "Build World": "world"}
+REVISE_TASKS = frozenset({"Revise / Improve", "Tighten Structure",
+                          "Strengthen Argument"})
+# One reply is capped at MAX_OUTPUT_TOKENS (8,192, about 30,000 characters);
+# a revision runs a little longer than its source, so 20,000 leaves margin.
+REVISE_MAX_CHARS = 20_000
+REVISE_TOO_LONG = (
+    "[Too long] Revise works on up to 20,000 characters (about 3,300 words) "
+    "at a time, because a reply is limited to 8,192 tokens. Select a chapter "
+    "or passage in the Draft and press Write again.")
+
 
 class AuthorPanel(QWidget):
     """The manuscript workbench: write, then publish, then market."""
@@ -86,6 +103,14 @@ class AuthorPanel(QWidget):
         self._mkt_token = None
         self._last_response = ""
         self._is_continuing = False
+        # The running Write/Continue: "append", "notes" or "revise" (None
+        # when nothing streams), where streamed prose begins, and the text
+        # a revision will replace.
+        self._stream_mode: str | None = None
+        self._stream_anchor: QTextCursor | None = None
+        self._stream_sep = 0
+        self._stream_open = False
+        self._revise_cursor: QTextCursor | None = None
         self._chapter_offsets: list = []
         self._layout_state = None
         self._project_id: str | None = None
@@ -1011,7 +1036,8 @@ class AuthorPanel(QWidget):
         )
 
     def _start_worker(self, provider: str, model: str, prompt: str,
-                      recent_draft_text: str = "", resume=None):
+                      recent_draft_text: str = "", resume=None,
+                      mode: str = "append"):
         agent = self.host.agent_instances["author"]
         consistency_context = self._build_consistency_context(recent_draft_text)
         evidence = self._build_evidence_block()
@@ -1041,16 +1067,16 @@ class AuthorPanel(QWidget):
         token = self.host.authorize_request("author", provider, model, prompt,
                                             messages=messages, resume=resume)
         if not token:
-            # Refused or held on the routing banner: the draft Write cleared
-            # comes back, and the buttons disabled above are re-enabled.
-            if recent_draft_text:
-                self.author_draft_box.setPlainText(recent_draft_text)
+            # Refused or held on the routing banner: nothing has touched the
+            # Draft yet; the buttons disabled above are re-enabled.
+            self._revise_cursor = None
             self.author_write_btn.setEnabled(True)
             self.author_continue_btn.setEnabled(True)
             self.author_stop_btn.setEnabled(False)
             self.author_status_label.setText("")
             return
         self._write_token = token
+        self._begin_stream(mode)
         worker = self.host._new_chat_worker(provider, model, messages, prompt)
         self.host.author_worker = worker
         worker.token_signal.connect(self._on_token)
@@ -1070,13 +1096,36 @@ class AuthorPanel(QWidget):
         if not model:
             QMessageBox.warning(self, "No Model", "Please select a model.")
             return
+        task = self.author_task_box.currentText()
         self._is_continuing = False
-        existing = self.author_draft_box.toPlainText().strip()
-        self.author_draft_box.clear()
         self._last_response = ""
+        # The Draft is never cleared: prose is added after it, notes go to
+        # their tab, a revision replaces only the text it was given.
+        existing = self.author_draft_box.toPlainText().strip()
+        if task in REVISE_TASKS:
+            cursor = self.author_draft_box.textCursor()
+            if not cursor.hasSelection():
+                cursor.select(QTextCursor.Document)
+            target = cursor.selection().toPlainText()
+            if not target.strip():
+                QMessageBox.warning(self, "Nothing to Revise",
+                                    "The Draft is empty.")
+                return
+            if len(target) > REVISE_MAX_CHARS:
+                self.author_status_label.setText(REVISE_TOO_LONG)
+                return
+            self._revise_cursor = QTextCursor(cursor)
+            prompt = self._build_prompt(
+                f"{direction}\n\nTEXT TO REVISE (reply with the revised text "
+                f"in full, nothing else):\n\n{target}")
+            # The text travels in full above; no 3,000-character tail.
+            self._start_worker(provider, model, prompt, resume=self.write,
+                               mode="revise")
+            return
         prompt = self._build_prompt(direction)
         self._start_worker(provider, model, prompt, recent_draft_text=existing,
-                           resume=self.write)
+                           resume=self.write,
+                           mode="notes" if task in NOTES_TASKS else "append")
 
     def continue_draft(self):
         direction = self.author_direction_input.text().strip()
@@ -1096,19 +1145,61 @@ class AuthorPanel(QWidget):
         continuation_note = "\n\n".join(parts)
         self._is_continuing = True
         self._last_response = ""
-        # Append a separator then stream new content
-        if existing:
-            cursor = self.author_draft_box.textCursor()
-            cursor.movePosition(QTextCursor.End)
-            cursor.insertText("\n\n")
-            self.author_draft_box.setTextCursor(cursor)
         prompt = self._build_prompt(continuation_note)
         # Recent draft text is already embedded in full inside `continuation_note` above —
         # don't pass it again here, that would just duplicate it in the prompt.
+        # The separator is added once the request is authorized.
         self._start_worker(provider, model, prompt, resume=self.continue_draft)
 
+    def _begin_stream(self, mode: str):
+        """Prepare the Draft for an authorized run. Only "append" touches it:
+        trailing whitespace becomes one blank line, and an anchor on the
+        last character before the new text marks where the reply begins
+        (Qt moves the anchor with any edit the user makes meanwhile)."""
+        self._stream_mode = mode
+        self._stream_anchor = None
+        self._stream_sep = 0
+        self._stream_open = mode == "append"
+        if mode != "append":
+            return
+        box = self.author_draft_box
+        text = box.toPlainText()
+        cursor = QTextCursor(box.document())
+        cursor.movePosition(QTextCursor.End)
+        if text.strip():
+            trailing = len(text) - len(text.rstrip())
+            if trailing:
+                cursor.movePosition(QTextCursor.Left, QTextCursor.KeepAnchor,
+                                    trailing)
+                cursor.removeSelectedText()
+            cursor.insertText("\n\n")
+            self._stream_sep = 2
+        position = cursor.position()
+        if position:
+            anchor = QTextCursor(box.document())
+            anchor.setPosition(position - 1)
+            self._stream_anchor = anchor
+        box.setTextCursor(cursor)
+
+    def _stream_start(self) -> int:
+        """Where the streamed reply begins in the Draft."""
+        return self._stream_anchor.position() + 1 if self._stream_anchor else 0
+
+    def _end_stream(self) -> str | None:
+        mode, self._stream_mode = self._stream_mode, None
+        return mode
+
     def _on_token(self, token: str):
+        mode = self._stream_mode
+        if mode is None:            # stopped or failed: late tokens go nowhere
+            return
         self._last_response += token
+        if mode != "append":
+            # Notes and revisions wait for the whole reply; the Draft and the
+            # tabs stay as they are until then.
+            self.author_status_label.setText(
+                f"[Working…] {len(self._last_response):,} characters received")
+            return
         cursor = self.author_draft_box.textCursor()
         cursor.movePosition(QTextCursor.End)
         cursor.insertText(token)
@@ -1127,11 +1218,23 @@ class AuthorPanel(QWidget):
     def _on_finished(self, full_response: str):
         token, self._write_token = self._write_token, None
         entry = self.host.record_request(token, full_response) if token else None
-        self._populate_tabs(full_response)
+        mode = self._end_stream()
+        revise, self._revise_cursor = self._revise_cursor, None
+        cut = result_notice(entry, full_response, "author") is not None
+        if mode == "revise" and cut:
+            # Half a revision must never replace the whole text it was for.
+            self.author_status_label.setText(
+                "[Cut off] The revision stopped at the length limit — Draft "
+                "unchanged. Select a shorter passage and press Write again.")
+            self._finish_buttons()
+            return
+        self._populate_tabs(full_response, mode, revise)
         word_count = len(self.author_draft_box.toPlainText().split())
         # A draft cut at the length limit must not read "[Done]".
         status = (result_notice(entry, full_response, "author", words=word_count)
-                  or f"[Done] {word_count:,} words")
+                  or (f"[Done] Revised — {word_count:,} words. Ctrl+Z in the "
+                      "Draft brings back the earlier text." if mode == "revise"
+                      else f"[Done] {word_count:,} words"))
         # Count in the text that will actually be published: a clean
         # Continue must not hide chapter one's unverified claims — and a
         # sectioned response must not hide marks routed to other tabs.
@@ -1142,20 +1245,26 @@ class AuthorPanel(QWidget):
             status += (f" — {unsourced} claim(s) marked [UNSOURCED]: "
                        "verify or cut before publishing")
         self.author_status_label.setText(status)
+        self._finish_buttons()
+        self.author_save_btn.setEnabled(True)
+        self.host._refresh_next_step_tip()
+
+    def _finish_buttons(self):
         self.author_write_btn.setEnabled(True)
         self.author_continue_btn.setEnabled(True)
         self.author_stop_btn.setEnabled(False)
-        self.author_save_btn.setEnabled(True)
-        self.host._refresh_next_step_tip()
 
     def _on_error(self, error: str):
         token, self._write_token = self._write_token, None
         if token:
             self.host.abandon_request(token, error=error)
+        # Nothing is undone or overwritten: prose written so far stays after
+        # the old Draft (as with Continue); notes and revisions were never
+        # applied.
+        self._end_stream()
+        self._revise_cursor = None
         self.author_status_label.setText(f"[Error] {error}")
-        self.author_write_btn.setEnabled(True)
-        self.author_continue_btn.setEnabled(True)
-        self.author_stop_btn.setEnabled(False)
+        self._finish_buttons()
 
     def stop(self):
         worker = self.host.author_worker
@@ -1165,10 +1274,12 @@ class AuthorPanel(QWidget):
         token, self._write_token = self._write_token, None
         if token:
             self.host.abandon_request(token, reason="stopped")
-        self.author_write_btn.setEnabled(True)
-        self.author_continue_btn.setEnabled(True)
-        self.author_stop_btn.setEnabled(False)
-        self.author_status_label.setText("[Stopped]")
+        mode = self._end_stream()
+        self._revise_cursor = None
+        self._finish_buttons()
+        self.author_status_label.setText(
+            "[Stopped] Draft unchanged." if mode in ("notes", "revise")
+            else "[Stopped]")
 
     # ── document actions ────────────────────────────────────────────────
     def _link_project_output(self, path: Path, kind: str) -> bool:
@@ -1250,9 +1361,12 @@ class AuthorPanel(QWidget):
         self.author_scene_count_label.setText("0")
         self.author_save_btn.setEnabled(False)
 
-    def _populate_tabs(self, response: str):
+    def _populate_tabs(self, response: str, mode: str | None = None,
+                       revise: QTextCursor | None = None):
         task = self.author_task_box.currentText()
         sections = self._parse_sections(response)
+        marked = any(sections.values())
+        clean = sections["draft"] if marked else response.strip()
         if sections.get("outline"):
             self.author_outline_box.setPlainText(sections["outline"])
         if sections.get("characters"):
@@ -1266,9 +1380,44 @@ class AuthorPanel(QWidget):
             self.author_characters_box.setPlainText(response)
         elif task == "Build World" and not sections.get("world"):
             self.author_world_box.setPlainText(response)
-        elif not self._is_continuing and not sections.get("outline") and not sections.get("characters"):
-            # Fresh write with no section markers — put full response in draft
-            self.author_draft_box.setPlainText(sections.get("draft") or response)
+        elif mode == "revise" and revise is not None:
+            # Replace exactly the text that was sent, as one edit so Ctrl+Z
+            # brings it back. An empty reply replaces nothing.
+            if clean:
+                revise.beginEditBlock()
+                revise.insertText(clean)
+                revise.endEditBlock()
+        elif mode == "notes" or task in NOTES_TASKS or self._is_continuing:
+            return
+        else:
+            self._replace_streamed(clean)
+
+    def _replace_streamed(self, clean: str):
+        """Swap the raw streamed reply (markers and all) for its clean draft
+        text. Only the streamed part is touched; text before it stays. A
+        handler called without a stream adds the text after the Draft."""
+        box = self.author_draft_box
+        cursor = QTextCursor(box.document())
+        cursor.movePosition(QTextCursor.End)
+        if not self._stream_open:
+            existing = box.toPlainText()
+            start = 0 if not existing.strip() else None
+            if start is None:
+                if clean:
+                    cursor.insertText(
+                        ("" if existing.endswith("\n\n") else "\n\n") + clean)
+                return
+        else:
+            start = self._stream_start()
+            if not clean:
+                start -= self._stream_sep      # drop the blank line too
+        cursor.setPosition(max(start, 0), QTextCursor.KeepAnchor)
+        cursor.beginEditBlock()
+        cursor.insertText(clean)
+        cursor.endEditBlock()
+        self._stream_anchor = None
+        self._stream_sep = 0
+        self._stream_open = False
 
     @staticmethod
     def _parse_sections(text: str) -> dict:

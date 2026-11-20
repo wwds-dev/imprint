@@ -80,7 +80,7 @@ remain at the location chosen by the user, including after Project deletion.
   **Keep local** or **Keep <model>**, and **Cancel**). An answer puts the
   chosen model in the Provider and Model boxes and runs the action again,
   so the paid-request dialog and the caps still decide; a held or refused
-  Write puts back the draft it had cleared. A failed run hands its error
+  Write leaves the Draft exactly as it was. A failed run hands its error
   to `abandon_request(error=…)`, which may offer a failover on the same
   banner (never sent by itself). Since the audit P1 fixes (`12604e9`) the
   status line wraps, shows provider text as plain text, and a reply that
@@ -88,6 +88,23 @@ remain at the location chosen by the user, including after Project deletion.
   `services/output_limits.result_notice()` makes Write/Continue say
   "[Cut off] N words, stopped at the length limit. Press Continue to write
   more." and Publish/Market say the result is incomplete.
+  **Draft safety** (audit QB-1, 2026-11-20, `docs/specs/quill-draft-safety.md`):
+  Write never clears the Draft. Each task is one of three kinds
+  (`NOTES_TASKS`, `REVISE_TASKS` at the top of `panel.py`): *prose* streams
+  in after the existing Draft, separated by a blank line, and on finish the
+  streamed part is swapped for its clean `[DRAFT]` section (a `QTextCursor`
+  anchor tracks where it begins, so the user's edits meanwhile are kept);
+  *notes* (Outline, Characters, World) are collected off-screen and go only
+  to their tab; *revise* (Revise / Improve, Tighten Structure, Strengthen
+  Argument) sends the Draft selection, or the whole Draft, in full and
+  replaces exactly that text as one undoable edit. Revise works on up to
+  `REVISE_MAX_CHARS` (20,000 characters, about 3,300 words) per run because
+  one reply is capped at 8,192 tokens; above it no request is sent and the
+  status says to select a passage. A revision cut off at the length limit,
+  and any notes or revise run that errors or is stopped, changes nothing;
+  prose written before an error or Stop stays after the old Draft, as with
+  Continue. Late tokens after Stop are ignored. Tests:
+  `tests/test_author_draft_safety.py`.
 - `book_exporter.py` — chapter detection (`split_into_chapters()`,
   `find_chapter_offsets()`) and EPUB/DOCX/PDF export (`export_book()`).
 - `recommendations.py` — exports `RECOMMENDATION_PROFILE` (an `AgentProfile`)

@@ -22,6 +22,21 @@ This file is generated from `git log`; see the note at the bottom for how to
 regenerate it. It states what the code does, not how well it works for you:
 nothing here is a claim about income, sales or publishing results.
 
+## 2026-11-20
+
+### Fixed
+- Quill never loses the Draft (audit QB-1, `docs/specs/quill-draft-safety.md`).
+  Write no longer empties the Draft: a prose task (Write Scene, Write Chapter,
+  Write Dialogue, Add Case Study / Example, Continue Draft) adds its text after
+  the existing Draft. Generate Outline, Develop Characters and Build World go
+  only to their own tab. An error or Stop keeps the Draft, so the autosave can
+  no longer store an emptied one. Revise / Improve, Tighten Structure and
+  Strengthen Argument now send the whole selection (or the whole Draft) instead
+  of its last 3,000 characters, replace exactly that text as one edit (Ctrl+Z
+  brings it back), and work on up to 20,000 characters per run; a longer text
+  is refused with a note to select a passage, and a revision cut off at the
+  length limit leaves the Draft unchanged.
+
 ## 2026-10-14
 
 ### Fixed

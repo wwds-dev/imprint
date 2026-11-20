@@ -1,6 +1,6 @@
 # Spec: Quill never loses the Draft (audit QB-1)
 
-Status: Defined 2026-11-20, waiting for the owner's Define gate. Priority: P0 (audit blocker QB-1,
+Status: Define approved by the owner 2026-11-20 ("Yes, as recommended": D1–D3 as recommended). Built 2026-11-20. Priority: P0 (audit blocker QB-1,
 `docs/audit/code-readiness-audit-2026-11-18.md`). Type: user-visible bug fix. Owner session:
 `claude/quill-draft-qb1-5d96fa`.
 
@@ -78,3 +78,17 @@ No new dependency, network surface, secret or file write: Secure is not required
 - The user types in the Draft while a prose reply streams: positions are tracked with a
   `QTextCursor`, which Qt moves with edits, so the user's text is not overwritten.
 - Undo after a Revise holds only while the panel lives; reloading the project resets Qt's undo stack.
+
+## As built (2026-11-20)
+`agents/author/panel.py`: `NOTES_TASKS`, `REVISE_TASKS`, `REVISE_MAX_CHARS` / `REVISE_TOO_LONG` at
+module top; `_begin_stream` runs only after the guard authorizes (so a refused or held run touches
+nothing); `_on_token` ignores tokens once a run is stopped or failed; `_replace_streamed` swaps the
+raw streamed part for its clean `[DRAFT]` text; revise replaces through the saved selection cursor
+in one edit block. Continue's separator also moved after authorization (a refused Continue no
+longer leaves a stray blank line). Tests: `tests/test_author_draft_safety.py` (20, fake worker, real
+signal handlers, autosave after each case). Mutation check (6 planted): limit off-by-one, late-token guard and cut-off
+guard killed; one did not apply; splitting the revise edit block survived as equivalent (Qt still
+undoes it in one step); dropping the blank-line removal when a prose reply holds only notes survived,
+got a test, and is now killed.
+Skipped phases: Design (no new controls), Architect (no state, thread or boundary change), Secure
+(no network, secret, input or file-write change), Comply and Launch (no legal or public-claim change).
