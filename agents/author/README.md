@@ -106,7 +106,9 @@ remain at the location chosen by the user, including after Project deletion.
   Continue. Late tokens after Stop are ignored, and so is a finish that
   races Stop. A revision under half the length of its text is not applied
   (`REVISE_MIN_RATIO`: a local model can silently drop part of a long
-  prompt); the Draft is read-only while a revision runs; the Task is read
+  prompt); with a local model (Ollama, LM Studio) Revise works on up to
+  `REVISE_MAX_CHARS_LOCAL` (6,000 characters), and Tighten Structure's guard
+  is 25%; the Draft is read-only while a revision runs; the Task is read
   when the run starts; a revised selection keeps its edge whitespace. Tests:
   `tests/test_author_draft_safety.py`.
 - `book_exporter.py` — chapter detection (`split_into_chapters()`,

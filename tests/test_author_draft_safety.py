@@ -410,3 +410,35 @@ def test_a_revised_selection_keeps_its_edge_line_breaks(h):
     h.panel.write()
     h.worker.finished_signal.emit("Paragraph 2.")
     assert h.draft == "Para one.\n\nParagraph 2.\n\nPara three."
+
+
+@pytest.mark.parametrize("provider", ["ollama", "lmstudio"])
+def test_local_models_revise_at_most_6000_characters(h, provider):
+    from agents.author.panel import REVISE_MAX_CHARS_LOCAL
+    assert REVISE_MAX_CHARS_LOCAL == 6_000
+    h.setup("Revise / Improve", draft="z" * (REVISE_MAX_CHARS_LOCAL + 1))
+    h.panel.author_provider_box.setCurrentText(provider)
+    try:
+        h.panel.write()
+        assert h.sent == []
+        assert "6,000 characters" in h.panel.author_status_label.text()
+        h.setup("Revise / Improve", draft="z" * REVISE_MAX_CHARS_LOCAL)
+        h.panel.write()
+        assert len(h.sent) == 1
+    finally:
+        h.panel.author_provider_box.setCurrentText("anthropic")
+
+
+def test_a_cloud_model_may_revise_more_than_the_local_limit(h):
+    from agents.author.panel import REVISE_MAX_CHARS_LOCAL
+    h.panel.author_provider_box.setCurrentText("anthropic")
+    h.setup("Revise / Improve", draft="z" * (REVISE_MAX_CHARS_LOCAL + 1))
+    h.panel.write()
+    assert len(h.sent) == 1
+
+
+def test_tighten_structure_may_cut_below_half(h):
+    h.setup("Tighten Structure", draft="w " * 100)
+    h.panel.write()
+    h.worker.finished_signal.emit("w " * 30)          # 30% of the source
+    assert h.draft.strip() == ("w " * 30).strip()

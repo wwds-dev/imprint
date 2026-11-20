@@ -33,7 +33,8 @@ nothing here is a claim about income, sales or publishing results.
   no longer store an emptied one. Revise / Improve, Tighten Structure and
   Strengthen Argument now send the whole selection (or the whole Draft) instead
   of its last 3,000 characters, replace exactly that text as one edit (Ctrl+Z
-  brings it back), and work on up to 20,000 characters per run; a longer text
+  brings it back), and work on up to 20,000 characters per run (6,000 with
+  a local model); a longer text
   is refused with a note to select a passage, and a revision cut off at the
   length limit, or under half the length of its text, leaves the Draft
   unchanged. The Draft is read-only while a revision runs.

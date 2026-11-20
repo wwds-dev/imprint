@@ -56,10 +56,26 @@ REVISE_MAX_CHARS = 20_000
 # local model can silently drop the start of a long prompt (Ollama's default
 # context) and neither local server reliably reports a cut-off reply.
 REVISE_MIN_RATIO = 0.5
+# Tightening may legitimately cut a passage to well under half.
+REVISE_MIN_RATIO_BY_TASK = {"Tighten Structure": 0.25}
+# Local servers (Ollama's default context is about 4k tokens, prompt and
+# reply together) cannot hold 20,000 characters, and neither reliably
+# reports a cut-off: their Revise limit leaves room for prompt and reply.
+LOCAL_PROVIDERS = frozenset({"ollama", "lmstudio"})
+REVISE_MAX_CHARS_LOCAL = 6_000
 REVISE_TOO_LONG = (
     "[Too long] Revise works on up to 20,000 characters (about 3,300 words) "
     "at a time, because a reply is limited to 8,192 tokens. Select a chapter "
     "or passage in the Draft and press Write again.")
+REVISE_TOO_LONG_LOCAL = (
+    "[Too long] With a local model, Revise works on up to 6,000 characters "
+    "(about 1,000 words) at a time, because a local model's context holds "
+    "the text and its revision together. Select a passage, or choose a "
+    "cloud model, and press Write again.")
+
+
+def _is_local(provider: str) -> bool:
+    return provider.lower().replace(" ", "") in LOCAL_PROVIDERS
 
 
 class AuthorPanel(QWidget):
@@ -1118,6 +1134,9 @@ class AuthorPanel(QWidget):
                 QMessageBox.warning(self, "Nothing to Revise",
                                     "The Draft is empty.")
                 return
+            if _is_local(provider) and len(target) > REVISE_MAX_CHARS_LOCAL:
+                self.author_status_label.setText(REVISE_TOO_LONG_LOCAL)
+                return
             if len(target) > REVISE_MAX_CHARS:
                 self.author_status_label.setText(REVISE_TOO_LONG)
                 return
@@ -1248,7 +1267,9 @@ class AuthorPanel(QWidget):
             revised = (sections["draft"] if any(sections.values())
                        else full_response.strip())
             source = revise.selection().toPlainText().strip()
-            short = len(revised) < REVISE_MIN_RATIO * len(source)
+            ratio = REVISE_MIN_RATIO_BY_TASK.get(self._run_task,
+                                                 REVISE_MIN_RATIO)
+            short = len(revised) < ratio * len(source)
             if cut or short:
                 # Half a revision must never replace the whole text it was for.
                 self.author_status_label.setText(

@@ -97,5 +97,12 @@ cut-off (`REVISE_MIN_RATIO`); (P1) the Draft is read-only while a revision runs,
 never swallowed by the replace; (P2) a finish that races Stop is ignored; (P2) the Task is read
 when the run starts, so switching it mid-run cannot reroute the reply; (P2) a revised selection
 keeps its own leading and trailing whitespace.
+Re-check (same reviewer, `0ac4cbc`): findings 2–5 fixed; finding 1 only partly, because a local
+model can lose 20–40% of an 18–20k-character text and still pass the half-length guard; and a new
+P2: a correct Tighten Structure reply under half was refused. Fixed in the next commit:
+**Revise with a local model (Ollama, LM Studio) works on up to 6,000 characters** (about 1,000
+words; `REVISE_MAX_CHARS_LOCAL`), since their default context holds prompt and reply together;
+Tighten Structure's guard is 25% instead of 50%. The 6,000 figure tightens the approved D2 rule for
+local models only and is flagged to the owner.
 Skipped phases: Design (no new controls), Architect (no state, thread or boundary change), Secure
 (no network, secret, input or file-write change), Comply and Launch (no legal or public-claim change).
