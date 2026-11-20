@@ -82,6 +82,12 @@ class ReleaseKitDriver(QObject):
         self.status_text = ""
         self._stop = False
         self._worker: StageItemWorker | None = None
+        # The last finished worker stays referenced until the next one
+        # replaces it: Python owns it and frees it outside its own signal
+        # delivery. No deleteLater(): a queued delete on a parentless object
+        # that the collector also frees has crashed this suite before
+        # (tests/test_model_watch_media.py, `owned`).
+        self._retired: StageItemWorker | None = None
         self._callbacks = None
         self._grant = None
         self._queue: deque = deque()
@@ -193,7 +199,7 @@ class ReleaseKitDriver(QObject):
         callbacks, self._callbacks = self._callbacks, None
         if worker is not None:
             worker.wait()
-            worker.deleteLater()
+            self._retired = worker
             if getattr(self.host, "release_kit_worker", None) is worker:
                 self.host.release_kit_worker = None
         return callbacks

@@ -160,6 +160,8 @@ def kit(app, tmp_path, monkeypatch):
     driver.render["epub"] = epub
 
     yield window, driver, dialogs, calls
+    import gc
+    from PySide6.QtCore import QCoreApplication, QEvent
     window.author_panel._project_save_timer.stop()
     window.resource_timer.stop()
     if window.release_kit_window is not None:
@@ -167,6 +169,10 @@ def kit(app, tmp_path, monkeypatch):
     app.removeEventFilter(window)
     window.close()
     window.deleteLater()
+    # Destroy it now, while nothing walks the widget list, rather than leave
+    # a queued delete for a later module's collector (see test_model_watch_media).
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    gc.collect()
 
 
 def _artifact_paths():
