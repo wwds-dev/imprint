@@ -253,11 +253,12 @@ def test_revise_sends_the_whole_draft_and_replaces_it_undoably(h):
     sent = "\n".join(m["content"] for m in h.sent[-1])
     assert OLD.strip() in sent, "Revise did not send the whole Draft"
     assert marker_start in sent
+    revised = OLD.strip().replace("ink ran", "ink bled")
     h.stream("Revised ", "book.")
     assert h.draft == OLD, "the revision streamed over the Draft"
-    h.worker.finished_signal.emit("Revised book.")
-    assert h.draft == "Revised book."
-    assert h.autosave() == "Revised book."
+    h.worker.finished_signal.emit(revised)
+    assert h.draft == revised + " "     # the Draft's own trailing space stays
+    assert h.autosave() == revised + " "
     h.panel.author_draft_box.undo()
     assert h.draft == OLD, "Ctrl+Z does not bring the earlier Draft back"
 
@@ -275,8 +276,8 @@ def test_revise_works_on_the_selection_only(h):
     sent = "\n".join(m["content"] for m in h.sent[-1])
     assert "Fix this bit." in sent
     assert "Keep A." not in sent.split("TEXT TO REVISE")[-1]
-    h.worker.finished_signal.emit("Fixed.")
-    assert h.draft == "Keep A. Fixed. Keep B."
+    h.worker.finished_signal.emit("Fixed this bit.")
+    assert h.draft == "Keep A. Fixed this bit. Keep B."
 
 
 def test_revise_over_the_limit_sends_nothing_and_says_why(h):
@@ -343,3 +344,69 @@ def test_prose_reply_with_only_notes_leaves_the_draft_as_it_was(h):
     h.worker.finished_signal.emit("[OUTLINE]\nPlan")
     assert h.draft == OLD.strip()
     assert h.panel.author_outline_box.toPlainText() == "Plan"
+
+
+# ── review fixes (code review of 67f35ad) ───────────────────────────────
+
+def test_a_revision_under_half_its_source_is_not_applied(h):
+    # A local model can drop the start of a long prompt without saying so.
+    h.setup("Revise / Improve")
+    h.panel.write()
+    h.worker.finished_signal.emit("Only the last paragraph, revised.")
+    assert h.draft == OLD
+    assert h.autosave() == OLD
+    assert "Draft unchanged" in h.panel.author_status_label.text()
+
+
+def test_the_draft_is_read_only_while_a_revision_runs(h):
+    h.setup("Revise / Improve", draft="Old book")
+    h.panel.write()
+    assert h.panel.author_draft_box.isReadOnly()
+    h.worker.finished_signal.emit("New book")
+    assert not h.panel.author_draft_box.isReadOnly()
+    assert h.draft == "New book"
+
+
+@pytest.mark.parametrize("end", ["error", "stop"])
+def test_read_only_ends_with_the_run(h, end):
+    h.setup("Revise / Improve", draft="Old book")
+    h.panel.write()
+    if end == "error":
+        h.worker.error_signal.emit("boom")
+    else:
+        h.panel.stop()
+    assert not h.panel.author_draft_box.isReadOnly()
+
+
+@pytest.mark.parametrize("task", ["Revise / Improve", "Generate Outline"])
+def test_a_finish_that_races_stop_is_ignored(h, task):
+    h.setup(task, draft="Old book")
+    h.panel.write()
+    h.panel.stop()
+    h.worker.finished_signal.emit("[OUTLINE]\nNew book")
+    assert h.draft == "Old book"
+    assert h.panel.author_outline_box.toPlainText() == "OLD OUTLINE"
+
+
+def test_switching_the_task_mid_run_does_not_reroute_the_reply(h):
+    h.setup("Generate Outline")
+    h.panel.write()
+    h.panel.author_task_box.setCurrentText("Write Scene")
+    h.worker.finished_signal.emit("An unmarked outline")
+    assert h.panel.author_outline_box.toPlainText() == "An unmarked outline"
+    assert h.draft == OLD
+
+
+def test_a_revised_selection_keeps_its_edge_line_breaks(h):
+    from PySide6.QtGui import QTextCursor
+    h.setup("Revise / Improve", draft="Para one.\n\nPara two.\n\nPara three.")
+    box = h.panel.author_draft_box
+    text = box.toPlainText()
+    start = text.index("Para two.")
+    cursor = box.textCursor()
+    cursor.setPosition(start)
+    cursor.setPosition(start + len("Para two.\n\n"), QTextCursor.KeepAnchor)
+    box.setTextCursor(cursor)
+    h.panel.write()
+    h.worker.finished_signal.emit("Paragraph 2.")
+    assert h.draft == "Para one.\n\nParagraph 2.\n\nPara three."

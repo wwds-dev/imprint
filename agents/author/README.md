@@ -103,7 +103,11 @@ remain at the location chosen by the user, including after Project deletion.
   status says to select a passage. A revision cut off at the length limit,
   and any notes or revise run that errors or is stopped, changes nothing;
   prose written before an error or Stop stays after the old Draft, as with
-  Continue. Late tokens after Stop are ignored. Tests:
+  Continue. Late tokens after Stop are ignored, and so is a finish that
+  races Stop. A revision under half the length of its text is not applied
+  (`REVISE_MIN_RATIO`: a local model can silently drop part of a long
+  prompt); the Draft is read-only while a revision runs; the Task is read
+  when the run starts; a revised selection keeps its edge whitespace. Tests:
   `tests/test_author_draft_safety.py`.
 - `book_exporter.py` — chapter detection (`split_into_chapters()`,
   `find_chapter_offsets()`) and EPUB/DOCX/PDF export (`export_book()`).

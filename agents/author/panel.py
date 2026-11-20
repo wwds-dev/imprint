@@ -52,6 +52,10 @@ REVISE_TASKS = frozenset({"Revise / Improve", "Tighten Structure",
 # One reply is capped at MAX_OUTPUT_TOKENS (8,192, about 30,000 characters);
 # a revision runs a little longer than its source, so 20,000 leaves margin.
 REVISE_MAX_CHARS = 20_000
+# A revision under half its source is treated as incomplete, not applied: a
+# local model can silently drop the start of a long prompt (Ollama's default
+# context) and neither local server reliably reports a cut-off reply.
+REVISE_MIN_RATIO = 0.5
 REVISE_TOO_LONG = (
     "[Too long] Revise works on up to 20,000 characters (about 3,300 words) "
     "at a time, because a reply is limited to 8,192 tokens. Select a chapter "
@@ -111,6 +115,9 @@ class AuthorPanel(QWidget):
         self._stream_sep = 0
         self._stream_open = False
         self._revise_cursor: QTextCursor | None = None
+        self._revise_edges = ("", "")
+        self._run_task = ""         # the Task when the run started
+        self._run_stopped = False   # Stop pressed; a late finish is ignored
         self._chapter_offsets: list = []
         self._layout_state = None
         self._project_id: str | None = None
@@ -1115,6 +1122,12 @@ class AuthorPanel(QWidget):
                 self.author_status_label.setText(REVISE_TOO_LONG)
                 return
             self._revise_cursor = QTextCursor(cursor)
+            # Keep the selection's own edge whitespace (a trailing blank
+            # line, say) around the revised text.
+            body = target.strip()
+            head = target[:len(target) - len(target.lstrip())]
+            tail = target[len(target.rstrip()):] if body else ""
+            self._revise_edges = (head, tail)
             prompt = self._build_prompt(
                 f"{direction}\n\nTEXT TO REVISE (reply with the revised text "
                 f"in full, nothing else):\n\n{target}")
@@ -1157,8 +1170,12 @@ class AuthorPanel(QWidget):
         last character before the new text marks where the reply begins
         (Qt moves the anchor with any edit the user makes meanwhile)."""
         self._stream_mode = mode
+        self._run_task = self.author_task_box.currentText()
+        self._run_stopped = False
         self._stream_anchor = None
         self._stream_sep = 0
+        # Nobody types into text a revision is about to replace.
+        self.author_draft_box.setReadOnly(mode == "revise")
         self._stream_open = mode == "append"
         if mode != "append":
             return
@@ -1187,6 +1204,7 @@ class AuthorPanel(QWidget):
 
     def _end_stream(self) -> str | None:
         mode, self._stream_mode = self._stream_mode, None
+        self.author_draft_box.setReadOnly(False)
         return mode
 
     def _on_token(self, token: str):
@@ -1220,14 +1238,29 @@ class AuthorPanel(QWidget):
         entry = self.host.record_request(token, full_response) if token else None
         mode = self._end_stream()
         revise, self._revise_cursor = self._revise_cursor, None
-        cut = result_notice(entry, full_response, "author") is not None
-        if mode == "revise" and cut:
-            # Half a revision must never replace the whole text it was for.
-            self.author_status_label.setText(
-                "[Cut off] The revision stopped at the length limit — Draft "
-                "unchanged. Select a shorter passage and press Write again.")
-            self._finish_buttons()
+        stopped, self._run_stopped = self._run_stopped, False
+        if mode is None and stopped:
+            # A finish that raced Stop: the run was abandoned, apply nothing.
             return
+        cut = result_notice(entry, full_response, "author") is not None
+        if mode == "revise" and revise is not None:
+            sections = self._parse_sections(full_response)
+            revised = (sections["draft"] if any(sections.values())
+                       else full_response.strip())
+            source = revise.selection().toPlainText().strip()
+            short = len(revised) < REVISE_MIN_RATIO * len(source)
+            if cut or short:
+                # Half a revision must never replace the whole text it was for.
+                self.author_status_label.setText(
+                    "[Cut off] The revision stopped at the length limit — Draft "
+                    "unchanged. Select a shorter passage and press Write again."
+                    if cut else
+                    "[Incomplete?] The revision is under half the length of "
+                    "its text, so it may have lost part of it — Draft "
+                    "unchanged. Select a shorter passage, or a model with a "
+                    "larger context, and press Write again.")
+                self._finish_buttons()
+                return
         self._populate_tabs(full_response, mode, revise)
         word_count = len(self.author_draft_box.toPlainText().split())
         # A draft cut at the length limit must not read "[Done]".
@@ -1276,6 +1309,7 @@ class AuthorPanel(QWidget):
             self.host.abandon_request(token, reason="stopped")
         mode = self._end_stream()
         self._revise_cursor = None
+        self._run_stopped = True
         self._finish_buttons()
         self.author_status_label.setText(
             "[Stopped] Draft unchanged." if mode in ("notes", "revise")
@@ -1363,7 +1397,10 @@ class AuthorPanel(QWidget):
 
     def _populate_tabs(self, response: str, mode: str | None = None,
                        revise: QTextCursor | None = None):
-        task = self.author_task_box.currentText()
+        # The Task the run started with: switching the box mid-run must not
+        # reroute (and lose) the reply.
+        task = ((self._run_task if mode else "")
+                or self.author_task_box.currentText())
         sections = self._parse_sections(response)
         marked = any(sections.values())
         clean = sections["draft"] if marked else response.strip()
@@ -1385,7 +1422,8 @@ class AuthorPanel(QWidget):
             # brings it back. An empty reply replaces nothing.
             if clean:
                 revise.beginEditBlock()
-                revise.insertText(clean)
+                head, tail = self._revise_edges
+                revise.insertText(head + clean + tail)
                 revise.endEditBlock()
         elif mode == "notes" or task in NOTES_TASKS or self._is_continuing:
             return

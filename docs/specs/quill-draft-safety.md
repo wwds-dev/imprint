@@ -90,5 +90,12 @@ signal handlers, autosave after each case). Mutation check (6 planted): limit of
 guard killed; one did not apply; splitting the revise edit block survived as equivalent (Qt still
 undoes it in one step); dropping the blank-line removal when a prose reply holds only notes survived,
 got a test, and is now killed.
+Review (code-reviewer, 2026-11-20): no P0; two P1 and three P2, all fixed in the follow-up
+commit with tests: (P1) a revision under half the length of its source is not applied, because
+a local model can drop the start of a long prompt and neither local server reliably reports a
+cut-off (`REVISE_MIN_RATIO`); (P1) the Draft is read-only while a revision runs, so typed text is
+never swallowed by the replace; (P2) a finish that races Stop is ignored; (P2) the Task is read
+when the run starts, so switching it mid-run cannot reroute the reply; (P2) a revised selection
+keeps its own leading and trailing whitespace.
 Skipped phases: Design (no new controls), Architect (no state, thread or boundary change), Secure
 (no network, secret, input or file-write change), Comply and Launch (no legal or public-claim change).
