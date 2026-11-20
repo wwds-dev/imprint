@@ -319,6 +319,11 @@ class GodAI(QWidget):
         # agent-name API resolves through.
         self._pending_requests: dict[str, dict] = {}
         self._pending_by_agent: dict[str, list[str]] = {}
+        # Release kits (docs/specs/one-click-release.md): one driver, one
+        # worker at a time, both stopped by closeEvent's sweep.
+        self.release_kit_driver = None
+        self.release_kit_worker = None
+        self.release_kit_window = None
 
         # Async model discovery (AgentPanel.load_models): one shared worker
         # per provider, and a session-lifetime cache of live answers so the
@@ -4581,10 +4586,161 @@ class GodAI(QWidget):
 
     def _resume_provider_jobs(self) -> None:
         """Startup reconciliation: each panel that persists provider jobs
-        finishes what a previous process left in flight."""
+        finishes what a previous process left in flight. Release kits first,
+        before Booth's own scan (spec A4, F9)."""
+        try:
+            self._recover_release_kits()
+        except Exception as exc:
+            self._note_failure("release kit: recover", exc)
         self.video_panel.resume_pending_jobs()
         self.creator_panel.resume_pending_teasers()
         self.audiobook_panel.resume_pending_conversions()
+
+    # ── Release kits (spec one-click-release, A1 slice-1 form, A4, A6) ──────
+
+    def authorize_job_item(self, job_id, stage, item_key, *, provider, model,
+                           messages=None, flat_cost_eur=None):
+        """Authorize one release-kit item without a dialog.
+
+        Slice 1 is local-only: any provider that is not a local model runtime
+        or the on-device voice is refused with `not_in_this_version`, and no
+        money path exists yet (owner decision, Architect gate 3). The child
+        token carries the job's own Project and frozen instructions (F4), its
+        cost is €0, and it is never put in `_pending_by_agent`, so a by-name
+        call from Press or Booth cannot take it (F7). Returns a JobGrant or a
+        JobRefusal; never opens a dialog (F2).
+        """
+        from services.release_kit import ledger
+        from services.release_kit.grant import _MINT, JobGrant, JobRefusal
+        from services.release_kit.plan import STAGE_BY_KEY, is_local_route
+
+        if not is_local_route(provider):
+            return JobRefusal(
+                "not_in_this_version",
+                f"{provider} is a paid route, and this version runs local "
+                "steps only.")
+        job = ledger.get_job(job_id)
+        if not job or job["status"] != "running":
+            return JobRefusal("not_active", "This release kit is not running.")
+        if not model:
+            return JobRefusal("route", "No model is named for this step.")
+        agent = STAGE_BY_KEY[stage].agent
+        prompt = (messages[-1]["content"] if messages else item_key)
+        token = uuid.uuid4().hex
+        self._pending_requests[token] = {
+            "agent": agent,
+            "tool": f"release_kit/{stage}",
+            "provider": provider,
+            "model": model,
+            "prompt": prompt,
+            "usage": None,
+            "flat_cost_eur": flat_cost_eur,
+            "estimated_cost": 0.0,
+            "project": job["project_id"],
+            "project_instructions": job["project_instructions"],
+            "job_id": job_id,
+            "job_stage": stage,
+            "job_item": item_key,
+            "run_id": self.run_logger.start(
+                agent=agent, tool=f"release_kit/{stage}", provider=provider,
+                model=model, mode="release kit", prompt_summary=item_key,
+                job_id=job_id),
+        }
+        return JobGrant(_MINT, token=token, job_id=job_id, stage=stage,
+                        item_key=item_key, provider=provider, model=model,
+                        is_open=self._pending_requests.__contains__)
+
+    def record_job_item(self, grant, response, usage=None):
+        """Bill a finished text item: one usage row with the job columns,
+        clamped at what was granted (€0 in slice 1, so a local reply that is
+        somehow priced is recorded at €0 and marked `capped`). No Saved Chat."""
+        context = self._pending_requests.pop(grant.token, None)
+        if context is None:
+            return None
+        entry = self.usage_tracker.log_request(
+            agent=context["agent"], backend=context["provider"],
+            model=context["model"],
+            prompt_text=context["prompt"] + "\n" + context["project_instructions"],
+            response_text=response, usage=usage,
+            flat_cost_eur=None, project=context["project"],
+            job_id=context["job_id"], job_item=context["job_item"])
+        granted = float(context.get("estimated_cost") or 0.0)
+        if float(entry.get("cost_eur") or 0.0) > granted:
+            from services.database import get_connection
+            with get_connection() as conn:
+                conn.execute("UPDATE usage SET cost_eur = ?, cost_type = 'capped' "
+                             "WHERE id = ?", (granted, entry["usage_id"]))
+            entry = {**entry, "cost_eur": granted, "estimated_cost": granted,
+                     "cost_type": "capped"}
+        if context["run_id"]:
+            self.run_logger.finish(
+                run_id=context["run_id"], status="success",
+                input_tokens=entry.get("input_tokens", 0),
+                output_tokens=entry.get("output_tokens", 0),
+                cost_eur=entry.get("cost_eur", 0.0))
+        return self._with_stop(entry, usage)
+
+    def close_job_item(self, grant, status, error=""):
+        """Close an item that writes no usage row: a local render, a failed
+        or cancelled request. Never offers failover (no dialog at night)."""
+        context = self._pending_requests.pop(grant.token, None)
+        if context and context["run_id"]:
+            self.run_logger.finish(run_id=context["run_id"], status=status,
+                                   error=error or None)
+
+    def release_kit_driver_instance(self):
+        if self.release_kit_driver is None:
+            from ui.release_kit.driver import ReleaseKitDriver
+            self.release_kit_driver = ReleaseKitDriver(self)
+            self.release_kit_driver.changed.connect(self._on_release_kit_changed)
+        return self.release_kit_driver
+
+    def _on_release_kit_changed(self, _job_id=""):
+        panel = getattr(self, "manuscript_panel", None)
+        if panel is not None and hasattr(panel, "refresh_release_kit_entry"):
+            panel.refresh_release_kit_entry()
+
+    def _recover_release_kits(self) -> None:
+        """A4 recovery; opens the Release Kits window once when a kit is
+        unfinished (D4: launching is the owner's own action)."""
+        from services.release_kit import ledger
+        driver = self.release_kit_driver
+        active = driver.job_id if driver is not None else None
+        unfinished = [job_id for job_id in ledger.recover(active=active)
+                      if job_id != active]
+        self._on_release_kit_changed()
+        if unfinished:
+            self.show_release_kits()
+
+    def show_release_kits(self, project_id=None, job_id=None):
+        """The non-modal Release Kits window (D3, D4)."""
+        from ui.release_kit.window import ReleaseKitsWindow
+        window = self.release_kit_window
+        if window is None:
+            window = ReleaseKitsWindow(self)
+            self.release_kit_window = window
+        window.show_kits(project_id=project_id, job_id=job_id)
+        return window
+
+    def make_release_kit(self, project_id, version):
+        """D1 → D2: the one confirmation, then start. Returns the job id."""
+        from ui.release_kit.confirm_dialog import MakeReleaseKitDialog
+        from services.release_kit import ledger
+        driver = self.release_kit_driver_instance()
+        dialog = MakeReleaseKitDialog(self, project_id, version)
+        if dialog.exec() != MakeReleaseKitDialog.Accepted or dialog.approved is None:
+            return None
+        plan, plan_json, start_label = dialog.approved
+        try:
+            job_id = ledger.create_job(plan, plan_json=plan_json,
+                                       start_label=start_label)
+        except ledger.KitBusy:
+            self.show_release_kits()
+            return None
+        Path(plan.output_dir).mkdir(parents=True, exist_ok=True)
+        driver.start(job_id)
+        self.show_release_kits(project_id=project_id, job_id=job_id)
+        return job_id
 
     def _on_models_listed(self, provider: str, models: list,
                           error: str) -> None:
@@ -6264,6 +6420,21 @@ class GodAI(QWidget):
             self, RESOURCE_DIR, start_page="overview", start_anchor=anchor)
 
     def closeEvent(self, event):
+        driver = self.release_kit_driver
+        if driver is not None and driver.is_running():
+            box = QMessageBox(self)
+            box.setWindowTitle("A release kit is running")
+            box.setText("Quitting pauses it. Finished work is kept, and you "
+                        "can resume next time you open Imprint.")
+            keep = box.addButton("Keep Running", QMessageBox.RejectRole)
+            box.addButton("Quit and Pause", QMessageBox.AcceptRole)
+            box.setDefaultButton(keep)
+            box.setEscapeButton(keep)
+            box.exec()
+            if box.clickedButton() is keep:
+                event.ignore()
+                return
+            driver.stop_now("quit")
         try:
             self.author_panel._project_save_timer.stop()
             self.author_panel._persist_project_state()
@@ -6294,7 +6465,7 @@ class GodAI(QWidget):
                     "fiverr_text_worker", "fiverr_image_worker",
                     "video_worker", "video_estimate_worker",
                     "muse_pull_worker", "model_scan_worker",
-                    "local_measure_worker"):
+                    "local_measure_worker", "release_kit_worker"):
                 worker = getattr(self, attr, None)
                 if worker is not None and worker.isRunning():
                     if hasattr(worker, "cancel"):
