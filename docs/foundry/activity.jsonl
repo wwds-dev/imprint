@@ -101,3 +101,6 @@
 {"ts": "2026-11-20T00:11:09", "phase": "define", "state": "done", "spec": "quill-draft-safety"}
 {"ts": "2026-11-20T00:11:09", "phase": "build", "state": "start", "spec": "quill-draft-safety"}
 {"ts": "2026-11-20T11:17:09", "phase": "build", "state": "done", "spec": "quill-draft-safety"}
+{"ts": "2026-11-20T11:50:10", "phase": "review", "state": "done", "spec": "quill-draft-safety"}
+{"ts": "2026-11-20T11:50:10", "phase": "verify", "state": "done", "spec": "quill-draft-safety"}
+{"ts": "2026-11-20T11:50:10", "phase": "document", "state": "done", "spec": "quill-draft-safety"}

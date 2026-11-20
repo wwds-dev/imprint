@@ -106,3 +106,5 @@ Tighten Structure's guard is 25% instead of 50%. The 6,000 figure tightens the a
 local models only and is flagged to the owner.
 Skipped phases: Design (no new controls), Architect (no state, thread or boundary change), Secure
 (no network, secret, input or file-write change), Comply and Launch (no legal or public-claim change).
+
+Verify: full suite on `5aea8ec`: 2191 passed, 17 skipped, 6 subtests passed in 24 min 35 s (the only mode the project defines; `docs/foundry/app-context.md` ## Commands).
