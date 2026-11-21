@@ -165,8 +165,10 @@ Tests at 7e6f182: `pytest -q -p no:randomly` on the release-kit suites (`securit
 The 13 skips are the drift tests: "sentinel/lab_hub is not checked out beside this repository" in a
 nested worktree. I compared the files by hand instead: `services/providers.py` and
 `services/lmstudio_client.py` are byte-equal to `active/sentinel`'s copies (`cmp`).
-`services/benchmarks.py` differs from Sentinel's working copy, but this branch does not touch it
-(not in `3e0a761..HEAD`): flagged for the drift owner, outside this scope. Full suite not run.
+`services/benchmarks.py` is not byte-equal to Sentinel's copy, but its drift test passes in the main
+checkout, where Sentinel is beside it (`tests/test_benchmarks_drift.py`: 2 passed). The differences
+are the docstring, User-Agent and *Imprint only* block that the test allows, and this branch does not
+touch the file. Corrected 2026-11-21: an earlier version of this line called it drift. Full suite not run.
 
 Left (P3, not blocking):
 - LM Studio's non-stream calls (`chat`, model listing) still honour proxies. Nothing in the app calls
