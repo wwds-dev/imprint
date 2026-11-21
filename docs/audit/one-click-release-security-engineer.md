@@ -7,7 +7,10 @@ scope `git diff 3e0a761..HEAD` at **bf006a7**. No third-party network calls, no 
 Probe scripts ran from the session scratchpad with the main checkout's `.venv` (Python 3.11, requests 2.33.1).
 
 ## Verdict
-**Ready for Comply: no.** One **P1** (S-1): with a proxy configured, the "on this Mac" model calls go
+**Updated after the re-check of 7e6f182 (see "Re-check" at the end): ready for Comply: yes.**
+S-1 to S-4 are fixed and each fix is killed by a mutation. No P0 or P1 is open. The P3s stand.
+
+Original verdict at bf006a7: **Ready for Comply: no.** One **P1** (S-1): with a proxy configured, the "on this Mac" model calls go
 to the proxy, so the book can leave the Mac while the screen, report and provenance say it did not.
 Three P2s, several P3s. The money guard holds for slice 1: no path reaches a paid provider.
 Comply can start once S-1 is fixed, or once the owner defers it in writing.
@@ -144,3 +147,29 @@ phase commits only its report.
 A real system-proxy run (S-1 live). A real Ollama model run (no model installed, as QA found). Excel and
 Numbers behaviour on the guarded CSV. Behaviour with a symlinked kit folder. App Nap. The packaged
 (frozen) app's default folder: it is under Application Support per the code, but was not run.
+
+## Re-check of the fix commit 7e6f182 (2026-11-21)
+Same role. I did not write 7e6f182 (the build session did). Read-only on code. Probes ran from the
+scratchpad. Mutations ran on a `git archive` copy of 7e6f182, never in this worktree.
+
+| Finding | Fix in 7e6f182 | Re-check evidence | Status |
+|---|---|---|---|
+| S-1 proxy | `services/local_endpoint.py` `NO_PROXIES = {"http","https","all": None}` on every Ollama call (`ollama_client.py`, 7 sites) and on `LocalLMStudioClient.stream_chat`. `main.py` now builds `self.lmstudio = LocalLMStudioClient()`. The shared `lmstudio_client.py` and `providers.py` are back to Sentinel's bytes | With `HTTP_PROXY`/`ALL_PROXY` set to a dead port, a local fake server received both streams ("direct"). Mutations M2 (drop it on the Ollama stream) and M3 (drop it on the LM Studio stream) are killed | **Fixed** |
+| S-2 parser mismatch | `url_host` now uses urllib3's `parse_url`. `is_plain_endpoint` refuses userinfo, `\`, `%` and parser disagreement, and runs before the loopback check (`plan.py:81`) | 16 inputs re-run. `evil.com\@127.0.0.1`, `evil.com@127.0.0.1`, tab or newline in the host, `[::1%25en0]`, `0177.0.0.1` are refused. `127.0.0.1`, `localhost`, `LOCALHOST`, `[::1]`, `127.1.2.3`, `HTTP://127.0.0.1` are allowed. `OLLAMA_HOST=http://evil.com\@127.0.0.1:11434` is refused. M4 (skip the check) is killed | **Fixed** |
+| S-3 `say` options | `"--"` before the text for `say` and `espeak` (`mock.py:78,92`) | Measured earlier: `say -- "-o…"` and `-- "- Run…"` exit 0 with no stray file. New test `test_say_speaks_a_dash_quote_and_writes_nothing_else`. M1 (drop `--`) is killed | **Fixed** |
+| S-4 default folder | `default_kit_base`: from source, `output/release_kits/`; frozen, the app's data folder (`plan.py:289`, `confirm_dialog.py:47`) | The default is now `<repo>/output/release_kits/My_Novel_v3_2026-11-21`. `git check-ignore -v` gives `.gitignore:25:output/`. M5 (repo root again) is killed | **Fixed** |
+
+Tests at 7e6f182: `pytest -q -p no:randomly` on the release-kit suites (`security_fixes`, `contract`,
+`review_fixes`, `core`, `e2e`), `calendar_export`, `local_reply_cap`, `quote_finder`, `chat_streaming`,
+`providers_registry`, `voice_and_rates` and the three drift tests gave **275 passed, 13 skipped** (105 s).
+The 13 skips are the drift tests: "sentinel/lab_hub is not checked out beside this repository" in a
+nested worktree. I compared the files by hand instead: `services/providers.py` and
+`services/lmstudio_client.py` are byte-equal to `active/sentinel`'s copies (`cmp`).
+`services/benchmarks.py` differs from Sentinel's working copy, but this branch does not touch it
+(not in `3e0a761..HEAD`): flagged for the drift owner, outside this scope. Full suite not run.
+
+Left (P3, not blocking):
+- LM Studio's non-stream calls (`chat`, model listing) still honour proxies. Nothing in the app calls
+  `lmstudio.chat(` (grep), and `run_backend` always takes `stream_chat` when it exists, so no book text
+  goes that way. Model listing sends no user content.
+- S-5 to S-12 as above, unchanged.
