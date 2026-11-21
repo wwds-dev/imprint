@@ -58,3 +58,6 @@ Side note for the owner: the bundle identifier is `com.netrunner3000.imprint`, w
 5. **Install** to `/Applications` and UAT on the installed app: do you want a build from the final HEAD, after the above?
 6. **CHANGELOG** "not yet merged" wording: update on your word.
 7. **Release gate.** Not asked for approval until 1 to 4 are settled. No approval recorded.
+
+## Update 2026-11-21 (owner answer to decision 1)
+Asked whether the `signoff.jsonl` row of 2026-11-21T21:24:20 is theirs, the owner answered: "Yes, mine". The row still has the placeholders `by: "<your name>"` and `risk_accepted: "<why>"`, and T1, T2 and the name trigger are still listed open, so it names no signer and gives no reason. An agent cannot fix that: the owner re-signs in a terminal with the real values (or a lawyer closes the triggers). Decisions 2 to 7 are still open and no Release approval is recorded.
