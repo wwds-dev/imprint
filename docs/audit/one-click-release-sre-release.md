@@ -67,3 +67,12 @@ The owner removed the placeholder rows. I re-ran the gate myself in the main che
 
 ## Update 2026-11-21, later (LICENSE, CHANGELOG, rebuild)
 Owner: "Use MIT, fix the CHANGELOG, then build". Done in `9f656a1`: `LICENSE` (MIT, "Copyright (c) 2026 wwds-dev"; the holder name is my choice from the commit identity, the owner may change it), CHANGELOG slice-1 wording corrected plus an MIT line. Rebuilt with `./scripts/build_app.sh --no-install`: rc 0, bundle baked as v2.397 (`commit 9f656a1`), `codesign --verify --deep --strict` ok, `--selftest` (scratch `HOME`) "all checks passed". The full suite was not re-run: the only changes since the 2321-pass run are docs, `LICENSE` and the CHANGELOG. Not installed. Open: push `main` (26 commits), install and UAT, then the Release gate.
+
+## Update 2026-11-21, later (install and UAT)
+Owner: "Install it and run the UAT". **Installed** `/Applications/Imprint.app` with `./scripts/build_app.sh` from `451ed53`: v2.398, `_build_info.json` `{"build":398,"commit":"451ed53"}`, `codesign --verify --deep --strict` ok. It replaced the frozen build of 2026-11-21 02:14. Before installing I copied `~/Library/Application Support/Imprint` (496 KB) to `~/Documents/lab/backups/imprint_pre_install_20261121/` (ignored snapshot; delete once nothing needs it).
+
+UAT result: **partial**.
+- A1 launch, from a terminal (`Imprint.app/Contents/MacOS/Imprint`, real data dir): `--selftest` on the installed app "all checks passed". Output had no `resume`/`pending`/column warnings; one `[warn] models: anthropic: RuntimeError: Connection error.` (start-up model-list fetch, existing behaviour, not release kit).
+- A1 visible: header opens, version badge reads `v2.398`, status pill `Ready`, workspace tabs (Author, Audio + Music, Video + Ads, Social, Web, Brand Design, Brand Content, Assistant) intact, Spend panel and Limits (€1 session, €5 daily) shown, Quill panel loads. Seen in one screenshot only; not resized, no tooltip check.
+- **Not run:** everything else, including Press, Quote Finder, **Make Release Kit** and the **Release Kits** window. The app's window sits on a full-screen Space and the background tool could not click into it (clicks had no effect). Make Release Kit end to end also needs a local model (Ollama or LM Studio, none installed) and a manuscript, so it could not complete here anyway.
+- The installed app is still running (started by me).
