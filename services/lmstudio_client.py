@@ -27,6 +27,8 @@ from pathlib import Path
 import requests
 
 from services import providers
+from services.output_limits import stop_kind
+from services.stream_usage import UsageStream
 
 CONNECT_TIMEOUT = 3
 READ_TIMEOUT = 300
@@ -279,33 +281,46 @@ class LMStudioClient:
         except (KeyError, IndexError, ValueError) as exc:
             raise RuntimeError(f"LM Studio sent an unreadable reply: {exc}")
 
-    def stream_chat(self, model: str, messages: list[dict], **_ignored):
-        try:
-            with requests.post(
-                    f"{self.base_url}/chat/completions",
-                    json=self._payload(model, messages, True), stream=True,
-                    timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)) as response:
-                response.raise_for_status()
-                for raw in response.iter_lines():
-                    if not raw:
-                        continue
-                    line = raw.decode("utf-8")
-                    if not line.startswith("data:"):
-                        continue
-                    body = line[5:].strip()
-                    if body == "[DONE]":
-                        break
-                    data = json.loads(body)
-                    if data.get("error"):
-                        raise RuntimeError(
-                            f"LM Studio stopped mid-reply: {data['error']}")
-                    delta = (data.get("choices") or [{}])[0].get("delta", {})
-                    if delta.get("content"):
-                        yield delta["content"]
-        except requests.RequestException as exc:
-            raise RuntimeError(f"LM Studio streaming request failed: {exc}")
-        except json.JSONDecodeError as exc:
-            raise RuntimeError(f"LM Studio streaming JSON parse failed: {exc}")
+    def stream_chat(self, model: str, messages: list[dict],
+                    max_tokens: int | None = None, **_ignored):
+        """Stream a reply. `max_tokens` caps the output (the release kit's
+        8,192); `stop_reason` is "length" when the reply hit that cap."""
+        payload = self._payload(model, messages, True)
+        if max_tokens:
+            payload["max_tokens"] = int(max_tokens)
+
+        def _gen(out):
+            try:
+                with requests.post(
+                        f"{self.base_url}/chat/completions",
+                        json=payload, stream=True,
+                        timeout=(CONNECT_TIMEOUT, READ_TIMEOUT)) as response:
+                    response.raise_for_status()
+                    for raw in response.iter_lines():
+                        if not raw:
+                            continue
+                        line = raw.decode("utf-8")
+                        if not line.startswith("data:"):
+                            continue
+                        body = line[5:].strip()
+                        if body == "[DONE]":
+                            break
+                        data = json.loads(body)
+                        if data.get("error"):
+                            raise RuntimeError(
+                                f"LM Studio stopped mid-reply: {data['error']}")
+                        choice = (data.get("choices") or [{}])[0]
+                        if choice.get("finish_reason"):
+                            out.stop_reason = stop_kind(choice["finish_reason"])
+                        delta = choice.get("delta", {})
+                        if delta.get("content"):
+                            yield delta["content"]
+            except requests.RequestException as exc:
+                raise RuntimeError(f"LM Studio streaming request failed: {exc}")
+            except json.JSONDecodeError as exc:
+                raise RuntimeError(f"LM Studio streaming JSON parse failed: {exc}")
+
+        return UsageStream(_gen)
 
     def generate(self, prompt: str, model: str, **_ignored) -> str:
         return self.chat(model, [{"role": "user", "content": prompt}])

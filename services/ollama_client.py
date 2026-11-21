@@ -5,6 +5,7 @@ import requests
 
 from services import providers
 
+from services.output_limits import stop_kind
 from services.stream_usage import UsageStream
 
 # Meta's Muse Glimmer — 30B open-weights agentic model (Apache 2.0), released
@@ -225,13 +226,18 @@ class OllamaClient:
         except requests.RequestException as e:
             raise RuntimeError(f"Ollama chat request failed: {e}")
 
-    def stream_chat(self, model: str, messages: list[dict], keep_alive: str = "3m"):
+    def stream_chat(self, model: str, messages: list[dict], keep_alive: str = "3m",
+                    max_tokens: int | None = None):
         payload = {
             "model": model,
             "messages": messages,
             "stream": True,
             "keep_alive": keep_alive,
         }
+        if max_tokens:
+            # The release kit's 8,192-token reply cap; `done_reason` "length"
+            # then marks a reply that hit it.
+            payload["options"] = {"num_predict": int(max_tokens)}
 
         def _gen(out):
             try:
@@ -271,6 +277,7 @@ class OllamaClient:
                                 "output_tokens": int(
                                     data.get("eval_count", 0) or 0),
                             }
+                            out.stop_reason = stop_kind(data.get("done_reason"))
                             break
 
             except requests.RequestException as e:

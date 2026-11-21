@@ -107,8 +107,9 @@ def kit(app, tmp_path, monkeypatch):
         assert open_[0]["job_id"] and open_[0]["project"] == "book-a"
         return open_[0]
 
-    def run_backend(provider, model, messages, prompt):
+    def run_backend(provider, model, messages, prompt, max_tokens=None):
         assert (provider, model) == ("ollama", "fake-local:1b")
+        assert max_tokens == 8192          # the cap the confirmation shows
         user = messages[-1]["content"]
         if "quotable" in user:
             ctx = open_job_token("quotes")
@@ -315,7 +316,7 @@ def test_a_local_model_that_does_not_answer_pauses_without_a_dialog(kit):
     from services.release_kit import ledger
     window, driver, dialogs, calls = kit
 
-    def down(*args):
+    def down(*args, **kwargs):
         raise ConnectionError("connection refused")
     window.run_backend = down
     window.manuscript_panel.start_release_kit()
@@ -522,20 +523,20 @@ def test_every_exit_from_running_releases_keep_awake_and_writes_the_report(
     backend = window.run_backend
 
     if exit_path == "made_check":          # captions cut short → Incomplete
-        def short_captions(provider, model, messages, prompt):
-            reply = backend(provider, model, messages, prompt)
+        def short_captions(provider, model, messages, prompt, **kw):
+            reply = backend(provider, model, messages, prompt, **kw)
             return reply if "quotable" in messages[-1]["content"] else '["only one"]'
         window.run_backend = short_captions
     elif exit_path == "user_stop":
         driver.render["epub"] = (lambda f: lambda *a: (driver.stop(), f(*a))[1])(
             driver.render["epub"])
     elif exit_path == "route_unavailable":
-        window.run_backend = lambda *a: (_ for _ in ()).throw(OSError("refused"))
+        window.run_backend = lambda *a, **k: (_ for _ in ()).throw(OSError("refused"))
     elif exit_path == "item_failed":
         driver.render["graphic"] = lambda *a: (_ for _ in ()).throw(
             RuntimeError("no font"))
     elif exit_path == "no_quotes":
-        window.run_backend = lambda *a: '["Nothing like the book."]'
+        window.run_backend = lambda *a, **k: '["Nothing like the book."]'
     elif exit_path == "quit":
         driver.render["graphic"] = (lambda f: lambda *a: (
             driver.stop_now("quit"), f(*a))[1])(driver.render["graphic"])
