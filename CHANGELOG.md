@@ -22,6 +22,76 @@ This file is generated from `git log`; see the note at the bottom for how to
 regenerate it. It states what the code does, not how well it works for you:
 nothing here is a claim about income, sales or publishing results.
 
+## 2026-11-21
+
+### Added
+- **Make Release Kit** (slice 1, the free path; on branch
+  `claude/one-click-release-slice1-599646`, not yet merged or released). In
+  Press's Quote Finder tab, next to **Export Approved…**, one button turns an
+  approved Project version into a set of files with one confirmation, all on
+  this Mac, with no charge. Nothing is posted, scheduled or submitted. Eight
+  steps run one at a time: EPUB (with its SHA-256 receipt), quotes, a 4-week
+  calendar, one graphic per unique quote, one Short per Short slot, captions,
+  `calendar.csv`, then every file is linked to the Project and a
+  `release-kit-report.md` and `provenance.json` are written to the kit's own
+  folder (`<Title>_v<N>_<date>`, never reused). The audiobook step is shown as
+  "Not included": narration is always paid and this version cannot approve a
+  paid step.
+- Quotes and captions run on a local model (Ollama or LM Studio); an address
+  that is not this Mac is refused so the book never leaves it. The quote step
+  samples the whole book (12 windows of up to 2,500 characters; a book of
+  30,000 characters or fewer is sent whole) and keeps only quotes found word
+  for word, at most 280 characters, up to 20. Press's own Quote Finder still
+  sends the first 30,000 characters. The caption reply is capped at 8,192
+  tokens; posts left without a caption are listed in the report and the step
+  is marked Incomplete.
+- Shorts use the on-device macOS `say` voice, for testing only. Apple's licence
+  limits its built-in voices to personal, non-commercial use, so the
+  confirmation and the report carry a notice (N2): decide before posting these
+  Shorts publicly. The report and the CSV's new **AI used** column record which
+  model chose the quotes and wrote the captions and that the voice is
+  synthetic; no marking is written into any file.
+- The kit keeps the Mac awake while it runs (`caffeinate -i`, tied to
+  Imprint's process, so it ends if Imprint exits or crashes; the display may
+  sleep and a closed lid still sleeps the Mac). Only one kit runs at a time.
+- A **Release Kits** window (from Start, **Open Release Kit…** or Project
+  Overview's new **Release Kits…** button, which also shows a release-kit
+  line) lists each kit's steps, with Stop, Resume, Discard, Show Folder and
+  Show Report. Quitting while a kit runs asks to Keep Running or Quit and Pause.
+- Resume after a crash or quit: progress is written to four new tables
+  (`release_jobs`, `release_job_approvals`, `release_job_stages`,
+  `release_job_items`; additive migration) as it happens. At the next launch
+  the window opens once; Resume checks each finished file against its SHA-256,
+  skips the good ones and runs the rest again. A kit pauses, and never asks
+  during the run, when a model does not answer, a render fails or a request is
+  larger than its bound.
+- `usage` and `runs` gained a `job_id` column (and `usage` a `job_item`
+  column) so each local request is recorded against its kit.
+- Calendar CSV export (Press and the kit share
+  `agents/manuscript/calendar_export.py`) prefixes a cell that starts with
+  `=`, `+`, `-`, `@`, a tab or a carriage return with `'`, so a spreadsheet
+  keeps quotes and captions as text instead of running them as formulas.
+- Not in slice 1: paid cloud models, ElevenLabs Shorts, the audiobook step,
+  the job-level budget reservation and re-approval of remaining steps.
+
+### Fixed
+- Found in code review of the kit before release: an error inside any step or
+  callback now pauses the kit (it used to leave it "running" with the Mac held
+  awake); a local model address that is not this Mac is refused; the guard
+  checks each item against the approved route, the running step and the kit's
+  own items; the 8,192-token reply cap is sent to Ollama (`num_predict`) and LM
+  Studio (`max_tokens`) and a cut reply is reported; the CSV formula guard
+  covers a leading tab and carriage return; Resume reports a file-check error
+  instead of stalling; the quote request bound is derived from the prompt
+  rather than fixed; a missing `caffeinate` is shown in the window instead of
+  claiming the Mac stays awake; the ledger accepts only known column names;
+  quitting while a local request runs now stops reading the model's reply and
+  closes the stream (before, the request kept running after Quit and Pause);
+  only the wait for the first token cannot be cut, and then the item is left
+  for the next launch to resolve and runs again on Resume. Open from that review: a pending request token can leak if
+  the driver raises between granting an item and starting it, and the cost
+  clamp in `record_job_item` must be replaced before any paid route ships.
+
 ## 2026-11-20
 
 ### Fixed

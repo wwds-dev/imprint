@@ -73,7 +73,9 @@ class MockVoiceProvider(VoiceProvider):
         if not aiff_path.endswith(".aiff"):
             aiff_path += ".aiff"
 
-        say_cmd = ["say", "-v", voice, "-r", str(rate), "-o", aiff_path, text]
+        # "--" ends options: a quote that starts with "-" is spoken, never
+        # read as `-f <file>` or `-o <path>` (security S-3).
+        say_cmd = ["say", "-v", voice, "-r", str(rate), "-o", aiff_path, "--", text]
         self._run_engine(say_cmd, "say", aiff_path)
         try:
             self._encode(aiff_path, output_path)
@@ -87,7 +89,7 @@ class MockVoiceProvider(VoiceProvider):
         if not wav_path.endswith(".wav"):
             wav_path += ".wav"
 
-        self._run_engine(["espeak", "-w", wav_path, text], "espeak", wav_path)
+        self._run_engine(["espeak", "-w", wav_path, "--", text], "espeak", wav_path)
         try:
             self._encode(wav_path, output_path)
         finally:

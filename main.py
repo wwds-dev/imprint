@@ -24,6 +24,7 @@ if "--narrator-worker" in sys.argv:
 from services import providers as provider_registry
 from services.providers import is_local as is_local_provider
 from services.lmstudio_client import LMStudioClient
+from services.local_endpoint import LocalLMStudioClient
 from services import local_models
 from services import local_ratings
 from services import routing_advisor
@@ -270,7 +271,9 @@ class GodAI(QWidget):
         self.settings = self.load_json(SETTINGS_FILE, {})
 
         self.ollama = OllamaClient(provider_registry.ollama_host())
-        self.lmstudio = LMStudioClient()
+        # Capped, proxy-free stream (review P2-3, security S-1); the shared
+        # client stays byte-for-byte equal to Sentinel's.
+        self.lmstudio = LocalLMStudioClient()
         # What is on this Mac. The UI reads the cache only; LocalDiscoveryWorker
         # is the one place that talks to LM Studio, Ollama and the disk.
         self.local_inventory = local_models.LocalInventory()
@@ -4612,18 +4615,40 @@ class GodAI(QWidget):
         """
         from services.release_kit import ledger
         from services.release_kit.grant import _MINT, JobGrant, JobRefusal
-        from services.release_kit.plan import STAGE_BY_KEY, is_local_route
+        from services.release_kit.plan import (
+            STAGE_BY_KEY, SYSTEM_VOICE_ROUTE, endpoint_problem, is_local_route)
 
         if not is_local_route(provider):
             return JobRefusal(
                 "not_in_this_version",
                 f"{provider} is a paid route, and this version runs local "
                 "steps only.")
+        # The address the client will actually dial, not only the default.
+        problem = endpoint_problem(
+            provider, getattr(getattr(self, provider, None), "base_url", None))
+        if problem:
+            return JobRefusal("route", problem)
         job = ledger.get_job(job_id)
         if not job or job["status"] != "running":
             return JobRefusal("not_active", "This release kit is not running.")
         if not model:
             return JobRefusal("route", "No model is named for this step.")
+        # ADR 0005 §2: the route must be the approved one, for the step that
+        # is running, on an item the ledger holds (review P2-2).
+        if stage not in STAGE_BY_KEY:
+            return JobRefusal("route", f"{stage} is not a release kit step.")
+        row = ledger.stage(job_id, stage)
+        if not row or row["status"] != "running":
+            return JobRefusal("not_active", f"{STAGE_BY_KEY[stage].label} is "
+                                            "not the step that is running.")
+        approved_model = row["model"] or (
+            "say" if row["provider"] == SYSTEM_VOICE_ROUTE else "")
+        if (provider, model) != (row["provider"], approved_model):
+            return JobRefusal(
+                "route", f"{provider} · {model} is not the route approved for "
+                         f"{STAGE_BY_KEY[stage].label}.")
+        if ledger.item(job_id, stage, item_key) is None:
+            return JobRefusal("route", f"{item_key} is not an item of this kit.")
         agent = STAGE_BY_KEY[stage].agent
         prompt = (messages[-1]["content"] if messages else item_key)
         token = uuid.uuid4().hex
@@ -5587,13 +5612,17 @@ class GodAI(QWidget):
             )
         return recorded, confirmed
 
-    def run_backend(self, backend, model, messages, prompt):
+    def run_backend(self, backend, model, messages, prompt, max_tokens=None):
         """Send one request to `backend`, dispatching on its registry spec.
 
         Local providers (any protocol) are fit-checked against memory first;
         the call itself is the same for every client: stream if it can, else
         chat, else generate. The local model is the slowest responder in the
         app, so the stream matters most there.
+
+        `max_tokens` (the release kit's reply cap) is passed to a local
+        stream only; a request that names one and cannot honour it is refused
+        rather than sent uncapped.
         """
         spec = provider_registry.get(backend)
         client = getattr(self, backend, None) if spec is not None else None
@@ -5610,6 +5639,12 @@ class GodAI(QWidget):
             if verdict is not None and verdict["level"] == "too_big":
                 raise RuntimeError(verdict["message"])
 
+        if max_tokens:
+            if not (spec.is_local and hasattr(client, "stream_chat")):
+                raise RuntimeError(f"{backend} cannot cap this reply at "
+                                   f"{int(max_tokens):,} tokens here.")
+            return client.stream_chat(messages=messages, model=model,
+                                      max_tokens=int(max_tokens))
         if hasattr(client, "stream_chat"):
             return client.stream_chat(messages=messages, model=model)
         if hasattr(client, "chat"):

@@ -198,6 +198,28 @@ Run focused coverage with `pytest tests/test_book_pipeline.py tests/test_manuscr
     a stated cadence actually holds every week instead of front-loading.
     Caption text for each slot is a separate LLM step
     (`ManuscriptAgent.build_calendar_caption_messages`, above).
+  - **`calendar_export.py`** — Qt-free caption and CSV helpers shared by the
+    Calendar tab and the release kit: `caption_items()` builds the caption
+    request's JSON, `apply_captions()` fills each slot and returns the blank
+    ones (a reply cut at the output cap leaves later slots blank, never
+    invented), and `write_calendar_csv()` writes the file. A cell starting
+    with `=`, `+`, `-`, `@`, a tab or a carriage return is prefixed with `'`
+    so a spreadsheet keeps it as text. With `ai_column` it adds a factual
+    "AI used" cell per row (the release kit passes it; Press does not).
+  - **`quote_finder.py`** — Qt-free whole-book quote sampling, used by the
+    release kit only (Press's Quote Finder still sends the first 30,000
+    characters): a body of 30,000 characters or fewer is one window,
+    otherwise 12 windows of up to 2,500 characters, snapped to paragraph and
+    sentence starts and deterministic. The parser keeps a quote only if it
+    is found word for word in a passage and is at most 280 characters (up to
+    20), and counts the rest as too long, not found or duplicate.
+  - **Release kit.** The panel's **Make Release Kit…** button
+    (`start_release_kit`, `refresh_release_kit_entry`) hands off to the host
+    (`GodAI.make_release_kit`); the kit itself lives in `services/release_kit/`
+    and `ui/release_kit/` (see README §7.7). `shorts_generator.render_short`
+    takes an explicit `voice_provider`, so the kit names its voice (the
+    on-device macOS `say`, for testing only) instead of reading it from the
+    environment.
   - **`book_widgets.py`** — shared `QComboBox`/helper factories for the
     theme, size, and voice-source/voice controls that Quote Graphics, Shorts,
     Quote Finder and Calendar all offer identically, so adding a theme or a

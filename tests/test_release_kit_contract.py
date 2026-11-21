@@ -132,3 +132,70 @@ def test_job_tokens_never_enter_the_by_agent_queue():
         assert not used & {"_pending_by_agent", "QMessageBox",
                            "confirm_external_api_request", "offer_failover",
                            "_offer_local_fallback"}, name
+
+
+# ── review P2-4: references and the replaceable renderer table ───────────────
+
+def _enclosing(tree):
+    """node id -> innermost enclosing function."""
+    owner = {}
+    for fn in _functions(tree):
+        for n in ast.walk(fn):
+            owner[id(n)] = fn
+    return owner
+
+
+def test_a_guarded_function_is_never_passed_around_without_a_grant():
+    """`self.host.run_backend` handed over as a value is a call the name walk
+    cannot see. Such a reference is allowed only in a function that first got
+    a grant from `authorize_job_item` and passes `grant` along."""
+    offenders = []
+    for path in KIT_SOURCES:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        owner = _enclosing(tree)
+        call_funcs = {id(n.func) for n in ast.walk(tree) if isinstance(n, ast.Call)}
+        for node in ast.walk(tree):
+            name = (node.attr if isinstance(node, ast.Attribute)
+                    else node.id if isinstance(node, ast.Name) else "")
+            if name not in GUARDED_NAMES or id(node) in call_funcs:
+                continue
+            if isinstance(node, ast.Name) and isinstance(
+                    node.ctx, (ast.Store, ast.Param)):
+                continue
+            fn = owner.get(id(node))
+            minted = [n.lineno for n in ast.walk(fn)
+                      if isinstance(n, ast.Call)
+                      and _call_name(n)[1] == "authorize_job_item"] if fn else []
+            if not minted or min(minted) > node.lineno:
+                offenders.append(f"{path.relative_to(ROOT)}:{node.lineno} "
+                                 f"references {name}")
+    assert not offenders, "\n".join(offenders)
+
+
+def test_renderers_that_reach_a_provider_are_called_with_the_grant():
+    """`self.render[...]` is a replaceable dict; the text and short renderers
+    must receive `grant` so their own `grant.check()` (covered above) runs."""
+    seen = set()
+    for path in KIT_SOURCES:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Subscript)
+                    and isinstance(node.func.value, ast.Attribute)
+                    and node.func.value.attr == "render"):
+                continue
+            key = node.func.slice
+            if isinstance(key, ast.Constant) and key.value in ("text", "short"):
+                seen.add(key.value)
+                first = node.args[0] if node.args else None
+                assert isinstance(first, ast.Name) and first.id == "grant", \
+                    f"{path.name}:{node.lineno} render[{key.value!r}] without grant"
+    assert seen == {"text", "short"}
+
+
+def test_the_default_text_and_short_renderers_check_the_grant():
+    from ui.release_kit.driver import default_renderers
+    from services.release_kit import stages
+    table = default_renderers()
+    assert table["text"] is stages.ask_text
+    assert table["short"] is stages.render_short_item

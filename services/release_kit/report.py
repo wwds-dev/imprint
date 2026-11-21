@@ -129,7 +129,7 @@ def build(job_id: str) -> str:
         incomplete.append(
             f"Captions and CSV: {len(blank)} of {slots} posts have no caption. "
             f"{captions['result'].get('why', '')} Write them in Press → "
-            "Calendar, or run this step again.".replace("  ", " "))
+            "Calendar.".replace("  ", " "))
     quotes = by_key.get("quotes")
     if quotes and quotes["result"].get("too_long"):
         incomplete.append(

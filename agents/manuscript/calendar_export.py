@@ -19,7 +19,7 @@ AI_COLUMN = "AI used"
 # A spreadsheet treats a cell starting with one of these as a formula. Quotes
 # and captions come from a manuscript and a model, so a cell such as
 # "=HYPERLINK(...)" must stay text when the CSV is opened (CSV injection).
-_FORMULA_START = ("=", "+", "-", "@")
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
 
 
 def _safe_cell(value) -> str:

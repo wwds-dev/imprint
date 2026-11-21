@@ -107,8 +107,9 @@ def kit(app, tmp_path, monkeypatch):
         assert open_[0]["job_id"] and open_[0]["project"] == "book-a"
         return open_[0]
 
-    def run_backend(provider, model, messages, prompt):
+    def run_backend(provider, model, messages, prompt, max_tokens=None):
         assert (provider, model) == ("ollama", "fake-local:1b")
+        assert max_tokens == 8192          # the cap the confirmation shows
         user = messages[-1]["content"]
         if "quotable" in user:
             ctx = open_job_token("quotes")
@@ -160,8 +161,10 @@ def kit(app, tmp_path, monkeypatch):
     driver.render["epub"] = epub
 
     yield window, driver, dialogs, calls
-    import gc
-    from PySide6.QtCore import QCoreApplication, QEvent
+    # The suite's own teardown pattern (as tests/test_chat_projects.py): close
+    # and deleteLater, no forced flush. Destroying a GodAI synchronously here
+    # (sendPostedEvents(DeferredDelete)) left app-wide state pointing at its
+    # dead widgets, and test_fiverr_orders' qWait then segfaulted every time.
     window.author_panel._project_save_timer.stop()
     window.resource_timer.stop()
     if window.release_kit_window is not None:
@@ -169,10 +172,6 @@ def kit(app, tmp_path, monkeypatch):
     app.removeEventFilter(window)
     window.close()
     window.deleteLater()
-    # Destroy it now, while nothing walks the widget list, rather than leave
-    # a queued delete for a later module's collector (see test_model_watch_media).
-    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    gc.collect()
 
 
 def _artifact_paths():
@@ -317,7 +316,7 @@ def test_a_local_model_that_does_not_answer_pauses_without_a_dialog(kit):
     from services.release_kit import ledger
     window, driver, dialogs, calls = kit
 
-    def down(*args):
+    def down(*args, **kwargs):
         raise ConnectionError("connection refused")
     window.run_backend = down
     window.manuscript_panel.start_release_kit()
@@ -331,6 +330,45 @@ def test_a_local_model_that_does_not_answer_pauses_without_a_dialog(kit):
     with database.get_connection() as conn:
         assert conn.execute("SELECT COUNT(*) FROM usage WHERE job_id = ?",
                             (job["id"],)).fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("where", ["quotes_result", "graphic_output"])
+def test_an_error_inside_a_step_pauses_the_kit_instead_of_stranding_it(
+        kit, monkeypatch, where):
+    """Review P1-1: an exception in a result callback (after the reply was
+    billed, or a graphic that wrote no file) pauses with `item_failed`,
+    releases keep-awake, closes no grant twice and frees the one-kit slot."""
+    from services.release_kit import ledger
+    import ui.release_kit.driver as driver_mod
+    window, driver, dialogs, calls = kit
+    if where == "quotes_result":
+        def parse(*args, **kwargs):
+            raise ValueError("bad reply shape")
+        monkeypatch.setattr(driver_mod, "parse_verified_quotes", parse)
+        stage, label = "quotes", "Quotes"
+    else:
+        def graphic(quote, path, attribution):      # "succeeds", writes nothing
+            calls["graphic"].append(quote)
+            return path
+        driver.render["graphic"] = graphic
+        stage, label = "graphics", "Quote graphics"
+
+    window.manuscript_panel.start_release_kit()
+
+    (job,) = ledger.list_jobs("book-a")
+    assert (job["status"], job["pause_reason"]) == ("paused", "item_failed")
+    assert job["pause_detail"].startswith(f"Paused during {label}: ")
+    assert ledger.stage(job["id"], stage)["status"] == "paused"
+    assert not driver.is_running() and ledger.running_job() is None
+    assert driver.keep_awake.released == 1 and not driver.keep_awake.held
+    assert not any(ctx.get("job_id") == job["id"]
+                   for ctx in window._pending_requests.values())
+    report = (Path(job["output_dir"]) / "release-kit-report.md").read_text()
+    assert "Paused" in report
+    if where == "quotes_result":
+        with database.get_connection() as conn:     # billed once, not twice
+            assert conn.execute("SELECT COUNT(*) FROM usage WHERE job_id = ?",
+                                (job["id"],)).fetchone()[0] == 1
 
 
 def test_a_paid_route_is_refused_by_the_guard_without_a_dialog(kit):
@@ -358,6 +396,48 @@ def test_a_paid_route_is_refused_by_the_guard_without_a_dialog(kit):
     refusal = window.authorize_job_item(job_id, "quotes", "quotes:request#2",
                                         provider="ollama", model="m")
     assert refusal.scope == "not_active"
+
+
+def test_the_job_entry_point_grants_only_the_approved_route_and_step(kit):
+    """Review P2-1 and P2-2 (ADR 0005 §2): a local route on another machine,
+    a model or step other than the approved one, an unknown step or item:
+    each is refused and leaves no open token."""
+    from services.release_kit import ledger
+    from services.release_kit.grant import JobGrant
+    from services.release_kit.plan import KitPlan, Route
+    window, driver, dialogs, calls = kit
+    plan = KitPlan("book-a", "Salt Road", 1, "T", "B", "s", 1, 1, "out",
+                   quotes=Route("ollama", "fake-local:1b"),
+                   captions=Route("ollama", "fake-local:1b"))
+    job_id = ledger.create_job(plan, plan_json={"kit": plan.to_json()},
+                               start_label="Start")
+    ledger.set_stage(job_id, "quotes", status="running")
+    ledger.ensure_item(job_id, "quotes", "quotes:request#1")
+    before = dict(window._pending_requests)
+
+    def ask(stage="quotes", item="quotes:request#1", provider="ollama",
+            model="fake-local:1b"):
+        return window.authorize_job_item(job_id, stage, item,
+                                         provider=provider, model=model)
+
+    assert ask(model="bigger-local:70b").scope == "route"
+    assert ask(provider="lmstudio").scope == "route"
+    assert ask(stage="captions", item="captions:request#1").scope == "not_active"
+    assert ask(stage="nonsense").scope == "route"
+    assert ask(item="quotes:request#9").scope == "route"
+    real_url = window.ollama.base_url
+    try:
+        window.ollama.base_url = "http://192.168.1.20:11434"
+        far = ask()
+        assert far.scope == "route" and "not this Mac" in far.reason
+    finally:
+        window.ollama.base_url = real_url
+    assert window._pending_requests == before and calls["backend"] == []
+
+    grant = ask()                                # the approved route: granted
+    assert isinstance(grant, JobGrant)
+    window.close_job_item(grant, "cancelled")
+    ledger.set_job_status(job_id, "paused", reason="user_stop")
 
 
 def test_the_confirmation_disables_start_when_no_local_model_answers(kit, monkeypatch):
@@ -443,20 +523,20 @@ def test_every_exit_from_running_releases_keep_awake_and_writes_the_report(
     backend = window.run_backend
 
     if exit_path == "made_check":          # captions cut short → Incomplete
-        def short_captions(provider, model, messages, prompt):
-            reply = backend(provider, model, messages, prompt)
+        def short_captions(provider, model, messages, prompt, **kw):
+            reply = backend(provider, model, messages, prompt, **kw)
             return reply if "quotable" in messages[-1]["content"] else '["only one"]'
         window.run_backend = short_captions
     elif exit_path == "user_stop":
         driver.render["epub"] = (lambda f: lambda *a: (driver.stop(), f(*a))[1])(
             driver.render["epub"])
     elif exit_path == "route_unavailable":
-        window.run_backend = lambda *a: (_ for _ in ()).throw(OSError("refused"))
+        window.run_backend = lambda *a, **k: (_ for _ in ()).throw(OSError("refused"))
     elif exit_path == "item_failed":
         driver.render["graphic"] = lambda *a: (_ for _ in ()).throw(
             RuntimeError("no font"))
     elif exit_path == "no_quotes":
-        window.run_backend = lambda *a: '["Nothing like the book."]'
+        window.run_backend = lambda *a, **k: '["Nothing like the book."]'
     elif exit_path == "quit":
         driver.render["graphic"] = (lambda f: lambda *a: (
             driver.stop_now("quit"), f(*a))[1])(driver.render["graphic"])

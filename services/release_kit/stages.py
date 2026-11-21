@@ -9,20 +9,41 @@ and after. Every provider or voice call sits behind `grant.check()`
 from __future__ import annotations
 
 import json
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
 from agents.manuscript.agent import CALENDAR_CAPTION_PROMPT
 from services.chat_projects import with_project_instructions
 from services.release_kit.grant import JobGrant
-from services.release_kit.plan import CAPTION_SLOT_CHARS
+from services.release_kit.plan import CAPTION_OUTPUT_TOKENS, CAPTION_SLOT_CHARS
 
-QUOTES_INPUT_BOUND = 32_000          # characters, A1 bounded-estimate table
+QUOTES_BOUND_MARGIN = 500            # characters over the largest request
 CAPTION_PROMPT_CHARS = len(CALENDAR_CAPTION_PROMPT)
 
 
 class BoundExceeded(ValueError):
     """A request is larger than its approved bound; nothing was sent."""
+
+
+class Cancelled(RuntimeError):
+    """The owner chose Quit and Pause while this item ran; the reply, if any,
+    is dropped and never recorded."""
+
+
+# The worker thread running an item installs a check here (review P2-5), so
+# `ask_text` can stop reading a local stream and drop the connection when
+# Imprint quits, without a new argument on every renderer.
+_cancel = threading.local()
+
+
+def set_cancel_check(check) -> None:
+    _cancel.check = check
+
+
+def cancel_requested() -> bool:
+    check = getattr(_cancel, "check", None)
+    return bool(check and check())
 
 
 @dataclass
@@ -31,12 +52,22 @@ class TextReply:
     usage: dict | None
 
 
+def quotes_input_bound() -> int:
+    """The largest quote request the plan allows, derived from the prompt so
+    growing it cannot silently exceed the bound (review P3-4): the request
+    with no passages, plus every window at full size and its label."""
+    from agents.manuscript import quote_finder as qf
+    base = sum(len(m["content"]) for m in qf.build_quote_messages([], qf.MAX_QUOTES))
+    return (base + qf.WINDOW_COUNT * (qf.WINDOW_CHARS + 80) + QUOTES_BOUND_MARGIN)
+
+
 def check_quote_bound(messages: list[dict]) -> None:
     size = sum(len(str(m.get("content") or "")) for m in messages)
-    if size > QUOTES_INPUT_BOUND:
+    bound = quotes_input_bound()
+    if size > bound:
         raise BoundExceeded(
             f"the quote request is {size:,} characters, above its "
-            f"{QUOTES_INPUT_BOUND:,}-character bound")
+            f"{bound:,}-character bound")
 
 
 def check_caption_bound(messages: list[dict], slots: int) -> None:
@@ -49,22 +80,38 @@ def check_caption_bound(messages: list[dict], slots: int) -> None:
 
 
 def ask_text(grant: JobGrant, run_backend, messages: list[dict],
-             prompt: str, project_instructions: str = "") -> TextReply:
+             prompt: str, project_instructions: str = "",
+             max_tokens: int = CAPTION_OUTPUT_TOKENS) -> TextReply:
     """Send one text request on the granted local route and collect the reply.
 
     Mirrors ChatWorker's three result shapes (stream, (text, usage), text)
     without its signals; the job's frozen project instructions go in once.
+    The reply is capped at `max_tokens`, the figure the confirmation shows.
     """
     grant.check()
+    if cancel_requested():
+        raise Cancelled("Imprint closed before this request was sent")
     sent = with_project_instructions(messages, project_instructions)
-    result = run_backend(grant.provider, grant.model, sent, prompt)
+    result = run_backend(grant.provider, grant.model, sent, prompt,
+                         max_tokens=max_tokens)
     if isinstance(result, tuple):
         text, usage = result
         return TextReply(str(text or ""), usage)
     if isinstance(result, str):
         return TextReply(result, None)
     if hasattr(result, "__iter__") and not isinstance(result, dict):
-        parts = [str(token) for token in result]
+        parts = []
+        try:
+            for token in result:
+                if cancel_requested():
+                    raise Cancelled("Imprint closed during this request")
+                parts.append(str(token))
+        finally:
+            # Drop the connection to the local runtime now, so it stops
+            # generating a reply nobody will use.
+            close = getattr(result, "close", None)
+            if cancel_requested() and callable(close):
+                close()
         usage = getattr(result, "usage", None)
         stop = getattr(result, "stop_reason", None)
         if stop:

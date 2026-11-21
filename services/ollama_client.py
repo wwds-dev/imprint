@@ -5,6 +5,8 @@ import requests
 
 from services import providers
 
+from services.local_endpoint import NO_PROXIES
+from services.output_limits import stop_kind
 from services.stream_usage import UsageStream
 
 # Meta's Muse Glimmer — 30B open-weights agentic model (Apache 2.0), released
@@ -64,7 +66,7 @@ class OllamaClient:
         try:
             response = requests.get(
                 f"{self.base_url}/api/tags",
-                timeout=10,
+                proxies=NO_PROXIES, timeout=10,
             )
             response.raise_for_status()
 
@@ -81,7 +83,7 @@ class OllamaClient:
         the name and throw the rest away. Returns {} if the daemon is down.
         """
         try:
-            response = requests.get(f"{self.base_url}/api/tags", timeout=10)
+            response = requests.get(f"{self.base_url}/api/tags", proxies=NO_PROXIES, timeout=10)
             response.raise_for_status()
             data = response.json()
         except (requests.RequestException, json.JSONDecodeError):
@@ -119,7 +121,7 @@ class OllamaClient:
     def loaded_models(self) -> list[dict]:
         """Models currently resident in memory, from /api/ps. [] if unknown."""
         try:
-            response = requests.get(f"{self.base_url}/api/ps", timeout=5)
+            response = requests.get(f"{self.base_url}/api/ps", proxies=NO_PROXIES, timeout=5)
             response.raise_for_status()
             return response.json().get("models", []) or []
         except (requests.RequestException, json.JSONDecodeError):
@@ -155,7 +157,7 @@ class OllamaClient:
                 f"{self.base_url}/api/pull",
                 json={"model": model, "stream": True},
                 stream=True,
-                timeout=None,
+                proxies=NO_PROXIES, timeout=None,
             ) as response:
                 response.raise_for_status()
 
@@ -193,7 +195,7 @@ class OllamaClient:
             response = requests.post(
                 f"{self.base_url}/api/generate",
                 json=payload,
-                timeout=(self.CONNECT_TIMEOUT, self.READ_TIMEOUT),
+                proxies=NO_PROXIES, timeout=(self.CONNECT_TIMEOUT, self.READ_TIMEOUT),
             )
             response.raise_for_status()
 
@@ -215,7 +217,7 @@ class OllamaClient:
             response = requests.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=(self.CONNECT_TIMEOUT, self.READ_TIMEOUT),
+                proxies=NO_PROXIES, timeout=(self.CONNECT_TIMEOUT, self.READ_TIMEOUT),
             )
             response.raise_for_status()
 
@@ -225,13 +227,18 @@ class OllamaClient:
         except requests.RequestException as e:
             raise RuntimeError(f"Ollama chat request failed: {e}")
 
-    def stream_chat(self, model: str, messages: list[dict], keep_alive: str = "3m"):
+    def stream_chat(self, model: str, messages: list[dict], keep_alive: str = "3m",
+                    max_tokens: int | None = None):
         payload = {
             "model": model,
             "messages": messages,
             "stream": True,
             "keep_alive": keep_alive,
         }
+        if max_tokens:
+            # The release kit's 8,192-token reply cap; `done_reason` "length"
+            # then marks a reply that hit it.
+            payload["options"] = {"num_predict": int(max_tokens)}
 
         def _gen(out):
             try:
@@ -239,7 +246,7 @@ class OllamaClient:
                     f"{self.base_url}/api/chat",
                     json=payload,
                     stream=True,
-                    timeout=(self.CONNECT_TIMEOUT, self.READ_TIMEOUT),
+                    proxies=NO_PROXIES, timeout=(self.CONNECT_TIMEOUT, self.READ_TIMEOUT),
                 ) as response:
                     response.raise_for_status()
 
@@ -271,6 +278,7 @@ class OllamaClient:
                                 "output_tokens": int(
                                     data.get("eval_count", 0) or 0),
                             }
+                            out.stop_reason = stop_kind(data.get("done_reason"))
                             break
 
             except requests.RequestException as e:
