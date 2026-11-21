@@ -25,8 +25,9 @@ nothing here is a claim about income, sales or publishing results.
 ## 2026-11-21
 
 ### Added
-- **Make Release Kit** (slice 1, the free path; on branch
-  `claude/one-click-release-slice1-599646`, not yet merged or released). In
+- **MIT licence** (`LICENSE`, copyright 2026 wwds-dev). Until now the public repository carried no licence.
+- **Make Release Kit** (slice 1, the free path; merged into local
+  `main`, not yet pushed or released). In
   Press's Quote Finder tab, next to **Export Approved…**, one button turns an
   approved Project version into a set of files with one confirmation, all on
   this Mac, with no charge. Nothing is posted, scheduled or submitted. Eight
