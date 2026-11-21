@@ -76,3 +76,6 @@ UAT result: **partial**.
 - A1 visible: header opens, version badge reads `v2.398`, status pill `Ready`, workspace tabs (Author, Audio + Music, Video + Ads, Social, Web, Brand Design, Brand Content, Assistant) intact, Spend panel and Limits (€1 session, €5 daily) shown, Quill panel loads. Seen in one screenshot only; not resized, no tooltip check.
 - **Not run:** everything else, including Press, Quote Finder, **Make Release Kit** and the **Release Kits** window. The app's window sits on a full-screen Space and the background tool could not click into it (clicks had no effect). Make Release Kit end to end also needs a local model (Ollama or LM Studio, none installed) and a manuscript, so it could not complete here anyway.
 - The installed app is still running (started by me).
+
+## Release gate: approved 2026-11-21T22:53:49
+The owner said in this session: "Yes, I approve the Release gate". Recorded in `docs/foundry/approvals.jsonl` with `record_approval.py` (gate `release`, spec `one-click-release`). An earlier relayed message from the Secure session was not used. Approved with these still open, not hidden by the approval: the Press / Make Release Kit UAT (owner testing), a real local-model run, `main` 26 commits unpushed, and report commits not pushed because github.com was unreachable. Not merged, not tagged, `main` not pushed.

@@ -2,3 +2,4 @@
 {"ts": "2026-11-18T19:49:38", "gate": "architect", "by": "owner", "words": "Approve as recommended", "recorded_by": "agent", "spec": "one-click-release"}
 {"ts": "2026-11-20T00:11:09", "gate": "define", "by": "owner", "words": "Yes, as recommended", "recorded_by": "agent", "spec": "quill-draft-safety"}
 {"ts": "2026-11-20T11:55:17", "gate": "define", "by": "owner", "words": "Yes, merge (approves the 6,000-character local Revise limit and the merge into main)", "recorded_by": "agent", "spec": "quill-draft-safety"}
+{"ts": "2026-11-21T22:53:49", "gate": "release", "by": "owner", "words": "Yes, I approve the Release gate", "recorded_by": "agent", "spec": "one-click-release", "note": "Given in this session after the report: v2.398 installed, selftest passed, Press/Make Release Kit UAT not done, 4c5df8e unpushed. Earlier relayed words from the Secure session were not used."}
