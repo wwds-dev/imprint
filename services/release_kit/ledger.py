@@ -205,6 +205,22 @@ def stage(job_id: str, key: str) -> dict:
     raise KeyError(key)
 
 
+_STAGE_FIELDS = frozenset({
+    "status", "result_json", "started_at", "ended_at", "detail", "attempt",
+    "recorded_eur", "spend_state", "conversion_id", "provider", "model",
+    "voice", "route_kind", "line_eur"})
+_ITEM_FIELDS = frozenset({
+    "state", "updated_at", "granted_eur", "recorded_eur", "usage_id",
+    "output_path", "output_sha256", "output_kind", "artifact_id", "ai_json"})
+
+
+def _only(fields: dict, allowed: frozenset, where: str) -> None:
+    """Column names go into SQL text, so only known ones may pass (review P3-7)."""
+    bad = sorted(set(fields) - allowed)
+    if bad:
+        raise ValueError(f"{where}: unknown column(s) {', '.join(bad)}")
+
+
 def set_stage(job_id: str, key: str, **fields) -> None:
     if "result" in fields:
         fields["result_json"] = json.dumps(fields.pop("result"), sort_keys=True)
@@ -212,6 +228,7 @@ def set_stage(job_id: str, key: str, **fields) -> None:
         fields.setdefault("started_at", _now())
     if fields.get("status") in STAGE_FINISHED:
         fields.setdefault("ended_at", _now())
+    _only(fields, _STAGE_FIELDS, "set_stage")
     columns = ", ".join(f"{name} = ?" for name in fields)
     with get_connection() as conn:
         conn.execute(
@@ -270,6 +287,7 @@ def mark_item(job_id: str, stage_key: str, item_key: str, state: str,
         fields["ai_json"] = json.dumps(fields.pop("ai"), sort_keys=True)
     fields["state"] = state
     fields["updated_at"] = _now()
+    _only(fields, _ITEM_FIELDS, "mark_item")
     columns = ", ".join(f"{name} = ?" for name in fields)
     with get_connection() as conn:
         conn.execute(

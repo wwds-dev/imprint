@@ -57,6 +57,14 @@ def summary_line(job: dict | None) -> str:
     return f"Release kit: {v} discarded"
 
 
+def awake_line(held: bool) -> str:
+    """What the window says about sleep; only claims what is actually held."""
+    if held:
+        return "This Mac stays awake while the kit runs. The display may sleep."
+    return ("This Mac could not be kept awake (caffeinate is unavailable), so "
+            "it may sleep and pause the kit.")
+
+
 class ReleaseKitsWindow(QWidget):
     def __init__(self, host):
         super().__init__(host, Qt.Window)
@@ -213,8 +221,7 @@ class ReleaseKitsWindow(QWidget):
             lines.append(job["pause_detail"])
         if running:
             lines.append("Closing this window does not stop the kit.")
-            lines.append("This Mac stays awake while the kit runs. The display "
-                         "may sleep.")
+            lines.append(awake_line(self.driver.keep_awake.held))
         elif job["status"] in ("paused", "made", "made_check"):
             lines.append("This Mac may sleep again.")
         if job["status"] in ("made", "made_check"):
@@ -266,6 +273,11 @@ class ReleaseKitsWindow(QWidget):
             reopened = self.driver.resume(job_id)
         except ledger.KitBusy as exc:
             self.note_text = f"Cannot resume yet: {exc} One kit runs at a time."
+            self.note.setText(self.note_text)
+            return
+        except Exception as exc:        # e.g. a disk error while checking files
+            self.note_text = (f"Cannot resume yet: {exc or exc.__class__.__name__}. "
+                              "Nothing was changed; try again.")
             self.note.setText(self.note_text)
             return
         notes = [f"{STAGE_BY_KEY[key].label} will run again: {len(keys)} of its "

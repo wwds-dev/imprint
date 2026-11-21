@@ -17,7 +17,7 @@ from services.chat_projects import with_project_instructions
 from services.release_kit.grant import JobGrant
 from services.release_kit.plan import CAPTION_SLOT_CHARS
 
-QUOTES_INPUT_BOUND = 32_000          # characters, A1 bounded-estimate table
+QUOTES_BOUND_MARGIN = 500            # characters over the largest request
 CAPTION_PROMPT_CHARS = len(CALENDAR_CAPTION_PROMPT)
 
 
@@ -31,12 +31,22 @@ class TextReply:
     usage: dict | None
 
 
+def quotes_input_bound() -> int:
+    """The largest quote request the plan allows, derived from the prompt so
+    growing it cannot silently exceed the bound (review P3-4): the request
+    with no passages, plus every window at full size and its label."""
+    from agents.manuscript import quote_finder as qf
+    base = sum(len(m["content"]) for m in qf.build_quote_messages([], qf.MAX_QUOTES))
+    return (base + qf.WINDOW_COUNT * (qf.WINDOW_CHARS + 80) + QUOTES_BOUND_MARGIN)
+
+
 def check_quote_bound(messages: list[dict]) -> None:
     size = sum(len(str(m.get("content") or "")) for m in messages)
-    if size > QUOTES_INPUT_BOUND:
+    bound = quotes_input_bound()
+    if size > bound:
         raise BoundExceeded(
             f"the quote request is {size:,} characters, above its "
-            f"{QUOTES_INPUT_BOUND:,}-character bound")
+            f"{bound:,}-character bound")
 
 
 def check_caption_bound(messages: list[dict], slots: int) -> None:
