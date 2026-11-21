@@ -82,6 +82,8 @@ def kit(app, tmp_path, monkeypatch):
         return QDialog.Accepted if self.approved else QDialog.Rejected
     monkeypatch.setattr(MakeReleaseKitDialog, "exec", confirm)
 
+    from PySide6.QtWidgets import QApplication as _App
+    existing = set(_App.topLevelWidgets())
     window = main.GodAI()
     # Flush queued launch timers, this window's and any earlier test's, so a
     # stale `_resume_provider_jobs` cannot fire in the middle of a kit.
@@ -171,6 +173,15 @@ def kit(app, tmp_path, monkeypatch):
     window.deleteLater()
     # Destroy it now, while nothing walks the widget list, rather than leave
     # a queued delete for a later module's collector (see test_model_watch_media).
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    # Building a GodAI also leaves ~29 parentless widgets behind (TODO: the
+    # intermittent suite segfault). This module builds one window per test,
+    # so delete every top-level widget this test created; a later module's
+    # app.allWidgets() walk must not meet hundreds of stale orphans.
+    import shiboken6
+    for widget in set(_App.topLevelWidgets()) - existing:
+        if shiboken6.isValid(widget):
+            shiboken6.delete(widget)
     QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
     gc.collect()
 
