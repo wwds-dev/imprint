@@ -24,6 +24,7 @@ if "--narrator-worker" in sys.argv:
 from services import providers as provider_registry
 from services.providers import is_local as is_local_provider
 from services.lmstudio_client import LMStudioClient
+from services.local_endpoint import LocalLMStudioClient
 from services import local_models
 from services import local_ratings
 from services import routing_advisor
@@ -270,7 +271,9 @@ class GodAI(QWidget):
         self.settings = self.load_json(SETTINGS_FILE, {})
 
         self.ollama = OllamaClient(provider_registry.ollama_host())
-        self.lmstudio = LMStudioClient()
+        # Capped, proxy-free stream (review P2-3, security S-1); the shared
+        # client stays byte-for-byte equal to Sentinel's.
+        self.lmstudio = LocalLMStudioClient()
         # What is on this Mac. The UI reads the cache only; LocalDiscoveryWorker
         # is the one place that talks to LM Studio, Ollama and the disk.
         self.local_inventory = local_models.LocalInventory()

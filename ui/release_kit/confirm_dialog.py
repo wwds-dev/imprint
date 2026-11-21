@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 from services.release_kit import plan as kitplan
 from services.release_kit.plan import (
     NOTICES, PLATFORMS, DEFAULT_SYSTEM_VOICE, KitPlan, Route)
-from services.runtime_paths import user_data_base
+from services.runtime_paths import is_frozen, user_data_base
 from ui.forms import MD, SM, field, micro, primary, section, toggle_chip
 
 ROW_OF = {s.key: i for i, s in enumerate(kitplan.STAGES)}
@@ -44,7 +44,8 @@ class MakeReleaseKitDialog(QDialog):
             source_sha256=(source or {}).get("sha256", ""),
             words=len(body.split()), characters=len(body),
             output_dir=str(kitplan.default_output_dir(
-                base_dir or user_data_base(), (source or {}).get("title", ""),
+                base_dir or kitplan.default_kit_base(user_data_base(), is_frozen()),
+                (source or {}).get("title", ""),
                 version, self._today)),
             start_date=self._today,
             project_instructions=project.get("instructions", "") or "")

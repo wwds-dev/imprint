@@ -9,7 +9,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from services import lmstudio_client, ollama_client
+from services import local_endpoint, ollama_client
 
 
 def _response(lines):
@@ -67,8 +67,8 @@ def test_lm_studio_sends_max_tokens_and_reports_a_capped_reply(monkeypatch):
         sent.update(kwargs["json"])
         return _response([f"data: {json.dumps(c)}".encode()
                           for c in chunks] + [b"data: [DONE]"])
-    monkeypatch.setattr(lmstudio_client.requests, "post", post)
-    client = lmstudio_client.LMStudioClient("http://127.0.0.1:1234/v1")
+    monkeypatch.setattr(local_endpoint.requests, "post", post)
+    client = local_endpoint.LocalLMStudioClient("http://127.0.0.1:1234/v1")
     stream = client.stream_chat("m", [{"role": "user", "content": "x"}],
                                 max_tokens=8192)
     assert "".join(stream) == "Hi"

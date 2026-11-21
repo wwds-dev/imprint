@@ -78,12 +78,19 @@ def endpoint_problem(provider: str, url: str | None = None) -> str:
     """
     if provider == SYSTEM_VOICE_ROUTE or not is_local(provider):
         return ""
-    from services.providers import base_url, is_loopback_host, url_host
+    from services.local_endpoint import (
+        is_loopback_host, is_plain_endpoint, url_host)
+    from services.providers import base_url
     address = url or base_url(provider)
+    runtime = {"ollama": "Ollama", "lmstudio": "LM Studio"}.get(provider, provider)
+    if not is_plain_endpoint(address):
+        return (f"{runtime}'s address ({address}) has a form this version "
+                "does not accept (user info, a backslash or encoded "
+                "characters). Use a plain address such as "
+                "http://127.0.0.1:11434.")
     host = url_host(address)
     if is_loopback_host(host):
         return ""
-    runtime = {"ollama": "Ollama", "lmstudio": "LM Studio"}.get(provider, provider)
     return (f"{runtime} is set to {host or address}, which is not this Mac, so "
             "the book would leave it. This version sends it only to a model "
             "on this Mac.")
@@ -277,6 +284,16 @@ def blocking_sentence(estimate_: KitEstimate) -> str:
 
 def safe_name(title: str) -> str:
     return re.sub(r"[^\w\s-]", "", title).strip().replace(" ", "_") or "release_kit"
+
+
+def default_kit_base(data_base: Path, frozen: bool) -> Path:
+    """Where new kit folders go (security S-4).
+
+    Frozen: the app's own data folder. From source the data folder is the
+    repo root, so kits go under `output/release_kits/` (git-ignored): an
+    unpublished book's EPUB must never sit in the public repo's tree.
+    """
+    return Path(data_base) if frozen else Path(data_base) / "output" / "release_kits"
 
 
 def default_output_dir(base: Path, title: str, version: int,
