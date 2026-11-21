@@ -5609,13 +5609,17 @@ class GodAI(QWidget):
             )
         return recorded, confirmed
 
-    def run_backend(self, backend, model, messages, prompt):
+    def run_backend(self, backend, model, messages, prompt, max_tokens=None):
         """Send one request to `backend`, dispatching on its registry spec.
 
         Local providers (any protocol) are fit-checked against memory first;
         the call itself is the same for every client: stream if it can, else
         chat, else generate. The local model is the slowest responder in the
         app, so the stream matters most there.
+
+        `max_tokens` (the release kit's reply cap) is passed to a local
+        stream only; a request that names one and cannot honour it is refused
+        rather than sent uncapped.
         """
         spec = provider_registry.get(backend)
         client = getattr(self, backend, None) if spec is not None else None
@@ -5632,6 +5636,12 @@ class GodAI(QWidget):
             if verdict is not None and verdict["level"] == "too_big":
                 raise RuntimeError(verdict["message"])
 
+        if max_tokens:
+            if not (spec.is_local and hasattr(client, "stream_chat")):
+                raise RuntimeError(f"{backend} cannot cap this reply at "
+                                   f"{int(max_tokens):,} tokens here.")
+            return client.stream_chat(messages=messages, model=model,
+                                      max_tokens=int(max_tokens))
         if hasattr(client, "stream_chat"):
             return client.stream_chat(messages=messages, model=model)
         if hasattr(client, "chat"):

@@ -15,7 +15,7 @@ from pathlib import Path
 from agents.manuscript.agent import CALENDAR_CAPTION_PROMPT
 from services.chat_projects import with_project_instructions
 from services.release_kit.grant import JobGrant
-from services.release_kit.plan import CAPTION_SLOT_CHARS
+from services.release_kit.plan import CAPTION_OUTPUT_TOKENS, CAPTION_SLOT_CHARS
 
 QUOTES_INPUT_BOUND = 32_000          # characters, A1 bounded-estimate table
 CAPTION_PROMPT_CHARS = len(CALENDAR_CAPTION_PROMPT)
@@ -49,15 +49,18 @@ def check_caption_bound(messages: list[dict], slots: int) -> None:
 
 
 def ask_text(grant: JobGrant, run_backend, messages: list[dict],
-             prompt: str, project_instructions: str = "") -> TextReply:
+             prompt: str, project_instructions: str = "",
+             max_tokens: int = CAPTION_OUTPUT_TOKENS) -> TextReply:
     """Send one text request on the granted local route and collect the reply.
 
     Mirrors ChatWorker's three result shapes (stream, (text, usage), text)
     without its signals; the job's frozen project instructions go in once.
+    The reply is capped at `max_tokens`, the figure the confirmation shows.
     """
     grant.check()
     sent = with_project_instructions(messages, project_instructions)
-    result = run_backend(grant.provider, grant.model, sent, prompt)
+    result = run_backend(grant.provider, grant.model, sent, prompt,
+                         max_tokens=max_tokens)
     if isinstance(result, tuple):
         text, usage = result
         return TextReply(str(text or ""), usage)
