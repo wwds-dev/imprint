@@ -85,9 +85,10 @@ nothing here is a claim about income, sales or publishing results.
   instead of stalling; the quote request bound is derived from the prompt
   rather than fixed; a missing `caffeinate` is shown in the window instead of
   claiming the Mac stays awake; the ledger accepts only known column names;
-  quitting while a local request runs is now covered by a test (the request
-  cannot be interrupted, so after a 2-second wait the item is left for the
-  next launch to resolve and runs again on Resume). Open from that review: a pending request token can leak if
+  quitting while a local request runs now stops reading the model's reply and
+  closes the stream (before, the request kept running after Quit and Pause);
+  only the wait for the first token cannot be cut, and then the item is left
+  for the next launch to resolve and runs again on Resume. Open from that review: a pending request token can leak if
   the driver raises between granting an item and starting it, and the cost
   clamp in `record_job_item` must be replaced before any paid route ships.
 

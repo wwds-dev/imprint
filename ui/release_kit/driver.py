@@ -45,11 +45,14 @@ class StageItemWorker(QThread):
         self._cancelled = False
 
     def cancel(self):
-        # The callable cannot be interrupted (Pillow, `say`, ffmpeg, a local
-        # model); the result of a cancelled item is simply not used.
+        # Pillow, `say` and ffmpeg cannot be interrupted; their result is
+        # simply not used. A local model's reply is read token by token, so
+        # `stages.ask_text` sees this flag, closes the stream and raises
+        # (review P2-5); only the wait for the first token cannot be cut.
         self._cancelled = True
 
     def run(self):
+        stages.set_cancel_check(lambda: self._cancelled)
         try:
             result = self._fn()
         except Exception as exc:          # reported, never raised in a thread

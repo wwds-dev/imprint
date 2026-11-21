@@ -146,3 +146,75 @@ def test_quitting_mid_quotes_with_a_slow_model_pauses_and_ignores_the_late_reply
                             (job["id"],)).fetchone()[0] == 0
     assert not any(ctx.get("job_id") == job["id"]
                    for ctx in window._pending_requests.values())
+
+
+# ── P2-5, second half: a cancelled item stops reading and drops the stream ───
+
+class _EndlessStream:
+    def __init__(self):
+        self.tokens, self.closed = 0, False
+        self.usage = None
+        self._gen = self._run()
+
+    def _run(self):
+        while True:
+            self.tokens += 1
+            yield "x"
+
+    def __iter__(self):
+        return self._gen
+
+    def close(self):
+        self.closed = True
+        self._gen.close()
+
+
+def _grant():
+    from types import SimpleNamespace
+    return SimpleNamespace(check=lambda: None, provider="ollama", model="m")
+
+
+def test_ask_text_stops_and_closes_the_stream_when_cancelled():
+    from services.release_kit import stages
+    stream = _EndlessStream()
+    stages.set_cancel_check(lambda: stream.tokens >= 3)
+    try:
+        with pytest.raises(stages.Cancelled):
+            stages.ask_text(_grant(), lambda *a, **k: stream, [{"role": "user",
+                            "content": "q"}], "q")
+    finally:
+        stages.set_cancel_check(None)
+    assert stream.closed and stream.tokens == 3
+
+
+def test_ask_text_without_a_cancel_reads_the_whole_stream_and_leaves_it_open():
+    from services.release_kit import stages
+
+    class Finite(_EndlessStream):
+        def _run(self):
+            yield "a"
+            yield "b"
+    stream = Finite()
+    reply = stages.ask_text(_grant(), lambda *a, **k: stream,
+                            [{"role": "user", "content": "q"}], "q")
+    assert reply.text == "ab" and not stream.closed
+
+
+def test_a_cancelled_worker_ends_quickly_with_an_endless_local_reply():
+    from PySide6.QtWidgets import QApplication
+    from services.release_kit import stages
+    from ui.release_kit.driver import StageItemWorker
+    stream = _EndlessStream()
+    worker = StageItemWorker(lambda: stages.ask_text(
+        _grant(), lambda *a, **k: stream, [{"role": "user", "content": "q"}], "q"))
+    errors = []
+    worker.error.connect(errors.append)
+    worker.start()
+    deadline = time.monotonic() + 5
+    while stream.tokens == 0 and time.monotonic() < deadline:
+        time.sleep(0.001)
+    worker.cancel()
+    assert worker.wait(2000)                      # no terminate(), no 10 s wait
+    for _ in range(20):
+        QApplication.processEvents()
+    assert stream.closed and errors and "closed" in errors[0]
