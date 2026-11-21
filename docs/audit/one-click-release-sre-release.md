@@ -61,3 +61,6 @@ Side note for the owner: the bundle identifier is `com.netrunner3000.imprint`, w
 
 ## Update 2026-11-21 (owner answer to decision 1)
 Asked whether the `signoff.jsonl` row of 2026-11-21T21:24:20 is theirs, the owner answered: "Yes, mine". The row still has the placeholders `by: "<your name>"` and `risk_accepted: "<why>"`, and T1, T2 and the name trigger are still listed open, so it names no signer and gives no reason. An agent cannot fix that: the owner re-signs in a terminal with the real values (or a lawyer closes the triggers). Decisions 2 to 7 are still open and no Release approval is recorded.
+
+## Update 2026-11-21, later (legal sign-off replaced)
+The owner removed the placeholder rows. I re-ran the gate myself in the main checkout: `legal_gate.py check .` prints "legal gate: clear"; `release_check.py .` prints "legal gate clear (tier public)" and "clear: Release may start". `docs/legal/signoff.jsonl` now has one row: `by` `wwds-dev`, role owner, 2026-11-21T22:00:27, scope "whole pack", commit `0f0c0de`, hash `8b0becd4a572...`, with risk accepted in writing for the name, T1 and T2 triggers (the owner's own decision; I did not write or edit it). Section 1 above is resolved. The still-open blocker is `LICENSE` (owner's choice), then pushing `main`; no Release approval is recorded.
