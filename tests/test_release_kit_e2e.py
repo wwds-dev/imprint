@@ -331,6 +331,45 @@ def test_a_local_model_that_does_not_answer_pauses_without_a_dialog(kit):
                             (job["id"],)).fetchone()[0] == 0
 
 
+@pytest.mark.parametrize("where", ["quotes_result", "graphic_output"])
+def test_an_error_inside_a_step_pauses_the_kit_instead_of_stranding_it(
+        kit, monkeypatch, where):
+    """Review P1-1: an exception in a result callback (after the reply was
+    billed, or a graphic that wrote no file) pauses with `item_failed`,
+    releases keep-awake, closes no grant twice and frees the one-kit slot."""
+    from services.release_kit import ledger
+    import ui.release_kit.driver as driver_mod
+    window, driver, dialogs, calls = kit
+    if where == "quotes_result":
+        def parse(*args, **kwargs):
+            raise ValueError("bad reply shape")
+        monkeypatch.setattr(driver_mod, "parse_verified_quotes", parse)
+        stage, label = "quotes", "Quotes"
+    else:
+        def graphic(quote, path, attribution):      # "succeeds", writes nothing
+            calls["graphic"].append(quote)
+            return path
+        driver.render["graphic"] = graphic
+        stage, label = "graphics", "Quote graphics"
+
+    window.manuscript_panel.start_release_kit()
+
+    (job,) = ledger.list_jobs("book-a")
+    assert (job["status"], job["pause_reason"]) == ("paused", "item_failed")
+    assert job["pause_detail"].startswith(f"Paused during {label}: ")
+    assert ledger.stage(job["id"], stage)["status"] == "paused"
+    assert not driver.is_running() and ledger.running_job() is None
+    assert driver.keep_awake.released == 1 and not driver.keep_awake.held
+    assert not any(ctx.get("job_id") == job["id"]
+                   for ctx in window._pending_requests.values())
+    report = (Path(job["output_dir"]) / "release-kit-report.md").read_text()
+    assert "Paused" in report
+    if where == "quotes_result":
+        with database.get_connection() as conn:     # billed once, not twice
+            assert conn.execute("SELECT COUNT(*) FROM usage WHERE job_id = ?",
+                                (job["id"],)).fetchone()[0] == 1
+
+
 def test_a_paid_route_is_refused_by_the_guard_without_a_dialog(kit):
     """SM3 (slice-1 form): the job entry point issues no token for a paid
     provider, so no fake provider can be called."""

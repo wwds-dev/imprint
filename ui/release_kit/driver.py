@@ -154,7 +154,53 @@ class ReleaseKitDriver(QObject):
 
     # ── scheduling ───────────────────────────────────────────────────────────
 
+    def _guarded(self, fn, where: str = "step"):
+        """Every slot and scheduled callback runs through this: an exception
+        pauses the kit instead of stranding it `running` (review P1-1)."""
+        def run(*args):
+            try:
+                return fn(*args)
+            except Exception as exc:
+                self._crash(where, exc)
+        return run
+
+    def _crash(self, where: str, exc: Exception) -> None:
+        """Turn an unexpected error into a pause: grant closed, stage and job
+        paused (`item_failed`), keep-awake released, report rewritten."""
+        if self.job_id is None:
+            return
+        message = str(exc) or exc.__class__.__name__
+        note = getattr(self.host, "_note_failure", None)
+        if note:
+            try:
+                note(f"release kit: {where}", exc)
+            except Exception:
+                pass
+        grant, self._grant = self._grant, None
+        if grant is not None:
+            try:
+                self.host.close_job_item(grant, "error", message)
+            except Exception:
+                pass
+        key = ""
+        try:
+            key = self._current_stage()
+        except Exception:
+            pass
+        label = STAGE_BY_KEY[key].label if key in STAGE_BY_KEY else "the kit"
+        detail = (f"Paused during {label}: {message}. Finished work is kept. "
+                  "Fix it, then resume.")
+        try:
+            self._pause("item_failed", detail, key or None)
+        except Exception:
+            if self.job_id is not None:      # _leave was never reached
+                try:
+                    self._leave("paused", "interrupted", detail)
+                except Exception:
+                    pass                     # recovery at the next launch
+
     def _schedule(self, fn) -> None:
+        fn = self._guarded(fn)
         if not self.run_inline:
             QTimer.singleShot(0, fn)
             return
@@ -207,12 +253,12 @@ class ReleaseKitDriver(QObject):
     def _on_unit_done(self, result) -> None:
         callbacks = self._finish_unit()
         if callbacks and self.job_id is not None:
-            callbacks[0](result)
+            self._guarded(callbacks[0], "item result")(result)
 
     def _on_unit_error(self, message: str) -> None:
         callbacks = self._finish_unit()
         if callbacks and self.job_id is not None:
-            callbacks[1](message)
+            self._guarded(callbacks[1], "item error")(message)
 
     # ── the loop ─────────────────────────────────────────────────────────────
 
