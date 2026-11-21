@@ -79,3 +79,6 @@ UAT result: **partial**.
 
 ## Release gate: approved 2026-11-21T22:53:49
 The owner said in this session: "Yes, I approve the Release gate". Recorded in `docs/foundry/approvals.jsonl` with `record_approval.py` (gate `release`, spec `one-click-release`). An earlier relayed message from the Secure session was not used. Approved with these still open, not hidden by the approval: the Press / Make Release Kit UAT (owner testing), a real local-model run, `main` 26 commits unpushed, and report commits not pushed because github.com was unreachable. Not merged, not tagged, `main` not pushed.
+
+## Update 2026-11-21, later (owner UAT)
+The owner ran the Press and Make Release Kit UAT on the installed v2.398 and reported: "UAT passed". No per-case detail was given, so the cases covered, the manuscript and the model used are not recorded here, and I did not verify it. That closes the "UAT not run" item above (except as stated in the owner's words); a real local-model run is still unverified by any agent. `main` was pushed at the owner's request (`0f0c0de..9b5a240`) after the release branch was merged (`9b5a240`). Nothing is tagged.
