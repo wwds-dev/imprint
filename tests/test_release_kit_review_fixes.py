@@ -111,10 +111,10 @@ def test_quitting_mid_quotes_with_a_slow_model_pauses_and_ignores_the_late_reply
     gate, entered = threading.Event(), threading.Event()
     fast = window.run_backend
 
-    def slow(provider, model, messages, prompt):
+    def slow(provider, model, messages, prompt, **kwargs):
         entered.set()
         gate.wait(10)
-        return fast(provider, model, messages, prompt)
+        return fast(provider, model, messages, prompt, **kwargs)
     window.run_backend = slow
 
     window.manuscript_panel.start_release_kit()
