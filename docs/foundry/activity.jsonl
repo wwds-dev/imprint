@@ -119,3 +119,5 @@
 {"ts": "2026-11-21T21:02:05", "phase": "secure", "state": "start", "spec": "one-click-release"}
 {"ts": "2026-11-21T21:02:54", "phase": "comply", "state": "start", "spec": "one-click-release"}
 {"ts": "2026-11-21T21:04:30", "phase": "comply", "state": "done", "spec": "one-click-release"}
+{"ts": "2026-11-21T21:58:02", "phase": "release", "state": "start", "spec": "one-click-release"}
+{"ts": "2026-11-21T22:27:35", "phase": "release", "state": "blocked", "spec": "one-click-release"}
