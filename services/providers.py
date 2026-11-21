@@ -27,9 +27,11 @@ Pure functions only, standard library only, no Qt, no network.
 
 from __future__ import annotations
 
+import ipaddress
 import os
 import re
 from dataclasses import dataclass
+from urllib.parse import urlparse
 
 LOCAL = "local"
 CLOUD = "cloud"
@@ -147,6 +149,21 @@ def lmstudio_url(environ=None) -> str:
     env = os.environ if environ is None else environ
     return (str(env.get("LMSTUDIO_URL", "") or "").strip().rstrip("/")
             or DEFAULT_LMSTUDIO_URL)
+
+
+def url_host(url: str) -> str:
+    """The host name in an endpoint URL ("" when there is none)."""
+    return urlparse(url or "").hostname or ""
+
+
+def is_loopback_host(host: str) -> bool:
+    """True for an address that can only be this machine."""
+    if (host or "").casefold() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
 
 
 def base_url(name: str, environ=None) -> str:

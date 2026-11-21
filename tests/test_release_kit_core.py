@@ -95,6 +95,27 @@ def test_no_local_model_blocks_with_check_again_wording(tmp_path):
         "then press Check again.")
 
 
+@pytest.mark.parametrize("value,local", [
+    ("", True), ("127.0.0.1:11434", True), (":11500", True),
+    ("http://localhost:11434", True), ("0.0.0.0", True), ("[::1]:11434", True),
+    ("http://192.168.1.20:11434", False), ("gpu-box.local", False),
+    ("https://ollama.example.com", False)])
+def test_a_local_runtime_pointed_at_another_machine_blocks(
+        tmp_path, monkeypatch, value, local):
+    """Review P2-1: "on this Mac" holds only for a loopback address."""
+    monkeypatch.setenv("OLLAMA_HOST", value)
+    assert (kitplan.endpoint_problem("ollama") == "") is local
+    est = kitplan.estimate(_plan(tmp_path))
+    assert est.can_start is local
+    if not local:
+        assert "not this Mac" in kitplan.blocking_sentence(est)
+    monkeypatch.setenv("LMSTUDIO_URL", "http://10.0.0.5:1234/v1")
+    assert "10.0.0.5" in kitplan.endpoint_problem("lmstudio")
+    assert kitplan.endpoint_problem("system") == ""
+    # The client's own address wins over the environment.
+    assert kitplan.endpoint_problem("ollama", "http://127.0.0.1:11434") == ""
+
+
 def test_empty_title_or_no_platform_blocks(tmp_path):
     assert not kitplan.estimate(_plan(tmp_path, byline=" ")).can_start
     assert not kitplan.estimate(_plan(tmp_path, platforms=[])).can_start

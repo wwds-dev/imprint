@@ -4612,18 +4612,40 @@ class GodAI(QWidget):
         """
         from services.release_kit import ledger
         from services.release_kit.grant import _MINT, JobGrant, JobRefusal
-        from services.release_kit.plan import STAGE_BY_KEY, is_local_route
+        from services.release_kit.plan import (
+            STAGE_BY_KEY, SYSTEM_VOICE_ROUTE, endpoint_problem, is_local_route)
 
         if not is_local_route(provider):
             return JobRefusal(
                 "not_in_this_version",
                 f"{provider} is a paid route, and this version runs local "
                 "steps only.")
+        # The address the client will actually dial, not only the default.
+        problem = endpoint_problem(
+            provider, getattr(getattr(self, provider, None), "base_url", None))
+        if problem:
+            return JobRefusal("route", problem)
         job = ledger.get_job(job_id)
         if not job or job["status"] != "running":
             return JobRefusal("not_active", "This release kit is not running.")
         if not model:
             return JobRefusal("route", "No model is named for this step.")
+        # ADR 0005 §2: the route must be the approved one, for the step that
+        # is running, on an item the ledger holds (review P2-2).
+        if stage not in STAGE_BY_KEY:
+            return JobRefusal("route", f"{stage} is not a release kit step.")
+        row = ledger.stage(job_id, stage)
+        if not row or row["status"] != "running":
+            return JobRefusal("not_active", f"{STAGE_BY_KEY[stage].label} is "
+                                            "not the step that is running.")
+        approved_model = row["model"] or (
+            "say" if row["provider"] == SYSTEM_VOICE_ROUTE else "")
+        if (provider, model) != (row["provider"], approved_model):
+            return JobRefusal(
+                "route", f"{provider} · {model} is not the route approved for "
+                         f"{STAGE_BY_KEY[stage].label}.")
+        if ledger.item(job_id, stage, item_key) is None:
+            return JobRefusal("route", f"{item_key} is not an item of this kit.")
         agent = STAGE_BY_KEY[stage].agent
         prompt = (messages[-1]["content"] if messages else item_key)
         token = uuid.uuid4().hex

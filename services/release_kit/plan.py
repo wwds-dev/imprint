@@ -69,6 +69,26 @@ def is_local_route(provider: str) -> bool:
     return provider == SYSTEM_VOICE_ROUTE or is_local(provider)
 
 
+def endpoint_problem(provider: str, url: str | None = None) -> str:
+    """Why a local runtime's address is not this Mac, else "" (review P2-1).
+
+    OLLAMA_HOST and LMSTUDIO_URL can point at another machine; the kit then
+    would send the book off this Mac while every screen says "on this Mac".
+    `url` is the client's own address when known, else the environment's.
+    """
+    if provider == SYSTEM_VOICE_ROUTE or not is_local(provider):
+        return ""
+    from services.providers import base_url, is_loopback_host, url_host
+    address = url or base_url(provider)
+    host = url_host(address)
+    if is_loopback_host(host):
+        return ""
+    runtime = {"ollama": "Ollama", "lmstudio": "LM Studio"}.get(provider, provider)
+    return (f"{runtime} is set to {host or address}, which is not this Mac, so "
+            "the book would leave it. This version sends it only to a model "
+            "on this Mac.")
+
+
 @dataclass
 class Route:
     provider: str = ""
@@ -195,6 +215,8 @@ def estimate(plan: KitPlan) -> KitEstimate:
         elif not is_local(route.provider):
             blocked.append((stage, f"{label} uses {route.provider}, a paid "
                                    "route. This version runs local steps only."))
+        elif endpoint_problem(route.provider):
+            blocked.append((stage, endpoint_problem(route.provider)))
         return EstimateRow(stage, label, _route_text(route), basis,
                            LOCAL_NO_CHARGE)
 

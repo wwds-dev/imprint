@@ -397,6 +397,48 @@ def test_a_paid_route_is_refused_by_the_guard_without_a_dialog(kit):
     assert refusal.scope == "not_active"
 
 
+def test_the_job_entry_point_grants_only_the_approved_route_and_step(kit):
+    """Review P2-1 and P2-2 (ADR 0005 §2): a local route on another machine,
+    a model or step other than the approved one, an unknown step or item:
+    each is refused and leaves no open token."""
+    from services.release_kit import ledger
+    from services.release_kit.grant import JobGrant
+    from services.release_kit.plan import KitPlan, Route
+    window, driver, dialogs, calls = kit
+    plan = KitPlan("book-a", "Salt Road", 1, "T", "B", "s", 1, 1, "out",
+                   quotes=Route("ollama", "fake-local:1b"),
+                   captions=Route("ollama", "fake-local:1b"))
+    job_id = ledger.create_job(plan, plan_json={"kit": plan.to_json()},
+                               start_label="Start")
+    ledger.set_stage(job_id, "quotes", status="running")
+    ledger.ensure_item(job_id, "quotes", "quotes:request#1")
+    before = dict(window._pending_requests)
+
+    def ask(stage="quotes", item="quotes:request#1", provider="ollama",
+            model="fake-local:1b"):
+        return window.authorize_job_item(job_id, stage, item,
+                                         provider=provider, model=model)
+
+    assert ask(model="bigger-local:70b").scope == "route"
+    assert ask(provider="lmstudio").scope == "route"
+    assert ask(stage="captions", item="captions:request#1").scope == "not_active"
+    assert ask(stage="nonsense").scope == "route"
+    assert ask(item="quotes:request#9").scope == "route"
+    real_url = window.ollama.base_url
+    try:
+        window.ollama.base_url = "http://192.168.1.20:11434"
+        far = ask()
+        assert far.scope == "route" and "not this Mac" in far.reason
+    finally:
+        window.ollama.base_url = real_url
+    assert window._pending_requests == before and calls["backend"] == []
+
+    grant = ask()                                # the approved route: granted
+    assert isinstance(grant, JobGrant)
+    window.close_job_item(grant, "cancelled")
+    ledger.set_job_status(job_id, "paused", reason="user_stop")
+
+
 def test_the_confirmation_disables_start_when_no_local_model_answers(kit, monkeypatch):
     from ui.release_kit.confirm_dialog import MakeReleaseKitDialog
     window, driver, dialogs, calls = kit
