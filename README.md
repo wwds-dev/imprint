@@ -282,7 +282,10 @@ date and confirmation reference or local evidence file after submitting it
 yourself. Imprint checks that the export still matches its fingerprint before
 recording the note. This is a self-reported record, not an upload or retailer
 verification. Project Overview shows approval, export and submission counts
-and indicates when Write has changed since approval.
+and indicates when Write has changed since approval. **Make Release Kit…**,
+next to **Export Approved…**, turns the selected approved version into one
+local release kit with a single confirmation (§7.7); the kit's files are
+linked to the Project.
 See `docs/projects_roadmap.md` for the remaining cross-workspace work.
 Booth's **Use Project Book** selects a linked Write TXT/EPUB/PDF
 without moving it into the global input folder; a successful conversion links
@@ -301,7 +304,10 @@ its records.
 working-draft count, files grouped by agent, and scheduled Creator content.
 It flags missing files instead of hiding them. Opening a file or its folder
 is explicit; Project deletion removes approval/export/submission records and
-links, not external files.
+links, not external files. Its summary also carries a release-kit line
+("Release kit: none", "v3 running, step 2 of 8", "v3 paused, needs you" or "v3
+made 19 Nov") and a **Release Kits…** button that opens the Release Kits
+window (see "Make Release Kit" in §7.7). The Overview itself stays read-only.
 
 **Agent filter** — narrows the list to one agent. Populated from the chats that
 exist, so it only ever offers agents you have actually used.
@@ -1802,7 +1808,22 @@ Picks up where the Manuscript (writing studio) agent stops: real sales data, lau
 - Distributes the Quote Finder candidates across a posting schedule — TikTok 4×/week (short), Instagram 3×/week (alternating graphic/short), Pinterest 7×/week (graphic) — cycling quotes if there are more slots than quotes. Pure scheduling, no LLM call, deterministic.
 - One batched LLM call writes a platform-native caption per post (all at once, not one call per row) — TikTok casual with hashtags, Instagram warmer, Pinterest keyword-rich with no hashtags.
 - Every row has a one-click Graphic / Short button using the exact same generation code as Quote Finder/Shorts.
-- **Export Calendar (CSV)** writes the full schedule — date, platform, format, quote, caption — for manual posting.
+- **Export Calendar (CSV)** writes the full schedule — date, platform, format, quote, caption — for manual posting. A cell that starts with `=`, `+`, `-`, `@`, a tab or a carriage return gets a `'` in front, so a spreadsheet shows it as text instead of running it as a formula (quotes come from a manuscript and captions from a model). Press's export and the release kit's use the same code (`agents/manuscript/calendar_export.py`).
+
+**Make Release Kit (Quote Finder tab, slice 1: local steps only):**
+
+One action on an approved Project version makes a set of files for a release, on this Mac, with one confirmation. Nothing is posted, scheduled or submitted, and the kit makes no claim about income, reach or results.
+
+- **Where:** the **Make Release Kit…** button on the approved-version row, right after **Export Approved…**; it uses the version selected there. A note under the row says why the button is off (no Project, no approved version, an empty title or byline on that version, or another kit running: one kit runs at a time). While this Project has a running or paused kit the button reads **Open Release Kit…**.
+- **The confirmation** ("Make Release Kit") lists the source (Project, approved version, word count, title and byline), a new output folder `<Title>_v<N>_<date>` that is never reused (**Change…** picks another empty one), and the eight steps with their routes. It shows "No charge": every step runs on this Mac. Quotes and Captions offer local models only (Ollama or LM Studio; an `OLLAMA_HOST` or `LMSTUDIO_URL` that is not this Mac is refused, so the book never leaves it). Shorts use the on-device macOS voice. The Audiobook row is shown as "Not included": narration is always paid and this version cannot approve a paid step, so narrate in Booth. Anything paid blocks Start with a "Cannot start:" line. Escape cancels; nothing is written until Start.
+- **The eight steps, in this order, one at a time:** (1) EPUB from the approved version, with its SHA-256 receipt; (2) Audiobook, not included; (3) Quotes: the book is sampled in 12 windows of up to 2,500 characters spread across the whole text (a book of 30,000 characters or fewer is sent whole) and the model may return up to 20 quotes, each kept only if it appears word for word in the book and is at most 280 characters; (4) Calendar: 4 weeks (28 days) from the start date you pick, for the platforms you tick, with the same cadence as the Calendar tab; (5) one quote graphic (PNG) per unique quote; (6) one Short (MP4) per Short slot; (7) captions for every post in one request, with the reply capped at 8,192 tokens, then `calendar.csv` (the Calendar tab's columns plus an **AI used** column that states the facts per row); (8) every file is linked to the Project and `release-kit-report.md` and `provenance.json` are written.
+- **Captions can come back short.** If the reply stops early or has fewer captions than posts, the later posts stay blank and the step is marked Incomplete; the report lists how many posts have no caption. Quotes the model returned that were not found word for word, or were longer than 280 characters, are not used and are counted in the report.
+- **Shorts use the macOS `say` voice for testing only.** Apple's licence limits its built-in voices to personal, non-commercial use, so the confirmation and the report carry a notice: decide before posting these Shorts publicly. The report's "AI used in this kit" section and the CSV's **AI used** column record which model chose the quotes and wrote the captions and that the voice is synthetic. They are records of fact, not labels: no marking is embedded in any file, and each store or platform has its own rules for AI content.
+- **Release Kits window** (non-modal; from Start, **Open Release Kit…**, or **Release Kits…** in Project Overview): headline "Step 2 of 8: …", the step's progress, a table of Step · State · Spent · Line, **Stop**, **Resume**, **Discard**, **Show Folder**, **Show Report**. Closing it does not stop the kit. **Stop** deletes nothing: it finishes the current item and pauses. **Discard** asks first and keeps the files and their links.
+- **Keeps the Mac awake** while a kit runs, using `caffeinate -i -w <Imprint's pid>`: the system will not idle-sleep, the display may still sleep, a closed lid still sleeps the Mac, and the hold ends if Imprint exits or crashes. If `caffeinate` is missing the window says the Mac may sleep. Not verified on this Mac: `pmset -g assertions`, and App Nap over a whole night.
+- **Quit and resume.** Quitting while a kit runs asks "A release kit is running" (**Keep Running** or **Quit and Pause**). Every progress step is written to the database as it happens (ledger tables `release_jobs`, `release_job_approvals`, `release_job_stages`, `release_job_items`), so a crash or quit leaves a paused kit. At the next launch the Release Kits window opens once; **Resume** checks each finished file (present, SHA-256 matches), skips the good ones ("Done earlier") and runs the rest again. A local request cannot be interrupted, so if one is still running two seconds after **Quit and Pause**, that item is left unfinished and runs again on Resume.
+- **Pauses, never prompts:** a local model that does not answer, a render that fails, an error inside any step, a request larger than its bound, no usable quote, a stop by you, a quit or an interruption pauses the kit with the reason in the window and the report. Resume continues from there. A step is never re-routed by itself.
+- **Not in this version:** paid routes (cloud models, ElevenLabs Shorts), the audiobook step, the job-level budget reservation, "Review and Approve…", and any posting or retailer submission (PublishDrive stays out of scope). Quote Finder in Press still sends only the first ~30,000 characters; the whole-book sampling is used by the kit only.
 
 ---
 
@@ -1829,6 +1850,7 @@ Picks up where the Manuscript (writing studio) agent stops: real sales data, lau
 | **Theme / Voice / Attribution** | Applied to every graphic/short generated from this tab's candidates. |
 | **Suggest Quotes** | Runs the extraction prompt; populates the candidate list. |
 | **Graphic / Short per row** | One-click graphic or narrated short for that specific quote. |
+| **Make Release Kit…** / **Open Release Kit…** | On the approved-version row, after **Export Approved…**. Opens the one confirmation for a local release kit made from the selected approved version, or the Release Kits window when this Project already has a running or paused kit. A note under the row says why it is off. See "Make Release Kit" above. |
 
 ##### Quote Graphics Tab
 
@@ -1861,7 +1883,7 @@ Picks up where the Manuscript (writing studio) agent stops: real sales data, lau
 | **Theme / Voice / Attribution** | Applied to every asset generated from this tab. |
 | **Generate Calendar** | Builds the schedule (instant), then writes all captions in one LLM call. |
 | **Table rows** | Date, Platform, Format, Quote, Caption, and a Graphic / Short action button per row. |
-| **Export Calendar (CSV)** | Saves the full schedule + captions to a CSV file. |
+| **Export Calendar (CSV)** | Saves the full schedule + captions to a CSV file. A cell starting with `=`, `+`, `-`, `@`, a tab or a carriage return is written with a `'` in front so a spreadsheet keeps it as text. |
 
 ---
 
@@ -1905,7 +1927,7 @@ Picks up where the Manuscript (writing studio) agent stops: real sales data, lau
 
 #### Tips & Limitations
 
-> Quote Finder truncates very long manuscripts to the first ~30,000 characters per request to keep cost bounded — paste or load a specific chapter for more targeted picks on a long book.
+> Quote Finder truncates very long manuscripts to the first ~30,000 characters per request to keep cost bounded — paste or load a specific chapter for more targeted picks on a long book. (The release kit does not have this limit: it samples the whole approved version in 12 windows.)
 
 > The agent does not post to social platforms itself, and does not create social media accounts — both are either against platform terms for automated tools or require an app-review process (Meta, TikTok) that isn't worth building for a single-author use case. Graphics/shorts are generated locally; posting is a manual step, or route through a scheduler like Buffer/Metricool if you want that automated.
 
@@ -2595,6 +2617,7 @@ All business logic is separated from the GUI into dedicated service classes in `
 | `resource_monitor.py` | `ResourceMonitor` | `snapshot()` returns CPU, RAM, swap, and battery stats via `psutil` |
 | `tool_runner.py` | `ToolRunner` | Loads tool configuration (paths, venv, defaults) for the Audiobook tool |
 | `model_router.py` | `ModelRouter` | Stateless helper for provider/model selection logic |
+| `release_kit/` | — (package, Qt-free) | The release kit's core: `plan.py` (steps, routes, estimate, notices), `ledger.py` (job, step and item records, recovery, resume checks), `stages.py` (one function per item), `runner.py`, `grant.py` (the per-item permission the host mints; local routes only), `power.py` (keep-awake), `report.py` and `provenance.py` (the report and the AI-use record). Its window and driver are in `ui/release_kit/` |
 | `benchmarks.py` | `RatingTable` | LMArena per-task model ratings: daily fetch, cache, shipped snapshot. A copy of Sentinel's; `tests/test_benchmarks_drift.py` |
 | `recommendations/ratings.py` | — (module) | Turns a rating into the 0–1 quality the BEST FIT ranker weighs; holds unrated models at their provider's best |
 
@@ -2621,6 +2644,8 @@ Signals:
 ## 15. Database Schema
 
 The SQLite database is stored at `data/imprint.db`. All tables use WAL journal mode and foreign key enforcement.
+
+Release kits add four tables, created by an additive migration: `release_jobs` (one row per kit: Project, approved version and its SHA-256, output folder, status, pause reason), `release_job_approvals` (append-only: what the owner approved, as shown), `release_job_stages` (one row per step: route, status, result) and `release_job_items` (one row per file or request, with its output path, SHA-256 and AI-use facts). `usage` and `runs` also gained a `job_id` column, and `usage` a `job_item` column, so each local request is recorded against its kit. Only one job can be `running` at a time (a partial unique index).
 
 ### `agents`
 
