@@ -12,7 +12,6 @@ flows (Ask, quote suggestions, calendar captions, ElevenLabs narration),
 so nothing here resolves a request by agent name.
 """
 
-import csv
 import os
 import re
 import sqlite3
@@ -371,10 +370,23 @@ class ManuscriptPanel(QWidget):
             "the current Write editor.")
         self.quote_export_approved_btn.clicked.connect(self.export_approved_version)
         publication_controls.addWidget(self.quote_export_approved_btn)
+        # Release kit (docs/specs/one-click-release.md, D1): right after
+        # Export Approved, on the version selected in this row.
+        self.release_kit_btn = QPushButton("Make Release Kit…")
+        self.release_kit_btn.clicked.connect(self.start_release_kit)
+        publication_controls.addWidget(self.release_kit_btn)
         self.quote_submission_ledger_btn = QPushButton("Submission Ledger…")
         self.quote_submission_ledger_btn.clicked.connect(self.open_submission_ledger)
         publication_controls.addWidget(self.quote_submission_ledger_btn)
         layout.addWidget(publication_row)
+        # A disabled button cannot take focus, so its reason is a visible
+        # note and the button's accessible description, not a tooltip.
+        self.release_kit_note = QLabel("")
+        self.release_kit_note.setObjectName("FieldNote")
+        self.release_kit_note.setWordWrap(True)
+        layout.addWidget(self.release_kit_note)
+        self.quote_approved_version_box.currentIndexChanged.connect(
+            lambda *_: self.refresh_release_kit_entry())
         self.refresh_project_versions()
 
         settings_row_container = QWidget()
@@ -1211,6 +1223,58 @@ class ManuscriptPanel(QWidget):
         picker.blockSignals(False)
         self.quote_use_approved_btn.setEnabled(picker.count() > 0)
         self.quote_export_approved_btn.setEnabled(picker.count() > 0)
+        self.refresh_release_kit_entry()
+
+    def _release_kit_state(self) -> tuple[str, str, dict | None]:
+        """(button mode, note, this Project's open kit) for D1.
+        Mode: "make", "open" or "disabled"."""
+        from services.project_manuscripts import get_version
+        from services.release_kit import ledger
+
+        project = self.host._active_project()
+        if not project:
+            return "disabled", "Select a Project to make a release kit.", None
+        own = next(iter(ledger.list_jobs(project["id"], unfinished=True)), None)
+        if own:
+            return "open", "", own
+        if self.quote_approved_version_box.count() == 0:
+            return ("disabled", "Approve the Write draft first. A release kit "
+                    "is made only from an approved version.", None)
+        version = self.quote_approved_version_box.currentData()
+        row = get_version(project["id"], version) if version else None
+        if row and (not row["title"].strip() or not row["byline"].strip()):
+            return ("disabled", f"Version {version} has no title or byline. "
+                    "Set them in the Project, then approve a new version.", None)
+        running = ledger.running_job()
+        if running:
+            other = self.host.registry.get_project(running["project_id"] or "")
+            name = (other or {}).get("name") or running["project_id"]
+            return ("disabled", f"A release kit is running for {name}. One kit "
+                    "runs at a time.", None)
+        return "make", "", None
+
+    def refresh_release_kit_entry(self):
+        if not hasattr(self, "release_kit_btn"):
+            return
+        mode, note, _job = self._release_kit_state()
+        self.release_kit_btn.setText(
+            "Open Release Kit…" if mode == "open" else "Make Release Kit…")
+        self.release_kit_btn.setEnabled(mode != "disabled")
+        self.release_kit_btn.setAccessibleDescription(note)
+        self.release_kit_note.setText(note)
+        self.release_kit_note.setVisible(bool(note))
+
+    def start_release_kit(self):
+        """D1: open the kit's one confirmation, or its window when this
+        Project already has a running or paused kit."""
+        mode, _note, job = self._release_kit_state()
+        project = self.host._active_project()
+        if mode == "open":
+            self.host.show_release_kits(project_id=project["id"], job_id=job["id"])
+        elif mode == "make":
+            self.host.make_release_kit(
+                project["id"], self.quote_approved_version_box.currentData())
+        self.refresh_release_kit_entry()
 
     def approve_project_draft(self):
         from services.project_manuscripts import approve, list_versions
@@ -1508,7 +1572,6 @@ class ManuscriptPanel(QWidget):
         return quotes
 
     def generate_calendar(self):
-        import json
         quotes = self._calendar_quotes_from_finder()
         if not quotes:
             QMessageBox.warning(
@@ -1546,8 +1609,8 @@ class ManuscriptPanel(QWidget):
             return
         self._calendar_slots = slots
 
-        items = [{"quote": s.quote, "platform": s.platform.lower()} for s in slots]
-        items_json = json.dumps(items)
+        from agents.manuscript.calendar_export import caption_items
+        items_json = caption_items(slots)
         agent = self.host.agent_instances["manuscript"]
         messages = agent.build_calendar_caption_messages(items_json)
         self.manuscript_status_label.setText("[Writing captions…]")
@@ -1572,9 +1635,8 @@ class ManuscriptPanel(QWidget):
         self._calendar_captions_token = None
         entry = self.host.record_request(token, full_response) if token else None
         self.calendar_generate_btn.setEnabled(True)
-        captions = self._parse_quote_list(full_response)
-        for i, slot in enumerate(self._calendar_slots):
-            slot.caption = captions[i] if i < len(captions) else ""
+        from agents.manuscript.calendar_export import apply_captions
+        apply_captions(self._calendar_slots, full_response)
         self._populate_calendar_table()
         # Cut captions leave the later slots blank: never "[Done]" for that.
         self.manuscript_status_label.setText(
@@ -1689,11 +1751,7 @@ class ManuscriptPanel(QWidget):
         )
         if not path:
             return
-        with open(path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(["Date", "Platform", "Format", "Quote", "Caption"])
-            for slot in self._calendar_slots:
-                writer.writerow([slot.day.strftime("%Y-%m-%d"), slot.platform,
-                                 slot.format, slot.quote, slot.caption])
+        from agents.manuscript.calendar_export import write_calendar_csv
+        write_calendar_csv(self._calendar_slots, path)
         self.manuscript_status_label.setText(
             f"[Done] Exported calendar to {Path(path).name}")

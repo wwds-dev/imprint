@@ -1,0 +1,9 @@
+# Foundry plan: estimates and milestones. Written by docs/foundry/tooling/plan.py.
+# Read by the Foundry workspace. A missing key is shown as 'not recorded'.
+estimate_hours = 12.0
+updated = "2026-11-20"
+
+[[milestone]]
+name = "One-click release slice 1 (free path)"
+due = "2026-11-27"
+spec = "one-click-release"

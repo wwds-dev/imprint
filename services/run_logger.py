@@ -9,7 +9,7 @@ class RunLogger:
         self._active: dict[str, float] = {}  # run_id → monotonic start time
 
     def start(self, agent: str, tool: str, provider: str, model: str,
-              mode: str, prompt_summary: str) -> str:
+              mode: str, prompt_summary: str, job_id: str = "") -> str:
         run_id = str(uuid.uuid4())[:8]
         timestamp = datetime.now().isoformat(timespec="seconds")
         self._active[run_id] = time.monotonic()
@@ -17,9 +17,11 @@ class RunLogger:
         with get_connection() as conn:
             conn.execute("""
                 INSERT INTO runs
-                  (run_id, timestamp, agent, tool, provider, model, mode, prompt_summary, status)
-                VALUES (?,?,?,?,?,?,?,?,?)
-            """, (run_id, timestamp, agent, tool, provider, model, mode, prompt_summary[:200], "running"))
+                  (run_id, timestamp, agent, tool, provider, model, mode,
+                   prompt_summary, status, job_id)
+                VALUES (?,?,?,?,?,?,?,?,?,?)
+            """, (run_id, timestamp, agent, tool, provider, model, mode,
+                  prompt_summary[:200], "running", job_id or ""))
             conn.commit()
 
         return run_id

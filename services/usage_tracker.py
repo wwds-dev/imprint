@@ -141,7 +141,8 @@ class UsageTracker:
                     prompt_text: str, response_text: str, usage: dict | None = None,
                     flat_cost_eur: float | None = None,
                     project: str | None = None,
-                    cost_type: str | None = None) -> dict:
+                    cost_type: str | None = None,
+                    job_id: str = "", job_item: str = "") -> dict:
         """Record one request and what it cost.
 
         `flat_cost_eur` is for work that is **not billed per token**: an image,
@@ -152,7 +153,9 @@ class UsageTracker:
         caller that knows the real price passes it, and the token arithmetic is
         skipped rather than fudged. `cost_type` names such an amount when it
         is not a per-unit price: "partial" is what a failed or stopped render
-        or batch had already spent (GodAI.record_partial).
+        or batch had already spent (GodAI.record_partial). `job_id` and
+        `job_item` tie the row to one release-kit item; the database allows
+        one row per item (ux_usage_job_item).
         """
         input_tokens, output_tokens, token_cost_type = self.normalize_usage(
             usage, prompt_text, response_text)
@@ -167,18 +170,21 @@ class UsageTracker:
         timestamp = datetime.now().isoformat(timespec="seconds")
 
         with get_connection() as conn:
-            conn.execute("""
+            cursor = conn.execute("""
                 INSERT INTO usage
                   (timestamp, agent, backend, model, input_tokens, output_tokens,
-                   total_tokens, cost_eur, cost_type, cloud, project)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                   total_tokens, cost_eur, cost_type, cloud, project,
+                   job_id, job_item)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (
                 timestamp, agent, backend, model,
                 input_tokens, output_tokens, input_tokens + output_tokens,
                 cost_eur, cost_type,
                 1 if backend in CLOUD_BACKENDS else 0,
                 project or "",
+                job_id or "", job_item or "",
             ))
+            usage_id = cursor.lastrowid
             conn.commit()
 
         return {
@@ -194,6 +200,9 @@ class UsageTracker:
             "cost_type": cost_type,
             "cloud": backend in CLOUD_BACKENDS,
             "project": project or "",
+            "usage_id": usage_id,
+            "job_id": job_id or "",
+            "job_item": job_item or "",
         }
 
     def get_project_today_total(self, project: str) -> float:

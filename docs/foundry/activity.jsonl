@@ -101,6 +101,9 @@
 {"ts": "2026-11-20T00:11:09", "phase": "define", "state": "done", "spec": "quill-draft-safety"}
 {"ts": "2026-11-20T00:11:09", "phase": "build", "state": "start", "spec": "quill-draft-safety"}
 {"ts": "2026-11-20T11:17:09", "phase": "build", "state": "done", "spec": "quill-draft-safety"}
+{"ts": "2026-11-20T11:45:50", "phase": "plan", "state": "start", "spec": "one-click-release"}
+{"ts": "2026-11-20T11:47:04", "phase": "plan", "state": "done", "spec": "one-click-release"}
+{"ts": "2026-11-20T11:47:04", "phase": "build", "state": "start", "spec": "one-click-release"}
 {"ts": "2026-11-20T11:50:10", "phase": "review", "state": "done", "spec": "quill-draft-safety"}
 {"ts": "2026-11-20T11:50:10", "phase": "verify", "state": "done", "spec": "quill-draft-safety"}
 {"ts": "2026-11-20T11:50:10", "phase": "document", "state": "done", "spec": "quill-draft-safety"}

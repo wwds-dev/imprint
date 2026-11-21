@@ -90,6 +90,10 @@ class ProjectOverviewDialog(QDialog):
         self.reveal_button.clicked.connect(self.reveal_selected)
         actions.addWidget(self.reveal_button)
         actions.addStretch()
+        # Overview stays read-only: this opens the kit's own window (D1).
+        self.release_kits_button = QPushButton("Release Kits…")
+        self.release_kits_button.clicked.connect(self.show_release_kits)
+        actions.addWidget(self.release_kits_button)
         refresh_button = QPushButton("Refresh")
         refresh_button.clicked.connect(self.refresh)
         actions.addWidget(refresh_button)
@@ -123,7 +127,8 @@ class ProjectOverviewDialog(QDialog):
             f"Submission notes (self-reported): "
             f"{data['self_reported_submissions']}   ·   "
             f"Linked files: {len(data['artifacts'])}   ·   "
-            f"Creator items: {len(data['creator_content'])}")
+            f"Creator items: {len(data['creator_content'])}   ·   "
+            f"{self._release_kit_line()}")
 
         self.files.clear()
         groups = {}
@@ -160,6 +165,21 @@ class ProjectOverviewDialog(QDialog):
             for column, value in enumerate(values):
                 self.content.setItem(row, column,
                                      QTableWidgetItem(str(value)))
+
+    def _release_kit_line(self) -> str:
+        from services.release_kit.ledger import latest_for_project
+        from ui.release_kit.window import summary_line
+        try:
+            return summary_line(latest_for_project(self.project_id))
+        except Exception:        # an Overview must open even if this fails
+            return "Release kit: unknown"
+
+    def show_release_kits(self):
+        # This dialog is modal; close it first so the window can take input.
+        host = self.parent()
+        self.accept()
+        if host is not None and hasattr(host, "show_release_kits"):
+            host.show_release_kits(project_id=self.project_id)
 
     def _selected_path(self) -> Path | None:
         selected = self.files.selectedItems()
