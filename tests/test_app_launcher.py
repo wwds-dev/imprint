@@ -23,7 +23,7 @@ def test_the_bundle_executable_is_the_interpreter():
     installer = INSTALLER.read_text(encoding="utf-8")
     launcher = LAUNCHER.read_text(encoding="utf-8")
 
-    assert 'CFBundleExecutable -string "${APP_NAME}"' in installer
+    assert 'CFBundleExecutable -string "${APP_DISPLAY_NAME}"' in installer
     assert "-lpython" in installer
     assert "Py_InitializeFromConfig" in launcher
     assert "Py_RunMain" in launcher
