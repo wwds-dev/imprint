@@ -29,7 +29,7 @@
 4. Open **Chat routing**. A recommendation is guidance for the current task and
    eligible configuration; inspect the visible provider/model badges where the
    dedicated agent exposes them.
-5. Open **API keys**. This is readiness/status, not a place to paste secrets.
+5. Open **API keys** in the right rail. This card shows readiness, not secrets; keys are pasted in **Settings → API keys** ([Add a key](13-access-privacy.md#add-a-key)).
    Below it, **Model updates** lists models your providers released since
    Imprint last looked, and under **Video and image** any removed video or
    image models and known shutdown dates; its title shows the counts

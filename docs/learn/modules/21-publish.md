@@ -14,7 +14,7 @@
 | Tab/area | What it does | Required interpretation |
 |---|---|---|
 | Overview | Sync strip, reporting period, royalties-by-marketplace chart, metrics box, Ask, publishing todos, Connections | Imported/refreshed rows are observations only for their source/window |
-| Quote Finder | Load File, candidate count, voice, Suggest Quotes | Suggestions require source-text verification |
+| Quote Finder | Load File, candidate count, voice, Suggest Quotes; Approve Write Draft, approved-version picker, Export Approved, Make Release Kit, Submission Ledger | Suggestions require source-text verification; a release kit is made from an approved version only ([Make a release kit](#make-a-release-kit)) |
 | Quote Graphics | Quote, attribution, theme, size, Generate Graphic, Open Folder | A generated asset is not licensed proof or performance evidence |
 | Shorts | Quote/narration, attribution, theme, voice source/narrator, Generate, Play, Folder | Review audio, claims, timing, and platform rules |
 | Calendar | Weeks, start, platforms, theme, voice, attribution, Generate, Export CSV | A prepared calendar is not a post or measured distribution |
@@ -217,3 +217,74 @@ Select it and click **Done** only when that condition is actually true.
 Marking it done is self-reported: it changes your list, not the store.
 
 [Show me](show:manuscript_todo_input)
+
+## Make a release kit
+
+**Make Release Kit…** turns one approved version into a folder of release
+files on this Mac, with one confirmation. Nothing is posted, scheduled or
+submitted, and the kit claims nothing about income, reach or results. This
+first version runs free, local steps only.
+
+**Before you start:** a Project with an approved version ([Step 1 — Approve the draft as a version](#step-1--approve-the-draft-as-a-version)), a
+title and byline on that version, and a local model running in Ollama or LM
+Studio for the quotes and captions. One kit runs at a time. When the button
+is off, the note under the row says why.
+
+### Step 1 — Open the kit's confirmation
+
+In **Quote Finder**, pick the approved version in the picker and click
+**Make Release Kit…** (right after **Export Approved…**).
+
+[Show me](show:release_kit_btn)
+
+### Step 2 — Read the confirmation, then start
+
+Read the confirmation. It lists the source (Project, version, word count,
+title, byline), a new output folder named `<Title>_v<N>_<date>` (**Change…**
+picks another empty folder), and eight steps with their routes. It says "No
+charge": every step runs on this Mac. The Audiobook row is "Not included",
+because narration is always paid; narrate in Booth.
+Anything paid blocks Start with a "Cannot start:" line. Escape cancels;
+nothing is written until **Start**.
+
+Click **Start**. The **Release Kits** window shows "Step N of 8", a table of
+Step · State · Spent · Line, and **Stop**, **Resume**, **Discard**, **Show
+Folder** and **Show Report**. Closing the window does not stop the kit. When
+it finishes, click **Show Report** and read `release-kit-report.md`.
+
+### What the kit contains
+
+The eight steps: an EPUB of the approved version with its SHA-256
+receipt; Audiobook (not included); up to 20 quotes, each kept only if it
+appears word for word in the book and is at most 280 characters; a 4-week
+calendar for the platforms you tick; one quote graphic per quote; one Short
+per Short slot; captions for every post in one request, then `calendar.csv`
+with an **AI used** column; last, every file is linked to the Project and the
+report and `provenance.json` are written.
+
+**How to read the result:**
+
+- **Incomplete** on the captions step means the reply stopped early: the
+  later posts have no caption, and the report says how many.
+- Quotes the model returned that are not in the book word for word, or are
+  too long, are not used; the report counts them.
+- **Shorts use the macOS voice for testing only.** Apple's licence limits its
+  built-in voices to personal, non-commercial use; decide before posting
+  these Shorts publicly.
+- The report's "AI used in this kit" section and the CSV's **AI used**
+  column are records of fact, not labels: nothing is embedded in the files,
+  and each store or platform has its own rules for AI content.
+
+**Stop, quit and resume.** **Stop** finishes the current item and pauses;
+it deletes nothing. Quitting while a kit runs asks: **Keep Running** or
+**Quit and Pause**. A paused kit, or one interrupted by a crash, is offered
+at the next launch; **Resume** checks each finished file against its SHA-256,
+skips the good ones ("Done earlier") and runs the rest. **Discard** asks
+first and keeps the files. A local model that does not answer, a failed
+render or any error pauses the kit with the reason; it is never re-routed by
+itself. The Mac is kept awake while a kit runs (a closed lid still sleeps
+it).
+
+**Done when:** the report lists every step as done, or names why one is
+incomplete, and you have checked each quote against the book before using
+it anywhere.

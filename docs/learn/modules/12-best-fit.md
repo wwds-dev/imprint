@@ -16,7 +16,7 @@ model for the current agent and task. **Model BEST FIT** marks the best eligible
 model *inside the provider currently selected*. If you manually choose another
 provider, the model menu still gives useful guidance within that choice.
 
-**BEST AVAILABLE** or setup-target wording means the ideal route is not fully
+**BEST AVAILABLE** or [setup-target](18-glossary.md#setup-target) wording means the ideal route is not fully
 ready under current keys, permissions, capability, or budget. It is a setup
 recommendation, not proof that pressing the action will work now.
 

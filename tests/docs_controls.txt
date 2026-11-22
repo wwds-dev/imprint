@@ -7,12 +7,8 @@
 #
 # Seeded on 2026-11-22 from the bold phrases in README.md, the lessons, the
 # sheets, the package READMEs and tests/manual_test_cases.md that matched a
-# label in the code, plus the five README quotes of audit DL-5.
-Save Budget Limits
-Reset Session Spend
-Clear All
-Format + Export Book
-Scenes / Chapters
+# label in the code, plus the five README quotes of audit DL-5 (removed
+# again once the README quoted the real labels).
 AI used
 API key
 API keys
@@ -374,3 +370,4 @@ Yes
 [not controls]
 # Bold phrases in a lesson's "Control atlas" that are not labels: section
 # names, states, emphasis.
+⌘Z

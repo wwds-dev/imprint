@@ -1320,7 +1320,7 @@ Task is one of three kinds:
 |---|---|---|
 | Prose | Write Scene, Write Chapter, Write Dialogue, Add Case Study / Example, Continue Draft | Adds the new text after the existing Draft, separated by a blank line |
 | Notes | Generate Outline, Develop Characters, Build World | Only the matching tab (Outline, Characters, World Notes); the Draft is untouched |
-| Revise | Revise / Improve, Tighten Structure, Strengthen Argument | Replaces the Draft selection, or the whole Draft when nothing is selected, as one edit; **Ctrl+Z** in the Draft brings the earlier version back |
+| Revise | Revise / Improve, Tighten Structure, Strengthen Argument | Replaces the Draft selection, or the whole Draft when nothing is selected, as one edit; **⌘Z** (undo) in the Draft brings the earlier version back |
 
 **Deliberate limit:** a revise task works on up to 20,000 characters (about
 3,300 words) per run, 6,000 (about 1,000 words) with a local model, because

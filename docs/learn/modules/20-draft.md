@@ -20,6 +20,25 @@
 | Document actions | Save Draft, Author name, export format, Export Book | Persist current text and produce EPUB/DOCX/PDF from recognised chapters |
 | Mode switch | Write, Publish & Market; Publish/Market sub-tabs | Draft prose versus packaging and launch-copy tasks |
 
+### What Write changes
+
+Write never clears the Draft. What it changes depends on the kind of Task
+(draft safety, since 2026-11-20):
+
+| Task kind | Tasks | What Write changes |
+|---|---|---|
+| Prose | Write Scene, Write Chapter, Write Dialogue, Add Case Study / Example, Continue Draft | Adds the new text after the existing Draft, after a blank line |
+| Notes | Generate Outline, Develop Characters, Build World | Only the Outline, Characters or World Notes tab; the Draft is untouched |
+| Revise | Revise / Improve, Tighten Structure, Strengthen Argument | Replaces the text selected in the Draft, or the whole Draft when nothing is selected, as one edit: **⌘Z** (undo) in the Draft brings the earlier version back |
+
+A revise task works on up to 20,000 characters (about 3,300 words) per run,
+or 6,000 (about 1,000 words) with a local model, because one reply is capped
+at 8,192 tokens. Above that nothing is sent and the status line asks you to
+select a passage: select one chapter and revise it, then the next. A revision
+cut off at the length limit, or under half the length of its text, leaves the
+Draft unchanged. An error or **Stop** never removes Draft text. The Draft is
+read-only while a revision runs.
+
 ## Worked input and run
 
 1. Fill Title, Author, Type and the Book Profile. Keep comp titles factual and
@@ -27,8 +46,9 @@
 2. Approve an outline before paying for full prose.
 3. Select a Task and write a Direction with scene/argument purpose, required
    facts, length, continuity facts, and an acceptance checklist.
-4. Inspect BEST FIT, then press **Write** once. Use **Continue** only when the
-   next text truly extends the existing Draft.
+4. Inspect BEST FIT, then press **Write** once. The new text is added after
+   whatever the Draft already holds. Use **Continue** only when the next text
+   truly extends the existing Draft.
 5. Review structure before sentence polish. Update Outline, Characters, and
    World Notes with stable facts—not speculative alternatives.
 6. Save Draft. Refresh Chapters after adding headings and verify navigation.
@@ -72,6 +92,11 @@ projects, return, and confirm that the authoritative version restores.
 **Generic prose:** add authoritative context and a scene/argument decision.  
 **Continuity drift:** shorten factual notes; do not rely on the entire draft as
 perfect memory.  
+**Two versions of the same chapter in Draft:** you pressed Write again with a
+prose task, which adds rather than replaces. Delete the version you do not
+want, or select it and run **Revise / Improve** with your correction.  
+**"Select a passage" and nothing sent:** the revise task's text is over the
+limit (20,000 characters, 6,000 with a local model). Select one chapter.  
 **Empty Chapters:** use consistent Markdown-style headings and refresh.  
 **Export looks wrong:** verify chapter headings and author metadata first.
 
@@ -213,8 +238,13 @@ Continue to write more.** in the status line instead of **[Done]**.
 **Good result:** the chapter follows the direction, sourced facts carry their
 citation in parentheses, and anything the sources do not cover wears
 `[UNSOURCED]`. **Weak result:** generic night-city atmosphere with no sourced
-facts — tighten World Notes and the Direction, then write again. Use
-**Continue** only when the next text truly extends what is already in Draft.
+facts. Do not press Write again: a second Write adds a second chapter under
+the first. Instead, tighten World Notes, then select the chapter in the Draft,
+set **Task** to `Revise / Improve`, put the correction in **Direction** ("use
+only the sourced facts; cut the atmosphere") and press **Write**: the
+selection is replaced as one edit, and **⌘Z** (undo) in the Draft undoes it.
+Use **Continue** only when the next text truly extends what is already in
+Draft.
 
 [Show me](show:author_write_btn)
 

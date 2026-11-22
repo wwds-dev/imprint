@@ -68,5 +68,5 @@ stable enough to learn which stage failed.
 
 ## Next action
 
-Create an [evidence passport](30-evidence.md), then define the offer precisely
+Create an [evidence passport](30-evidence.md#evidence-passport), then define the offer precisely
 in [Define one measurable offer](31-offer.md).

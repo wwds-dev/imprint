@@ -8,12 +8,14 @@
 
 | Goal | Begin here | The result you should leave with |
 |---|---|---|
+| Get a model working | [Add a key](13-access-privacy.md#add-a-key) | One cloud key that passes **Test**, or a local model, ready to use. |
 | Learn the interface | [Navigate Imprint](10-navigate.md) | You can find the correct agent and read its status. |
 | Make a first asset | [First verified result](01-first-result.md) | One edited, saved output with a known route and cost state. |
 | Decide what to sell | [Choose an income path](02-choose-path.md) | One buyer, bounded offer, channel, and next evidence step. |
 | Learn one tool | Open **Agent Academy** in the contents | A control-by-control run and acceptance checklist. |
 | Measure a venture | [Evidence before production](30-evidence.md) | A labelled observation that permits a specific next test. |
-| Fix a failure | Search the exact button label or error text | An anchored recovery procedure, not another blind retry. |
+| Fix a failure | [Troubleshooting](17-troubleshooting.md), or search the exact button label or error text | An anchored recovery procedure, not another blind retry. |
+| Look up a term | [Glossary](18-glossary.md) | A one-line meaning and the lesson that uses it. |
 
 ## Prerequisites
 
@@ -38,7 +40,7 @@ Observe → choose one offer → produce → review → distribute → measure �
 
 Automation belongs after the loop produces trustworthy evidence. Faster output
 does not repair an unclear offer, missing denominator, negative contribution,
-rights problem, or unreviewed public claim.
+rights problem, or unreviewed public claim. (Terms: [denominator](18-glossary.md#denominator), [contribution](18-glossary.md#contribution).)
 
 ## How this centre is organised
 
