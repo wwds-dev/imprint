@@ -26,6 +26,11 @@ from pathlib import Path
 
 APP_NAME = "Imprint"
 
+# What the app calls itself on screen (window title, tray, bundle, Dock).
+# Deliberately separate from APP_NAME: renaming the display name must never
+# move the writable folder above (spec rename-imprint-studio, 2026-11-22).
+APP_DISPLAY_NAME = "Imprint Studio"
+
 # Directories this app used to write to, newest first. Only ever read from, to
 # carry state forward across a rename.
 PREVIOUS_APP_NAMES = ("Create & Publish",)

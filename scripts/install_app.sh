@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install "Imprint.app" into /Applications — a thin launcher that runs the
+# Install "Imprint Studio.app" into /Applications — a thin launcher that runs the
 # project's own main.py through the project's .venv.
 #
 #   ./scripts/install_app.sh
@@ -17,9 +17,9 @@
 # run `python main.py` by hand, so the app and the terminal share one state.
 #
 # The bundle's executable is scripts/app_launcher.c, compiled here against the
-# venv's own libpython: Python runs *inside* Contents/MacOS/Imprint rather than
+# venv's own libpython: Python runs *inside* Contents/MacOS/Imprint Studio rather than
 # being handed off to .venv/bin/python. macOS names a process after the
-# executable it runs, so that is the only way Imprint is called Imprint in
+# executable it runs, so that is the only way the app is called Imprint Studio in
 # Activity Monitor, the Dock, Cmd-Tab and Force Quit — a launcher that execs the
 # venv's python shows "python" in all four, whatever the app does afterwards.
 # What came before, and why each went: an AppleScript applet, which blocked in
@@ -39,8 +39,10 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 "${PROJECT_ROOT}/.venv/bin/python" "${PROJECT_ROOT}/scripts/stamp_version.py" 2>/dev/null \
   || python3 "${PROJECT_ROOT}/scripts/stamp_version.py" 2>/dev/null \
   || true
-APP_NAME="Imprint"
-INSTALLED="/Applications/${APP_NAME}.app"
+# The name shown in the Dock, Cmd-Tab and Activity Monitor. The data folder
+# keeps the name "Imprint" (services/runtime_paths.py APP_NAME).
+APP_DISPLAY_NAME="Imprint Studio"
+INSTALLED="/Applications/${APP_DISPLAY_NAME}.app"
 PY="${PROJECT_ROOT}/.venv/bin/python"
 
 if [ ! -x "$PY" ]; then
@@ -51,7 +53,7 @@ fi
 
 STAGE="$(mktemp -d)"
 trap 'rm -rf "$STAGE"' EXIT
-APP_DIR="$STAGE/${APP_NAME}.app"
+APP_DIR="$STAGE/${APP_DISPLAY_NAME}.app"
 
 mkdir -p "$APP_DIR/Contents/MacOS" "$APP_DIR/Contents/Resources"
 
@@ -63,9 +65,9 @@ PY_HOME="$(sed -n 's/^home = //p' "$PROJECT_ROOT/.venv/pyvenv.cfg")"
 PY_LIBDIR="$(dirname "$PY_HOME")/lib"
 PY_INCLUDE="$("$PY" -c "import sysconfig; print(sysconfig.get_config_var('INCLUDEPY'))")"
 PY_LDVERSION="$("$PY" -c "import sysconfig; print(sysconfig.get_config_var('LDVERSION'))")"
-EXE="$APP_DIR/Contents/MacOS/${APP_NAME}"
+EXE="$APP_DIR/Contents/MacOS/${APP_DISPLAY_NAME}"
 xcrun clang -std=c11 -Wall -Wextra -Werror \
-    -DAPP_NAME="\"${APP_NAME}\"" -DLOG_PATH="\"/tmp/imprint_launch.log\"" \
+    -DAPP_NAME="\"${APP_DISPLAY_NAME}\"" -DLOG_PATH="\"/tmp/imprint_launch.log\"" \
     -I"$PY_INCLUDE" "$PROJECT_ROOT/scripts/app_launcher.c" \
     -L"$PY_LIBDIR" -lpython"$PY_LDVERSION" -Wl,-rpath,"$PY_LIBDIR" \
     -o "$EXE"
@@ -77,10 +79,10 @@ cp "$PROJECT_ROOT/assets/icon.icns" "$APP_DIR/Contents/Resources/icon.icns"
 # compiled in, so app_launcher.c stays identical across the apps that use it.
 printf '%s\n' "$PROJECT_ROOT" > "$APP_DIR/Contents/Resources/project_root.txt"
 
-defaults write "$APP_DIR/Contents/Info" CFBundleName -string "${APP_NAME}"
-defaults write "$APP_DIR/Contents/Info" CFBundleDisplayName -string "${APP_NAME}"
+defaults write "$APP_DIR/Contents/Info" CFBundleName -string "${APP_DISPLAY_NAME}"
+defaults write "$APP_DIR/Contents/Info" CFBundleDisplayName -string "${APP_DISPLAY_NAME}"
 defaults write "$APP_DIR/Contents/Info" CFBundleIdentifier -string "com.netrunner3000.imprint"
-defaults write "$APP_DIR/Contents/Info" CFBundleExecutable -string "${APP_NAME}"
+defaults write "$APP_DIR/Contents/Info" CFBundleExecutable -string "${APP_DISPLAY_NAME}"
 defaults write "$APP_DIR/Contents/Info" CFBundleIconFile -string "icon.icns"
 defaults write "$APP_DIR/Contents/Info" CFBundlePackageType -string "APPL"
 defaults write "$APP_DIR/Contents/Info" NSHighResolutionCapable -bool true
@@ -104,7 +106,7 @@ for _ in $(seq 1 40); do
     sleep 0.5
 done
 if pgrep -f "$RUNNING" >/dev/null; then
-    echo "Error: ${APP_NAME} did not quit within 20 seconds. Quit it, then re-run." >&2
+    echo "Error: ${APP_DISPLAY_NAME} did not quit within 20 seconds. Quit it, then re-run." >&2
     exit 1
 fi
 
@@ -115,6 +117,11 @@ codesign --force --deep --sign - "$INSTALLED"
 
 LSREG="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 "$LSREG" -f "$INSTALLED"
+
+# The bundle was /Applications/Imprint.app until 2026-11-22.
+# shellcheck source=retire_old_bundle.sh
+source "${PROJECT_ROOT}/scripts/retire_old_bundle.sh"
+retire_old_bundle
 
 echo ""
 echo "✓ Installed: ${INSTALLED}"

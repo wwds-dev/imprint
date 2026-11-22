@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for Imprint — self-contained macOS .app bundle.
+"""PyInstaller spec for Imprint Studio — self-contained macOS .app bundle.
 
 Build:   .venv/bin/pyinstaller --noconfirm Imprint.spec
-Output:  dist/Imprint.app
+Output:  dist/Imprint Studio.app
 """
 import json
 from pathlib import Path
@@ -117,7 +117,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Imprint",
+    name="Imprint Studio",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -137,7 +137,7 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="Imprint",
+    name="Imprint Studio",
 )
 
 # The bundle's version is derived like the badge (services/version.py):
@@ -149,12 +149,12 @@ BUNDLE_VERSION = f"{_MAJOR}.{_BUILD}" if _BUILD is not None else _MAJOR
 
 app = BUNDLE(
     coll,
-    name="Imprint.app",
+    name="Imprint Studio.app",
     icon="assets/icon.icns",
     bundle_identifier="com.netrunner3000.imprint",
     info_plist={
-        "CFBundleName": "Imprint",
-        "CFBundleDisplayName": "Imprint",
+        "CFBundleName": "Imprint Studio",
+        "CFBundleDisplayName": "Imprint Studio",
         "CFBundleShortVersionString": BUNDLE_VERSION,
         "CFBundleVersion": BUNDLE_VERSION,
         "NSHighResolutionCapable": True,

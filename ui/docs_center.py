@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 from ui.learning_center_v2 import (
     DOCUMENT_CSS, _document_sections, _fit_images,
 )
+from services.runtime_paths import APP_DISPLAY_NAME
 from ui import theme
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BG, BORDER, BORDER_STRONG, ELEVATED,
@@ -143,10 +144,10 @@ class DocsCentreDialog(QDialog):
         self._nav_forced = False
 
         self.setObjectName("DocsCentreDialog")
-        self.setWindowTitle("Documentation · Imprint")
+        self.setWindowTitle(f"Documentation · {APP_DISPLAY_NAME}")
         self.setMinimumSize(940, 650)
         self.resize(1300, 840)
-        self.setAccessibleName("Imprint documentation")
+        self.setAccessibleName(f"{APP_DISPLAY_NAME} documentation")
         self.setAccessibleDescription(
             "Searchable technical reference for Imprint agents and shared systems.")
         self._build_ui()

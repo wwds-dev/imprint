@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from services.runtime_paths import APP_DISPLAY_NAME
 from ui import theme
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BG, BORDER, BORDER_STRONG, ELEVATED,
@@ -318,10 +319,10 @@ class LearningCentreDialog(QDialog):
         self._building_navigation = False
 
         self.setObjectName("LearningCentreDialog")
-        self.setWindowTitle("Learning Centre · Imprint")
+        self.setWindowTitle(f"Learning Centre · {APP_DISPLAY_NAME}")
         self.setMinimumSize(980, 680)
         self.resize(1320, 860)
-        self.setAccessibleName("Imprint Learning Centre")
+        self.setAccessibleName(f"{APP_DISPLAY_NAME} Learning Centre")
         self.setAccessibleDescription(
             "Searchable lessons for Imprint controls, agents, income experiments, and recovery.")
         self._build_ui()

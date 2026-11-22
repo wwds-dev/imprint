@@ -40,7 +40,7 @@ def menu_bar_item(app):
 def test_the_menu_offers_open_and_quit(menu_bar_item):
     labels = [a.text() for a in menu_bar_item._menu.actions() if a.text()]
 
-    assert labels == ["Open Imprint", "Quit Imprint"]
+    assert labels == ["Open Imprint Studio", "Quit Imprint Studio"]
 
 
 def test_the_menu_is_held_on_the_instance(menu_bar_item):

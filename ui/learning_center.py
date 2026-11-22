@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from services.runtime_paths import APP_DISPLAY_NAME
 from ui import theme
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BG, BORDER, BORDER_STRONG, ELEVATED,
@@ -85,7 +86,7 @@ def show_learning_center(app, resource_dir: Path,
 
     dialog = QDialog(app)
     dialog.setObjectName("LearningCentreDialog")
-    dialog.setWindowTitle("Learning Centre · Imprint")
+    dialog.setWindowTitle(f"Learning Centre · {APP_DISPLAY_NAME}")
     dialog.setMinimumSize(980, 680)
     dialog.resize(1280, 840)
 

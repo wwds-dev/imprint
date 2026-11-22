@@ -48,7 +48,7 @@ import subprocess
 from functools import lru_cache
 from pathlib import Path
 
-from services.runtime_paths import is_frozen, resource_base
+from services.runtime_paths import APP_DISPLAY_NAME, is_frozen, resource_base
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
@@ -185,7 +185,7 @@ def staleness() -> dict:
 def tooltip() -> str:
     """The badge's hover text: what is running, and whether it is current."""
     running = info()
-    lines = [f"Imprint {running['version']}"]
+    lines = [f"{APP_DISPLAY_NAME} {running['version']}"]
     if running["commit"]:
         lines.append(f"commit {running['commit']}")
     if running["date"]:

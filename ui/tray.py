@@ -25,7 +25,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QMenu, QSystemTrayIcon
 
-from services.runtime_paths import APP_NAME, resource_base
+from services.runtime_paths import APP_DISPLAY_NAME, resource_base
 
 ICON_FILE = "tray.png"
 
@@ -60,16 +60,16 @@ class Tray(QObject):
         super().__init__(parent)
 
         self.icon = QSystemTrayIcon(_icon(), self)
-        self.icon.setToolTip(APP_NAME)
+        self.icon.setToolTip(APP_DISPLAY_NAME)
 
         menu = QMenu()
 
-        open_action = QAction(f"Open {APP_NAME}", menu)
+        open_action = QAction(f"Open {APP_DISPLAY_NAME}", menu)
         open_action.triggered.connect(self.open_requested)
         menu.addAction(open_action)
 
         menu.addSeparator()
-        quit_action = QAction(f"Quit {APP_NAME}", menu)
+        quit_action = QAction(f"Quit {APP_DISPLAY_NAME}", menu)
         quit_action.triggered.connect(self.quit_requested)
         menu.addAction(quit_action)
 

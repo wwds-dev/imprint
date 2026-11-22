@@ -30,7 +30,9 @@ from services import local_ratings
 from services import routing_advisor
 from ui.panel_routing import PanelRouting
 from services import version as app_version
-from services.runtime_paths import resource_base, user_data_base, ensure_seeded, is_frozen
+from services.runtime_paths import (
+    APP_DISPLAY_NAME, resource_base, user_data_base, ensure_seeded, is_frozen,
+)
 ensure_seeded()
 
 # Anchor the working directory to the writable base so the handful of services
@@ -249,7 +251,7 @@ class GodAI(QWidget):
         install_dropdown_system(QApplication.instance())
         self._is_initializing = True
 
-        self.setWindowTitle("Imprint")
+        self.setWindowTitle(APP_DISPLAY_NAME)
         self.resize(1400, 900)
         self.setMinimumSize(1000, 600)
         self.showMaximized()
@@ -2353,7 +2355,7 @@ class GodAI(QWidget):
         The header itself is a fixed-height single row that ui/header_fit.py
         measures, so this is its own strip beneath it rather than a second
         line inside it. It exists because agent labels are codenames now:
-        "Brand Content" holding "Muse" tells a new user nothing on its own.
+        "Brand Content" holding "Nova" tells a new user nothing on its own.
         """
         strip = QFrame()
         strip.setObjectName("WorkspaceDescriptionStrip")
@@ -2388,7 +2390,7 @@ class GodAI(QWidget):
         dot.setObjectName("WordmarkDot")
         row.addWidget(dot)
         row.addSpacing(SM)
-        brand = QLabel("IMPRINT")
+        brand = QLabel(APP_DISPLAY_NAME.upper())
         brand.setObjectName("Wordmark")
         row.addWidget(brand)
 
@@ -2602,7 +2604,7 @@ class GodAI(QWidget):
         # Docs, tooltips and the status pill moved to the header bar: they are
         # application chrome, not part of this page, and having them here put a
         # row of controls between the title and the form it belongs to.
-        self.agent_title_label = QLabel("Chat")
+        self.agent_title_label = QLabel(AGENTS_BY_KEY["chat"].label)
         self.agent_title_label.setObjectName("AgentTitle")
         center_layout.addWidget(self.agent_title_label)
 
@@ -3009,7 +3011,7 @@ class GodAI(QWidget):
 
     # ── Creator (shared content production) ──────────────────────────────────
     def build_creator_panel(self):
-        """Compose the Muse panel owned by its agent package."""
+        """Compose the Nova panel owned by its agent package."""
         self.creator_panel = CreatorPanel(self)
 
     # ── Creator handlers ─────────────────────────────────────────────────────
@@ -6553,7 +6555,7 @@ def _selftest() -> int:
     repository imported at runtime, so PyInstaller's static analysis never sees
     it and only a real bundle proves it shipped.
 
-    Run:  /Applications/Imprint.app/Contents/MacOS/Imprint --selftest
+    Run:  "/Applications/Imprint Studio.app/Contents/MacOS/Imprint Studio" --selftest
     """
     from pathlib import Path as _Path
 
@@ -6564,7 +6566,7 @@ def _selftest() -> int:
         if not ok:
             failures.append(label)
 
-    print(f"Imprint self-test  (frozen={is_frozen()})")
+    print(f"{APP_DISPLAY_NAME} self-test  (frozen={is_frozen()})")
 
     # 1. Writable data directory. A frozen app that writes inside its own
     #    bundle breaks its signature and loses everything on reinstall.
@@ -6660,8 +6662,8 @@ if __name__ == "__main__":
     # The name goes in before QApplication() too, for a terminal run: that
     # process is the venv's python, outside any bundle, and AppKit reads the
     # name it titles the application menu with when Qt creates the application
-    # object. Imprint.app already carries its own (scripts/app_launcher.c).
-    app_identity.name_in_menu_bar("Imprint")
+    # object. Imprint Studio.app already carries its own (scripts/app_launcher.c).
+    app_identity.name_in_menu_bar(APP_DISPLAY_NAME)
     appkit_guard.install()
 
     app = QApplication([])
@@ -6671,7 +6673,7 @@ if __name__ == "__main__":
     app_identity.set_dock_icon(RESOURCE_DIR / "assets" / "icon.icns")
 
     # Second launch: focus the window that is already open and leave. Launch
-    # Services dedupes Imprint.app itself; this covers a terminal run beside it.
+    # Services dedupes Imprint Studio.app itself; this covers a terminal run beside it.
     if _hand_off_to_running_instance():
         sys.exit(0)
 

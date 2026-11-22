@@ -14,6 +14,7 @@ from services.income_lab import (
     automation_payback, break_even, compare_variants, contribution, funnel,
     recurring_cohort, workflow_cost,
 )
+from services.runtime_paths import APP_DISPLAY_NAME
 from ui import theme
 from ui.style import (
     ACCENT, ACCENT_LINE, ACCENT_WASH, BG, BORDER, ELEVATED, SURFACE, SUNKEN,
@@ -53,7 +54,7 @@ class IncomeWorksheetsDialog(QDialog):
     def __init__(self, parent=None, start: str = "contribution"):
         super().__init__(parent)
         self.setObjectName("IncomeWorksheetsDialog")
-        self.setWindowTitle("Income Lab worksheets · Imprint")
+        self.setWindowTitle(f"Income Lab worksheets · {APP_DISPLAY_NAME}")
         self.setMinimumSize(880, 650)
         self.resize(1040, 760)
         self.setAccessibleName("Income Lab interactive worksheets")

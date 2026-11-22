@@ -895,7 +895,7 @@ def test_studio_assistant_workspace_opens_the_existing_chat_panel(app, window):
     app.processEvents()
     assert window.workspace_tabs.tabText(window.workspace_tabs.currentIndex()) == "Assistant"
     assert window.normal_panel.isVisible()
-    assert window.agent_title_label.text() == "Chat"
+    assert window.agent_title_label.text() == "Kernel"
 
 
 def test_audiobook_selection_refreshes_the_cost_estimate(app, window):
@@ -1404,3 +1404,17 @@ def test_no_button_or_tab_label_has_a_lone_ampersand(app, window):
         offenders += [tabs.tabText(i) for i in range(tabs.count())
                       if lone.search(tabs.tabText(i))]
     assert not offenders, offenders
+
+
+def test_window_title_and_wordmark_show_the_display_name(window):
+    """Spec rename-imprint-studio, measure 1(a)."""
+    from PySide6.QtWidgets import QLabel
+    assert window.windowTitle() == "Imprint Studio"
+    assert window.findChild(QLabel, "Wordmark").text() == "IMPRINT STUDIO"
+
+
+def test_vector_panel_states_it_makes_png(window):
+    """Spec rename-imprint-studio R1 (audit QM-18), where the user starts a logo."""
+    from agents.fiverr.agent import PNG_NOTE
+    assert window.fiverr_panel.fiverr_png_note.text() == PNG_NOTE
+    assert "PNG" in PNG_NOTE and "not vector files" in PNG_NOTE
