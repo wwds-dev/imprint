@@ -1310,7 +1310,7 @@ This is injected as a "BOOK CONTEXT" block into every Write, Publish, and Market
 | **Scenes** | Live scene count parsed from chapter/scene headings and scene breaks. |
 | **Save Draft** | Saves the current Draft tab to `.txt` or `.md`. |
 | **Author name** | Name printed on the export title page (not the same as the Project Bar title). |
-| Format menu + **Export Book** | Pick **EPUB**, **DOCX** or **PDF** in the menu beside the author name, then **Export Book** renders the Draft tab — title page + auto-detected chapter breaks. No external tools required (EbookLib / python-docx / reportlab). |
+| Format menu + **Export Book** | Pick **EPUB**, **DOCX** or **PDF** in the menu beside the author name, then **Export Book** renders the Draft tab with auto-detected chapter breaks; DOCX and PDF get a title page, EPUB carries title and author as metadata only (`agents/author/book_exporter.py`). No external tools required (EbookLib / python-docx / reportlab). |
 | **Clear** | Empties the Draft, Outline, Characters, World Notes and Sources tabs, the Direction and the Title. |
 
 **Draft safety** (since 2026-11-20, `docs/specs/quill-draft-safety.md`). Each
