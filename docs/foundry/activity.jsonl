@@ -129,3 +129,4 @@
 {"ts": "2026-11-22T03:51:53", "phase": "define", "state": "done", "spec": "model-updates"}
 {"ts": "2026-11-22T03:51:53", "phase": "define", "state": "done", "spec": "docs-learning-centre-readiness"}
 {"ts": "2026-11-22T04:43:36", "phase": "build", "state": "start", "spec": "docs-learning-centre-readiness"}
+{"ts": "2026-11-22T05:33:32", "phase": "build", "state": "done", "spec": "docs-learning-centre-readiness"}

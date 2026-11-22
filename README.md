@@ -3029,10 +3029,10 @@ imprint/
 
 This is the one place the suite's size and run time are recorded; other
 documents point here. Count it yourself with
-`.venv/bin/python -m pytest --collect-only -q`. Last measurement: 2,637 tests
-collected on 2026-11-22; the last recorded full run (2026-11-20,
-`docs/specs/quill-draft-safety.md`) gave 2,191 passed and 17 skipped in
-24 min 35 s. A full run takes **about 15 to 30 minutes** on the owner's Mac,
+`.venv/bin/python -m pytest --collect-only -q`. Last measurement, 2026-11-22 at
+`be9f616`: 2,625 collected; a full run in random order gave 2,578 passed,
+17 skipped and 30 expected failures (the docs checks that wait for the rename)
+in 28 min 57 s. A full run takes **about 15 to 30 minutes** on the owner's Mac,
 not seconds; plan for that before starting one. Install the suite's own
 dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
 covers pytest, `pytest-timeout` and `pytest-randomly`:
