@@ -217,3 +217,42 @@ decides it. Launch: skipped (no announcement).
 2. Does the QM-18 fix ship inside this change or just before it?
 3. The bundle id is `com.netrunner3000.imprint` (`install_app.sh:82`, `Imprint.spec:154`) in a
    public repo. It stays here by decision 2; should a later change with a migration replace it?
+
+## Design (Build session, 2026-11-22)
+One question: does the name fit the header wordmark and the Dock?
+- **Wordmark.** `QLabel#Wordmark` is 15 px, weight 700, letter-spacing 2.4 px (`ui/style.py:914`).
+  "IMPRINT STUDIO" is 14 characters, about 170 px against about 95 px today; the header row has
+  only the dot, the version badge and a stretch before the right-hand controls, and the window's
+  minimum width is 1000 px (`main.py:254`). It fits on one line. Decision: one label, "IMPRINT
+  STUDIO", same style; no second weight or colour for "STUDIO" (calm UI, memory
+  `ui-gimmick-restraint`).
+- **Dock, Cmd-Tab, Activity Monitor.** They read the bundle and executable name (D1-B): "Imprint
+  Studio" fits under a Dock icon (the label shows on hover only) and in Cmd-Tab.
+- **Sub-window titles** keep the pattern "<Window> · Imprint Studio"; accessible names follow.
+- **Codenames.** The header title for the Assistant reads "Kernel" (was the label "Chat"); the
+  Brand Content and Brand Design workspaces show "Nova" and "Vector" from the catalog. The Vector
+  panel carries one muted line where the user starts a logo: "Vector makes PNG images, not vector
+  files. Trace them to SVG in a vector tool before client delivery." (R1).
+
+## Architect note (Build session, 2026-11-22; no ADR)
+- **State: none moves.** `APP_NAME`, `DB_PATH`, `SINGLE_INSTANCE_KEY`, `QSettings("Imprint",
+  "Imprint")` and the Application Support folder are untouched. The display name is a new constant
+  `APP_DISPLAY_NAME` in `services/runtime_paths.py`, read by every name surface; nothing writable
+  is derived from it.
+- **Existing databases.** No migration: `_sync_agent_labels` (`services/database.py:966`) already
+  rewrites every built-in agent's label from the catalog on each `init_db()`, so an install that
+  holds "Chat", "Muse" and "Stamp" shows Kernel, Nova and Vector on the next launch. The seed rows
+  are changed too, so a fresh database never holds an old label even for a moment. A test pins it.
+- **Concurrency: none.** No thread, worker or lock is touched.
+- **Boundaries.** Shared copies (`services/benchmarks.py`, the narrator converter,
+  `scripts/app_launcher.c`, `ui/appkit_guard.py`, `ui/app_identity.py`, the routing files) are not
+  edited: the menu-bar name is an argument at the call site. Lab Hub's `apps.toml` changes in its
+  own repo (the tile name builds the `/Applications/<name>.app` path).
+- **Removing the old bundle (D1-B, why Secure is required).** Both install scripts, after the new
+  bundle is in place, remove exactly `/Applications/Imprint.app` and nothing else: a fixed literal
+  path, no glob, no variable that could be empty; only when it is a real directory (not a symlink)
+  whose `Info.plist` has the bundle id `com.netrunner3000.imprint`; a running copy is asked to quit
+  first the way the new bundle is, and the script stops rather than delete a bundle that is still
+  running. User data lives in `~/Library/Application Support/Imprint/` and is never touched.
+- **Gate:** no state, concurrency or boundary change of the kind that needs the owner's Architect
+  gate.
