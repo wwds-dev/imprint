@@ -32,14 +32,14 @@ SHEETS = ROOT / "docs" / "agents"
 CONTROLS_FILE = ROOT / "tests" / "docs_controls.txt"
 
 # Review R-5: these cases belong to agents whose label did not change in the
-# rename (2026-11-22), so they are not the rename's; they wait on the rest of
-# spec package 5 (lesson and sheet titles, DL-9 and DL-18) or on the owner
-# (D7). The rename's own cases passed with it and lost their marks.
+# rename (2026-11-22), so they are not the rename's. The owner moved them out
+# of spec package 5 into their own open P2 row in TODO.md (review R-10). The
+# rename's own cases passed with it and lost their marks.
 NOT_RENAME = ("title or retired name of an agent whose label did not change "
-              "(spec package 5, DL-9/DL-18; review R-5)")
+              "(DL-9/DL-18, open P2 row in TODO.md; review R-5, R-10)")
 
 
-def _package5(*values):
+def _not_rename_xfail(*values):
     return pytest.param(*values, marks=pytest.mark.xfail(strict=True, reason=NOT_RENAME))
 
 
@@ -437,12 +437,12 @@ RETIRED_NAMES = ("Atelier", "Maestro", "Publisher Agent", "Narrator Agent",
 
 # README sections whose agent changed its name in the rename (2026-11-22):
 # 7.1 Kernel, 7.2 Vector, 7.11 Nova. Checked on their own by the test below.
-_README_PACKAGE_5 = (r"^7\.1 ", r"^7\.2 ", r"^7\.11 ")
+_README_RENAMED_SECTIONS = (r"^7\.1 ", r"^7\.2 ", r"^7\.11 ")
 
 
-def _readme_without_package5() -> str:
+def _readme_without_renamed_sections() -> str:
     text = _visible(README.read_text(encoding="utf-8"))
-    for pattern in _README_PACKAGE_5:
+    for pattern in _README_RENAMED_SECTIONS:
         body = _section(text, pattern)
         text = text.replace(body, "\n" * body.count("\n"))
     # Their headings, and the contents entries that link to them.
@@ -453,11 +453,14 @@ def _readme_without_package5() -> str:
 
 
 def _retired_hits(text: str, label: str) -> list[str]:
+    """Every retired name in ``text``, also where a line break splits it
+    ("Client\nGigs"; review R-9), reported at the line it starts on."""
     hits = []
-    for number, line in enumerate(text.splitlines(), 1):
-        for name in RETIRED_NAMES:
-            if re.search(rf"\b{re.escape(name)}\b", line):
-                hits.append(f"{label}:{number} {name!r}")
+    for name in RETIRED_NAMES:
+        words = r"\s+".join(re.escape(word) for word in name.split())
+        for found in re.finditer(rf"\b{words}\b", text):
+            number = text.count("\n", 0, found.start()) + 1
+            hits.append(f"{label}:{number} {name!r}")
     return hits
 
 
@@ -465,14 +468,14 @@ def test_t5_no_retired_agent_names_in_the_readme():
     """DL-1: sections 6 and 7 described seven agents in a left panel, under
     names retired in September. Sections 7.1, 7.2 and 7.11 are checked by the
     next test, after the rename."""
-    hits = _retired_hits(_readme_without_package5(), "README.md")
+    hits = _retired_hits(_readme_without_renamed_sections(), "README.md")
     assert not hits, "\n".join(hits)
 
 
 def test_t5_no_retired_agent_names_in_readme_sections_7_1_7_2_7_11():
     text = _visible(README.read_text(encoding="utf-8"))
     hits = []
-    for pattern in _README_PACKAGE_5:
+    for pattern in _README_RENAMED_SECTIONS:
         heading = next(line for line in text.splitlines()
                        if re.match(r"^### " + pattern[1:], line))
         hits += _retired_hits(heading + "\n" + _section(text, pattern),
@@ -481,14 +484,14 @@ def test_t5_no_retired_agent_names_in_readme_sections_7_1_7_2_7_11():
 
 
 # Lesson 26 is headed "Site Builder" (Sitebuilder's label did not change).
-_T5_PACKAGE_5_FILES = {"docs/learn/modules/26-site-builder.md"}
+_T5_NOT_RENAME_FILES = {"docs/learn/modules/26-site-builder.md"}
 
 
 def _t5_params():
     for path in USER_DOCS:
         if path == README:
             continue
-        yield (_package5(path) if _rel(path) in _T5_PACKAGE_5_FILES
+        yield (_not_rename_xfail(path) if _rel(path) in _T5_NOT_RENAME_FILES
                else pytest.param(path))
 
 
@@ -540,8 +543,9 @@ def _titled_files() -> list:
     params = []
     for path, label in rows:
         ok = _first_heading(path).startswith(label)
-        # Today's mismatches are the rename's (package 5); new ones are bugs.
-        params.append(_package5(path, label) if not ok and _rel(path) in _T6_KNOWN
+        # Today's mismatches are known and not the rename's (review R-5,
+        # R-10: moved to the open P2 row); new ones are bugs.
+        params.append(_not_rename_xfail(path, label) if not ok and _rel(path) in _T6_KNOWN
                       else pytest.param(path, label))
     return params
 

@@ -47,7 +47,7 @@ def test_version_tooltip_starts_with_the_display_name():
 # Calls whose string argument a user reads as the app's name.
 _NAME_CALLS = {"setWindowTitle", "setAccessibleName", "setToolTip", "name_in_menu_bar"}
 _NAME_SOURCES = ["main.py", *sorted(p.relative_to(ROOT).as_posix()
-                                    for p in (ROOT / "ui").glob("*.py"))]
+                                    for p in (ROOT / "ui").rglob("*.py"))]
 
 
 def _literal_name_arguments(path: Path):
@@ -72,6 +72,43 @@ def test_no_window_title_or_tray_text_hard_codes_the_old_name(rel):
     hits = [f"{rel}:{line} {text!r}" for line, text in _literal_name_arguments(ROOT / rel)
             if re.search(r"\bImprint\b(?! Studio)", text)]
     assert not hits, "\n".join(hits)
+
+
+@pytest.fixture(scope="module")
+def qt_app():
+    from PySide6.QtWidgets import QApplication
+    return QApplication.instance() or QApplication([])
+
+
+def _open_dialog(kind: str):
+    from PySide6.QtWidgets import QWidget
+    from services.runtime_paths import resource_base
+    RESOURCE_DIR = resource_base()
+    host = QWidget()
+    if kind == "docs":
+        from ui.docs_center import DocsCentreDialog
+        return host, DocsCentreDialog(host, RESOURCE_DIR)
+    if kind == "learn":
+        from ui.learning_center_v2 import LearningCentreDialog
+        return host, LearningCentreDialog(host, RESOURCE_DIR)
+    from ui.income_worksheets import IncomeWorksheetsDialog
+    return host, IncomeWorksheetsDialog(host)
+
+
+@pytest.mark.parametrize("kind,title", [
+    ("docs", "Documentation"), ("learn", "Learning Centre"),
+    ("income", "Income Lab worksheets"),
+])
+def test_sub_window_titles_carry_the_display_name(qt_app, kind, title):
+    """Review R-11: the static scan above only proves no old literal is
+    left; a title that dropped the app name would pass it. Built offscreen."""
+    from services.runtime_paths import APP_DISPLAY_NAME
+    host, dialog = _open_dialog(kind)
+    try:
+        assert dialog.windowTitle() == f"{title} · {APP_DISPLAY_NAME}"
+    finally:
+        dialog.deleteLater()
+        host.deleteLater()
 
 
 def test_bundle_metadata_names_imprint_studio():
@@ -280,3 +317,9 @@ def test_old_bundle_removal_is_one_fixed_path():
         text = (ROOT / "scripts" / script).read_text(encoding="utf-8")
         assert 'source "${PROJECT_ROOT}/scripts/retire_old_bundle.sh"' in text, script
         assert "\nretire_old_bundle\n" in text, script
+
+    # Review R-8: a copy that will not quit makes retire_old_bundle return 1,
+    # and set -e then stops build_app.sh, so it must come after the build-copy
+    # cleanup rather than before it.
+    build = (ROOT / "scripts" / "build_app.sh").read_text(encoding="utf-8")
+    assert build.index('rm -rf "$DIST_APP"') < build.index("\nretire_old_bundle\n")
