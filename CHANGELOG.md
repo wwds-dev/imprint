@@ -51,7 +51,20 @@ listed under **Unreleased** until it ships.
   references, orphan lessons, quoted controls (`tests/docs_controls.txt`),
   retired names, titles, income wording, local paths, limitation sections and
   the Settings tabs and permission boxes, checked in the normal suite. Cases
-  that wait for the rename are strict expected failures.
+  that wait for the rename are strict expected failures. After review
+  (`docs/audit/docs-learning-centre-readiness-code-reviewer.md`, R-3 and R-4):
+  the label check also covers README sections 3 to 7 and 13, every sheet and
+  every lesson, ignores docstrings, and Troubleshooting's quoted messages are
+  checked against the app's strings.
+
+### Fixed
+- **Docs after review (R-1, R-2, R-4, R-7, R-12):** Herald's Pinterest posting
+  is described as not working yet everywhere (it did say both); Label's two
+  tabs, not Label and Muse, share the "music" authorization; Troubleshooting
+  quotes the real "[Too long]", "too big now" and "_API_KEY is not set."
+  messages and points to the video, posting and audiobook lessons; the
+  Tighten Structure threshold (a quarter) is named; seven labels quoted with
+  the wrong wording or case now match the panels.
 
 ## 2026-11-21
 

@@ -3,7 +3,7 @@
 # literal in the app's Python or config (a longer label may contain it, as
 # "Make Release Kit…" contains "Make Release Kit"). When a doc quotes a new
 # control, add it here; when a label changes in the code, the test names
-# every doc line that has to follow.
+# the phrase that no longer matches (find the doc lines with grep).
 #
 # Seeded on 2026-11-22 from the bold phrases in README.md, the lessons, the
 # sheets, the package READMEs and tests/manual_test_cases.md that matched a
@@ -371,3 +371,146 @@ Yes
 # Bold phrases in a lesson's "Control atlas" that are not labels: section
 # names, states, emphasis.
 ⌘Z
+# Added 2026-11-22 when T4 widened to README 3-7 and 13, the sheets and
+# every lesson (review R-3): emphasis, section and widget descriptions,
+# outside products, roadmap items, prompt headings and status tokens.
+), an agent's cap in
+. Use
+22 October 2026
+8s
+A visible lead
+ARTIST PROFILE
+Ad-campaign briefs
+Add a Tool
+Add command scaffolds
+Agent Academy
+Agent controls
+Agent filter
+Agents tab
+All three modes
+Another image provider
+Another narrator
+Autonomous drive loop
+Backstage
+Best Qwen model for …
+BookProfile auto-fill
+Chapters tab
+Consistency memory
+Cover art
+DISTRIBUTION GUIDE
+Distribution integration
+Does not post yet
+Draft safety
+ElevenLabs API key
+Foundations
+Framework switch
+Frozen app
+HYPOTHESIS
+Keeps the Mac awake
+Live data
+Live preview
+Logo concepts
+MOBI and AZW3 need Calibre
+Market mode
+Mode tabs
+Model BEST FIT
+Model best fit
+Models tab
+Multi-file output
+New distributor
+No evidence of improvement
+Nothing changes the agent's selection
+One narrator key
+Other gig types
+Output box
+PRO registration
+Per-chapter files
+Per-section export
+Permission boxes
+Project Bar
+Project selector
+Prompt input
+Provider BEST FIT
+Provider best fit
+Provider filter
+Publish mode
+PublishDrive API key
+RELEASE SETUP
+Reedsy Studio
+Release Kits window
+Removed models
+Repeat
+Responsive
+Routing tab
+SPOTIFY STRATEGY
+Saved-chat list
+Scrivener
+Search bar
+Seedance paths not answering
+Show me
+Status filter
+Storage and history
+Structured chapter model
+Summary bar
+System Prompt preview
+System tab
+Table rows
+The agent
+The confirmation
+The picker groups local models
+The request gate
+Theme dots
+Ulysses
+Undated
+Unrated models
+Vector export
+Vellum
+When a run fails
+Workspace navigation
+Write mode
+[CHARACTER]
+[DRAFT]
+[No answer]
+[OUTLINE]
+a few seconds after startup
+actually generates the logo images
+address
+always tagged
+any
+assessed before approval
+baseline
+before
+character bible
+conversion worker
+dated snapshot
+delivery message
+digital distributor
+drafting available
+file path
+held
+image model
+in addition to
+in the model dropdowns
+narrator
+never added to a menu
+no price of its own
+not runnable
+observed transaction
+posting ready
+pricing table
+progress bar
+qualified opportunity
+quality gap
+relative to each other
+relative to the other routes
+standard ``
+start LM Studio's server with
+status label
+style prompt
+that
+that request
+three distinct modes
+voice profile
+▶ Show me
+Booth finds no books
+Herald cannot post

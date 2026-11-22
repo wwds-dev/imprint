@@ -200,9 +200,12 @@ def test_t3_every_learn_page_on_disk_is_in_the_manifest():
 
 @lru_cache(maxsize=1)
 def _app_strings() -> tuple[str, ...]:
-    """Every string literal in the app's Python and its config JSON."""
+    """Every string literal in the app's Python and its config JSON, except
+    docstrings: a phrase in a docstring is never on screen (review R-3, where
+    "too big right now" passed on ``services/providers.py``'s docstring)."""
     skip = {".venv", "tests", "cloud", "build", "dist", ".claude", "_to_delete"}
     strings: list[str] = []
+    scopes = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
     for path in ROOT.rglob("*.py"):
         if skip & set(path.relative_to(ROOT).parts):
             continue
@@ -210,8 +213,13 @@ def _app_strings() -> tuple[str, ...]:
             tree = ast.parse(path.read_text(encoding="utf-8"))
         except (SyntaxError, UnicodeDecodeError):
             continue
+        docstrings = {id(node.body[0].value) for node in ast.walk(tree)
+                      if isinstance(node, scopes) and node.body
+                      and isinstance(node.body[0], ast.Expr)
+                      and isinstance(node.body[0].value, ast.Constant)}
         strings += [node.value for node in ast.walk(tree)
-                    if isinstance(node, ast.Constant) and isinstance(node.value, str)]
+                    if isinstance(node, ast.Constant) and isinstance(node.value, str)
+                    and id(node) not in docstrings]
 
     def walk(value):
         if isinstance(value, str):
@@ -288,6 +296,122 @@ def test_t4_bold_phrases_in_a_control_atlas_are_listed(path):
     unknown = [p for p in _bold(_visible(atlas)) if p not in known]
     assert not unknown, (f"{_rel(path)}: add each to tests/docs_controls.txt "
                          f"(control or [not controls]): {unknown}")
+
+
+# README sections whose bold phrases name controls (review R-3).
+_T4_README_SECTIONS = ("3", "4", "5", "6", "7", "13")
+_GLYPH = re.compile(r"^[^\w\[(\"'“]+\s*")
+_LABEL_SEPARATORS = ("…", "...", ":", " —", " (", " –")
+
+# Label-like bold phrases that are not, today, a label in the app: each is a
+# doc naming a control differently from the panel, or naming one that is not
+# there. Found while widening T4 (review R-3); fixed in the name pass or by
+# hand, and then this list shrinks (strict: a fixed entry fails the suite).
+_T4_SUSPECTED_DRIFT = frozenset({
+    "BEST AVAILABLE",    # lessons 12 and 18; no such badge text in the code
+    "Free-form",         # README 7.4, as a Quill task group; no such label
+    "Last decision",     # README 5, a rail row; no such label
+    "Publishing Todos",  # README 7.5; only inside a status sentence
+})
+
+
+def _t4_scopes() -> list[tuple[str, str]]:
+    readme = _visible(README.read_text(encoding="utf-8"))
+    scopes = [(f"README.md section {n}", _section(readme, rf"^{n}\.\s"))
+              for n in _T4_README_SECTIONS]
+    for path in sorted(SHEETS.glob("*.md")) + sorted((LEARN / "modules").glob("*.md")):
+        scopes.append((_rel(path), _visible(path.read_text(encoding="utf-8"))))
+    return scopes
+
+
+def _label_like(phrase: str) -> bool:
+    """A bold phrase that could be a control's label. Not checked, because no
+    string test can tell them apart: run-in headings and sentences (ending in
+    ``:``, ``.``, ``;`` or ``,``, or over five words), quoted messages (they
+    are T4's list or Troubleshooting's job), and composed names: several
+    controls in one (``/``, ``+``, ``→``) or a label with a placeholder
+    (``<model>``, ``N``, ``…`` inside). Plain-text (unbolded) quotes of a label
+    are not checked either: nothing marks them as a label."""
+    if phrase.endswith((":", ".", ";", ",")) or len(phrase.split()) > 5:
+        return False
+    if any(mark in phrase for mark in ('"', "“", "/", "+", "→", "<")):
+        return False
+    if re.search(r"\bN\b", phrase) or "…" in phrase.rstrip("…"):
+        return False
+    return bool(re.search(r"[A-Za-z]", phrase))
+
+
+@lru_cache(maxsize=1)
+def _app_labels() -> frozenset[str]:
+    # Qt shows "&&" in a label as "&" ("Songs && Albums").
+    return frozenset(_normalise(s.replace("&&", "&")) for s in _app_strings())
+
+
+def _is_app_label(phrase: str) -> bool:
+    """Whole-literal match: the phrase is a literal, or a literal starts with
+    it followed by an ellipsis, a colon or an explanation ("Not rated yet —
+    ranked below rated models"). A phrase of three words or more may also sit
+    inside a longer literal at word boundaries (a quoted status line)."""
+    wanted = _normalise(_GLYPH.sub("", phrase))
+    if wanted in _app_labels() or wanted.rstrip(".:").strip() in _app_labels():
+        return True
+    starts = tuple(wanted + sep for sep in _LABEL_SEPARATORS)
+    if any(s.startswith(starts) for s in _app_labels()):
+        return True
+    if len(wanted.split()) >= 3:
+        pattern = re.compile(r"(?<!\w)" + re.escape(wanted) + r"(?!\w)")
+        return any(pattern.search(s) for s in _app_labels())
+    return False
+
+
+def _t4_unknown() -> dict[str, set[str]]:
+    controls, allowed = _controls()
+    known = set(controls) | allowed
+    found: dict[str, set[str]] = {}
+    for where, text in _t4_scopes():
+        for phrase in _bold(text):
+            if (_label_like(phrase) and phrase not in known
+                    and not _is_app_label(phrase)):
+                found.setdefault(phrase, set()).add(where)
+    return found
+
+
+def test_t4_label_like_bold_phrases_are_app_labels():
+    """DL-5 again, outside the control atlas (review R-3): README sections 3
+    to 7 and 13, every agent sheet and every lesson. A label-like bold phrase
+    is a whole label in the app, on the control list, or listed under
+    ``[not controls]``; "Save Budget Limits" for "Save Limits" fails here."""
+    unknown = {p: w for p, w in _t4_unknown().items() if p not in _T4_SUSPECTED_DRIFT}
+    assert not unknown, ("bold phrase is no label in the app; fix the doc, or add it "
+                         "to tests/docs_controls.txt [not controls]:\n"
+                         + "\n".join(f"{p!r} in {sorted(w)}" for p, w in sorted(unknown.items())))
+
+
+@pytest.mark.xfail(strict=True, reason="docs name controls the app labels differently (R-3)")
+def test_t4_suspected_label_drift_is_fixed():
+    still = sorted(p for p in _T4_SUSPECTED_DRIFT if p in _t4_unknown())
+    assert not still, f"still not app labels: {still}"
+
+
+def test_t4_troubleshooting_quotes_text_the_app_shows():
+    """Review R-4: each Troubleshooting entry starts with the message as the
+    app shows it. Every piece of a quoted message between ellipses (the
+    variable parts) must be in an app string that is not a docstring."""
+    text = _visible((LEARN / "modules" / "17-troubleshooting.md").read_text(encoding="utf-8"))
+    wrong = []
+    for phrase in _bold(text):
+        for quoted in re.findall(r'"([^"]+)"', phrase):
+            for piece in re.split(r"…|\.\.\.", quoted):
+                piece = piece.strip(" '.")
+                if len(piece) > 3 and not _in_app(piece):
+                    wrong.append(piece)
+    assert not wrong, f"quoted in Troubleshooting, not shown by the app: {wrong}"
+
+
+def test_t4_suspected_drift_list_has_no_stale_entries():
+    """An entry that is fixed, or no longer in the docs, comes off the list."""
+    stale = sorted(_T4_SUSPECTED_DRIFT - set(_t4_unknown()))
+    assert not stale, f"remove from _T4_SUSPECTED_DRIFT: {stale}"
 
 
 @pytest.mark.xfail(strict=True, reason=PACKAGE_5)
@@ -488,7 +612,9 @@ def test_t7_label_readme_does_not_project_payouts():
 @pytest.mark.parametrize("path", USER_DOCS + [ROOT / "CHANGELOG.md"], ids=_rel)
 def test_t8_no_local_user_path_in_a_doc(path):
     """DL-2: the README sent readers to a folder on the owner's Mac, and
-    published that folder's name in a public repo."""
+    published that folder's name in a public repo. Scope is the user docs
+    (``USER_DOCS``); ``TODO.md``, ``config/`` and older audits are not checked
+    and still carry such paths (review R-8, TODO QM rows)."""
     hits = [f"{_rel(path)}:{n}" for n, line in
             enumerate(path.read_text(encoding="utf-8").splitlines(), 1)
             if "/Users/" in line]
