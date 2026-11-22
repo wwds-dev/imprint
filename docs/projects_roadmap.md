@@ -191,7 +191,7 @@ database links, never the external files.
       scheduling refuses to file a draft under a different account. Imported
       media and finished teaser clips gain Project artifact links. Project
       deletion unfiles content and jobs without deleting accounts, voice,
-      character records or files; Muse's Calendar and Media tabs default to all
+      character records or files; Nova's Calendar and Media tabs default to all
       account work, with an explicit current-Project filter.
 - [x] **Project Overview** in the left rail joins Write's working-draft count,
       linked files grouped by agent, and Creator's scheduled content. Broken

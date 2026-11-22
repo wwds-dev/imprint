@@ -95,7 +95,7 @@ AGENT_SPECS = (
 AGENTS_BY_KEY = MappingProxyType({spec.key: spec for spec in AGENT_SPECS})
 
 # One line per workspace, shown under the header tab bar. Agent labels are
-# codenames now ("Quill", "Booth", "Muse"), so a workspace name alone no
+# codenames now ("Quill", "Booth", "Nova"), so a workspace name alone no
 # longer tells a new user what lives inside it. Keyed by workspace name
 # because a workspace is a grouping, not an agent, and has no spec of its own.
 #

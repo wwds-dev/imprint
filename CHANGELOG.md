@@ -40,8 +40,10 @@ listed under **Unreleased** until it ships.
   the bundle id do not change. Agents: Chat is now **Kernel**, Muse is
   **Nova**, Stamp is **Vector**; an existing database shows the new names on
   the next launch. "Open Muse" and "use Stamp" no longer route (no aliases),
-  and the router no longer treats "use the nova voice" or "use vector files"
-  as naming an agent. Docs, sheets, lessons and the hand-test script use the
+  and the router no longer treats "use the nova voice", "use vector files" or
+  "use nova's voice" as naming an agent. That check covers only Kernel, Nova
+  and Vector: "open Booth again" or "use Quill on chapter 3" still open the
+  agent, as before. Docs, sheets, lessons and the hand-test script use the
   new names; the Kernel, Nova and Vector sheets gained "Deliberate
   limitations".
 
@@ -78,7 +80,8 @@ listed under **Unreleased** until it ships.
   (audit QM-18). Its prompt dropped the "5-star reputation", leaves prices as
   `[PRICE]` unless you give them, and asks for a flat logo on a plain
   background; the panel, sheet and lesson say "Vector makes PNG images, not
-  vector files".
+  vector files". The ban now covers delivery messages too, and the README no
+  longer says the prompt asks for a transparent, vector-like logo.
 - **Docs after review (R-1, R-2, R-4, R-7, R-12):** Herald's Pinterest posting
   is described as not working yet everywhere (it did say both); Label's two
   tabs, not Label and Muse, share the "music" authorization; Troubleshooting

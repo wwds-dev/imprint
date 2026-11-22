@@ -1,4 +1,4 @@
-"""Week-calendar logic for the Nova's content plan.
+"""Week-calendar logic for Nova's content plan.
 
 Qt-free on purpose: parsing, week arithmetic and the two export formats
 are plain functions a test can call without a window.

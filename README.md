@@ -1187,7 +1187,7 @@ Live status appears as a line under the action row.
 
 #### Tips & Limitations
 
-> The image prompt asks for a vector-like logo, transparent background and no text — but the result is still a raster PNG. Vectorise before final client delivery.
+> The image prompt asks for a flat logo with clean edges on a plain white background and no text. The result is a raster image saved as `.png`, not a vector file and not transparent: trace it to SVG in a vector tool before final client delivery.
 
 > The text LLM is used twice per logo run: once to build the image prompt, once for whatever copy task you trigger.
 

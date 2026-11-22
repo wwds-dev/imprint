@@ -40,7 +40,7 @@ Two-step logo flow: a `ChatWorker` runs `FiverrAgent.build_image_prompt_request(
 ## Deliberate limitations
 What Vector does not do, on purpose or not yet. Rows marked *open* are known gaps with a `TODO.md` item; the code audit of 2026-11-18 (`docs/audit/code-readiness-audit-2026-11-18.md`) is the source.
 
-- **PNG images only, not vector files.** Every image route returns a raster PNG; trace it to SVG in a vector tool before client delivery. The prompt no longer asks for a vector or transparent-background result (audit QM-18, fixed 2026-11-22).
+- **Raster images only, not vector files.** Every image route returns a raster image (saved as `.png`); trace it to SVG in a vector tool before client delivery. The prompt no longer asks for a vector or transparent-background result (audit QM-18, fixed 2026-11-22).
 - **No transparent background.** Concepts come on a plain background; remove it in an image editor if the client needs one.
 - **Prices are yours to set.** The gig description leaves `[PRICE]` where you gave no price; it does not invent ratings, reviews or a track record.
 - **A bare "logo" does not route here** from Auto Route (only "logo order" or "gig listing" do); open Brand Design yourself.

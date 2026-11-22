@@ -154,9 +154,9 @@ and wins it. A rating only moves the BEST FIT badge — nothing switches.
 
 **Settings → Models** sets a routing mode, with an override per agent:
 *Local, advise per job* (the default), *Suggest local*, *Local first*,
-*Cloud only* and *Local only*. Five agents are advised: the Studio
-Assistant, Quill (Draft), Herald (Social), Sitebuilder and Vector (Client
-Gigs). Nova and Press (which offer no local model), Label's music plans and
+*Cloud only* and *Local only*. Five agents are advised: Kernel
+(Assistant), Quill (Draft), Herald (Social), Sitebuilder and Vector (Brand
+Design). Nova and Press (which offer no local model), Label's music plans and
 Suno drafts, and every media request (audiobooks, video and images, billed
 per unit) are not advised.
 When a job's selected model is not good enough for it — rated more than 20

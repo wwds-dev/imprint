@@ -204,7 +204,7 @@ class FiverrPanel(QWidget):
         layout.addLayout(actions)
 
         # The name invites the opposite reading (spec rename-imprint-studio,
-        # R1; audit QM-18): every image route returns a raster PNG.
+        # R1; audit QM-18): every image route returns a raster image, saved as .png.
         self.fiverr_png_note = QLabel(PNG_NOTE)
         self.fiverr_png_note.setObjectName("EstimateLine")
         self.fiverr_png_note.setWordWrap(True)
