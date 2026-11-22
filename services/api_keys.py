@@ -58,7 +58,7 @@ GROUPS = (MODEL, MEDIA, ENDPOINTS, PRESS, HERALD)
 
 CREDENTIALS: tuple[Credential, ...] = (
     Credential("OPENAI_API_KEY", "OpenAI", MODEL,
-               "Chat, GPT Image for Stamp and Reel's scenes, and Booth's OpenAI TTS narration. "
+               "Kernel, GPT Image for Vector and Reel's scenes, and Booth's OpenAI TTS narration. "
                "platform.openai.com → API keys.", probe="openai"),
     Credential("ANTHROPIC_API_KEY", "Anthropic", MODEL,
                "Claude for every text agent. console.anthropic.com → API keys.", probe="anthropic"),
@@ -74,7 +74,7 @@ CREDENTIALS: tuple[Credential, ...] = (
                "Qwen text and images, Wan video. bailian.console.alibabacloud.com.", probe="qwen"),
 
     Credential("HF_API_KEY_ID", "Higgsfield key ID", MEDIA,
-               "Muse's teasers and Reel's Higgsfield route. A key ID + secret pair, not a bearer token. "
+               "Nova's teasers and Reel's Higgsfield route. A key ID + secret pair, not a bearer token. "
                "cloud.higgsfield.ai.", aliases=("HIGGSFIELD_API_KEY_ID",)),
     Credential("HF_API_KEY_SECRET", "Higgsfield key secret", MEDIA,
                "The second half of the Higgsfield pair.", aliases=("HIGGSFIELD_API_KEY_SECRET",)),

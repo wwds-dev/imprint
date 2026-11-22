@@ -1220,7 +1220,7 @@ def model_guide_html() -> str:
         if conn is not None:
             conn.close()
     parts.append("<h3>Image, video and speech</h3>"
-                 "<p>Chosen per request in Reel, Stamp, Press and Booth; every "
+                 "<p>Chosen per request in Reel, Vector, Press and Booth; every "
                  "paid render is assessed against the other routes before you "
                  "approve it, with its own cost estimate.</p>")
     return "\n".join(parts)

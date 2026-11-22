@@ -1,4 +1,4 @@
-"""Muse workspace and its guarded drafting/teaser lifecycles.
+"""Nova workspace and its guarded drafting/teaser lifecycles.
 
 Phase 4 extraction: the profile form, compose controls and the four tabs
 (Draft, Calendar, Voice, Media) and every

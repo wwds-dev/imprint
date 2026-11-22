@@ -1,7 +1,7 @@
 {
   "agents": [
     {
-      "name": "chat", "type": "agent", "label": "Chat", "enabled": true, "version": "1.0",
+      "name": "chat", "type": "agent", "label": "Kernel", "enabled": true, "version": "1.0",
       "allowed_providers": ["ollama", "openai", "deepseek", "kimi", "gemini", "qwen", "anthropic"],
       "allowed_tools": null, "budget_limit_eur": null, "requires_approval": false,
       "description": "General-purpose conversation with saved project history.", "log_path": "data/logs/runs.jsonl"
@@ -37,7 +37,7 @@
       "description": "Generate responsive websites and production-ready front-end code.", "log_path": "data/logs/runs.jsonl"
     },
     {
-      "name": "fiverr", "type": "agent", "label": "Stamp", "enabled": true, "version": "1.0",
+      "name": "fiverr", "type": "agent", "label": "Vector", "enabled": true, "version": "1.0",
       "allowed_providers": ["ollama", "openai", "deepseek", "kimi", "gemini", "qwen", "anthropic"],
       "allowed_tools": null, "budget_limit_eur": null, "requires_approval": false,
       "description": "Create logo concepts, gig listings, and client delivery messages.", "log_path": "data/logs/runs.jsonl"

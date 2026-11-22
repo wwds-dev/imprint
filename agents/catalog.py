@@ -68,19 +68,19 @@ AGENT_SPECS = (
         recommendation_profile="agents.webdesign.recommendations",
     ),
     AgentSpec(
-        "fiverr", "Stamp", "Brand Design",
+        "fiverr", "Vector", "Brand Design",
         "Create client-ready concepts, listings and delivery messages.",
         "agents.fiverr",
         recommendation_profile="agents.fiverr.recommendations",
     ),
     AgentSpec(
-        "creator", "Muse", "Brand Content",
+        "creator", "Nova", "Brand Content",
         "Create reusable campaigns, captions and promotional assets.",
         "agents.creator",
         recommendation_profile="agents.creator.recommendations",
     ),
     AgentSpec(
-        "chat", "Chat", "Assistant",
+        "chat", "Kernel", "Assistant",
         "General-purpose chat and tool-assisted conversation.",
         "agents.chat", panel=False,
         recommendation_profile="agents.chat.recommendations",

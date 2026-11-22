@@ -1,4 +1,4 @@
-"""Public interface for the internal Chat."""
+"""Public interface for the internal Kernel agent."""
 
 from .agent import ChatAgent
 

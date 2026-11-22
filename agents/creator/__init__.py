@@ -1,4 +1,4 @@
-"""Public interface for the Muse agent."""
+"""Public interface for the Nova agent."""
 
 from .agent import KINDS, PROMO_CHANNELS, CreatorAgent
 

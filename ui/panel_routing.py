@@ -1,7 +1,7 @@
-"""The routing advisor for Imprint's text agents beyond Chat.
+"""The routing advisor for Imprint's text agents beyond Kernel.
 
-Chat holds a job on its own banner (main.py `_advise_job`); Quill (author),
-Herald (social), Sitebuilder (webdesign) and Stamp (fiverr) hold theirs here,
+Kernel holds a job on its own banner (main.py `_advise_job`); Quill (author),
+Herald (social), Sitebuilder (webdesign) and Vector (fiverr) hold theirs here,
 on a banner at the top of the agent's panel. Both ask the same question of
 services/routing_advisor.py and keep the answers in the same place, per agent
 and kind of work, in data/routing_rules.json.
@@ -14,7 +14,7 @@ the chosen model in the boxes and running the action again, never by swapping
 the model inside the guard.
 
 Left out on purpose:
-  * Muse (creator) and Press (manuscript) offer no local provider, on
+  * Nova (creator) and Press (manuscript) offer no local provider, on
     purpose, so there is nothing local to prefer and no panel call passes
     `resume=`. creator is named in `NEVER_ADVISED`, and `eligible()` also asks
     for a local provider in the agent's box, so a later change to either panel

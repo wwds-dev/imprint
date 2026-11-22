@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from services.openai_client import (
     DEFAULT_IMAGE_MODEL,
 )
+from agents.fiverr.agent import PNG_NOTE
 from services import money_text
 from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
@@ -201,6 +202,13 @@ class FiverrPanel(QWidget):
         self.fiverr_cost_label.setObjectName("EstimateLine")
         actions.addWidget(self.fiverr_cost_label)
         layout.addLayout(actions)
+
+        # The name invites the opposite reading (spec rename-imprint-studio,
+        # R1; audit QM-18): every image route returns a raster PNG.
+        self.fiverr_png_note = QLabel(PNG_NOTE)
+        self.fiverr_png_note.setObjectName("EstimateLine")
+        self.fiverr_png_note.setWordWrap(True)
+        layout.addWidget(self.fiverr_png_note)
 
         self.fiverr_status_label = QLabel("Idle")
         self.fiverr_status_label.setObjectName("EstimateLine")
@@ -416,7 +424,7 @@ class FiverrPanel(QWidget):
         worker.start()
 
     def _image_assessment(self, selected: str, count: int, image_prompt: str):
-        """Price these logos on every image model Stamp can run, and rank them."""
+        """Price these logos on every image model Vector can run, and rank them."""
         from services.image_generation import provider_for
         from services.media_catalog import find_model
         from services.per_unit_pricing import image_cost_eur

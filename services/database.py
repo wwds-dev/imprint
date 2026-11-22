@@ -1197,7 +1197,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
     agents = [
         {
             "name": "chat",
-            "label": "Chat",
+            "label": "Kernel",
             "description": "General-purpose conversation with saved project history and budgeted provider routing.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -1241,7 +1241,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "fiverr",
-            "label": "Stamp",
+            "label": "Vector",
             "description": "Fiverr freelancer agent — generates logo concepts via current OpenAI GPT Image models, writes professional delivery messages, and creates Fiverr gig descriptions.",
             "allowed_providers": json.dumps([]),
             "allowed_tools": None,
@@ -1290,7 +1290,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "creator",
-            "label": "Muse",
+            "label": "Nova",
             "description": "Shared content production for every venture — concepts, captions, campaigns, posting plans, promotional assets, calendars, and performance feedback.",
             # higgsfield is the video renderer, not a chat provider, but it is a paid
             # backend the guard authorises against and so has to be permitted here.
@@ -1304,7 +1304,7 @@ def _seed_default_agents(conn: sqlite3.Connection) -> None:
         },
         {
             "name": "manuscript",
-            "label": "Publisher",
+            "label": "Press",
             "description": "Book publishing metrics, platform distribution tracking, and todo management.",
             # elevenlabs is the shorts narrator, not a chat provider, but it is
             # a paid backend the guard authorises against and so has to be

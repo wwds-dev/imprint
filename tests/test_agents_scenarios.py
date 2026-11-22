@@ -138,7 +138,9 @@ class TestRouterAgent:
     @pytest.mark.parametrize("text,expected", [
         ("open Booth", "audiobook"),
         ("use Quill", "author"),
-        ("switch to Muse", "creator"),
+        ("switch to Nova", "creator"),
+        ("open Kernel", "chat"),
+        ("use Vector", "fiverr"),
         ("go to Herald", "social"),
         ("take me to Press", "manuscript"),
         ("open the Reel", "video"),
@@ -148,9 +150,10 @@ class TestRouterAgent:
         assert self.agent.classify(text) == expected
 
     @pytest.mark.parametrize("text,expected", [
-        ("Muse", "creator"),
+        ("Nova", "creator"),
         ("Booth", "audiobook"),
-        ("Stamp.", "fiverr"),
+        ("Vector.", "fiverr"),
+        ("Kernel", "chat"),
     ])
     def test_the_bare_name_is_enough(self, text, expected):
         assert self.agent.classify(text) == expected
@@ -160,12 +163,31 @@ class TestRouterAgent:
         "a white label deal",
         "stamp the document and send it",
         "we need a primer on solvency",
+        # The 2026-11-22 codenames are ordinary words too (spec R3).
+        "kernel panic on my Mac",
+        "use the nova voice",
+        "use vector files",
+        "open the vector file in Illustrator",
+        "use the kernel extension",
     ])
     def test_an_ordinary_word_is_not_an_address(self, text):
         """Half the codenames are ordinary English. Matching a bare token would
         send "press release" to Press, which is the reason addressing needs an
         opening verb rather than a word match."""
         assert self.agent.classify(text) == "chat"
+
+    @pytest.mark.parametrize("text", ["open Muse", "use Stamp", "Muse", "Stamp."])
+    def test_retired_codenames_no_longer_address_an_agent(self, text):
+        """Spec D4: no aliases for the names retired on 2026-11-22."""
+        assert self.agent.route(text).confidence != "addressed"
+
+    @pytest.mark.parametrize("text,expected", [
+        ("open Nova and draft a campaign", "creator"),
+        ("use Vector for this logo", "fiverr"),
+        ("open Kernel, please", "chat"),
+    ])
+    def test_a_name_followed_by_a_connector_still_addresses(self, text, expected):
+        assert self.agent.classify(text) == expected
 
     def test_codenames_come_from_the_catalog(self):
         """So a rename cannot leave the router answering to a name that no
@@ -457,6 +479,21 @@ class TestFiverrAgent:
     def test_image_prompt_request_includes_brief(self):
         msgs = self.agent.build_image_prompt_request(self.BRIEF)
         assert "NovaBrew Coffee" in _user(msgs)
+
+    def test_prompt_promises_no_vector_files_and_no_invented_record(self):
+        """Audit QM-18, spec rename-imprint-studio R1: every image route
+        returns a raster PNG, and the persona had a "5-star reputation" and
+        fixed prices nobody gave it."""
+        sys = _system(self.agent.build_messages("anything", self.BRIEF))
+        assert "vector logo" not in sys
+        assert "transparent background" not in sys
+        assert "5-star" not in sys
+        assert "never promise vector files" in sys
+        assert "[PRICE]" in sys
+
+    def test_png_note_says_what_vector_makes(self):
+        from agents.fiverr.agent import PNG_NOTE
+        assert PNG_NOTE.startswith("Vector makes PNG images, not vector files.")
 
 
 # 6. MusicAgent — Label

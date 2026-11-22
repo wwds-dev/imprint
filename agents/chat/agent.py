@@ -1,4 +1,4 @@
-"""General assistant implementation owned by the Chat agent package."""
+"""General assistant implementation owned by the Kernel agent package."""
 
 
 class ChatAgent:

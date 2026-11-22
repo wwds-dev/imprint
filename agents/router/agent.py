@@ -78,9 +78,30 @@ def _addressed(lowered: str) -> str | None:
         if re.fullmatch(rf"\W*{escaped}\W*", lowered):
             return key
         openers = "|".join(_OPENERS)
-        if re.search(rf"\b(?:{openers})\s+(?:the\s+)?{escaped}\b", lowered):
-            return key
+        for found in re.finditer(
+                rf"\b(?:{openers})\s+(?:the\s+)?{escaped}\b", lowered):
+            if _ends_the_name(lowered[found.end():]):
+                return key
     return None
+
+
+#: Words that may follow a name that addresses an agent ("open Nova and draft
+#: a campaign"). Any other word turns the name into a modifier of a noun: "use
+#: the nova voice" is an OpenAI voice and "use vector files" a file format,
+#: not a request for Nova or Vector (spec rename-imprint-studio, R3).
+_CONNECTORS = frozenset({
+    "and", "then", "to", "for", "please", "now", "with", "so", "agent",
+    "workspace", "tab", "panel", "instead",
+})
+
+
+def _ends_the_name(rest: str) -> bool:
+    """True when the text after an addressed name ends it: nothing, a
+    punctuation mark, or a connector word."""
+    following = re.match(r"\s*(\w+)", rest)
+    if following is None or not re.match(r"\s", rest):
+        return True
+    return following.group(1) in _CONNECTORS
 
 
 class RouterAgent:

@@ -1,6 +1,6 @@
-"""Muse implementation owned by the Muse agent package.
+"""Nova implementation owned by the Nova agent package.
 
-Muse turns venture context into concepts, captions, campaigns, posting plans,
+Nova turns venture context into concepts, captions, campaigns, posting plans,
 and promotional assets. It is platform-neutral: books, music, AltMerch, and
 future ventures use the same production surface.
 
@@ -81,7 +81,7 @@ you would need rather than inventing it."""
 
 
 class CreatorAgent:
-    """Builds prompts for the Muse panel."""
+    """Builds prompts for the Nova panel."""
 
     def build_messages(self, prompt: str) -> list[dict]:
         return [

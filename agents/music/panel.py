@@ -53,7 +53,7 @@ class MusicPanel(QWidget):
         layout.setSpacing(LG)
 
         layout.addWidget(section("Artist setup"))
-        self.music_artist_input = line_edit("Nova Drift, DJ Phantom, The Hollow Road")
+        self.music_artist_input = line_edit("Glass Harbor, DJ Phantom, The Hollow Road")
         self.music_genre_box = combo([
             "Pop", "Rock", "Hip-Hop", "Electronic", "Jazz", "Classical",
             "R&B", "Metal", "Indie", "Folk", "Country", "Latin", "Reggae",
