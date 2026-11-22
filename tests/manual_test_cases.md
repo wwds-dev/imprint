@@ -201,9 +201,11 @@ What is the capital of France?
 ```
 press release for the launch
 a white label deal
-stamp the document and send it
+vector graphics for the flyer
+use vector files
+use nova's voice
 ```
-- [ ] All three route to **Kernel**, not to Press / Label / Vector
+- [ ] All five route to **Kernel** without "addressed", not to Press / Label / Vector / Nova
 - [ ] A bare `Nova` or `Vector.` on its own *does* route to that agent
 
 **Test F — addressing beats intent**

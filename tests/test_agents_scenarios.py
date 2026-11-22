@@ -169,12 +169,19 @@ class TestRouterAgent:
         "use vector files",
         "open the vector file in Illustrator",
         "use the kernel extension",
+        # Review R-3: a hyphen, apostrophe or dot joined to the next word makes
+        # the name part of a longer word, not an address.
+        "use vector-based artwork",
+        "use nova's voice",
+        "open kernel.log",
     ])
     def test_an_ordinary_word_is_not_an_address(self, text):
         """Half the codenames are ordinary English. Matching a bare token would
         send "press release" to Press, which is the reason addressing needs an
         opening verb rather than a word match."""
-        assert self.agent.classify(text) == "chat"
+        decision = self.agent.route(text)
+        assert decision.key == "chat"
+        assert decision.confidence != "addressed"
 
     @pytest.mark.parametrize("text", ["open Muse", "use Stamp", "Muse", "Stamp."])
     def test_retired_codenames_no_longer_address_an_agent(self, text):
@@ -188,6 +195,39 @@ class TestRouterAgent:
     ])
     def test_a_name_followed_by_a_connector_still_addresses(self, text, expected):
         assert self.agent.classify(text) == expected
+
+    @pytest.mark.parametrize("text", [
+        "use nova-voice for the narration",
+        "use Nova's voice for the intro",
+        "open kernel.log and look for errors",
+    ])
+    def test_a_joined_word_never_addresses_a_new_codename(self, text):
+        """Review R-3: the same sentences, where intent may route elsewhere;
+        the point is only that the name is not taken as an address."""
+        assert self.agent.route(text).confidence != "addressed"
+
+    @pytest.mark.parametrize("text,expected", [
+        ("use Vector. Then make a logo", "fiverr"),
+        ("open Nova; draft three posts", "creator"),
+        ("switch to Kernel!", "chat"),
+    ])
+    def test_sentence_punctuation_ends_a_new_codename(self, text, expected):
+        assert self.agent.classify(text) == expected
+
+    @pytest.mark.parametrize("text,expected", [
+        ("open Booth again", "audiobook"),
+        ("use Quill on chapter 3", "author"),
+        ("use Herald today", "social"),
+        ("go to Press first", "manuscript"),
+        ("open the Reel quickly", "video"),
+        ("use Sitebuilder for my portfolio site", "webdesign"),
+    ])
+    def test_unchanged_codenames_address_with_any_trailing_word(self, text, expected):
+        """Review R-2: the modifier guard covers only the three names that are
+        new on 2026-11-22 (Kernel, Nova, Vector). Every other codename
+        addresses exactly as it did before the rename."""
+        decision = self.agent.route(text)
+        assert (decision.key, decision.confidence) == (expected, "addressed")
 
     def test_codenames_come_from_the_catalog(self):
         """So a rename cannot leave the router answering to a name that no
@@ -490,6 +530,14 @@ class TestFiverrAgent:
         assert "5-star" not in sys
         assert "never promise vector files" in sys
         assert "[PRICE]" in sys
+
+    def test_the_vector_file_ban_covers_every_kind_of_text(self):
+        """Review R-7: the ban sat inside the gig description only, so a
+        delivery message could still promise SVG files. It now sits in the
+        persona paragraph, which governs every section of the prompt."""
+        from agents.fiverr.agent import SYSTEM_PROMPT
+        persona = SYSTEM_PROMPT.split("\n\n", 1)[0]
+        assert "never promise vector files" in persona
 
     def test_png_note_says_what_vector_makes(self):
         from agents.fiverr.agent import PNG_NOTE

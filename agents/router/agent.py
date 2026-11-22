@@ -80,15 +80,22 @@ def _addressed(lowered: str) -> str | None:
         openers = "|".join(_OPENERS)
         for found in re.finditer(
                 rf"\b(?:{openers})\s+(?:the\s+)?{escaped}\b", lowered):
-            if _ends_the_name(lowered[found.end():]):
+            if key not in _GUARDED_KEYS or _ends_the_name(
+                    lowered[found.end():]):
                 return key
     return None
 
 
-#: Words that may follow a name that addresses an agent ("open Nova and draft
-#: a campaign"). Any other word turns the name into a modifier of a noun: "use
-#: the nova voice" is an OpenAI voice and "use vector files" a file format,
-#: not a request for Nova or Vector (spec rename-imprint-studio, R3).
+#: Agents whose codename (since 2026-11-22) is also a common modifier: Kernel
+#: (chat), Nova (creator) and Vector (fiverr). "Use the nova voice" is an
+#: OpenAI voice and "use vector files" a file format, so for these three the
+#: word after the name must end it (spec rename-imprint-studio, R3). Every
+#: other codename addresses after an opener whatever follows, as before.
+#: Keyed by catalog key, so a later relabel keeps the guard on the same agents.
+_GUARDED_KEYS = frozenset({"chat", "creator", "fiverr"})
+
+#: Words that may follow a guarded name that addresses an agent ("open Nova
+#: and draft a campaign"). Any other word makes the name a modifier.
 _CONNECTORS = frozenset({
     "and", "then", "to", "for", "please", "now", "with", "so", "agent",
     "workspace", "tab", "panel", "instead",
@@ -96,8 +103,12 @@ _CONNECTORS = frozenset({
 
 
 def _ends_the_name(rest: str) -> bool:
-    """True when the text after an addressed name ends it: nothing, a
-    punctuation mark, or a connector word."""
+    """True when the text after a guarded name ends it: nothing, a connector
+    word, or punctuation. A hyphen, apostrophe or dot joined to a word
+    character ("vector-based", "nova's", "kernel.log") continues a longer
+    word, so it does not end the name (review R-3)."""
+    if re.match(r"[-'\u2019.]\w", rest):
+        return False
     following = re.match(r"\s*(\w+)", rest)
     if following is None or not re.match(r"\s", rest):
         return True

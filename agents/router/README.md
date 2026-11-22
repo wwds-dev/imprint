@@ -53,9 +53,15 @@ execute provider calls or bypass the shared request guard.
 
   Addressing is narrow on purpose. Half the codenames are ordinary English, so
   a bare token match would send "press release" to `manuscript`, "white label"
-  to `music` and "stamp the document" to `fiverr`. A codename therefore routes
+  to `music` and "vector graphics for the flyer" to `fiverr`. A codename therefore routes
   only after an opening verb (`open`, `use`, `switch to`, `go to`,
-  `take me to`) or when the whole message is the name. Addressing wins over
+  `take me to`) or when the whole message is the name. For the three names
+  that are new on 2026-11-22 (Kernel, Nova, Vector; `_GUARDED_KEYS`), the
+  text after the name must also end it: nothing, punctuation, or a word in
+  `_CONNECTORS`; a joined `-`, `'` or `.` continues a longer word
+  (`_ends_the_name`). The other codenames address whatever follows. Known
+  limit: a connector after a guarded name still addresses ("use vector to
+  scale"); see `docs/agents/router.md`. Addressing wins over
   the keyword table when both match: naming a tool is the more explicit act.
   This is the one part of the router that is anchored rather than substring —
   `agent.py` uses `re.fullmatch`/`\b` for it.

@@ -18,14 +18,37 @@ labels the UI shows.
 
 Addressing is deliberately narrow, because half the codenames are ordinary
 English. A bare word match would send "press release" to Press, "white label" to
-Label and "stamp the document" to Vector. So a codename routes only when the text
+Label and "vector graphics for the flyer" to Vector. So a codename routes only when the text
 *addresses* it:
 
 - an opening verb — `open`, `use`, `switch to`, `go to`, `take me to` — as in
   "open Booth" or "use the Reel";
 - or the whole message being the name, as in "Nova" or "Vector.".
 
-Anything less is treated as the word, not the tool. Addressing beats intent when
+Anything less is treated as the word, not the tool.
+
+**Kernel, Nova and Vector need one more check.** Their names (since 2026-11-22)
+are also common modifiers: "use the nova voice" is an OpenAI voice and "use
+vector files" a file format. For these three, the opening verb and the name
+address the agent only when what follows ends the name:
+
+- nothing, or punctuation: "use Vector", "open Kernel, please", "use Vector. Then…";
+- or one of these words: and, then, to, for, please, now, with, so, agent,
+  workspace, tab, panel, instead ("open Nova and draft a campaign").
+
+Any other word makes the name a modifier ("use vector files", "open Nova mode").
+A hyphen, apostrophe or dot joined to the next word makes it part of a longer
+word ("use vector-based artwork", "use nova's voice", "open kernel.log").
+
+The other codenames have no such check: "open Booth again" and "use Quill on
+chapter 3" address the agent whatever follows, as before the rename.
+
+**Accepted limit.** A guarded name followed by a connector still addresses the
+agent, even when the sentence means the word: "use vector for print, not png",
+"use vector to scale without loss", "use vector and raster formats" and "use
+kernel to manage memory" open Vector or Kernel. Telling these apart from "use
+Vector for this logo" would need the meaning of the sentence, which a keyword
+router does not have. Pick the workspace yourself when this happens. Addressing beats intent when
 they disagree: naming a tool is the more explicit act.
 
 ### Intent — describing the work
