@@ -1,6 +1,6 @@
 # Spec: documentation and Learning Centre ready for the hand test
 
-Status: DRAFT, awaiting owner approval (Define gate). Priority: P1 (two P0 and fourteen P1 findings in
+Status: APPROVED by the owner 2026-11-22 (Define gate); D1 to D7 decided as recommended. Priority: P1 (two P0 and fourteen P1 findings in
 `docs/audit/docs-learning-centre-readiness-tech-writer.md`, 2026-11-22). Type: documentation, plus
 tests that keep it correct. No app behaviour changes. Written 2026-11-22 at `134365a` (v2.407).
 
@@ -39,6 +39,9 @@ produce a first result with each agent and find every control the docs name. Dem
 5. The existing guards stay green (182 passed, 2 skipped today) and the full suite is green.
 
 ## Owner decisions
+**Decided 2026-11-22: the owner accepted the recommended option for all seven ("Accept all seven").**
+The Define gate was approved the same day ("Approve docs plan").
+
 - **D1 Delete the hidden income chapter** (`README.md:3448-3739`, 292 lines). Recommended: delete;
   git history keeps it. Alternative: move to a private note outside the public repo.
 - **D2 Delete the seven legacy Learning pages** (`docs/learn/01` to `07`, 1,279 lines; not shown in
