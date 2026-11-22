@@ -82,7 +82,7 @@ lesson, opens the control it names and rings it; **Back to lesson** in the
 callout brings you back to that step.
 
 **Time:** about 20 minutes at the desk — the sales report itself appears on
-Amazon's schedule, not yours. **Cost:** one text request in Imprint, at the
+Amazon's schedule, not yours. **Cost:** one text request in Imprint Studio, at the
 Ask step — you see its estimate and approve it before anything is sent. This
 panel's provider list has no local Ollama option, so that one request is
 always metered. Every other step is free: approving, exporting, the ledger,

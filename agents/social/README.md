@@ -1,6 +1,6 @@
 # Herald
 
-Owns the public distribution funnel for work made elsewhere in Imprint:
+Owns the public distribution funnel for work made elsewhere in Imprint Studio:
 campaign context, platform-native drafts, variants, cadence schedules, clip
 briefs and supported publishing actions. Its durable delivery ledger prevents
 duplicate clicks and refuses to guess after an ambiguous API outcome. Its

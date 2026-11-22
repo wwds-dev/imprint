@@ -50,7 +50,7 @@ can spend part of the limit thinking; if it spends all of it, the line reads
 
 ## Renders and image batches that fail or stop
 
-A video render (Reel, or Herald's **Make a Clip**) and a Client Gigs logo
+A video render (Reel, or Herald's **Make a Clip**) and a Vector logo
 batch say in their approval that the paid steps already done are recorded if
 the job fails or you stop it. They are: each started render stage at its
 confirmed line and each image actually made at the confirmed per-image rate,

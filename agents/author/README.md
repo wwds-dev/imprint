@@ -1,7 +1,7 @@
 # Quill agent (`agents.author`)
 
 Owns long-form ideation, outlining, character and world development, drafting,
-continuation and revision for fiction and non-fiction.  Imprint imports
+continuation and revision for fiction and non-fiction.  Imprint Studio imports
 `AuthorAgent` from `agents.author`; the private implementation is `agent.py`.
 
 This package owns the editor and its project-scoped working state. The umbrella

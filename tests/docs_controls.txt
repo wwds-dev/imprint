@@ -161,6 +161,7 @@ Input
 JS
 Keep Running
 Keep local
+Kernel
 LM Studio
 LMArena
 Label
@@ -188,7 +189,6 @@ Model Guide
 Model providers
 Model updates
 More ▾
-Muse
 Music
 NEW
 Narrator
@@ -201,6 +201,7 @@ No books
 Not configured
 Not enough budget left
 Notes
+Nova
 Ollama
 On this Mac
 Open
@@ -314,7 +315,6 @@ Speed
 Spend
 Spotify Strategy
 Stack
-Stamp
 Start
 Start Over
 Start server
@@ -349,6 +349,7 @@ Use Approved Version
 Use Project Book
 Use Project Draft
 Use Recommended
+Vector
 VIDEO AND IMAGE
 Verify platform
 Version

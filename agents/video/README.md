@@ -1,6 +1,6 @@
 # Reel
 
-Owns Imprint's video workflow: idea and script, visual-provider selection,
+Owns Imprint Studio's video workflow: idea and script, visual-provider selection,
 narration, direct generation, assembly, job status and output library.
 
 Vidforge is ordinary Imprint source at `imprint/vidforge/` since 2026-09-30

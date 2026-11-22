@@ -1,6 +1,6 @@
 # VIDEO & AD GENERATOR — topic to finished video
 
-`key: video` · pipeline: `vidforge` (Imprint source, `imprint/vidforge/`) · direct providers: OpenAI / Gemini / Qwen-Wan / Higgsfield · bridge: `agents/video/studio.py` · panel: `build_video_panel()`
+`key: video` · pipeline: `vidforge` (Imprint Studio source, `imprint/vidforge/`) · direct providers: OpenAI / Gemini / Qwen-Wan / Higgsfield · bridge: `agents/video/studio.py` · panel: `build_video_panel()`
 
 ## What it does
 Turns a topic into a complete narrated, illustrated video: script, text-to-speech narration, word-aligned captions, generated visuals, Ken Burns motion, background music, loudness normalisation, and a thumbnail. Long-form for YouTube, or a vertical clip for social.
@@ -68,7 +68,7 @@ it needs that provider's key and permission **in addition to** OpenAI's: the
 panel checks the scene provider before approval, and the guard checks OpenAI.
 The pipeline's estimate prices the scenes at that provider's per-image rate.
 The scene images go through `services/image_generation.py`, the module
-Stamp's logos use.
+Vector's logos use.
 
 The Veo entries left the menus and the assessment on 22 October 2026
 (`MediaModel.retires`, filtered by `offered_models()`). A Veo job already in

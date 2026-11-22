@@ -1,4 +1,4 @@
-# Navigate Imprint
+# Navigate Imprint Studio
 
 > **Outcome:** move to the correct workspace and agent, identify the current
 > state, and know where to look before pressing a paid action.

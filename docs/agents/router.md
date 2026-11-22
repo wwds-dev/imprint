@@ -12,18 +12,18 @@ Two ways in: **address** first, then **intent**.
 
 ### Address — naming the agent
 Since the 2026-09-30 rename the agents have codenames, and "open Booth" used to
-route to Chat because the router only knew intent words. It now recognises an
+route to Chat (now Kernel) because the router only knew intent words. It now recognises an
 agent by its own name, read from `agents/catalog.py` so it cannot drift from the
 labels the UI shows.
 
 Addressing is deliberately narrow, because half the codenames are ordinary
 English. A bare word match would send "press release" to Press, "white label" to
-Label and "stamp the document" to Stamp. So a codename routes only when the text
+Label and "stamp the document" to Vector. So a codename routes only when the text
 *addresses* it:
 
 - an opening verb — `open`, `use`, `switch to`, `go to`, `take me to` — as in
   "open Booth" or "use the Reel";
-- or the whole message being the name, as in "Muse" or "Stamp.".
+- or the whole message being the name, as in "Nova" or "Vector.".
 
 Anything less is treated as the word, not the tool. Addressing beats intent when
 they disagree: naming a tool is the more explicit act.
@@ -54,7 +54,7 @@ Pick the workspace yourself from the mode tabs. Auto Route is a convenience, not
 ## Deliberate limitations
 - **No model and no score.** It is a keyword and codename matcher; order decides ties, and substrings match inside words.
 - **It never runs anything.** It returns an agent key; the chosen agent does the work under the usual request guard.
-- **Keyword gaps:** a bare "logo" does not reach Stamp (only "logo order" does), and `author` is checked last, so some requests fall through to Chat. Pick the workspace yourself when it guesses wrong.
+- **Keyword gaps:** a bare "logo" does not reach Vector (only "logo order" does), and `author` is checked last, so some requests fall through to Kernel. Pick the workspace yourself when it guesses wrong.
 - **No lesson.** The router has no panel or controls, so the Learning Centre has no lesson for it; this sheet is its only document.
 
 ## Under the hood — files & functions

@@ -40,7 +40,7 @@
 4. Watch the log to identify whether this is an assembled narrated pipeline or
    a direct asynchronous provider job.
 5. If stopping, press once and read the result: either the provider cancelled
-   a job that had not started (nothing charged), or Imprint only stopped
+   a job that had not started (nothing charged), or Imprint Studio only stopped
    watching a job that keeps rendering and will still bill. Closing Imprint
    does not lose an accepted job: reopening it re-polls, downloads and
    bills it exactly once on the next launch. A submission that never got a

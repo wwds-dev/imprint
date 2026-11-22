@@ -1,10 +1,10 @@
-# MUSE — shared identity and content production
+# Nova — shared identity and content production (Brand Content workspace)
 
 `key: creator` · class: `agents/creator/agent.py → CreatorAgent` · panel: `build_creator_panel()` · handler: `creator_generate()`
 
 ## What it does
 Creates concepts, captions, campaigns, posting plans, promotional asset briefs,
-and calendars for every Imprint venture. A profile records its platform or
+and calendars for every Imprint Studio venture. A profile records its platform or
 venture, so books and publishing, music, AltMerch, and future work can
 share one production tool without sharing business-specific assumptions.
 
@@ -28,7 +28,7 @@ record, statement import, per-asset revenue and outcomes, fan segments, the
 here. **Backstage** (`active/backstage`) already owned all of it, and keeping
 two implementations of the same records is how they drift apart.
 
-Muse keeps what Backstage does not have: drafting, the plan calendar, voice
+Nova keeps what Backstage does not have: drafting, the plan calendar, voice
 profiles, the media library, teaser rendering, and the written-character record
 behind them. The two apps share no code and no data, and a test enforces it.
 
@@ -104,7 +104,7 @@ Higgsfield; an Omni or Wan teaser runs to completion once submitted.
 Imprint uses Higgsfield's current request contract: a key ID + secret pair,
 model-specific endpoints, presigned reference-image uploads, and the returned
 status/cancel URLs. Add `HF_API_KEY_ID` and `HF_API_KEY_SECRET` to the private
-`.env`, then enable **Higgsfield** in the API permissions row. The Muse panel
+`.env`, then enable **Higgsfield** in the API permissions row. The Nova panel
 asks the official estimate endpoint for the exact request, shows that quote in
 the normal budget approval, and only then submits the paid render.
 
@@ -130,6 +130,14 @@ those requests locally, before the spend, with a reason — negated mentions
 than requests for it.
 
 Its role here is the safe-for-work promotional teaser.
+
+## Deliberate limitations
+What Nova does not do, on purpose or not yet. Rows marked *open* are known gaps with a `TODO.md` item; the code audit of 2026-11-18 (`docs/audit/code-readiness-audit-2026-11-18.md`) is the source.
+
+- **No posting button, by design.** Nova drafts; a person publishes on the platform.
+- **It will not write a message posing as a specific real person** in a live conversation.
+- **No local provider.** Nova's text requests need a cloud model the Mode and permission row allow.
+- **Only Higgsfield teasers pass the content-policy check**; the Gemini Omni and Qwen Wan routes send the prompt and reference images unchecked (*open*, audit QM-9).
 
 ## Under the hood — files & functions
 | Location | Role |

@@ -51,14 +51,14 @@ let you conclude. [Evidence before production](30-evidence.md#evidence-passport)
 
 ### Frozen app
 
-`Imprint.app` built with `scripts/build_app.sh`: a snapshot of the code with
+`Imprint Studio.app` built with `scripts/build_app.sh`: a snapshot of the code with
 its own Python, keeping keys and data in
 `~/Library/Application Support/Imprint/`. Code edits need a rebuild.
 [Files, launcher, and recovery](15-files-recovery.md).
 
 ### Live launcher
 
-`Imprint.app` installed with `scripts/install_app.sh`: a small launcher that
+`Imprint Studio.app` installed with `scripts/install_app.sh`: a small launcher that
 runs the project folder's current code and reads its `.env` and `data/`.
 [Files, launcher, and recovery](15-files-recovery.md).
 

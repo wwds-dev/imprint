@@ -1,10 +1,10 @@
-# Muse
+# Nova
 
-Owns shared content production for Imprint ventures: voice profiles, concepts,
+Owns shared content production for Imprint Studio ventures: voice profiles, concepts,
 captions, campaigns, promotional assets and the plan calendar.  Its public API
 is `agents.creator` (see `__init__.py` for the exact re-exports).
 
-Muse is platform-neutral.  Account consent records, platform-policy review,
+Nova is platform-neutral.  Account consent records, platform-policy review,
 statement import, per-asset revenue and the agency view were removed on
 2026-09-30 — **Backstage** (`active/backstage`) owns that work, shares no code
 or data with this app, and a test enforces the boundary.  User guidance:
@@ -26,10 +26,10 @@ Calendar and Media default to all work under the selected account; each has a
   `CreatorAgent` and the constants `KINDS` and `PROMO_CHANNELS`. Callers
   should import from the package, not `agent.py` directly.
 
-- **`agent.py`** — the implementation. Muse is a drafting tool, not an
+- **`agent.py`** — the implementation. Nova is a drafting tool, not an
   unattended publisher — it has no send path, because automation that
   *replaces* a human rather than assisting one risks the account. Key pieces:
-  - `KINDS` — every draft type Muse can produce (`post`, `caption`,
+  - `KINDS` — every draft type Nova can produce (`post`, `caption`,
     `posting_plan`, `promo_assets`, `promo`, `bio`, `campaign`, `hooks`),
     each mapped to the description injected into the prompt. `ppv` and
     `welcome` were subscription-platform messages and went to Backstage.
@@ -70,7 +70,7 @@ Calendar and Media default to all work under the selected account; each has a
   Anthropic (.98) and OpenAI (.96) above Gemini (.91), Qwen (.85), Kimi (.83)
   and DeepSeek (.78) for this task type.
 
-- **`panel.py`** — owns the complete Muse workspace: the profile
+- **`panel.py`** — owns the complete Nova workspace: the profile
   form, the compose controls, and all four tabs (Draft, Calendar, Voice,
   Media) with every handler, moved here
   from `main.py` in the Phase 4 extraction. Request tokens live on the
@@ -103,7 +103,7 @@ Calendar and Media default to all work under the selected account; each has a
   counts and the stop reason (audit B-F8: every draft used to be billed on
   the chars/4 estimate), and a draft cut at the length limit shows the
   `[Cut off]` notice instead of "Draft ready"; both status lines show
-  provider text as plain text. Muse offers no local provider and is never
+  provider text as plain text. Nova offers no local provider and is never
   routing-advised (`NEVER_ADVISED` in `ui/panel_routing.py`). The old
   `setattr(host, name, ...)` alias loop that mirrored every `HOST_CONTROLS`
   widget onto the umbrella was retired 2026-09-21 (commit `8de6d7c`) — shared

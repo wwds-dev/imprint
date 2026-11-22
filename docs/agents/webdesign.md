@@ -68,7 +68,7 @@ The streamed response remains in memory until it is saved or cleared.
 **Save .html** extracts the complete HTML block and writes it to the chosen
 local path; **Copy All** places the same result on the system clipboard. Neither
 action deploys a site. Cloud generation sends the brief to the chosen provider
-and is accounted by Imprint's shared request guard.
+and is accounted by Imprint Studio's shared request guard.
 
 ## Common failures
 

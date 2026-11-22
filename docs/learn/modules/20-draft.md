@@ -118,7 +118,7 @@ inputs exactly the first time, then swap in your own. Each **Show me** closes
 this lesson, opens the control it names and rings it; **Back to lesson** in
 the callout brings you back to that step.
 
-**Time:** about 15 minutes. **Cost:** one text request in Imprint — you see
+**Time:** about 15 minutes. **Cost:** one text request in Imprint Studio — you see
 its estimate and approve it before anything is sent (free with a local
 Ollama or LM Studio model). The notes, sources and save in the other steps cost nothing.
 

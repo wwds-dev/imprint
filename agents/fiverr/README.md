@@ -1,4 +1,4 @@
-# Stamp
+# Vector
 
 Owns client-service workflows: brief interpretation, logo concepts, gig listing
 copy, professional delivery messages and a durable per-client order record
@@ -15,7 +15,7 @@ and `pytest tests/test_fiverr_orders.py`.
 - **`__init__.py`** — the package's public surface: re-exports `FiverrAgent`
   and lazily exposes `FiverrPanel` so domain-only imports stay Qt-free.
 
-- **`panel.py`** — owns the complete Client Gigs workspace: brief and model
+- **`panel.py`** — owns the complete Brand Design workspace: brief and model
   controls, price estimate, guarded prompt/image/delivery/gig request
   lifecycles with exact tokens, result tabs, order log, save, clear and Stop.
   Since 2026-10-07 (`140ec2b`) the Image model menu lists every
@@ -83,19 +83,22 @@ and `pytest tests/test_fiverr_orders.py`.
   owns.
 
 - **`agent.py`** — the implementation. `SYSTEM_PROMPT` casts the model as a
-  5-star Fiverr freelancer specialising in logo design, and defines three
+  Fiverr freelancer specialising in logo design (it may not invent reviews,
+  ratings or a track record), and defines three
   distinct output formats it must switch between depending on what is asked:
   - **Delivery message** — warm opening thanking the client, a short
     explanation of the design choices, an offer of one revision round, and a
     professional sign-off; capped under 200 words, no jargon.
   - **Gig description** — a full listing: hook headline, 5–7 bullet "what
     you get" points, differentiators, a Basic/Standard/Premium package
-    breakdown with prices, and a call to action; capped under 400 words,
+    breakdown with `[PRICE]` left for the user unless prices were given, and no
+    promise of vector files, and a call to action; capped under 400 words,
     written in first person.
   - **Logo prompt** — a bare 1–3 sentence image-generation prompt (no
-    preamble) describing style, colours and mood, appending "vector logo,
-    transparent background, no text" unless a business name was explicitly
-    requested in the logo.
+    preamble) describing style, colours and mood, appending "flat logo,
+    clean edges, plain white background, no text" unless a business name was
+    explicitly requested in the logo. The result is a PNG, not a vector file
+    (audit QM-18).
 
   `FiverrAgent` is the class the app calls:
   - `build_messages(task, brief)` — builds a chat-messages list for any of
@@ -127,7 +130,7 @@ and `pytest tests/test_fiverr_orders.py`.
   `latest_for_client()` (newest order, open or not — the source of the
   brand-kit auto-fill) read them back. Covered by `tests/test_fiverr_orders.py`.
 
-- **`recommendations.py`** — registers Stamp's `RECOMMENDATION_PROFILE`
+- **`recommendations.py`** — registers Vector's `RECOMMENDATION_PROFILE`
   (an `AgentProfile` from `services.recommendations.models`) with the shared
   model-recommendation engine: task tags `marketing` / `creative` /
   `structured`, `cost_weight=.22` and `speed_weight=.16` — both raised above

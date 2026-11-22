@@ -1,6 +1,6 @@
-# Chat
+# Kernel
 
-General-purpose conversation is available in Imprint's **Assistant** workspace.
+General-purpose conversation is available in Imprint Studio's **Assistant** workspace.
 It uses the shared `normal_panel`, not a duplicate agent panel. Its public API
 is `agents.chat.ChatAgent`.
 

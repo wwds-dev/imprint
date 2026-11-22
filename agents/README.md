@@ -1,4 +1,4 @@
-# Imprint agent projects
+# Imprint Studio agent projects
 
 Every directory below is the ownership boundary for one Imprint agent.  It is
 small enough to become a standalone repository later, but remains part of the

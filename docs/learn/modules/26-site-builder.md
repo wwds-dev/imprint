@@ -107,7 +107,7 @@ clearer; add it and generate again.
 
 ### Step 7 — Save it as a file
 
-Click **Save .html**. Imprint first runs quick HTML and accessibility checks
+Click **Save .html**. Imprint Studio first runs quick HTML and accessibility checks
 on the page — doctype, page language, title, viewport, image alt text,
 labelled form fields, empty links, duplicate ids, heading order. If any turn
 up, a dialog lists them and asks **Export anyway?**: choose **No** and put the
@@ -186,5 +186,5 @@ deployment/instrumentation work is explicit.
 
 ## Next action
 
-For a client offer, continue to [Client Gigs](27-client-gigs.md); for demand
+For a client offer, continue to [Vector](27-client-gigs.md); for demand
 testing, define the funnel in [Design a fair experiment](32-experiment.md).

@@ -1,6 +1,6 @@
 # Security
 
-Imprint is free, open-source software maintained by one person. It handles API keys for several paid providers, imports untrusted documents (PDF, EPUB, DOCX) and renders model output,
+Imprint Studio is free, open-source software maintained by one person. It handles API keys for several paid providers, imports untrusted documents (PDF, EPUB, DOCX) and renders model output,
 so security reports are welcome.
 
 ## Report privately

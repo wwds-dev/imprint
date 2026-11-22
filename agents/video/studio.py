@@ -19,7 +19,7 @@ The package still needs `imprint/vidforge/` on `sys.path` to be importable as
 given there.
 
 *Frozen builds.* vidforge decides its own paths from `sys.frozen`: inside
-Imprint.app that resolves `BUNDLE_ROOT` to Imprint's bundle (so `Imprint.spec`
+Imprint Studio.app that resolves `BUNDLE_ROOT` to Imprint's bundle (so `Imprint.spec`
 ships `config.yaml`, `topics.txt` and `assets/`) and `PROJECT_ROOT` to
 `~/Library/Application Support/vidforge`.
 

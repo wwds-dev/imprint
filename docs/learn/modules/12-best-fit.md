@@ -22,7 +22,7 @@ recommendation, not proof that pressing the action will work now.
 
 ## How ranking works
 
-Imprint first removes incompatible, retired, unavailable, disallowed, and
+Imprint Studio first removes incompatible, retired, unavailable, disallowed, and
 over-budget candidates. It then scores the remaining routes against the agent's
 maintained quality, reliability, cost, speed, context, and privacy priorities.
 The process is deterministic and local; opening a menu does not make a paid call.
@@ -38,7 +38,7 @@ Four rules keep the ranking honest:
   rating is not chosen while a rated one can be. The tooltip says this in
   ratings and prices and credits the LMArena leaderboard (CC BY 4.0); the
   **Model updates** tile says which ratings are loaded. Images, video,
-  speech, unrated text models and Chat's Local only mode are still ranked on
+  speech, unrated text models and Kernel's Local only mode are still ranked on
   the agent's own priorities.
 - **Cost is the real price.** Text routes are scored on the per-token rates in
   Settings → Pricing; a model without its own row is priced at the provider's
@@ -155,8 +155,8 @@ and wins it. A rating only moves the BEST FIT badge — nothing switches.
 **Settings → Models** sets a routing mode, with an override per agent:
 *Local, advise per job* (the default), *Suggest local*, *Local first*,
 *Cloud only* and *Local only*. Five agents are advised: the Studio
-Assistant, Quill (Draft), Herald (Social), Sitebuilder and Stamp (Client
-Gigs). Muse and Press (which offer no local model), Label's music plans and
+Assistant, Quill (Draft), Herald (Social), Sitebuilder and Vector (Client
+Gigs). Nova and Press (which offer no local model), Label's music plans and
 Suno drafts, and every media request (audiobooks, video and images, billed
 per unit) are not advised.
 When a job's selected model is not good enough for it — rated more than 20

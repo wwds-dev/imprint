@@ -1,4 +1,4 @@
-# Imprint — Manual Test Cases
+# Imprint Studio — Manual Test Cases
 
 **Type:** User Acceptance Testing (UAT) — you drive the real app and judge the result.
 **Scope:** the eight visible workspaces, the ten agents inside them, and the shared
@@ -153,9 +153,9 @@ by reading this output, not by using the app.
 | Video + Ads | Reel | script, narrate and assemble long-form video and vertical ads |
 | Social | Herald | write and schedule platform-native posts; publish where connected |
 | Web | Sitebuilder | build responsive pages in HTML, CSS and JavaScript |
-| Brand Design | Stamp | client-ready brand concepts, logos and delivery copy |
-| Brand Content | Muse | draft campaign content, calendar it, render promos |
-| Assistant | Chat | general-purpose chat for anything without a dedicated tool |
+| Brand Design | Vector | client-ready brand concepts, logos and delivery copy |
+| Brand Content | Nova | draft campaign content, calendar it, render promos |
+| Assistant | Kernel | general-purpose chat for anything without a dedicated tool |
 
 - [ ] No workspace named after a retired venture appears (see C5)
 
@@ -163,7 +163,7 @@ by reading this output, not by using the app.
 
 > **What it does:** classifies what you typed and says *why* it chose. Three
 > confidence levels: `addressed` (you named the tool), `intent` (a keyword
-> matched) and `fallback` (nothing matched, so Chat). Ambiguity is shown, not
+> matched) and `fallback` (nothing matched, so Kernel). Ambiguity is shown, not
 > hidden.
 
 Type each input into the Assistant prompt and read the routing decision and its
@@ -194,7 +194,7 @@ Make a YouTube video for the music release
 ```
 What is the capital of France?
 ```
-- [ ] Routes to Chat, confidence `fallback`
+- [ ] Routes to Kernel, confidence `fallback`
 - [ ] The reason says no intent matched — not a pretend match
 
 **Test E — an ordinary English word is not an address**
@@ -203,8 +203,8 @@ press release for the launch
 a white label deal
 stamp the document and send it
 ```
-- [ ] All three route to **Chat**, not to Press / Label / Stamp
-- [ ] A bare `Muse` or `Stamp.` on its own *does* route to that agent
+- [ ] All three route to **Kernel**, not to Press / Label / Vector
+- [ ] A bare `Nova` or `Vector.` on its own *does* route to that agent
 
 **Test F — addressing beats intent**
 ```
@@ -249,7 +249,7 @@ and press **Save Draft**. Switch workspace and come back.
 - [ ] Approve it: output arrives, exactly **one** Cost History row, exactly one
       Run Log entry
 - [ ] Press Send twice quickly — you are not billed twice for one intent
-- [ ] Repeat the decline test in Quill, Sitebuilder and Stamp. A declined paid
+- [ ] Repeat the decline test in Quill, Sitebuilder and Vector. A declined paid
       request leaves the action button **available**, not stuck disabled
 
 ## A6. Budget caps and the free-local offer  `PAID`
@@ -377,7 +377,7 @@ Academy) and walk its recipe.
 > re-asks — and it settles the ledger before billing, so a crash in that window
 > undercounts once rather than double-billing.
 
-**Steps:** start a Reel direct render, a Muse teaser and a Booth conversion.
+**Steps:** start a Reel direct render, a Nova teaser and a Booth conversion.
 While each is in flight, quit the app (force-quit is the realistic case).
 Relaunch.
 
@@ -823,7 +823,7 @@ Make me a website.
 ```
 - [ ] It asks about purpose, audience, palette and style instead of inventing a business
 
-## B8. Brand Design → **Stamp**  `PAID` / `PAID-UNIT`
+## B8. Brand Design → **Vector**  `PAID` / `PAID-UNIT`
 
 > **What it does:** client-service work — logo concepts, gig listing copy and
 > delivery messages. One durable order per client, with a reusable brand kit.
@@ -846,8 +846,10 @@ primary wordmark, and a one-page usage sheet. One revision round included.
 
 **Test C — logo concepts**  `PAID-UNIT`
 - [ ] The prompt is a bare 1–3 sentences: style, colours, mood
-- [ ] It appends "vector logo, transparent background, no text" unless a
-      business name was explicitly asked for **in** the logo
+- [ ] It appends "flat logo, clean edges, plain white background, no text"
+      unless a business name was explicitly asked for **in** the logo
+- [ ] The panel says "Vector makes PNG images, not vector files" under the
+      actions, and the saved files are `.png`
 - [ ] Logo Preview shows the actual generated asset
 - [ ] Spelling, dimensions and brand fit are verifiable before delivery
 
@@ -860,7 +862,7 @@ primary wordmark, and a one-page usage sheet. One revision round included.
 - [ ] **Stop** cancels the active local generation; provider-accepted media may
       still have cost, and the message says so
 
-## B9. Brand Content → **Muse**  `PAID`
+## B9. Brand Content → **Nova**  `PAID`
 
 > **What it does:** platform-neutral campaign content — voice profiles,
 > concepts, captions, campaigns, promo assets and a plan calendar. It is a
@@ -894,7 +896,7 @@ primary wordmark, and a one-page usage sheet. One revision round included.
 **Test D — teaser resume**  `PAID-UNIT` (covered in A11)
 - [ ] A teaser in flight at quit is finished or failed after relaunch, billed once
 
-## B10. Assistant → **Chat**  `FREE` (ollama) or `PAID`
+## B10. Assistant → **Kernel**  `FREE` (ollama) or `PAID`
 
 > **What it does:** general-purpose conversation for a bounded question that
 > does not belong to a specialist agent. Streams from every provider.
@@ -927,8 +929,8 @@ limit. These are the cases where a regression costs money or credibility.
 Every billable action in the app must pass through `authorize_request`.
 - [ ] Walk every panel's paid buttons: Write, Continue, Publish, Market,
       Suggest Quotes, Generate Graphic, Shorts, Start (Booth), Render Video,
-      Draft (Herald), Generate (Sitebuilder), logo/delivery/gig (Stamp),
-      Muse drafts and teasers, Send (Chat)
+      Draft (Herald), Generate (Sitebuilder), logo/delivery/gig (Vector),
+      Nova drafts and teasers, Send (Kernel)
 - [ ] Each shows an estimate and can be declined
 - [ ] Per-unit paths (TTS, image, video) are guarded too, not just token paths
 
@@ -944,7 +946,7 @@ Every billable action in the app must pass through `authorize_request`.
 
 ## C3. The Backstage boundary  `FREE`
 
-Muse is platform-neutral. Account consent records, platform-policy review,
+Nova is platform-neutral. Account consent records, platform-policy review,
 statement import, per-asset revenue and the agency view belong to Backstage.
 - [ ] None of those appear anywhere in Imprint
 - [ ] `pytest tests/test_creator_agent.py -k platform_specific` passes
@@ -987,8 +989,8 @@ suite, so a UAT pass should not re-derive it:
 | Reel jobs and resume | `test_video_jobs.py`, `test_media_generation.py` |
 | Herald drafting, queue, publishing, onboarding | `test_social.py`, `test_social_onboarding.py` |
 | Sitebuilder export | `test_webdesign_export.py` |
-| Stamp orders | `test_fiverr_orders.py` |
-| Muse drafting, calendar, resume | `test_creator_agent.py`, `test_creator_v2.py`, `test_creator_calendar.py` |
+| Vector orders | `test_fiverr_orders.py` |
+| Nova drafting, calendar, resume | `test_creator_agent.py`, `test_creator_v2.py`, `test_creator_calendar.py` |
 | Chat streaming and projects | `test_chat_streaming.py`, `test_chat_projects.py` |
 | Layout at every width | `test_panel_layout.py`, `test_agent_panel.py` |
 | Learning Centre and recipes | `test_learning_center.py`, `test_learning_shots.py` |

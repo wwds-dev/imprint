@@ -54,7 +54,7 @@ the assembled MP3 is absent.
 
 ## Cost, cancellation, and gates
 
-Imprint prices speech by tokens (OpenAI), minutes of audio (Gemini) or
+Imprint Studio prices speech by tokens (OpenAI), minutes of audio (Gemini) or
 characters (ElevenLabs). Before approval each conversion is assessed across the
 narrators you can run, priced for this book; a switch is offered only when
 another wins by at least a point, and Apply asks again rather than starting the

@@ -8,7 +8,7 @@ User guidance: `docs/agents/music.md`.  Run focused coverage with
 `pytest tests/test_agents_scenarios.py -k music` and `pytest tests/test_music_plans.py`.
 
 The package owns the Music workspace layout and release-plan lifecycle in
-`panel.py`, plus its **Songs & Albums** tab in `suno_panel.py`. Imprint still
+`panel.py`, plus its **Songs & Albums** tab in `suno_panel.py`. Imprint Studio still
 owns provider execution, the shared spending guard and run history. The
 host-control aliases were retired 2026-09-21 (Music was the first package to
 drop them): shared tooltip/recommendation/context wiring resolves controls

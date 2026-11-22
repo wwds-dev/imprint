@@ -7,10 +7,11 @@ tests", T1 to T10). The lessons were already guarded by
 they drifted. Each check below names the audit finding it stops recurring
 (``docs/audit/docs-learning-centre-readiness-tech-writer.md``).
 
-A case still waiting for the name pass (package 5, with the rename in
-``docs/specs/rename-imprint-studio.md``) is marked ``xfail(strict=True)``: it
-fails today for a known reason, and the mark has to come off when that pass
-lands, because a strict xfail that starts passing fails the suite.
+The rename (``docs/specs/rename-imprint-studio.md``, 2026-11-22) took the marks
+off its own cases. A case still waiting on the rest of package 5 (titles of
+agents whose label did not change, review R-5) is marked
+``xfail(strict=True)``: it fails for a known reason, and the mark has to come
+off with the fix, because a strict xfail that starts passing fails the suite.
 """
 
 from __future__ import annotations
@@ -30,11 +31,16 @@ LEARN = ROOT / "docs" / "learn"
 SHEETS = ROOT / "docs" / "agents"
 CONTROLS_FILE = ROOT / "tests" / "docs_controls.txt"
 
-PACKAGE_5 = "names change with the rename (spec package 5)"
+# Review R-5: these cases belong to agents whose label did not change in the
+# rename (2026-11-22), so they are not the rename's; they wait on the rest of
+# spec package 5 (lesson and sheet titles, DL-9 and DL-18) or on the owner
+# (D7). The rename's own cases passed with it and lost their marks.
+NOT_RENAME = ("title or retired name of an agent whose label did not change "
+              "(spec package 5, DL-9/DL-18; review R-5)")
 
 
 def _package5(*values):
-    return pytest.param(*values, marks=pytest.mark.xfail(strict=True, reason=PACKAGE_5))
+    return pytest.param(*values, marks=pytest.mark.xfail(strict=True, reason=NOT_RENAME))
 
 
 # ── Which files are user docs ──────────────────────────────────────────────
@@ -414,11 +420,10 @@ def test_t4_suspected_drift_list_has_no_stale_entries():
     assert not stale, f"remove from _T4_SUSPECTED_DRIFT: {stale}"
 
 
-@pytest.mark.xfail(strict=True, reason=PACKAGE_5)
-def test_t4_stamp_sheet_field_labels_match_the_panel():
-    """DL-18: the Stamp sheet names four fields differently from the panel
-    (``agents/fiverr/panel.py``). Fixed with the rename, in one pass over that
-    sheet."""
+def test_t4_vector_sheet_field_labels_match_the_panel():
+    """DL-18: the Vector sheet (Stamp until 2026-11-22) named four fields
+    differently from the panel (``agents/fiverr/panel.py``); fixed with the
+    rename."""
     text = (SHEETS / "fiverr.md").read_text(encoding="utf-8")
     stale = [label for label in ("Business Name", "Primary Colors",
                                  "# Concepts", "Delivery Msg") if label in text]
@@ -430,8 +435,8 @@ def test_t4_stamp_sheet_field_labels_match_the_panel():
 RETIRED_NAMES = ("Atelier", "Maestro", "Publisher Agent", "Narrator Agent",
                  "Left-panel button", "Client Gigs", "Site Builder")
 
-# README sections whose agent changes its name in the rename (package 5):
-# 7.1 Chat, 7.2 Stamp, 7.11 Muse. Their old headings stay until then.
+# README sections whose agent changed its name in the rename (2026-11-22):
+# 7.1 Kernel, 7.2 Vector, 7.11 Nova. Checked on their own by the test below.
 _README_PACKAGE_5 = (r"^7\.1 ", r"^7\.2 ", r"^7\.11 ")
 
 
@@ -464,7 +469,6 @@ def test_t5_no_retired_agent_names_in_the_readme():
     assert not hits, "\n".join(hits)
 
 
-@pytest.mark.xfail(strict=True, reason=PACKAGE_5)
 def test_t5_no_retired_agent_names_in_readme_sections_7_1_7_2_7_11():
     text = _visible(README.read_text(encoding="utf-8"))
     hits = []
@@ -476,11 +480,8 @@ def test_t5_no_retired_agent_names_in_readme_sections_7_1_7_2_7_11():
     assert not hits, "\n".join(hits)
 
 
-_T5_PACKAGE_5_FILES = {"agents/fiverr/README.md", "docs/agents/fiverr.md",
-                       "docs/learn/modules/02-choose-path.md",
-                       "docs/learn/modules/14-costs-limits.md",
-                       "docs/learn/modules/26-site-builder.md",
-                       "docs/learn/modules/27-client-gigs.md"}
+# Lesson 26 is headed "Site Builder" (Sitebuilder's label did not change).
+_T5_PACKAGE_5_FILES = {"docs/learn/modules/26-site-builder.md"}
 
 
 def _t5_params():
@@ -493,8 +494,8 @@ def _t5_params():
 
 @pytest.mark.parametrize("path", list(_t5_params()), ids=_rel)
 def test_t5_no_retired_agent_names_in_user_docs(path):
-    """DL-9: lessons still call Sitebuilder "Site Builder" and Stamp "Client
-    Gigs". Extends ``test_retired_names.py`` (a retired venture) to the retired
+    """DL-9: lessons called Sitebuilder "Site Builder" and Vector (then Stamp)
+    "Client Gigs". Extends ``test_retired_names.py`` (a retired venture) to the retired
     agent names."""
     hits = _retired_hits(_visible(path.read_text(encoding="utf-8")), _rel(path))
     assert not hits, "\n".join(hits)
@@ -549,11 +550,10 @@ _T6_KNOWN = {
     "docs/learn/modules/20-draft.md", "docs/learn/modules/21-publish.md",
     "docs/learn/modules/22-audiobooks.md", "docs/learn/modules/23-music.md",
     "docs/learn/modules/24-video.md", "docs/learn/modules/25-social.md",
-    "docs/learn/modules/26-site-builder.md", "docs/learn/modules/27-client-gigs.md",
+    "docs/learn/modules/26-site-builder.md",
     "docs/agents/author.md", "docs/agents/manuscript.md", "docs/agents/audiobook.md",
     "docs/agents/music.md", "docs/agents/video.md", "docs/agents/social.md",
-    "docs/agents/webdesign.md", "docs/agents/fiverr.md", "docs/agents/chat.md",
-    "docs/agents/creator.md", "docs/agents/router.md",
+    "docs/agents/webdesign.md", "docs/agents/router.md",
 }
 
 
@@ -623,14 +623,7 @@ def test_t8_no_local_user_path_in_a_doc(path):
 
 # ── T9: limitation sections ────────────────────────────────────────────────
 
-_T9_PACKAGE_5 = {"chat.md", "creator.md", "fiverr.md"}
-
-
-@pytest.mark.parametrize(
-    "path",
-    [_package5(p) if p.name in _T9_PACKAGE_5 else pytest.param(p)
-     for p in sorted(SHEETS.glob("*.md"))],
-    ids=_rel)
+@pytest.mark.parametrize("path", sorted(SHEETS.glob("*.md")), ids=_rel)
 def test_t9_every_sheet_has_a_deliberate_limitations_section(path):
     """DL-14 (audit QB-5): ``overview.md`` promises the section on every sheet."""
     text = path.read_text(encoding="utf-8")

@@ -1,4 +1,8 @@
-# Imprint — Documentation
+# Imprint Studio — Documentation
+
+Imprint Studio (Imprint for short) is a macOS desktop app of creative and
+publishing agents. The repository, the Python package and the data folder
+keep the short name `imprint`.
 
 
 **Version:** `v2.xxx` in the header bar, derived rather than typed — see [§18.1 Versioning](#181-versioning).  
@@ -23,9 +27,9 @@ is reference.
 
    ffmpeg is needed for audiobooks, video and Shorts; Calibre's
    `ebook-convert` only for MOBI and AZW3 books. Run `./scripts/install_app.sh`
-   for an `Imprint.app` in `/Applications` that runs this checkout
+   for an `Imprint Studio.app` in `/Applications` that runs this checkout
    ([§18](#18-installing-and-packaging)).
-2. **Open the app:** `.venv/bin/python main.py`, or `Imprint.app`.
+2. **Open the app:** `.venv/bin/python main.py`, or `Imprint Studio.app`.
 3. **Choose a model.** Either run one on this Mac for free (install
    [Ollama](https://ollama.com), then `ollama pull deepseek-r1:8b`, or load a
    model in LM Studio), or add one cloud key: **Settings** (header) →
@@ -73,8 +77,8 @@ Centre; prices and model details are in the Model Guide and the agent sheets
    - [Progress Bar & Status Label](#66-progress-bar--status-label)
    - [Output Box](#67-output-box)
 7. [Agents](#7-agents)
-   - [Chat Agent](#71-chat-agent)
-   - [Atelier Agent](#72-atelier-agent)
+   - [Kernel (Assistant)](#71-kernel-assistant)
+   - [Vector (Brand Design)](#72-vector-brand-design)
    - [Quill (Author)](#73-quill-author)
    - [Label (Audio + Music)](#74-label-audio--music)
    - [Sitebuilder (Web)](#75-sitebuilder-web)
@@ -83,7 +87,7 @@ Centre; prices and model details are in the Model Guide and the agent sheets
    - [Primer (CLI) — archived](#78-primer-cli--archived)
    - [Reel (Video + Ads)](#79-reel-video--ads)
    - [Herald (Social)](#710-herald-social)
-   - [Creator Agent](#711-creator-agent)
+   - [Nova (Brand Content)](#711-nova-brand-content)
 8. [Tools](#8-tools)
 9. [Providers & Models](#9-providers--models)
    - [Ollama (Local)](#91-ollama-local)
@@ -134,9 +138,9 @@ narrate, make music plans, video, social posts, brand designs and web pages:
 | Video + Ads | **Reel** (script, generate, narrate and assemble video) |
 | Social | **Herald** (draft and schedule posts; publish to Reddit and YouTube; Pinterest posting does not work yet) |
 | Web | **Sitebuilder** (responsive HTML, CSS and JavaScript) |
-| Brand Design | **Stamp** (client-ready concepts, listings and delivery messages) |
-| Brand Content | **Muse** (reusable campaigns, captions and promotional assets) |
-| Assistant | **Chat** (general chat and tool-assisted conversation) |
+| Brand Design | **Vector** (client-ready concepts, listings and delivery messages) |
+| Brand Content | **Nova** (reusable campaigns, captions and promotional assets) |
+| Assistant | **Kernel** (general chat and tool-assisted conversation) |
 
 The roster is `agents/catalog.py`. An eleventh entry, the Intent Router, has no
 workspace: it picks one for **Auto Route**.
@@ -364,7 +368,7 @@ Video links a finished local clip to the Project captured when its render was
 approved, including provider jobs recovered after restart. Its vidforge
 Library still includes renders made before the absorption by default; choose the
 current-Project view to show only linked Imprint clips.
-Muse links scheduled content, teaser jobs and media to a Project while its
+Nova links scheduled content, teaser jobs and media to a Project while its
 profiles, voice and character records remain account-owned. Calendar and Media
 default to account-wide views, with a current-Project filter for each;
 deleting a Project unfiles Creator work rather than deleting the profile or
@@ -724,7 +728,7 @@ about a 53/47 split when two models meet, so inside that band a dearer model
 buys nothing measurable; a model further down is not good enough, however
 cheap. The agent's weights and provider preferences no longer decide between
 rated text models — they still rank images, video and speech, text models
-when none is rated, and Chat's **Local only** mode, whose privacy priority is
+when none is rated, and Kernel's **Local only** mode, whose privacy priority is
 what prefers local models.
 
 - **What the explanation says.** *Best value for Sitebuilder (landing page
@@ -816,10 +820,10 @@ scale, halving the price of a clip moved its score by under a point.
 | Reel, social clip | every direct-video model that can make the requested length and shape (Gemini Omni, Wan 3.0 / Prime / 2.7, Seedance — its cost marked *price only after the provider's quote*, Veo 3.1 until its earliest shutdown date, 22 Oct), plus the scene pipeline when the length is one of its clip lengths |
 | Reel, long-form | the scene pipeline routes — GPT Image ×3, Nano Banana 2.1 / Pro, Qwen Image 3.0 / Pro, Pexels, local cards — each priced by the pipeline's own pre-estimate |
 | Herald clip | the scene pipeline routes at the clip's shape; Apply sets Herald's visuals |
-| Stamp logos | all seven image models (OpenAI, Gemini, Qwen), for the number of concepts asked |
+| Vector logos | all seven image models (OpenAI, Gemini, Qwen), for the number of concepts asked |
 | Press Short narration | ElevenLabs against the free on-device voice; Apply switches to the free voice and stops, so no ElevenLabs voice id reaches a request nobody approved |
 | Booth audiobook | OpenAI gpt-4o-mini-tts, Gemini 3.8 Flash TTS, ElevenLabs Multilingual v2 — the selected one at what the run still owes after its cached chunks, the others at the whole book (a switch starts over) |
-| Muse teaser | Higgsfield Seedance 2.5, Gemini Omni 1.1 Flash, Wan 3.0 — each with the persona's reference images; Higgsfield is priced only when selected (it prices through its estimate call) |
+| Nova teaser | Higgsfield Seedance 2.5, Gemini Omni 1.1 Flash, Wan 3.0 — each with the persona's reference images; Higgsfield is priced only when selected (it prices through its estimate call) |
 
 A route that cannot make what was asked (a 30 s clip on a model that stops at
 10 s) is left out rather than compared at a different length.
@@ -834,11 +838,11 @@ Press; Audio + Music: Booth and Label) shows one button per agent under the
 tab bar. Each agent's
 panel is described under its name in [section 7](#7-agents).
 
-The rest of this section describes the **Assistant** workspace (Chat's
+The rest of this section describes the **Assistant** workspace (Kernel's
 panel): its request setup (Tool, Command, Provider, Model, Mode and the
 permission boxes), the message box, the action row and the output area.
 The permission boxes and the Mode set there apply to every agent's request,
-not only to Chat's (`main.py`, `current_api_permissions`).
+not only to Kernel's (`main.py`, `current_api_permissions`).
 
 ---
 
@@ -900,7 +904,7 @@ When a Studio Assistant job is sent, the advisor compares the selected model wit
 
 **When a run fails** (server down, out of memory, timeout) the banner offers the engine's next candidates: **Send to <provider>** (through the paid-request dialog) or **Try** a smaller local model. Nothing is resent by itself, a stopped run offers nothing, and **Local only never reaches the cloud**: no cloud suggestion, no cloud fallback, no cloud rule. The Spend rail's **saved local** and **advice spent** blocks show what running local saved today (the estimate for the cloud model the value rule would have picked) and what accepted suggestions spent (`data/routing_savings.json`); hover for the totals. The advisor reads caches only (the engine's candidates, ratings, prices, the local inventory, this session's model lists) and runs on the UI thread without fetching. Only the Studio Assistant is advised so far; the other agents keep their own provider and model.
 
-**The other text agents are advised too (2026-10-21).** Quill (author), Herald (social), Sitebuilder (webdesign) and Stamp (fiverr) pass `resume=` to `authorize_request`, which asks the advisor first (`ui/panel_routing.py`). A held job shows the same banner at the top of that agent's panel. *Switch for this job*, *Always for this kind* and *Keep local* put the chosen model in the panel's own provider and model boxes and run its action again, so the paid-request dialog and the budget caps decide as before; *Always* is stored per agent and kind in `data/routing_rules.json`, a failed run offers the next candidate on the panel, and a finished one counts in the same savings tally. **Left out on purpose:** Muse (creator) and Press (manuscript) offer no local provider, so there is nothing local to prefer and they are never advised (`NEVER_ADVISED`); Booth, video and every image or per-unit request (`flat_cost_eur`) are media and never advised. Imprint's never-auto-switch rule stands: the panel's saved selection is only changed by an answer you gave on the banner (or a rule you made).
+**The other text agents are advised too (2026-10-21).** Quill (author), Herald (social), Sitebuilder (webdesign) and Vector (fiverr) pass `resume=` to `authorize_request`, which asks the advisor first (`ui/panel_routing.py`). A held job shows the same banner at the top of that agent's panel. *Switch for this job*, *Always for this kind* and *Keep local* put the chosen model in the panel's own provider and model boxes and run its action again, so the paid-request dialog and the budget caps decide as before; *Always* is stored per agent and kind in `data/routing_rules.json`, a failed run offers the next candidate on the panel, and a finished one counts in the same savings tally. **Left out on purpose:** Nova (creator) and Press (manuscript) offer no local provider, so there is nothing local to prefer and they are never advised (`NEVER_ADVISED`); Booth, video and every image or per-unit request (`flat_cost_eur`) are media and never advised. Imprint's never-auto-switch rule stands: the panel's saved selection is only changed by an answer you gave on the banner (or a rule you made).
 
 ### 6.3 Control Bar — Row 3: Execution Mode & API Permissions
 
@@ -919,10 +923,10 @@ unticked at every launch, and none is saved.
 | Row | Boxes | Notes |
 |---|---|---|
 | **Cloud text models** | **OpenAI**, **DeepSeek**, **Kimi**, **Gemini**, **Anthropic**, **Qwen** | Greyed out under Local only, because the router then drops every cloud provider |
-| **Paid media** | **Higgsfield**, **ElevenLabs** | Not affected by Mode. Higgsfield allows paid promo-video requests (Muse, Reel); ElevenLabs allows paid ElevenLabs voices (Booth's ElevenLabs route, Press Shorts, whose default voice is the free on-device one) |
+| **Paid media** | **Higgsfield**, **ElevenLabs** | Not affected by Mode. Higgsfield allows paid promo-video requests (Nova, Reel); ElevenLabs allows paid ElevenLabs voices (Booth's ElevenLabs route, Press Shorts, whose default voice is the free on-device one) |
 
 These boxes are a deliberate safety mechanism. They gate every agent's paid
-request, not only Chat's: `authorize_request` passes them to the validator,
+request, not only Kernel's: `authorize_request` passes them to the validator,
 which blocks a request whose provider box is unticked even when that provider
 is selected. Local providers (Ollama, LM Studio) need no box. Booth's narration
 goes through the same check, so its route's box (OpenAI, Gemini or
@@ -961,8 +965,8 @@ A progress bar and a status label appear below the action row only while a reque
 
 The **progress bar** runs in indeterminate mode (animating, no percentage) because LLM response time is not predictable.
 
-One exception: **Get Muse Glimmer** — the link under Chat's model row while
-Meta's Muse Glimmer is not installed in Ollama — drives Chat's own bar as a
+One exception: **Get Muse Glimmer** — the link under Kernel's model row while
+Meta's Muse Glimmer is not installed in Ollama — drives Kernel's own bar as a
 determinate 0–100 % bar while the download runs, with the GB count in the
 status label, and hides it (handing it back to the busy bar) when the pull
 finishes or fails. Until 2026-10-09 the download moved Booth's Convert bar
@@ -994,7 +998,7 @@ agent has its own package in `agents/<key>/`, with its own README, and its own
 panel; Chat uses the Assistant workspace's standard panel
 ([section 6](#6-centre-panel--main-workspace)). Every text agent can use the
 local providers (Ollama, LM Studio) and the cloud providers you have a key
-for, except Press and Muse, which offer no local provider. Booth narrates with
+for, except Press and Nova, which offer no local provider. Booth narrates with
 one of three routes: OpenAI, Gemini or ElevenLabs. **F1** on a control opens
 the Learning Centre lesson for it; **Docs** in the header opens each agent's
 sheet.
@@ -1003,23 +1007,23 @@ The subsections below are headed with each agent's name and workspace. Their
 numbering is historical: 7.8 is an archived command-line tool, kept so that
 older references still resolve.
 
-### 7.1 Chat Agent
+### 7.1 Kernel (Assistant)
 
-**Left-panel button:** Chat  (category: **General**)
+**Workspace:** Assistant, in the header · **Agent:** Kernel (named Chat until 2026-11-22) · **Package:** `agents/chat/`
 
-The default, general-purpose agent. Chat is the one agent that does *not* swap in a custom panel — it runs inside the standard centre panel (Tool combo, Command combo, prompt input, output box) described in [section 6](#6-centre-panel--main-workspace). Use it for anything that doesn't have a dedicated specialist agent: open-ended questions, code help, drafting, summarisation, translation, follow-up conversation, brainstorming.
+The default, general-purpose agent. Kernel is the one agent that does *not* swap in a custom panel — it runs inside the standard centre panel (Tool combo, Command combo, prompt input, output box) described in [section 6](#6-centre-panel--main-workspace). Use it for anything that doesn't have a dedicated specialist agent: open-ended questions, code help, drafting, summarisation, translation, follow-up conversation, brainstorming.
 
 ---
 
-#### What the Chat Agent Does
+#### What Kernel does
 
-The Chat agent sends the prompt with the active Tool's instructions (General Chat, Writing, Coding, Summarize, Rewrite — see [§6.1](#61-control-bar--row-1-tool--command)). After the first reply, later messages in the same conversation include prior user and assistant turns. Saved chats are persisted as JSON files in `data/chats/` and re-appear in **Saved chats**. Reopening one restores the transcript and leaves the input empty for a follow-up. It uses the *current* Tool and project instructions, not a system prompt stored in the old file. Changing the agent, Tool, or project starts a different context; **New Chat** explicitly clears it. The preflight estimate includes earlier turns that will be sent again.
+Kernel sends the prompt with the active Tool's instructions (General Chat, Writing, Coding, Summarize, Rewrite — see [§6.1](#61-control-bar--row-1-tool--command)). After the first reply, later messages in the same conversation include prior user and assistant turns. Saved chats are persisted as JSON files in `data/chats/` and re-appear in **Saved chats**. Reopening one restores the transcript and leaves the input empty for a follow-up. It uses the *current* Tool and project instructions, not a system prompt stored in the old file. Changing the agent, Tool, or project starts a different context; **New Chat** explicitly clears it. The preflight estimate includes earlier turns that will be sent again.
 
 ---
 
 #### Panel Layout
 
-Chat uses the **standard `normal_panel`** described in [section 6](#6-centre-panel--main-workspace) (no custom GUI). The centre panel exposes:
+Kernel uses the **standard `normal_panel`** described in [section 6](#6-centre-panel--main-workspace) (no custom GUI). The centre panel exposes:
 
 | Element | Purpose |
 |---------|---------|
@@ -1037,7 +1041,7 @@ Chat uses the **standard `normal_panel`** described in [section 6](#6-centre-pan
 
 #### How to Use — Step by Step
 
-1. Click **Chat** in the **General** category of the left panel.
+1. Click **Assistant** in the header.
 2. Pick a **Tool** if you want a domain frame (e.g. Coding, Writing).
 3. Optionally pick a **Command** template.
 4. Choose **Provider** and **Model**.
@@ -1058,7 +1062,7 @@ Chat uses the **standard `normal_panel`** described in [section 6](#6-centre-pan
 
 #### Tips & Limitations
 
-> The Chat agent has no built-in tool-use, web browsing, or file uploads — it is plain text in, plain text out. There is no dedicated research/investigation agent in this fork (that stayed with `sentinel_ai`); Chat with the Writing or Coding tool is as close as this app gets.
+> Kernel has no built-in tool-use, web browsing, or file uploads — it is plain text in, plain text out. There is no dedicated research/investigation agent in this fork (that stayed with `sentinel_ai`); Kernel with the Writing or Coding tool is as close as this app gets.
 
 > Long conversations grow `current_messages` linearly; the entire history is re-sent on each turn. Use **New Chat** liberally to keep token costs down on paid providers.
 
@@ -1068,24 +1072,26 @@ Chat uses the **standard `normal_panel`** described in [section 6](#6-centre-pan
 
 | Property | Value |
 |----------|-------|
-| Agent class | `agents/chat_agent.py` — `ChatAgent` |
+| Agent class | `agents/chat/agent.py` — `ChatAgent` |
 | Agent name (DB) | `chat` |
-| Label | Chat |
+| Label | Kernel |
 | Default panel | Standard `normal_panel` (no custom GUI) |
 | Allowed providers | All five |
 | System prompt | None directly — uses the active Tool's system prompt |
 
 ---
 
-### 7.2 Atelier Agent
+### 7.2 Vector (Brand Design)
 
-**Left-panel button:** Stamp  (category: **Gigs**)
+**Workspace:** Brand Design, in the header · **Agent:** Vector (named Stamp until 2026-11-22) · **Package:** `agents/fiverr/`
 
-A logo-design freelancer assistant. The Fiverr agent generates **logo concepts** (OpenAI GPT Image, Gemini Nano Banana or Qwen Image), a polished **delivery message** for the client, and a complete **Fiverr gig description** — all from a single client brief form. Images go through `services/image_generation.py`, one request per image; the text deliverables can use any provider.
+**Vector makes PNG images, not vector files.** Trace them to SVG in a vector tool before client delivery.
+
+A logo-design freelancer assistant. Vector generates **logo concepts** (OpenAI GPT Image, Gemini Nano Banana or Qwen Image), a polished **delivery message** for the client, and a complete **Fiverr gig description** — all from a single client brief form. Images go through `services/image_generation.py`, one request per image; the text deliverables can use any provider.
 
 ---
 
-#### What the Atelier Agent Does
+#### What Vector does
 
 Three distinct outputs, generated independently:
 
@@ -1095,7 +1101,7 @@ Three distinct outputs, generated independently:
 
 ---
 
-#### Gigs Panel Layout
+#### Brand Design panel layout
 
 ##### Client brief
 
@@ -1159,7 +1165,7 @@ Live status appears as a line under the action row.
 
 #### How to Use — Step by Step
 
-1. Open the **Gigs** tab in the header.
+1. Open **Brand Design** in the header.
 2. Fill in **Business name**, **Industry**, **Style**, and **Primary colours**.
 3. Choose how many concepts to render (1–4) and add optional notes.
 4. Pick the **Text provider / model** for the prompt and copy, and the **Image model** for the logos.
@@ -1173,7 +1179,7 @@ Live status appears as a line under the action row.
 
 #### External Requirements
 
-- **A key for the chosen image model's provider** — OPENAI_API_KEY, GOOGLE_API_KEY (or GEMINI_API_KEY) or DASHSCOPE_API_KEY — plus its permission box. Stamp checks it before the paid prompt step. Each image carries a conservative per-image reserve (GPT Image $0.06, Nano Banana 2.1 $0.04, Pro $0.14, Qwen Image $0.03 / Pro $0.04).
+- **A key for the chosen image model's provider** — OPENAI_API_KEY, GOOGLE_API_KEY (or GEMINI_API_KEY) or DASHSCOPE_API_KEY — plus its permission box. Vector checks it before the paid prompt step. Each image carries a conservative per-image reserve (GPT Image $0.06, Nano Banana 2.1 $0.04, Pro $0.14, Qwen Image $0.03 / Pro $0.04).
 - Optional: account on **Fiverr** (https://fiverr.com) to publish the gig and deliver to clients. No Fiverr API integration — copy/paste the generated content.
 - Optional: a vector tool (Illustrator, Affinity Designer, Vectorizer.AI) to convert the raster PNG concepts into final vector logos before delivery.
 
@@ -1196,7 +1202,7 @@ Live status appears as a line under the action row.
 | Agent class | `agents/fiverr/agent.py` — `FiverrAgent` |
 | Workspace | `agents/fiverr/panel.py` — guarded logo/copy workflows, results and order log |
 | Agent name (DB) | `fiverr` |
-| Label | Atelier |
+| Label | Vector |
 | Default text provider | Anthropic |
 | Image provider | OpenAI, Gemini or Qwen — any model in `services/image_generation.image_models()` |
 | External worker | `FiverrImageWorker` (in `ui/workers.py`) — threaded image generation |
@@ -1517,7 +1523,7 @@ Five-section release plan:
 
 | Field | Description |
 |-------|-------------|
-| **Artist / Project Name** | e.g. Nova Drift, The Hollow Road. |
+| **Artist / Project Name** | e.g. Glass Harbor, The Hollow Road. |
 | **Genre** | Pop / Rock / Hip-Hop / Electronic / Jazz / Classical / R&B / Metal / Indie / Folk / Country / Latin / Reggae / Ambient / World / Other. |
 | **Release Type** | Single / EP (3–6 tracks) / Album (7+) / Mixtape. |
 | **Distributor** | Not signed up yet / DistroKid / TuneCore / CD Baby / Amuse / AWAL / Other. |
@@ -2194,7 +2200,9 @@ engagement bait, as a rule rather than a hope.
 
 ---
 
-### 7.11 Creator Agent
+### 7.11 Nova (Brand Content)
+
+**Workspace:** Brand Content, in the header · **Agent:** Nova (named Muse until 2026-11-22) · **Package:** `agents/creator/`
 
 `key: creator` · `agents/creator/agent.py` · panel `build_creator_panel()` ·
 full sheet in `docs/agents/creator.md`
@@ -2221,8 +2229,8 @@ conversation.
 On 30 September 2026 the account-type and consent model, the platform-policy
 record, statement import, per-asset revenue and outcomes, fan segments, the
 `ppv` and `welcome` kinds, pricing fields and the agency view were removed from
-Muse. **Backstage** — a separate app in the same workspace, sharing no code and
-no data — already owned all of it. Muse keeps drafting, the plan calendar,
+Nova. **Backstage** — a separate app in the same workspace, sharing no code and
+no data — already owned all of it. Nova keeps drafting, the plan calendar,
 voice, media, teasers and the written-character record.
 
 The `creator_*` tables stay in the database untouched, and `creator_content`
@@ -2417,8 +2425,8 @@ current models and prices are in the **Model Guide** ([§13.4](#134-model-guide)
 |---|---|---|---|
 | **LM Studio** (local) | none; server at `http://localhost:1234/v1` (`LMSTUDIO_URL`) | Chat and text agents, on this Mac at no cost ([§6.2.1](#621-local-providers-ollama-and-lm-studio)) | none |
 | **Kimi** (Moonshot) | `KIMI_API_KEY` | Chat and text agents; default `kimi-k3` | **Kimi** |
-| **Qwen** (Alibaba DashScope) | `DASHSCOPE_API_KEY` (optional `DASHSCOPE_WORKSPACE_ID`) | Chat (default `qwen3.8-max`), Qwen Image scene visuals and Wan video in Reel | **Qwen** |
-| **Higgsfield** | `HF_API_KEY_ID` + `HF_API_KEY_SECRET` | Seedance video in Reel and Muse's promo video, after an exact provider quote | **Higgsfield** |
+| **Qwen** (Alibaba DashScope) | `DASHSCOPE_API_KEY` (optional `DASHSCOPE_WORKSPACE_ID`) | Kernel (default `qwen3.8-max`), Qwen Image scene visuals and Wan video in Reel | **Qwen** |
+| **Higgsfield** | `HF_API_KEY_ID` + `HF_API_KEY_SECRET` | Seedance video in Reel and Nova's promo video, after an exact provider quote | **Higgsfield** |
 | **ElevenLabs** | `ELEVENLABS_API_KEY` | One of Booth's narration routes (`eleven_multilingual_v2`) and an optional voice for Press Shorts | **ElevenLabs** |
 
 ---
@@ -2524,10 +2532,10 @@ finished. Chat writes `[Cut off] … To get the rest, send "continue"` instead o
 limit. Press Continue to write more.`; every other panel shows the cut-off line
 in its status instead of `[Done]`. The notice sits beside the text and is never
 saved with it (Saved chats and the conversation Chat sends next hold the answer
-alone). Chat's **Export Report** exports the whole transcript, so the
+alone). Kernel's **Export Report** exports the whole transcript, so the
 `[Cut off]` line is in the report. A Gemini thinking model can use the whole
 limit thinking: the notice then says so, and an empty answer is still billed.
-A cut-off or empty Stamp image prompt or Herald clip brief stops there: no
+A cut-off or empty Vector image prompt or Herald clip brief stops there: no
 images and no render are requested from it.
 
 ### Work that is not billed per token
@@ -2567,12 +2575,12 @@ For any cloud provider, a confirmation dialog is shown before the worker starts,
 
 ### Failed or stopped renders and image batches
 
-A video render, a Herald clip or a Stamp logo batch that fails or is stopped
+A video render, a Herald clip or a Vector logo batch that fails or is stopped
 records what it had already paid for (`GodAI.record_partial`): each paid stage
 that started (script, narration, captions) at the line you confirmed, and each
 image actually saved at the per-image rate, never more than the confirmed total.
 Stopping before the script stage, or before the first logo, records nothing. A
-Stamp Stop closes the batch only when its image worker sends its last signal, so
+Vector Stop closes the batch only when its image worker sends its last signal, so
 a concept already returned (or in flight) is billed. The
 row has cost type `partial`, counts against the session, daily, agent and
 project caps, and the Run Log shows `error` or `cancelled` with "recorded €X of
@@ -3197,24 +3205,30 @@ that picking the wrong one wastes an afternoon.
 running it replaces the live app with a snapshot and puts you back to
 rebuilding after every edit.
 
-Both install to `/Applications/Imprint.app`, so **the last one you ran wins**.
-Both executables are called `Imprint`, so tell them apart by what sits beside
+Both install to `/Applications/Imprint Studio.app`, so **the last one you ran wins**.
+Both executables are called `Imprint Studio`, so tell them apart by what sits beside
 them:
 
 ```bash
-ls /Applications/Imprint.app/Contents/Resources/project_root.txt
+ls "/Applications/Imprint Studio.app/Contents/Resources/project_root.txt"
 ```
 
 If that file exists, you have the live launcher, and it names the checkout it
 runs. If it doesn't, you have the frozen build.
 
+Until 2026-11-22 the bundle was `/Applications/Imprint.app`. Both scripts
+remove that old bundle after installing the new one: only that exact path,
+only when its bundle id is this app's, and only after a running copy has
+quit. Your data folder is not touched. Re-pin the Dock icon once, and Lab Hub
+needs a rebuild to point at the new name.
+
 The live launcher is `scripts/app_launcher.c`, which `install_app.sh` compiles
 against the libpython the `.venv` was made from. Python runs **inside**
-`Contents/MacOS/Imprint`, with the venv's packages, rather than being handed
+`Contents/MacOS/Imprint Studio`, with the venv's packages, rather than being handed
 off to `.venv/bin/python`. macOS names a process after the executable it is
-running, so this is what makes the app *Imprint* in Activity Monitor, the Dock,
+running, so this is what makes the app *Imprint Studio* in Activity Monitor, the Dock,
 Cmd-Tab and Force Quit. Workers Imprint starts with `sys.executable` (the
-narrator converter) go through the same executable, so they are named Imprint
+narrator converter) go through the same executable, so they are named Imprint Studio
 too. The two launchers it replaced both got this wrong:
 
 - **AppleScript applet**, until 2026-10-07. It blocked for the app's whole
@@ -3335,7 +3349,7 @@ two scripts. macOS also caches icons; if the Dock still shows the old one,
 `main.py --selftest` checks what only a real bundle can break:
 
 ```bash
-/Applications/Imprint.app/Contents/MacOS/Imprint --selftest
+"/Applications/Imprint Studio.app/Contents/MacOS/Imprint Studio" --selftest
 ```
 
 It confirms the writable data directory is outside the bundle, that every agent

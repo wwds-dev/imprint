@@ -9,7 +9,7 @@
 - Which agent you were using and which provider and model were selected.
 
 Search this lesson for a word from the message: each entry below starts with
-the text Imprint shows.
+the text Imprint Studio shows.
 
 ## Keys and providers
 
@@ -29,7 +29,7 @@ tick it under **Cloud text models** (Higgsfield and ElevenLabs: **Paid media**).
 The boxes start unticked at every launch and apply to every agent.
 
 **"Agent '…' does not permit provider '…'."** That agent cannot use that
-provider (Press and Muse, for example, offer no local provider). Pick another
+provider (Press and Nova, for example, offer no local provider). Pick another
 provider in the agent's own menu.
 
 ## Local models

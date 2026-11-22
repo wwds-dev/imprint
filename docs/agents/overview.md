@@ -1,4 +1,4 @@
-# Imprint technical reference
+# Imprint Studio technical reference
 
 Imprint is an umbrella studio: each agent owns a focused production workflow,
 while the shell supplies shared navigation, providers, model recommendations,

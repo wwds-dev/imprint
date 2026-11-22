@@ -62,7 +62,7 @@ Missing, late, or excluded rows:
 
 Raw rows: 1,000 platform impressions; 120 source-tagged page visits; 18 checkout
 starts; 5 purchases. Two additional purchases appear in the store report with
-unknown source. One statement is USD; Imprint API cost is EUR.
+unknown source. One statement is USD; Imprint Studio API cost is EUR.
 
 ```text
 Known visit → checkout rate = 18 / 120

@@ -1,4 +1,4 @@
-# Muse
+# Nova
 
 > **Outcome:** create one campaign asset, keep public actions human-controlled,
 > and land it on a plan you can act from.
@@ -11,7 +11,7 @@
 - Rights to any likeness, voice or media you reference.
 
 > Earnings, statement imports, account consent records, platform-policy review
-> and the agency view moved to **Backstage** on 30 September 2026. Muse is the
+> and the agency view moved to **Backstage** on 30 September 2026. Nova is the
 > production surface; Backstage is where the money and the account
 > authorisation records live. Nothing here reports revenue any more.
 
@@ -57,12 +57,12 @@ An account may carry a written character — appearance, backstory, personality,
 boundaries, a locked generation seed and reference images. It exists so
 successive drafts and teaser renders are the same character rather than a new
 one each time. It is a consistency tool, not a claim that the character is a
-real person, and Muse will not write copy asserting that it is.
+real person, and Nova will not write copy asserting that it is.
 
 ## How to read the output
 
 Draft, calendar and media counts are production observations, not results.
-A calendar item's status describes what Imprint knows: `draft` means prepared
+A calendar item's status describes what Imprint Studio knows: `draft` means prepared
 here, never that anything was posted. Verification is manual and belongs to
 you — confirm publication on the platform itself before treating an item as
 live, and read receipts and revenue in Backstage, which holds the statements
@@ -89,7 +89,7 @@ item.
 
 **Channel disappeared:** it applies to the `promo` kind only; conditional
 fields give up their cell rather than leaving a hole.  
-**No posting button:** Muse intentionally produces drafts; a human publishes.  
+**No posting button:** Nova intentionally produces drafts; a human publishes.  
 **Looking for Earnings:** it is in Backstage now, along with statement imports
 and the agency view.
 
@@ -122,7 +122,7 @@ Backstage, and nothing in this recipe predicts what the post will earn.
 
 ### Step 1 — Create the content profile
 
-Fill in the profile fields at the top of Muse and click **Save Profile**. The
+Fill in the profile fields at the top of Nova and click **Save Profile**. The
 handle and platform travel with every draft, so the copy fits the same
 account each time. The profile exists only inside Imprint — saving or
 removing it touches nothing on the platform, and account consent records

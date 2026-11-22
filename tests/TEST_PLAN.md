@@ -1,4 +1,4 @@
-# Imprint — QA Test Plan
+# Imprint Studio — QA Test Plan
 
 **Status:** draft for review · **Revised:** 2026-10-09 · **Baseline commit:** `e23f3cd`
 
@@ -45,7 +45,7 @@ repeated here — where they already cover something, this plan points at them.
 **In scope**
 
 - The desktop app: ten agents in eight workspaces (Quill, Press · Booth, Label ·
-  Reel · Herald · Sitebuilder · Stamp · Muse · Chat) plus the Intent Router,
+  Reel · Herald · Sitebuilder · Vector · Nova · Kernel) plus the Intent Router,
   as `agents/catalog.py` lists them. If this plan and the catalog disagree, the
   catalog is right.
 - The shared systems every agent routes through: the spend guard
@@ -132,7 +132,7 @@ Measured on the checkout at `e23f3cd` (2026-10-09).
    change (Veo's shutdown, google-genai's TTS surface, LMArena's table);
    `scripts/check_keys.py` is a hand step, not a test.
 8. **The packaged build is not smoke-tested.** `--selftest` exists;
-   nothing runs it against a fresh `Imprint.app`.
+   nothing runs it against a fresh `Imprint Studio.app`.
 9. **Order-dependent Qt deadlocks have happened twice** (57 min, 25 min). Both
    root causes are fixed, but nothing runs the suite in randomised order or
    repeatedly to prove the class is closed.
@@ -166,7 +166,7 @@ their creative work. Severity follows from that, not from how visible a bug is.
 | Per-request assessment / Model updates / ratings | Unrated or unpriced model wins; silent switch | S2 | `test_model_watch.py` (868), `test_model_ratings.py`, `test_media_assessment.py`, `test_recommendations.py` | Ratings snapshot staleness is a hand check; dated price changes are time-dependent — freeze the clock |
 | Pricing tables | A model offered with no price row; a rate stale after an announced change | S1 | `test_settings_pricing.py`, `test_voice_and_rates.py`, "every KNOWN_MODEL has a price row" | Live price drift (provider page vs `pricing.json`) is manual |
 | Persistence and migrations | Older DB missing a column; startup reconciler swallows it | S1 | `test_database_migrations.py` (7) | One synthetic older DB; no real snapshots; no concurrent-writer test; no backup/restore |
-| Crash and resume of paid per-unit jobs (Booth, Reel, Muse, Stamp) | Job neither resumed nor settled; or resumed **and** re-billed | S0 | Resume logic unit-tested; `test_video_jobs.py`, `test_creator_resume.py` | Process is never actually killed. UAT A11 only |
+| Crash and resume of paid per-unit jobs (Booth, Reel, Nova, Vector) | Job neither resumed nor settled; or resumed **and** re-billed | S0 | Resume logic unit-tested; `test_video_jobs.py`, `test_creator_resume.py` | Process is never actually killed. UAT A11 only |
 | Intent Router | Wrong agent, hidden ambiguity, stale WHY | S2 | `TestRouterAgent` | Good. Add a corpus file so new phrasings are one line, not one test |
 | Projects / artifacts / deletion | Cross-project leakage; orphaned files | S1 | `test_agent_projects.py`, `test_chat_projects.py` (757) | Disk-vs-DB consistency after delete is UAT A4 only |
 | Booth (narration, converter, player) | Chunking drift breaks resume; failed chunk continues; player threads leak | S1 | `test_narrator_converter.py` (841), `test_audiobook_*`, `test_booth_routes.py`, `test_converter_drift.py` | No real ffmpeg round-trip; no awkward-EPUB corpus; M4B chapter markers unchecked |
@@ -174,7 +174,7 @@ their creative work. Severity follows from that, not from how visible a bug is.
 | Herald publishers (Reddit, Pinterest, YouTube) | Token expiry, rate limit, duplicate post | S1 | `test_social.py`, `test_social_onboarding.py` | No live contract; idempotency on retry not pinned |
 | Press exports (DOCX / PDF / KDP) | Unreadable file; malformed KDP CSV crashes the parser | S2 | `test_book_pipeline.py`, `test_manuscript_charts.py` | Export validity (reopen with `python-docx` / `pypdf`); KDP fuzz corpus |
 | Sitebuilder export | Broken local refs, invalid HTML | S2 | `test_webdesign_export.py`, `test_webdesign_panel.py` | Parse the export; check every `href`/`src` resolves |
-| Stamp / Muse image & teaser routes | Wrong provider key checked; render posted twice | S0/S1 | `test_image_routes.py`, `test_higgsfield_client.py`, `test_teaser_routes.py`, `test_creator_*` | Covered; keep under the guard sweep |
+| Vector / Nova image & teaser routes | Wrong provider key checked; render posted twice | S0/S1 | `test_image_routes.py`, `test_higgsfield_client.py`, `test_teaser_routes.py`, `test_creator_*` | Covered; keep under the guard sweep |
 | Provider clients ×6 | Error mapping, timeout, 429, usage parsing differ by client | S1 | Anthropic, Gemini (one attempt), Higgsfield tested individually | **DeepSeek and Kimi have no tests.** No uniform client contract |
 | Layout / themes / header | Overlap, crushed rows, header shedding order | S3 | `test_panel_layout.py`, `test_agent_panel.py`, `test_theme.py`, `test_vibe.py` | `ui/header_fit.py` and `ui/tooltips.py` have no direct tests; header shedding is UAT A1 only; no keyboard-navigation test |
 | Packaging / frozen build | Data dir inside the bundle; resource missing; `.env` baked in | S1 | `test_app_launcher.py`, `test_app_identity.py`, `test_appkit_guard.py`, `test_version.py` | `runtime_paths.py` untested; `--selftest` never run against a built `.app` by anything automated |
@@ -197,7 +197,7 @@ commit. The tiers are additive: a release runs all of them.
 | **T2 Component (offscreen window)** | *(none)* | Builds `GodAI` offscreen: guard dialogs, panel state, layout at sizes, themes, streaming, projects | ~70 s | every commit |
 | **T3 Integration & recovery** | `@pytest.mark.recovery` | Real SQLite with historical snapshots; subprocess kill-and-relaunch; real ffmpeg round-trip; export reopen | ~2 min | pre-merge, nightly |
 | **T4 Live contract** | `@pytest.mark.live` | One **free** metadata call per keyed provider; one minimal paid call per per-unit route under a hard cap; publisher auth checks | varies; **≤ €0.50 per run** | weekly, pre-release, opt-in only |
-| **T5 Build smoke** | `@pytest.mark.build` | `build_app.sh` → `Imprint.app --selftest`; version badge derived; data dir outside bundle; no `.env` in the bundle | ~5 min | pre-release |
+| **T5 Build smoke** | `@pytest.mark.build` | `build_app.sh` → `Imprint Studio.app --selftest`; version badge derived; data dir outside bundle; no `.env` in the bundle | ~5 min | pre-release |
 | **T6 Non-functional** | `@pytest.mark.soak` / `perf` | Randomised-order ×3 and repeat runs; startup and narration budgets; memory ceiling; provider failure-mode matrix | 10–20 min | nightly |
 | **UAT** | `tests/manual_test_cases.md` | Everything a human has to judge | FREE pass ~2 h; PAID pass budgeted | pre-release; after any S0/S1 fix in that area |
 
@@ -244,8 +244,8 @@ they are picked up.
    halves must go red.
 2. **Kill-and-resume, for real.** `tests/test_crash_recovery.py`
    (`@recovery`). A subprocess launches a headless harness that: creates a
-   temp DB, authorizes a fake per-unit job (Booth chunking, Reel render, Muse
-   teaser, Stamp images — parametrized), marks it in flight, then is
+   temp DB, authorizes a fake per-unit job (Booth chunking, Reel render, Nova
+   teaser, Vector images — parametrized), marks it in flight, then is
    `SIGKILL`ed at three points (before first write, mid-run, after output but
    before settlement). Relaunch the reconciler (`resume_pending_*`) in a
    second subprocess; assert: exactly one of {resumed to completion, settled
@@ -286,7 +286,7 @@ they are picked up.
    says; a read-only bundle path never receives a write. Then make
    `--selftest` call the same function so the two cannot disagree.
 8. **Build smoke** (`@build`). `scripts/build_app.sh` into a temp prefix,
-   then run `Imprint.app/Contents/MacOS/Imprint --selftest`; assert exit 0,
+   then run `"Imprint Studio.app/Contents/MacOS/Imprint Studio" --selftest`; assert exit 0,
    the version in `_build_info.json` matches the badge logic in
    `services/version.py`, every `datas` entry in `Imprint.spec` exists in the
    bundle, and `grep -r` finds no provider key pattern inside it.
@@ -623,7 +623,7 @@ IMPRINT_ENV_FILE=.env.test .venv/bin/python -m pytest -q -m live
 
 # build smoke
 .venv/bin/python -m pytest -q -m build
-/Applications/Imprint.app/Contents/MacOS/Imprint --selftest
+"/Applications/Imprint Studio.app/Contents/MacOS/Imprint Studio" --selftest
 
 # mutation run on the money modules
 .venv/bin/mutmut run --paths-to-mutate services/validator.py,services/pricing_catalog.py,services/per_unit_pricing.py

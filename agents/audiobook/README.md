@@ -1,7 +1,7 @@
 # Booth agent (`agents.audiobook`)
 
 Owns ebook discovery, narration configuration, conversion progress, listening,
-resume state and audiobook output management. Imprint imports its connector and
+resume state and audiobook output management. Imprint Studio imports its connector and
 Convert/Listen workspace from `agents.audiobook`. Discovery, estimation,
 conversion process lifecycle, billing closure, library and playback actions all
 belong to that workspace; only shared budgets, usage storage, output and the

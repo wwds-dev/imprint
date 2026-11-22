@@ -1,4 +1,4 @@
-# Chat
+# Kernel
 
 > **Outcome:** get one bounded answer, check it against your own acceptance
 > criteria, and keep or discard the conversation deliberately.
@@ -101,7 +101,7 @@ resend is a second request and shows a second estimate.
 
 ### Step 1 — Start a clean project
 
-Click **New Project** and name it. Imprint switches the Projects dropdown to
+Click **New Project** and name it. Imprint Studio switches the Projects dropdown to
 it and opens a fresh chat, so this question starts without leftover context
 and everything you ask now files under it.
 
@@ -134,11 +134,11 @@ Thu — maybe drop the webinar? nobody decided. Fri — new tagline approved
 ### Step 3 — Let the router read it
 
 Click **Auto Route**. The router reads your text and moves you to the
-workspace it fits; a general question like this one stays in Chat. The **Chat
+workspace it fits; a general question like this one stays in Kernel. The **Chat
 routing** card in the right rail fills in with the chosen agent, provider and
 model — hover it for the why and the how-sure. The tooltip names one of three
 honest tiers: *addressed* (you named a tool), *intent* (a keyword matched,
-and it says which), or *fallback* (nothing matched, so Chat). A fallback is a
+and it says which), or *fallback* (nothing matched, so Kernel). A fallback is a
 default, not a verdict.
 
 [Show me](show:auto_route_btn)

@@ -1,6 +1,6 @@
 # Support
 
-Imprint is a macOS desktop studio of AI agents for writing, publishing, audiobooks, music, video, social posts, brand design and web pages, maintained by one person in their own time. There is no paid
+Imprint Studio is a macOS desktop studio of AI agents for writing, publishing, audiobooks, music, video, social posts, brand design and web pages, maintained by one person in their own time. There is no paid
 support and no guaranteed response time.
 
 ## Where to ask

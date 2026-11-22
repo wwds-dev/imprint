@@ -1,4 +1,4 @@
-# Imprint audiobooks on Mac and iPhone
+# Imprint Studio audiobooks on Mac and iPhone
 
 **Status: 29 September 2026.** Imprint can save converted audio and listening
 progress either locally or in your synced `My Drive/audiobooks - gdrive` folder.

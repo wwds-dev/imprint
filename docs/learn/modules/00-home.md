@@ -1,7 +1,7 @@
 # Learning Centre
 
 > **Outcome:** choose the shortest lesson or guided path that leads to a
-> verified result. Imprint will help you produce and measure work; it will not
+> verified result. Imprint Studio will help you produce and measure work; it will not
 > turn generated output into evidence of demand.
 
 ## Start from your goal

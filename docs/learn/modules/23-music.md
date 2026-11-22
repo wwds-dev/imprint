@@ -1,7 +1,7 @@
 # Music
 
 > **Outcome:** make one finished song — lyrics, Suno prompt and audio kept
-> together in Imprint — and, when it is worth releasing, a verified release
+> together in Imprint Studio — and, when it is worth releasing, a verified release
 > checklist. Earnings figures are scenarios with assumptions, never
 > “realistic” predictions.
 

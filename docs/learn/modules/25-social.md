@@ -102,7 +102,7 @@ example inputs exactly the first time, then swap in your own. Each **Show me**
 closes this lesson, opens the control it names and rings it; **Back to lesson**
 in the callout brings you back to that step.
 
-**Time:** about 15 minutes in Imprint, plus the minute on the platform when you
+**Time:** about 15 minutes in Imprint Studio, plus the minute on the platform when you
 post, and a short return visit later for the numbers. **Cost:** one text
 request in Imprint — you see its estimate and approve it before anything is
 sent (free with a local Ollama or LM Studio model). Posting by hand costs nothing. **Make a

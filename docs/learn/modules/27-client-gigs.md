@@ -1,4 +1,7 @@
-# Client Gigs
+# Vector
+
+**Vector makes PNG images, not vector files.** Trace them to SVG in a vector
+tool before client delivery.
 
 > **Outcome:** prepare one bounded client deliverable with explicit acceptance,
 > revision, cost, and delivery boundaries.
@@ -7,7 +10,7 @@
 
 - Written client brief, authorised source assets, delivery format, deadline,
   price/fees, revision count, and acceptance criteria.
-- Nothing to set up for the order record: Imprint opens one durable order per
+- Nothing to set up for the order record: Imprint Studio opens one durable order per
   client the first time you generate for them.
 
 ## Control atlas
@@ -96,7 +99,7 @@ same way before any image is made.
 
 ### Step 1 — Write the client brief
 
-Fill in the brief at the top of Client Gigs. Everything here is sent with
+Fill in the brief at the top of Vector. Everything here is sent with
 every request for this order, so the concepts and the copy describe the same
 client.
 

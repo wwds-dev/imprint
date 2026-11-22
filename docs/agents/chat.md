@@ -1,4 +1,4 @@
-# STUDIO ASSISTANT — General-purpose conversation
+# Kernel — general-purpose conversation (Assistant workspace)
 
 `key: chat` · class: `agents/chat/agent.py → ChatAgent` · panel: standard `normal_panel` (no custom panel) · handler: `send_prompt()`
 
@@ -19,6 +19,14 @@ Streaming text into the **Output** box (auto-hidden until there's content). Each
 
 ## How it works
 `ChatAgent.build_messages()` returns `[system(tool prompt), user]`. On later turns the prior assistant reply is included so the model sees the whole thread. Token-by-token streaming for streaming backends, word-by-word emulation otherwise.
+
+## Deliberate limitations
+What Kernel does not do, on purpose or not yet. Rows marked *open* are known gaps with a `TODO.md` item; the code audit of 2026-11-18 (`docs/audit/code-readiness-audit-2026-11-18.md`) is the source.
+
+- **Plain text in, plain text out.** No tool use, web browsing or file upload; the Tool only changes the system prompt.
+- **The whole conversation is sent again on every turn**, so a long thread costs more per message. **New Chat** starts a fresh context.
+- **Its in-flight requests do not count toward the per-agent and per-project caps**, only toward the session and daily totals (*open*, audit QM-2 / security B-F4).
+- **A stopped or failed reply records €0**, even when the provider billed part of it (*open*, audit QM-4 / security B-F7).
 
 ## Under the hood — files & functions
 | Location | Role |
@@ -59,7 +67,7 @@ chat when old turns are no longer relevant.
 
 Prompts and responses are stored locally in `data/chats/`. A cloud run sends
 the current conversation context to the selected provider; a local Ollama run
-does not. Imprint checks the request against session and daily limits before
+does not. Imprint Studio checks the request against session and daily limits before
 starting, then records measured usage when available. Deleting a saved chat is
 separate from clearing the visible prompt and requires confirmation.
 

@@ -1,20 +1,22 @@
-# BRAND & LOGO DESIGNER — client identity studio
+# Vector — brand and logo design (Brand Design workspace)
 
 `key: fiverr` · agent: `agents.fiverr.FiverrAgent` · workspace owner: `agents.fiverr.FiverrPanel`
 
 ## What it does
+**Vector makes PNG images, not vector files.** Trace them to SVG in a vector tool before client delivery.
+
 End-to-end logo-gig assistant. Unlike a prompt-only helper, it **actually generates the logo images** — through OpenAI, Gemini or Qwen, whichever owns the selected image model — saves them locally, and also writes the Fiverr gig description and the client delivery message. One brief → concepts + copy.
 
 ## Inputs (panel controls)
 | Control | Purpose |
 |---|---|
-| Business Name, Industry / Niche | Core brief. |
+| Business name, Industry / niche | Core brief. |
 | Style | Minimalist / bold / vintage / tech / etc. |
-| Primary Colors, Notes | Palette + tagline/mood/competitors to avoid. |
-| # Concepts (1–4) | How many logos to generate. |
+| Primary colours, Notes | Palette + tagline/mood/competitors to avoid. |
+| Concepts (1–4) | How many logos to generate. |
 | Text Provider / Model | LLM for the image prompt + copy. |
 | Image Model | See the table below. The model's provider is the one that is billed and needs a key. |
-| Generate Logos / Delivery Msg / Gig Description / Stop | The three actions. |
+| Generate Logos / Delivery Message / Gig Description / Stop | The three actions. |
 | Save All Images / Clear | Export / reset. |
 
 ## Image models
@@ -33,7 +35,15 @@ Tabs: **Logo Preview** (generated images, 280×280 thumbnails), **Delivery Messa
 The Delivery Message and Gig Description you see are what the order holds: an edit is saved to the loaded order shortly after you stop typing, and at once when you switch orders or clear. In **Orders**, pick how an order ended — Delivered, Accepted or Cancelled — and **Close order**; the record stays, and the client's next job starts a new order instead of being added to the finished one as a revision. **Reopen** undoes a close.
 
 ## How it works
-Two-step logo flow: a `ChatWorker` runs `FiverrAgent.build_image_prompt_request()` to craft a clean image prompt, then `FiverrImageWorker` calls `services/image_generation.generate_image()` with the selected model and displays the returned image. Stamp authorizes the image model's own provider, and checks that provider's key before the paid prompt step, so a missing key costs nothing (it used to demand `OPENAI_API_KEY` whatever the model). Each image request is sent exactly once: a paid image is never retried automatically. Delivery/gig use `FiverrAgent.build_messages(task, brief)`.
+Two-step logo flow: a `ChatWorker` runs `FiverrAgent.build_image_prompt_request()` to craft a clean image prompt, then `FiverrImageWorker` calls `services/image_generation.generate_image()` with the selected model and displays the returned image. Vector authorizes the image model's own provider, and checks that provider's key before the paid prompt step, so a missing key costs nothing (it used to demand `OPENAI_API_KEY` whatever the model). Each image request is sent exactly once: a paid image is never retried automatically. Delivery/gig use `FiverrAgent.build_messages(task, brief)`.
+
+## Deliberate limitations
+What Vector does not do, on purpose or not yet. Rows marked *open* are known gaps with a `TODO.md` item; the code audit of 2026-11-18 (`docs/audit/code-readiness-audit-2026-11-18.md`) is the source.
+
+- **PNG images only, not vector files.** Every image route returns a raster PNG; trace it to SVG in a vector tool before client delivery. The prompt no longer asks for a vector or transparent-background result (audit QM-18, fixed 2026-11-22).
+- **No transparent background.** Concepts come on a plain background; remove it in an image editor if the client needs one.
+- **Prices are yours to set.** The gig description leaves `[PRICE]` where you gave no price; it does not invent ratings, reviews or a track record.
+- **A bare "logo" does not route here** from Auto Route (only "logo order" or "gig listing" do); open Brand Design yourself.
 
 ## Under the hood — files & functions
 | Location | Role |
@@ -43,7 +53,7 @@ Two-step logo flow: a `ChatWorker` runs `FiverrAgent.build_image_prompt_request(
 | `ui/workers.py: FiverrImageWorker` | Threaded image generation + local save, one concept at a time. |
 | `services/image_generation.py: generate_image()` | The one place a model id becomes a request: OpenAI through `services/openai_client.py`, Gemini through the Interactions API with its own retry switched off, Qwen through DashScope. |
 | `services/media_catalog.py` | The image models offered, with their providers and notes. |
-| `main.py` compatibility entries | Delegate older umbrella call sites to the owned panel; they contain no Client Gigs implementation. |
+| `main.py` compatibility entries | Delegate older umbrella call sites to the owned panel; they contain no Vector implementation. |
 
 ## Extend it
 - **Other gig types**: generalise the brief + add roles to `FiverrAgent` (business cards, thumbnails, banners).
@@ -51,7 +61,7 @@ Two-step logo flow: a `ChatWorker` runs `FiverrAgent.build_image_prompt_request(
 - **Another image provider**: add its request to `services/image_generation.py`, a `scene_images` entry to `services/media_catalog.py` and a per-image rate to `config/pricing.json`, rather than placing a model with no execution path in the menu.
 
 ## Requirements
-The **API key of the selected image model's provider** (OpenAI, Gemini or Qwen) and its permission box. GPT Image uses token-based image pricing, so Imprint reserves a conservative amount against the budget before rendering; the Nano Banana reserves round Google's list prices up, and Qwen's are Alibaba's list prices. Text copy can use any provider. Fiverr seller account to sell.
+The **API key of the selected image model's provider** (OpenAI, Gemini or Qwen) and its permission box. GPT Image uses token-based image pricing, so Imprint Studio reserves a conservative amount against the budget before rendering; the Nano Banana reserves round Google's list prices up, and Qwen's are Alibaba's list prices. Text copy can use any provider. Fiverr seller account to sell.
 
 DALL·E 2 and 3 are intentionally not offered: OpenAI retired and removed both APIs.
 

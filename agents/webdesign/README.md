@@ -1,7 +1,7 @@
 # Sitebuilder
 
 Owns responsive HTML, CSS and JavaScript generation plus front-end layout and
-accessibility guidance. Imprint imports `WebdesignAgent` from
+accessibility guidance. Imprint Studio imports `WebdesignAgent` from
 `agents.webdesign`. The package also owns the `WebdesignPanel` workspace and
 its local export actions (a single `.html` file, or a project folder with
 pre-export HTML/accessibility checks); Imprint still supplies provider execution, spending

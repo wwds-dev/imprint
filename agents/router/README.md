@@ -45,7 +45,7 @@ execute provider calls or bypass the shared request guard.
 
   Before that table runs, `classify()` checks whether the text **addresses**
   an agent by name. The 2026-09-30 rename gave the agents codenames, and
-  "open Booth" routed to Chat because the router only ever knew intent words.
+  "open Booth" routed to Chat (now Kernel) because the router only ever knew intent words.
   The names are read from `agents.catalog.AGENT_SPECS`, not copied here, so a
   relabel cannot leave the router answering to a name that no longer exists —
   a test asserts `classify(f"open {spec.label}") == spec.key` for every agent

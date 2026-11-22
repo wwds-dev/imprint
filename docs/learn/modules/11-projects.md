@@ -45,7 +45,7 @@ you intended to measure.
    copy that Project's current Write draft into the quote source and set the
    byline as attribution. This is working text, not approval. After editorial
    review, click **Approve Write Draft…** and confirm the title, byline and
-   word count. Imprint saves an immutable numbered snapshot. Choose a version
+   word count. Imprint Studio saves an immutable numbered snapshot. Choose a version
    and click **Use Approved Version** to load that exact text and byline; new
    Write edits cannot change it. Project Overview warns when Write has changed
    since the latest approval. **Load File** remains available for an external

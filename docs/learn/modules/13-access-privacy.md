@@ -13,7 +13,7 @@
 
 | State | Meaning |
 |---|---|
-| Credential exists | Imprint may be able to authenticate to that provider. |
+| Credential exists | Imprint Studio may be able to authenticate to that provider. |
 | Provider is permitted | The current execution policy allows that provider to be used. |
 | Route is eligible | Credential, permission, capability, availability, and budget checks passed. |
 
