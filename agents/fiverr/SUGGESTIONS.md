@@ -1,4 +1,4 @@
-# Stamp — Suggestions
+# Vector — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 

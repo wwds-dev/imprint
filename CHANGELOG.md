@@ -29,6 +29,22 @@ listed under **Unreleased** until it ships.
 ## Unreleased
 
 ### Changed
+- **The app is called Imprint Studio; three agents are renamed** (2026-11-22,
+  `docs/specs/rename-imprint-studio.md`, with package 5 of the docs readiness
+  spec). The window title, header wordmark, tray menu, version tooltip,
+  menu-bar name, sub-window titles, bundle and executable say "Imprint
+  Studio"; the bundle is now `/Applications/Imprint Studio.app`, and both
+  install scripts remove the old `/Applications/Imprint.app` (that exact path,
+  only with this app's bundle id, only once it has quit). The data folder
+  `~/Library/Application Support/Imprint/`, the database, the repository and
+  the bundle id do not change. Agents: Chat is now **Kernel**, Muse is
+  **Nova**, Stamp is **Vector**; an existing database shows the new names on
+  the next launch. "Open Muse" and "use Stamp" no longer route (no aliases),
+  and the router no longer treats "use the nova voice" or "use vector files"
+  as naming an agent. Docs, sheets, lessons and the hand-test script use the
+  new names; the Kernel, Nova and Vector sheets gained "Deliberate
+  limitations".
+
 - **Documentation and Learning Centre made ready for the hand test**
   (`docs/specs/docs-learning-centre-readiness.md`, packages 1 to 4). README:
   a "Start here" block, the two parts marked (*Using the app*, *Engineering
@@ -58,6 +74,11 @@ listed under **Unreleased** until it ships.
   checked against the app's strings.
 
 ### Fixed
+- **Vector no longer promises vector files or an invented track record**
+  (audit QM-18). Its prompt dropped the "5-star reputation", leaves prices as
+  `[PRICE]` unless you give them, and asks for a flat logo on a plain
+  background; the panel, sheet and lesson say "Vector makes PNG images, not
+  vector files".
 - **Docs after review (R-1, R-2, R-4, R-7, R-12):** Herald's Pinterest posting
   is described as not working yet everywhere (it did say both); Label's two
   tabs, not Label and Muse, share the "music" authorization; Troubleshooting

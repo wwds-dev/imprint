@@ -1,4 +1,4 @@
-# Muse — Suggestions
+# Nova — Suggestions
 
 Status: `IDEA` · `CONSIDERING` · `PLANNED` · `DONE` · `REJECTED`
 
