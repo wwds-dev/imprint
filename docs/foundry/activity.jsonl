@@ -122,3 +122,9 @@
 {"ts": "2026-11-21T21:58:02", "phase": "release", "state": "start", "spec": "one-click-release"}
 {"ts": "2026-11-21T22:27:35", "phase": "release", "state": "blocked", "spec": "one-click-release"}
 {"ts": "2026-11-21T22:53:49", "phase": "release", "state": "done", "spec": "one-click-release"}
+{"ts": "2026-11-22T03:40:50", "phase": "define", "state": "start", "spec": "rename-imprint-studio"}
+{"ts": "2026-11-22T03:40:50", "phase": "define", "state": "start", "spec": "model-updates"}
+{"ts": "2026-11-22T03:40:50", "phase": "define", "state": "start", "spec": "docs-learning-centre-readiness"}
+{"ts": "2026-11-22T03:51:52", "phase": "define", "state": "done", "spec": "rename-imprint-studio"}
+{"ts": "2026-11-22T03:51:53", "phase": "define", "state": "done", "spec": "model-updates"}
+{"ts": "2026-11-22T03:51:53", "phase": "define", "state": "done", "spec": "docs-learning-centre-readiness"}
