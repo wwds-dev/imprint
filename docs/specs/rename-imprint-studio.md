@@ -118,7 +118,9 @@ the Sentinel-shared job type, which stay.
 ## Owner decisions needed
 **Decided 2026-11-22 ("approve rename spec, accept all five recommendations"):** D1-B (bundle
 `Imprint Studio.app`, Lab Hub rebuilt), D2 short form "Imprint" in running text, D3 change the two
-visible "Nova Drift" examples, D4 no aliases, and the recommended option on the QM-18 question.
+visible "Nova Drift" examples, D4 no aliases. The QM-18 question (open question 2) had no recommendation in this spec; R1 already
+requires the fix to ship with or before the rename, so it is planned inside this change unless the
+owner says otherwise.
 **Sequencing, corrected the same day:** decision 4 above is superseded by the approved docs plan:
 `docs-learning-centre-readiness` packages 1 to 4 land first (names untouched), this rename lands
 next together with that plan's package 5 (the name pass), then its package 6.
