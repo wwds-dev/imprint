@@ -1,6 +1,6 @@
 # Spec: the app is shown as "Imprint Studio"; three agents become Kernel, Nova and Vector
 
-Status: DRAFT, awaiting owner approval (Define gate). Written 2026-11-22. Priority: P1 (below the
+Status: APPROVED by the owner 2026-11-22 (Define gate), all recommendations accepted. Written 2026-11-22. Priority: P1 (below the
 open P0 billing bugs QB-2 and QB-3, `TODO.md:61-62`). Type: user-visible rename, no behaviour
 change except one router guard (R3). Slug: `rename-imprint-studio`. Product-manager playbook:
 `status: current`, last-reviewed 2026-10-14 (39 days). Not run by this session (no shell):
@@ -116,6 +116,15 @@ counted exactly by grep: a name pattern finds 66 hits in 38 files, most of them 
 the Sentinel-shared job type, which stay.
 
 ## Owner decisions needed
+**Decided 2026-11-22 ("approve rename spec, accept all five recommendations"):** D1-B (bundle
+`Imprint Studio.app`, Lab Hub rebuilt), D2 short form "Imprint" in running text, D3 change the two
+visible "Nova Drift" examples, D4 no aliases. The QM-18 question (open question 2) had no recommendation in this spec; R1 already
+requires the fix to ship with or before the rename, so it is planned inside this change unless the
+owner says otherwise.
+**Sequencing, corrected the same day:** decision 4 above is superseded by the approved docs plan:
+`docs-learning-centre-readiness` packages 1 to 4 land first (names untouched), this rename lands
+next together with that plan's package 5 (the name pass), then its package 6.
+
 - **D1 Bundle name.** Lab Hub builds the path from the tile name: `/Applications/<name>.app`
   (`../lab_hub/lab_hub/launcher/state.py:50,1086`; `registry.py:214`; `apps.toml:40`).
   - **A, keep `/Applications/Imprint.app`**, change only the two display keys. Cost: 2 files. Risk:
