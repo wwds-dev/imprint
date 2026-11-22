@@ -316,9 +316,11 @@ def _readme_without_package5() -> str:
     for pattern in _README_PACKAGE_5:
         body = _section(text, pattern)
         text = text.replace(body, "\n" * body.count("\n"))
-    # Contents entries that link to those three sections.
-    return "\n".join(line for line in text.splitlines()
-                     if not re.search(r"\(#7(1|2|11)-", line))
+    # Their headings, and the contents entries that link to them.
+    return "\n".join(
+        "" if re.search(r"\(#7(1|2|11)-", line)
+        or re.match(r"^### 7\.(1|2|11) ", line) else line
+        for line in text.splitlines())
 
 
 def _retired_hits(text: str, label: str) -> list[str]:
@@ -343,7 +345,10 @@ def test_t5_no_retired_agent_names_in_readme_sections_7_1_7_2_7_11():
     text = _visible(README.read_text(encoding="utf-8"))
     hits = []
     for pattern in _README_PACKAGE_5:
-        hits += _retired_hits(_section(text, pattern), f"README {pattern}")
+        heading = next(line for line in text.splitlines()
+                       if re.match(r"^### " + pattern[1:], line))
+        hits += _retired_hits(heading + "\n" + _section(text, pattern),
+                              f"README {pattern}")
     assert not hits, "\n".join(hits)
 
 

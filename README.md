@@ -2,15 +2,60 @@
 
 
 **Version:** `v2.xxx` in the header bar, derived rather than typed — see [§18.1 Versioning](#181-versioning).  
-**Stack:** Python 3.11+ · PySide6 · SQLite · Ollama · Anthropic · OpenAI · DeepSeek · Gemini
+**Stack:** Python 3.11+ · PySide6 · SQLite · local models (Ollama, LM Studio) · cloud providers you add a key for
 
 Forked from `sentinel_ai` and stripped down to the creative/publishing agents —
 see [FORK_PLAN.md](FORK_PLAN.md) for the split rationale and what has and
 hasn't been done.
 
+## Start here
+
+Five steps from a fresh checkout to a first result. Everything after this list
+is reference.
+
+1. **Install.** On a Mac with [uv](https://docs.astral.sh/uv/) and Homebrew:
+
+   ```bash
+   uv venv --python 3.11 .venv
+   uv pip install -r requirements.txt
+   brew install ffmpeg
+   ```
+
+   ffmpeg is needed for audiobooks, video and Shorts; Calibre's
+   `ebook-convert` only for MOBI and AZW3 books. Run `./scripts/install_app.sh`
+   for an `Imprint.app` in `/Applications` that runs this checkout
+   ([§18](#18-installing-and-packaging)).
+2. **Open the app:** `.venv/bin/python main.py`, or `Imprint.app`.
+3. **Choose a model.** Either run one on this Mac for free (install
+   [Ollama](https://ollama.com), then `ollama pull deepseek-r1:8b`, or load a
+   model in LM Studio), or add one cloud key: **Settings** (header) →
+   **API keys**, paste the key, **Test**, **Save All**
+   ([§19](#environment-variables-api-keys)). A cloud provider also needs its
+   permission box ticked before a request is sent
+   ([§6.3](#63-control-bar--row-3-execution-mode--api-permissions)); the boxes
+   start unticked at every launch.
+4. **First result.** Press **F1** (or **Learning Centre** in the right rail)
+   and follow *First verified result*: one small, bounded request whose cost
+   you approve before anything is sent.
+5. **Find your files.** Run from this checkout, the database, chats, logs and
+   `.env` live in the repository (`data/`, `.env`); a frozen build keeps them
+   in `~/Library/Application Support/Imprint/` ([§16](#16-file--directory-structure)).
+
+Something not working? The Learning Centre's *Troubleshooting* lesson lists
+the status messages a first run meets, with the cause and the fix.
+
+**How this file is organised.** *Using the app* is sections 1 to 13, 20 and
+21: what each part of the window does and how each agent works. *Engineering
+reference* is sections 14 to 19: services, database, files and tests,
+packaging, configuration. Day-to-day operating steps are in the Learning
+Centre; prices and model details are in the Model Guide and the agent sheets
+(**Docs** in the header).
+
 ---
 
 ## Table of Contents
+
+**Using the app**
 
 1. [Overview](#1-overview)
 2. [Application Layout](#2-application-layout)
@@ -30,14 +75,14 @@ hasn't been done.
 7. [Agents](#7-agents)
    - [Chat Agent](#71-chat-agent)
    - [Atelier Agent](#72-atelier-agent)
-   - [Manuscript Agent](#73-manuscript-agent)
-   - [Maestro Agent](#74-maestro-agent)
-   - [Site Builder Agent](#75-site-builder-agent)
-   - [Narrator Agent](#76-narrator-agent)
-   - [Publisher Agent](#77-publisher-agent)
+   - [Quill (Author)](#73-quill-author)
+   - [Label (Audio + Music)](#74-label-audio--music)
+   - [Sitebuilder (Web)](#75-sitebuilder-web)
+   - [Booth (Audio + Music)](#76-booth-audio--music)
+   - [Press (Author)](#77-press-author)
    - [Primer (CLI) — archived](#78-primer-cli--archived)
-   - [Video Agent](#79-video-agent)
-   - [Social Agent](#710-social-agent)
+   - [Reel (Video + Ads)](#79-reel-video--ads)
+   - [Herald (Social)](#710-herald-social)
    - [Creator Agent](#711-creator-agent)
 8. [Tools](#8-tools)
 9. [Providers & Models](#9-providers--models)
@@ -46,6 +91,7 @@ hasn't been done.
    - [OpenAI](#93-openai)
    - [DeepSeek](#94-deepseek)
    - [Gemini](#95-gemini)
+   - [Other providers: LM Studio, Kimi, Qwen, Higgsfield, ElevenLabs](#96-other-providers-lm-studio-kimi-qwen-higgsfield-elevenlabs)
 10. [Routing & Execution Logic](#10-routing--execution-logic)
 11. [Validation & Permission System](#11-validation--permission-system)
 12. [Cost Tracking & Budgeting](#12-cost-tracking--budgeting)
@@ -55,6 +101,11 @@ hasn't been done.
    - [Settings](#133-settings)
    - [Model Guide](#134-model-guide)
    - [Docs](#135-docs)
+- [20. Learning Centre](#20-learning-centre)
+- [21. Income experiments with Imprint](#21-income-experiments-with-imprint)
+
+**Engineering reference**
+
 14. [Services Layer](#14-services-layer)
 15. [Database Schema](#15-database-schema)
 16. [File & Directory Structure](#16-file--directory-structure)
@@ -64,34 +115,52 @@ hasn't been done.
 18. [Installing and Packaging](#18-installing-and-packaging)
    - [Versioning](#181-versioning)
 19. [Configuration Reference](#19-configuration-reference)
-20. [Learning Centre](#20-learning-centre)
-21. [Earning Income with Imprint](#21-earning-income-with-imprint)
-   - [Service-Based Income (Fiverr, Web Design, Author)](#211-service-based-income-fiverr-web-design-author)
-   - [Recurring Revenue (Music, Audiobook, Courses)](#212-recurring-revenue-music-audiobook-courses)
-   - [Required External Accounts & Tools](#213-required-external-accounts--tools)
-   - [Realistic Earnings Expectations](#214-realistic-earnings-expectations)
+- [Housekeeping](#housekeeping)
 
 ---
 
 ## 1. Overview
 
-Imprint is a PySide6 desktop application for the creative/publishing
-half of a wider split: it was forked from `sentinel_ai` (the full history is
-still in `git log`), which kept the research/security agents, while this app
-kept everything to do with writing, publishing, and selling creative work. It
-acts as a unified command centre for interacting with multiple AI providers —
-local (Ollama) and cloud (Anthropic, OpenAI, DeepSeek, Gemini). It provides:
+> **Part one: Using the app** (sections 1 to 13, 20 and 21).
 
-- A multi-agent interface with specialised agents for different creative and
-  publishing workflows.
-- A permission and validation gate that enforces provider restrictions, tool
-  rules, and cost budgets before any request is sent.
-- Real-time cost estimation and post-request cost logging.
-- A run log that records the full lifecycle of every AI request.
-- A **Narrator** agent (Booth) that converts ebooks to MP3 or M4B, narrated by OpenAI, Gemini or ElevenLabs, with progress tracking, resume and quota-failure detection.
-- A full Settings panel for configuring API keys, pricing, budgets, agents, and tools without touching any file.
+**What it is.** Imprint is a macOS desktop app (PySide6) for one author or
+creator. Ten agents in eight header workspaces help you write, publish,
+narrate, make music plans, video, social posts, brand designs and web pages:
 
-The application is entirely self-contained: no server, no web interface, no external database. All data is stored in a local SQLite database (`data/imprint.db`).
+| Workspace | Agents |
+|---|---|
+| Author | **Quill** (plan, draft and revise long-form work), **Press** (prepare, export, log submissions and measure finished books) |
+| Audio + Music | **Booth** (ebook to audiobook), **Label** (songs, albums and releases; the audio itself is made in Suno) |
+| Video + Ads | **Reel** (script, generate, narrate and assemble video) |
+| Social | **Herald** (draft and schedule posts; publish to Reddit, YouTube and Pinterest) |
+| Web | **Sitebuilder** (responsive HTML, CSS and JavaScript) |
+| Brand Design | **Stamp** (client-ready concepts, listings and delivery messages) |
+| Brand Content | **Muse** (reusable campaigns, captions and promotional assets) |
+| Assistant | **Chat** (general chat and tool-assisted conversation) |
+
+The roster is `agents/catalog.py`. An eleventh entry, the Intent Router, has no
+workspace: it picks one for **Auto Route**.
+
+**How it reaches models.** Local models (Ollama, LM Studio) run on this Mac
+and cost nothing. Cloud providers (OpenAI, Anthropic, DeepSeek, Kimi, Gemini,
+Qwen, Higgsfield, ElevenLabs) are off until you add that provider's key and
+tick its permission box. Every paid request goes through one request guard:
+it estimates the cost, checks your budgets and asks before anything is sent
+(sections 11 and 12).
+
+**What it never does.** It never spends outside that guard, never posts or
+publishes without your action, and never forecasts income or claims results
+it cannot show (section 21).
+
+**Where your data lives.** Run from this checkout, the SQLite database is
+`data/imprint.db` and `.env` sits beside `main.py`; a frozen build keeps the
+database, chats, logs and `.env` in `~/Library/Application Support/Imprint/`
+(`services/runtime_paths.py`). Nothing is stored on a server. The repository
+also holds `cloud/`, a separately hosted web companion (Reading Compass) with
+its own README; the desktop app does not need it.
+
+**History.** Imprint was forked from `sentinel_ai`, which kept the
+research and security agents; this app kept the creative and publishing ones.
 
 ---
 
@@ -103,9 +172,9 @@ fixed width and cannot be dragged.
 | Region | Width | Purpose |
 |--------|-------|---------|
 | **Header bar** | full width, 56 px | Wordmark, workspace tabs, agent status, theme dots, Docs / Tooltips / Settings |
-| **Left rail** | 236 px | Project context, saved-chat filters, and New Project / New Chat |
+| **Left rail** | 216 px (`RAIL_LEFT_WIDTH`, `ui/forms.py`) | Project context, saved-chat filters, and New Project / New Chat |
 | **Centre** | fills the remainder | The current agent's panel |
-| **Right rail** | 268 px | Spend, budget limits, utilities, and collapsed reference panels |
+| **Right rail** | 244 px (`RAIL_RIGHT_WIDTH`) | Spend, budget limits, utilities, and collapsed reference panels |
 
 Everything starts from one left edge: the wordmark, the mode tabs and the page
 title are all on the same axis. Before the September 2026 GUI pass they were on
@@ -396,9 +465,9 @@ configured**, or **Check failed**. Secret values are never displayed.
 
 ### Documentation centre
 
-The header **Docs** button opens `ui/docs_center.py` at the active agent. The
-general **Docs** button opens the shared-system overview. Both use
-`docs/agents/manifest.json` as the navigation source and provide grouped
+The header **Docs** button opens `ui/docs_center.py` at the active agent's
+sheet; the shared-system overview is the first entry in its contents. It uses
+`docs/agents/manifest.json` as the navigation source and provides grouped
 contents, local heading-level search with exact anchors, an on-page outline,
 previous/next navigation, and links into the matching agent and Learning Centre
 lesson. The centre is bundled and does not make a provider call.
@@ -759,17 +828,17 @@ A route that cannot make what was asked (a 30 s clip on a model that stops at
 
 ## 6. Centre Panel — Main Workspace
 
-The centre panel contains one sub-panel per agent, mutually exclusive:
+The centre shows the panel of the agent picked in the header: the workspace
+tab chooses the workspace, and a workspace with two agents (Author: Quill and
+Press; Audio + Music: Booth and Label) shows one button per agent under the
+tab bar. Each agent's
+panel is described under its name in [section 7](#7-agents).
 
-- **Normal panel** — shown for the Chat agent (any Tool, including Writing/Coding).
-- **Audiobook panel** — shown when the Narrator (audiobook) agent is active.
-- **Author panel** — shown when the Manuscript (author) writing-studio agent is active.
-- **Music panel** — shown when the Maestro (music) agent is active.
-- **Web Design panel** — shown when the Site Builder (webdesign) agent is active.
-- **Fiverr panel** — shown when the Atelier (fiverr) agent is active.
-- **Manuscript panel** — shown when the Publisher (manuscript) agent is active.
-
-Below whichever sub-panel is active, the output area is always visible.
+The rest of this section describes the **Assistant** workspace (Chat's
+panel): its request setup (Tool, Command, Provider, Model, Mode and the
+permission boxes), the message box, the action row and the output area.
+The permission boxes and the Mode set there apply to every agent's request,
+not only to Chat's (`main.py`, `current_api_permissions`).
 
 ---
 
@@ -805,9 +874,9 @@ The last selected model for each provider is saved to `config/settings.json` and
 
 **Refresh Models** — Re-queries the provider for the current model list without changing any other setting. Useful after installing a new Ollama model or changing an API key.
 
-**Model Guide** — Opens the Model Guide dialog (see Section 12.4).
+**Model Guide** — the link beside the Model label; opens the Model Guide dialog ([§13.4](#134-model-guide)).
 
-**Docs** — Opens this documentation (see Section 12.5).
+The documentation centre opens from **Docs** in the header ([§13.5](#135-docs)).
 
 ---
 
@@ -843,13 +912,21 @@ When a Studio Assistant job is sent, the advisor compares the selected model wit
 | **Hybrid allowed** | Uses the selected Provider. Cloud APIs require their checkbox to be enabled. |
 | **Cloud only** | Forces a cloud provider. Local providers are not accepted. Fails immediately if the selected provider's checkbox is not ticked. |
 
-**OpenAI** (checkbox) — Grants the application permission to call the OpenAI API for this session. Unchecked by default. Must be ticked before any request that would use OpenAI.
+**Permission boxes** (toggle chips, `main.py`) — one per paid provider, in two
+rows. Each grants permission to call that provider for this session; all are
+unticked at every launch, and none is saved.
 
-**DeepSeek** (checkbox) — Same as above for the DeepSeek API.
+| Row | Boxes | Notes |
+|---|---|---|
+| **Cloud text models** | **OpenAI**, **DeepSeek**, **Kimi**, **Gemini**, **Anthropic**, **Qwen** | Greyed out under Local only, because the router then drops every cloud provider |
+| **Paid media** | **Higgsfield**, **ElevenLabs** | Not affected by Mode. Higgsfield allows paid promo-video requests (Muse, Reel); ElevenLabs allows paid ElevenLabs voices (Booth's ElevenLabs route, Press Shorts, whose default voice is the free on-device one) |
 
-**Gemini** (checkbox) — Same as above for the Gemini API.
-
-These checkboxes are a deliberate safety mechanism. Even if the provider is selected in the combo box, the request will be blocked by the validator if the matching checkbox is unchecked. This prevents unexpected API spend.
+These boxes are a deliberate safety mechanism. They gate every agent's paid
+request, not only Chat's: `authorize_request` passes them to the validator,
+which blocks a request whose provider box is unticked even when that provider
+is selected. Local providers (Ollama, LM Studio) need no box. Booth's narration
+goes through the same check, so its route's box (OpenAI, Gemini or
+ElevenLabs) must be ticked before a conversion starts.
 
 ---
 
@@ -911,25 +988,38 @@ The output box is also used by the Audiobook agent to display conversion logs an
 
 ## 7. Agents
 
-Imprint ships with 7 first-party GUI agents, each defined by its own Python class in `agents/` and a tailored system prompt. The left-panel navigator groups the GUI agents into three collapsible categories — General, Creative, Gigs; clicking an agent button either loads the standard Chat panel or swaps the centre area for a fully custom GUI built for that workflow. Most agents support all of Ollama (local), Anthropic, OpenAI, DeepSeek, and Gemini — Narrator is the exception, since it only ever calls OpenAI TTS (§5.6) — and most expose a Help button that opens this documentation at the relevant section. Anthropic Claude (Sonnet or Opus) typically gives the most structured output for the writing/publishing agents; Ollama works offline at no cost; the other cloud providers are interchangeable and chosen by taste, latency, or budget.
+Imprint has ten agents in eight workspaces, listed in `agents/catalog.py`
+and shown as tabs in the header (the table in [section 1](#1-overview)). Each
+agent has its own package in `agents/<key>/`, with its own README, and its own
+panel; Chat uses the Assistant workspace's standard panel
+([section 6](#6-centre-panel--main-workspace)). Every text agent can use the
+local providers (Ollama, LM Studio) and the cloud providers you have a key
+for, except Press and Muse, which offer no local provider. Booth narrates with
+one of three routes: OpenAI, Gemini or ElevenLabs. **F1** on a control opens
+the Learning Centre lesson for it; **Docs** in the header opens each agent's
+sheet.
+
+The subsections below are headed with each agent's name and workspace. Their
+numbering is historical: 7.8 is an archived command-line tool, kept so that
+older references still resolve.
 
 ### 7.1 Chat Agent
 
 **Left-panel button:** Chat  (category: **General**)
 
-The default, general-purpose agent. Chat is the one agent that does *not* swap in a custom panel — it runs inside the standard centre panel (Tool combo, Command combo, prompt input, output box) described in Section 4. Use it for anything that doesn't have a dedicated specialist agent: open-ended questions, code help, drafting, summarisation, translation, follow-up conversation, brainstorming.
+The default, general-purpose agent. Chat is the one agent that does *not* swap in a custom panel — it runs inside the standard centre panel (Tool combo, Command combo, prompt input, output box) described in [section 6](#6-centre-panel--main-workspace). Use it for anything that doesn't have a dedicated specialist agent: open-ended questions, code help, drafting, summarisation, translation, follow-up conversation, brainstorming.
 
 ---
 
 #### What the Chat Agent Does
 
-The Chat agent sends the prompt with the active Tool's instructions (General Chat, Writing, Coding, Summarize, Rewrite — see Chapter 6). After the first reply, later messages in the same conversation include prior user and assistant turns. Saved chats are persisted as JSON files in `data/chats/` and re-appear in **Saved Chats**. Reopening one restores the transcript and leaves the input empty for a follow-up. It uses the *current* Tool and project instructions, not a system prompt stored in the old file. Changing the agent, Tool, or project starts a different context; **New Chat** explicitly clears it. The preflight estimate includes earlier turns that will be sent again.
+The Chat agent sends the prompt with the active Tool's instructions (General Chat, Writing, Coding, Summarize, Rewrite — see [§6.1](#61-control-bar--row-1-tool--command)). After the first reply, later messages in the same conversation include prior user and assistant turns. Saved chats are persisted as JSON files in `data/chats/` and re-appear in **Saved Chats**. Reopening one restores the transcript and leaves the input empty for a follow-up. It uses the *current* Tool and project instructions, not a system prompt stored in the old file. Changing the agent, Tool, or project starts a different context; **New Chat** explicitly clears it. The preflight estimate includes earlier turns that will be sent again.
 
 ---
 
 #### Panel Layout
 
-Chat uses the **standard `normal_panel`** described in Chapter 4 (no custom GUI). The centre panel exposes:
+Chat uses the **standard `normal_panel`** described in [section 6](#6-centre-panel--main-workspace) (no custom GUI). The centre panel exposes:
 
 | Element | Purpose |
 |---------|---------|
@@ -962,7 +1052,7 @@ Chat uses the **standard `normal_panel`** described in Chapter 4 (no custom GUI)
 #### External Requirements
 
 - **Ollama** (local) needs Ollama installed and at least one model pulled (`ollama pull llama3.1`).
-- **Anthropic / OpenAI / DeepSeek / Gemini** require their respective API keys — see Chapter 7.
+- **Anthropic / OpenAI / DeepSeek / Gemini** require their respective API keys — see [§19](#environment-variables-api-keys).
 
 ---
 
@@ -1095,7 +1185,7 @@ Live status appears as a line under the action row.
 
 > The text LLM is used twice per logo run: once to build the image prompt, once for whatever copy task you trigger.
 
-> See Chapter 18 for the full Fiverr monetisation playbook — pricing, packages, and delivery cadence.
+> Pricing and packaging an offer: see the Income Lab ([section 21](#21-income-experiments-with-imprint)).
 
 ---
 
@@ -1114,15 +1204,15 @@ Live status appears as a line under the action row.
 
 ---
 
-### 7.3 Manuscript Agent
+### 7.3 Quill (Author)
 
-**Left-panel button:** Quill  (category: **Creative**)
+**Workspace:** Author, in the header · **Agent:** Quill (Press shares the workspace) · **Package:** `agents/author/`
 
 A full creative writing suite for novelists, screenwriters, short-story writers, and bloggers. The panel has **three distinct modes** accessed via a toggle at the top: a manuscript workspace for drafting, and a Publish & Market system for producing everything needed to take a finished book to market — from query letters and synopses to Amazon copy and Instagram posts.
 
 ---
 
-#### What the Manuscript Agent Does
+#### What Quill does
 
 The agent operates through system prompts that vary by mode — Write mode additionally switches between a fiction and a non-fiction prompt based on the **Type** field:
 
@@ -1213,15 +1303,32 @@ This is injected as a "BOOK CONTEXT" block into every Write, Publish, and Market
 | **Direction** | Free-text — what to write, the next scene, revision instructions. |
 | **Task** | Write Scene / Continue Draft / Generate Outline / Develop Characters / Build World / Write Dialogue / Revise / Improve. |
 | **Provider / Model** | Default Anthropic. Shared by all three modes. |
-| **Write** | Sends the brief; output streams into the relevant tab depending on Task. |
-| **Continue** | Appends to the existing draft from the cursor position — does not clear. |
+| **Write** | Sends the brief. What it changes depends on the Task (draft safety, below): prose is added after the existing Draft, outline, character and world replies go only to their tab, and a revise task replaces the Draft selection (or the whole Draft) as one undoable edit. Write never clears the Draft. |
+| **Continue** | Adds to the end of the existing Draft — does not clear. |
 | **Stop** | Cancels the in-flight request. |
 | **Words** | Live word count of the Draft tab (large, prominent, updates on every token). |
-| **Scenes / Chapters** | Live scene count parsed from chapter/scene headings and scene breaks. |
+| **Scenes** | Live scene count parsed from chapter/scene headings and scene breaks. |
 | **Save Draft** | Saves the current Draft tab to `.txt` or `.md`. |
 | **Author name** | Name printed on the export title page (not the same as the Project Bar title). |
-| **Format + Export Book** | Renders the Draft tab to **EPUB**, **DOCX**, or **PDF** — title page + auto-detected chapter breaks. No external tools required (EbookLib / python-docx / reportlab). |
-| **Clear All** | Clears all four tabs and resets the project bar. |
+| Format menu + **Export Book** | Pick **EPUB**, **DOCX** or **PDF** in the menu beside the author name, then **Export Book** renders the Draft tab — title page + auto-detected chapter breaks. No external tools required (EbookLib / python-docx / reportlab). |
+| **Clear** | Empties the Draft, Outline, Characters, World Notes and Sources tabs, the Direction and the Title. |
+
+**Draft safety** (since 2026-11-20, `docs/specs/quill-draft-safety.md`). Each
+Task is one of three kinds:
+
+| Kind | Tasks | What Write changes |
+|---|---|---|
+| Prose | Write Scene, Write Chapter, Write Dialogue, Add Case Study / Example, Continue Draft | Adds the new text after the existing Draft, separated by a blank line |
+| Notes | Generate Outline, Develop Characters, Build World | Only the matching tab (Outline, Characters, World Notes); the Draft is untouched |
+| Revise | Revise / Improve, Tighten Structure, Strengthen Argument | Replaces the Draft selection, or the whole Draft when nothing is selected, as one edit; **Ctrl+Z** in the Draft brings the earlier version back |
+
+**Deliberate limit:** a revise task works on up to 20,000 characters (about
+3,300 words) per run, 6,000 (about 1,000 words) with a local model, because
+one reply is capped at 8,192 tokens; above it nothing is sent and the status
+line asks you to select a passage. A revision cut off at the length limit, or
+under half the length of its text, leaves the Draft unchanged, and an error or
+**Stop** never removes Draft text. The Draft is read-only while a revision
+runs.
 
 ---
 
@@ -1295,17 +1402,17 @@ Platform format rules enforced by the Market system prompt:
 
 **Writing a new book:**
 
-1. Click **Draft** in the left panel.
+1. Open the **Author** workspace in the header and pick **Quill**.
 2. Fill in the **Project Bar**: Title, Author, Type (Fiction/Non-Fiction — this sets the Task list below), Genre, Tone, POV.
 3. Expand **Book Profile** and fill in Hook, Target Reader, Comp Titles, Publishing Path — then click **Save Profile**. Do this once; it persists across restarts and feeds Write, Publish, and Market automatically from here on.
 4. In the **Write** control column, pick Task: `Generate Outline`. Write a brief in Direction.
 5. Select **Provider / Model** (Claude Opus or GPT-4o for best prose).
 6. Click **Write** — the outline streams into the Outline tab.
 7. Switch Task to `Write Scene` (or `Write Chapter` for non-fiction). Write the scene/chapter brief in Direction.
-8. Click **Write** — draft appears in the Draft tab.
+8. Click **Write** — the new text is added after whatever is already in the Draft tab.
 9. Click **Continue** to extend from where the draft ends.
 10. Edit directly in any tab — they are all fully editable. Check **Chapters** any time for a live word-count breakdown.
-11. Click **Save Draft** for a plain-text backup, or pick a **Format** and click **Export Book** for a submittable EPUB/DOCX/PDF. Add `Chapter 1`, `Chapter 2`, etc. as line headings in the Draft to get real chapter breaks in the export — without them, the whole draft exports as one chapter.
+11. Click **Save Draft** for a plain-text backup, or pick a format (EPUB, DOCX, PDF) in the menu and click **Export Book** for a submittable EPUB/DOCX/PDF. Add `Chapter 1`, `Chapter 2`, etc. as line headings in the Draft to get real chapter breaks in the export — without them, the whole draft exports as one chapter.
 
 **Preparing to publish:**
 
@@ -1345,7 +1452,7 @@ Platform format rules enforced by the Market system prompt:
 
 > Tasks route output to the correct tab automatically: `Generate Outline` → Outline tab, `Develop Characters` → Characters tab. Make sure the right Task is selected before clicking Write.
 
-> **Continue** appends to the existing draft without clearing it. **Write** starts fresh. Use Write for new scenes, Continue to extend a scene in progress.
+> Neither **Write** nor **Continue** clears the Draft: a prose task adds its text after the existing Draft. Use Write for a new scene or chapter and Continue to extend the one in progress; to rework text, select it and run a revise task (see *Draft safety* above).
 
 > The Publish and Market pages both use the **Provider / Model** set in the Write control column. Make sure a model is selected before switching modes.
 
@@ -1371,7 +1478,7 @@ Platform format rules enforced by the Market system prompt:
 |----------|-------|
 | Agent class | `agents/author/agent.py` — `AuthorAgent` |
 | Agent name (DB) | `author` |
-| Label | Manuscript |
+| Label | Quill (`agents/catalog.py`) |
 | Default provider | Anthropic |
 | Write system prompt | `SYSTEM_PROMPT` (fiction) or `SYSTEM_PROMPT_NONFICTION`, selected by `content_type`; fiction markers `[DRAFT] / [OUTLINE] / [CHARACTER] / [WORLD]`, non-fiction uses `[DRAFT] / [OUTLINE]` only |
 | Publish system prompt | Document-by-document standards; word-count targets; pitch tone rules |
@@ -1384,15 +1491,15 @@ Platform format rules enforced by the Market system prompt:
 
 ---
 
-### 7.4 Maestro Agent
+### 7.4 Label (Audio + Music)
 
-**Left-panel button:** Label  (category: **Creative**)
+**Workspace:** Audio + Music, in the header · **Agent:** Label (Booth shares the workspace) · **Package:** `agents/music/`
 
 A Spotify Artist Setup specialist that produces a complete, copy-paste-ready release-and-monetisation plan for independent artists. The agent's system prompt forces every response to mark **[AI OUTPUT — COPY-PASTE READY]** vs **[HUMAN ACTION REQUIRED]** so you always know which bits to paste and which require manual steps in Spotify for Artists, DistroKid, etc.
 
 ---
 
-#### What the Maestro Agent Does
+#### What Label does
 
 Five-section release plan:
 
@@ -1452,7 +1559,7 @@ full step-by-step.
 
 #### How to Use — Step by Step
 
-1. Click **Music** under **Creative**.
+1. Open the **Audio + Music** workspace in the header and pick **Label**.
 2. Fill in **Artist / Project Name**, **Genre**, **Release Type**, **Distributor**, and **Describe Your Music**.
 3. (Optional) Specify **Target Audience**.
 4. Pick **Provider** and **Model** (Claude works well for long structured plans).
@@ -1483,7 +1590,7 @@ full step-by-step.
 
 > Streaming payout scenarios require a current source/date and user-supplied range. They remain hypothetical—not forecasts—and must include territory, listener/account mix, rights splits, distributor/payment fees, promotion, production cost, and human time.
 
-> Monetisation strategy in depth — see Chapter 18.
+> Testing a release or offer with your own numbers: see the Income Lab ([section 21](#21-income-experiments-with-imprint)).
 
 ---
 
@@ -1494,21 +1601,21 @@ full step-by-step.
 | Agent class | `agents/music/agent.py` — `MusicAgent` |
 | Workspace and lifecycle | `agents/music/panel.py` — `MusicPanel` |
 | Agent name (DB) | `music` |
-| Label | Maestro |
+| Label | Label (`agents/catalog.py`) |
 | Default provider | Anthropic |
 | System prompt | Music business consultant; five-section format with AI/human action markers; real distributor names and prices |
 
 ---
 
-### 7.5 Site Builder Agent
+### 7.5 Sitebuilder (Web)
 
-**Left-panel button:** Sitebuilder  (category: **Creative**)
+**Workspace:** Web, in the header · **Agent:** Sitebuilder · **Package:** `agents/webdesign/`
 
-A front-end design and prototyping agent. Given a brief, Site Builder produces HTML / CSS / JS for landing pages, portfolios, dashboards, forms, blogs, or single components. The result is shown in three read-only review tabs and can be copied or saved as an `.html` file. Check external assets and framework dependencies before treating it as self-contained.
+A front-end design and prototyping agent. Given a brief, Sitebuilder produces HTML / CSS / JS for landing pages, portfolios, dashboards, forms, blogs, or single components. The result is shown in three read-only review tabs and can be copied or saved as an `.html` file. Check external assets and framework dependencies before treating it as self-contained.
 
 ---
 
-#### What the Site Builder Agent Does
+#### What Sitebuilder does
 
 When invoked with a brief, the agent delivers a single complete code block (or three) covering:
 
@@ -1565,7 +1672,7 @@ The panel shows the extracted HTML and any inline `<style>` / `<script>` blocks 
 
 #### How to Use — Step by Step
 
-1. Click **Site Builder** under **Creative**.
+1. Open the **Web** workspace in the header (Sitebuilder is its only agent).
 2. Pick **Page Type** and **Style**.
 3. Enter a **Colour Palette** (or leave blank to let the model propose one).
 4. Choose a **Framework**.
@@ -1602,21 +1709,21 @@ The panel shows the extracted HTML and any inline `<style>` / `<script>` blocks 
 | Agent class | `agents/webdesign/agent.py` — `WebdesignAgent` |
 | Workspace and lifecycle | `agents/webdesign/panel.py` — `WebdesignPanel` |
 | Agent name (DB) | `webdesign` |
-| Label | Site Builder |
+| Label | Sitebuilder (`agents/catalog.py`) |
 | Default provider | Anthropic |
 | System prompt | Senior front-end developer; semantic HTML5; mobile-first; CSS custom properties; ES6+; W3C-valid output |
 
 ---
 
-### 7.6 Narrator Agent
+### 7.6 Booth (Audio + Music)
 
-**Left-panel button:** Booth  (category: **Creative**)
+**Workspace:** Audio + Music, in the header · **Agent:** Booth (Label shares the workspace) · **Package:** `agents/audiobook/`
 
-A separate workflow that converts ebook files into MP3 audiobooks using OpenAI's Text-to-Speech API. The Audiobook agent is unusual in two ways: (1) it does not stream LLM output — it runs a **conversion worker** as a subprocess, and (2) it has no system-prompt-style "agent class" beyond a thin **AudiobookConnector** that parses configuration input. Its Convert and Listen workspace lives in `agents/audiobook/panel.py`; the shared conversion engine is `services/narrator/converter.py`.
+Converts ebook files into MP3 or M4B audiobooks, narrated by one of three routes: OpenAI, Gemini or ElevenLabs. Booth is unusual in two ways: (1) it does not stream LLM output — it runs a **conversion worker** as a subprocess, and (2) it has no system-prompt-style "agent class" beyond a thin **AudiobookConnector** that parses configuration input. Its Convert and Listen workspace lives in `agents/audiobook/panel.py`; the shared conversion engine is `services/narrator/converter.py`.
 
 ---
 
-#### What the Narrator Agent Does
+#### What Booth does
 
 For a selected ebook (PDF / EPUB / TXT / MOBI / AZW3 — MOBI and AZW3 are converted to EPUB first with Calibre's `ebook-convert`, which must be installed), the engine:
 
@@ -1631,43 +1738,36 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 
 ---
 
-#### Audiobook Panel Layout
+#### Booth panel layout
 
-##### Select a Book to Convert (group box)
+Two tabs, **Convert** and **Listen** (`agents/audiobook/panel.py`).
+
+##### Convert tab
 
 | Element | Purpose |
 |---------|---------|
-| **Book list** | Populated from the configured input folder. Supports `.pdf`, `.epub`, `.txt`, `.mobi`, `.azw3`. |
+| **Book** list | Books in the input folder: `.pdf`, `.epub`, `.txt`, `.mobi`, `.azw3`. Empty until a supported file is there. |
+| **Input folder** + **Open input** | Read-only source folder, and a button that opens it in Finder. |
+| **Save converted audio** | **On this Mac** or **Google Drive folder**. |
+| **Output folder** + **Set output** | Where the audio goes, and a folder picker to change it. |
+| **Narrator** | Who narrates: OpenAI, Gemini or ElevenLabs (`NARRATION_ROUTES`). |
+| **Voice** | The chosen narrator's voices. |
+| **Chunk size (tokens)** | Default 1400; smaller chunks recover more easily if a request fails. |
+| **Format** | **MP3** (lossless copy of the narrated chunks) or **M4B (chapters)** (AAC with chapter marks from the EPUB's sections). |
+| **Convert audiobook** | Starts the conversion, after the cost estimate and the paid-request dialog. |
 | **Refresh List** | Re-scans the input folder. |
-| **Start** | Begins conversion of the selected book (confirmation dialog first). |
-| **⛔ Stop** | Kills the running conversion subprocess. |
-
-##### Conversion Settings (group box)
-
-| Element | Purpose |
-|---------|---------|
-| **Input Folder** | Read-only — source folder for ebooks. |
-| **Open** | Opens the input folder in Finder. |
-| **Output Folder** | Read-only — destination for MP3s. |
-| **Change** | Folder picker to redirect output for the current session. |
-| **Voice** | Combo: `alloy` / `verse` / `aria` / `coral` / `sage`. |
-| **Chunk Tokens** | Default 1400 — smaller = more API calls but smaller individual chunks. |
-| **Estimated cost** | A rough file-size-based cost estimate for the selected book. |
-
-##### Progress (group box)
-
-| Element | Purpose |
-|---------|---------|
-| **Progress bar** | Percentage based on chunk progress reported by the engine. |
-| **Status label** | `[Ready]` / `[Running] X% (N/M)` / `[Done]` / `[Blocked]` / `[Paused]` / `[Error]` / `[Stopped]`. |
+| **Use Project Book** | Adds the selected Project's latest Write export to the list without changing the input folder. |
+| **Stop** | Shown while a conversion runs; stops it. |
+| **Estimated cost** | This book's estimate on the chosen narrator. |
+| Progress bar and status | `[Ready]` / `[Running] X% (N/M)` / `[Done]` / `[Blocked]` / `[Paused]` / `[Error]` / `[Stopped]`. |
 
 ##### Status Detection
 
 | Subprocess Output | Status |
 |-------------------|--------|
 | Non-zero exit | `[Error]` |
-| `insufficient_quota` / `exceeded your current quota` / `Billing hard limit` | `[Blocked]` — directs to OpenAI billing |
-| `Conversion paused` | `[Paused]` — click Start to resume |
+| `insufficient_quota` / `exceeded your current quota` / `Billing hard limit` | `[Blocked]` — the message points to OpenAI's billing page, whichever narrator ran |
+| `Conversion paused` | `[Paused]` — click **Convert audiobook** to resume |
 | `ALL BOOKS COMPLETED` or 🎉 | `[Done]` |
 | Any other clean exit | `[Finished]` |
 
@@ -1680,9 +1780,9 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 3. Click **Refresh List** to populate the book list.
    Or select a named Project and click **Use Project Book** to add its linked
    Write export without changing the normal input folder.
-4. Pick a **Voice** and (optionally) adjust **Chunk Tokens**.
-5. If you want a different output destination, click **Change**.
-6. Select a book and click **Start**.
+4. Pick a **Narrator** and a **Voice**, and (optionally) adjust **Chunk size (tokens)** and **Format**.
+5. If you want a different output destination, click **Set output**.
+6. Select a book and click **Convert audiobook**.
 7. Confirm the cost estimate in the dialog.
 8. Watch the progress bar and live log; if you hit quota issues, the panel will explain where to top up.
 9. Find the finished MP3(s) in the output folder when the status reads `[Done]`.
@@ -1691,8 +1791,10 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 
 #### External Requirements
 
-- **OpenAI API key** with TTS credit — TTS is approximately **$15 per 1M input characters** (roughly 250 typical novels per $100). Standard quality.
-- The **`narrator/` sibling project** must be installed and its virtual environment configured. See `/Users/as/Documents/lab/active/narrator/` (additional working directory).
+- **ffmpeg** on the `PATH` (`brew install ffmpeg`): the converter refuses to start without it (`services/narrator/converter.py`, `ensure_ffmpeg_available`).
+- **One narrator key**, and that provider's permission box ticked: `OPENAI_API_KEY`, `GEMINI_API_KEY` (or `GOOGLE_API_KEY`) or `ELEVENLABS_API_KEY` ([§19](#environment-variables-api-keys)). Prices per narrator are in the tips below and in the Model Guide.
+- **Calibre** (`ebook-convert`), only for MOBI and AZW3 books, which are converted to EPUB first.
+- Nothing else: the converter is part of the app (`services/narrator/converter.py`), run as a subprocess.
 - Disk space for output MP3s — a typical novel renders to ~150–250 MB.
 - Optional: an MP3 player or audiobook app (Apple Books, Plex Audiobooks) for playback.
 
@@ -1706,7 +1808,7 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 
 > Booth's own daily cap ships at €10 (Settings → Agents). A whole ElevenLabs book exceeds it, and the guard refuses rather than overspend.
 
-> If conversion is `[Blocked]`, fix the key or top up that provider's credit, then click **Start** again — partial progress is preserved.
+> If conversion is `[Blocked]`, fix the key or top up that provider's credit, then click **Convert audiobook** again — partial progress is preserved.
 
 > Resume trusts only finished chunks. Each chunk streams into `<chunk>.part` and is renamed into place only once complete, so a run stopped mid-stream (⛔ Stop, a crash, a quota cut) leaves nothing a resume can mistake for a finished chunk; partials are swept on the next run.
 
@@ -1722,7 +1824,7 @@ The conversion runs as a `QProcess` so the GUI stays responsive. Output is strea
 | Workspace | `agents/audiobook/panel.py` — Convert/Listen layouts, guarded conversion lifecycle, library scanning and playback |
 | Engine | `services/narrator/converter.py` (subprocess worker) |
 | Agent name (DB) | `audiobook` |
-| Label | Narrator |
+| Label | Booth (`agents/catalog.py`) |
 | Provider | Narrator menu — OpenAI, Gemini or ElevenLabs (`NARRATION_ROUTES`, converter `--provider/--model`) |
 | System prompt | None — this is a process-runner, not an LLM agent |
 
@@ -1773,15 +1875,15 @@ whole feature:
 A book played to ~99% is marked finished rather than parked at the last second,
 so the next play starts over instead of resuming and stopping immediately.
 
-### 7.7 Publisher Agent
+### 7.7 Press (Author)
 
-**Left-panel button:** Press  (category: **Creative**)
+**Workspace:** Author, in the header · **Agent:** Press (Quill shares the workspace) · **Package:** `agents/manuscript/`
 
-Picks up where the Manuscript (writing studio) agent stops: real sales data, launch-content generation, and a publishing checklist. Five tabs: **Overview**, **Quote Finder**, **Quote Graphics**, **Shorts**, **Calendar**.
+Picks up where Quill (the writing studio) stops: real sales data, launch-content generation, and a publishing checklist. Five tabs: **Overview**, **Quote Finder**, **Quote Graphics**, **Shorts**, **Calendar**.
 
 ---
 
-#### What the Publisher Agent Does
+#### What Press does
 
 **Overview tab:**
 - Pulls PublishDrive sales/royalty data for a selected period (Last 30 days / This month / Last 7 days / All time).
@@ -1891,7 +1993,7 @@ One action on an approved Project version makes a set of files for a release, on
 
 **Checking sales and staying on top of launch tasks:**
 
-1. Click **Publish** in the left panel.
+1. Open the **Author** workspace in the header and pick **Press**.
 2. Set `PUBLISHDRIVE_API_KEY` in `.env` (once) to enable live sales data.
 3. Click **⟳ Refresh Data** for the current period, or **Ingest KDP CSV** after dropping a report into `data/kdp_reports/`.
 4. Ask a question in the Ask box ("What did I earn this month?") — answered from the fetched data, not guessed.
@@ -1920,7 +2022,7 @@ One action on an approved Project version makes a set of files for a release, on
 
 - **PublishDrive API key** (`PUBLISHDRIVE_API_KEY` in `.env`) for live sales data — optional, the rest of the panel works without it.
 - **ElevenLabs API key** (`ELEVENLABS_API_KEY`) for higher-quality short narration — optional, macOS `say` is the free default.
-- **ffmpeg** (already required elsewhere in the project, e.g. Narrator/course video) for Shorts.
+- **ffmpeg** (already required elsewhere in the project, e.g. Booth and Reel) for Shorts.
 - LLM provider key for Quote Finder's extraction step and the Overview Ask box.
 
 ---
@@ -1933,7 +2035,7 @@ One action on an approved Project version makes a set of files for a release, on
 
 > Shorts generation blocks the Generate button and disables all Quote Finder row Short buttons while one short is rendering — Calendar rows share the same lock, since both use the same background worker slot. Only one narration/encode runs at a time across the whole panel.
 
-> Nothing on this panel writes back into the manuscript — it only consumes a finished or in-progress draft. Drafting, editing, and EPUB/DOCX/PDF export live on the Manuscript writing-studio agent (§5.3), not here.
+> Nothing on this panel writes back into the manuscript — it only consumes a finished or in-progress draft. Drafting, editing, and EPUB/DOCX/PDF export live in Quill ([§7.3](#73-quill-author)), not here.
 
 > Calendar's captions are a single batched LLM call covering every scheduled post at once — if that call fails, the schedule still populates with blank captions rather than losing the whole batch; regenerate to retry.
 
@@ -1945,7 +2047,7 @@ One action on an approved Project version makes a set of files for a release, on
 |----------|-------|
 | Agent class | `agents/manuscript_agent.py` — `ManuscriptAgent` |
 | Agent name (DB) | `manuscript` |
-| Label | Publisher |
+| Label | Press (`agents/catalog.py`) |
 | Default provider | Anthropic (Overview tab; shared by Quote Finder) |
 | System prompts | Sales Q&A grounding prompt · PublishDrive/KDP JSON-extraction prompts · verbatim quote-suggestion prompt · calendar-caption prompt |
 | Methods | `build_messages()` · `build_publishdrive_parse_messages()` · `build_kdp_parse_messages()` · `build_quote_suggestions_messages()` · `build_calendar_caption_messages()` |
@@ -1970,9 +2072,9 @@ rather than as a separate agent.
 
 ---
 
-### 7.9 Video Agent
+### 7.9 Reel (Video + Ads)
 
-**Mode tab:** Reel
+**Workspace:** Video + Ads, in the header · **Agent:** Reel · **Package:** `agents/video/`
 
 Topic to finished video: script, narration, aligned captions, generated
 visuals, Ken Burns motion, music, loudness normalisation and a thumbnail.
@@ -1989,10 +2091,10 @@ scene-by-scene assembly OpenAI offers the GPT Image models, Gemini Nano Banana
 2.1 and Nano Banana Pro, and Qwen Qwen Image 3.0 and 3.0 Pro — a Gemini or Qwen
 scene route needs that provider's key and permission as well as OpenAI's, which
 still writes and narrates the script. For direct clips Gemini adds Omni 1.1
-Flash and the Veo 3.1 quality, Fast and Lite tiers — **Google may shut the
-Veo previews down from 22 October 2026 (its earliest date)**; they say so in
-their note, the Model updates tile counts down to it, and they leave the menus
-on that date, while a render already in flight is still collected. Qwen
+Flash. The Veo 3.1 previews left the menus on **22 October 2026**, Google's
+earliest shutdown date (`VEO_SHUTDOWN` in `services/media_catalog.py`);
+Gemini Omni is their replacement, and a Veo render already in flight on that
+day was still collected. Qwen
 adds Wan 3.0, Wan 3.0 Prime and Wan 2.7 text-to-video. Higgsfield's Seedance route also makes a direct clip after
 an exact provider quote. Pexels supplies stock visuals and Local makes gradient
 cards. Every visible model has an implemented route; DeepSeek, Anthropic, Kimi
@@ -2010,7 +2112,7 @@ overrides width, height, image shape, target length and scene cadence — the sa
 `produce()` call, not a second code path.
 
 The cost estimate is guarded before the run: a conservative per-image reserve
-for the scene pipeline (whichever image model), selected 720p per-second pricing for Veo and Wan,
+for the scene pipeline (whichever image model), selected 720p per-second pricing for Wan,
 a clearly labelled token-based reserve for Gemini Omni, and Higgsfield's exact
 request quote. Pexels and Local remove the image-generation portion, though the
 script and narration providers can still cost money.
@@ -2034,9 +2136,9 @@ Project. Switching Projects updates that view without relabelling old clips.
 
 ---
 
-### 7.10 Social Agent
+### 7.10 Herald (Social)
 
-**Mode tab:** Herald
+**Workspace:** Social, in the header · **Agent:** Herald · **Package:** `agents/social/`
 
 The public funnel for everything else in the studio. A **campaign** is one
 subject — a book, a release, a product, a gig — and its goal; posts are written
@@ -2185,7 +2287,7 @@ are watched through completion so their paid output is not lost.
 
 Tools define the system prompt that frames the conversation. The active tool is selected from the Tool combo box in the centre panel. The system prompt is prepended to every message sent to the model.
 
-Tools are stored in the `tools` table in the database and can be enabled/disabled in the Settings panel (see Section 12.3). Custom tools can be added to the database directly — the agent-factory workflow that used to generate them (the Forge agent) was removed along with the security verticals; see [FORK_PLAN.md](FORK_PLAN.md).
+Tools are stored in the `tools` table in the database and can be enabled/disabled in the Settings panel ([§13.3](#133-settings)). Custom tools can be added to the database directly — the agent-factory workflow that used to generate them (the Forge agent) was removed along with the security verticals; see [FORK_PLAN.md](FORK_PLAN.md).
 
 | Tool | Intended use |
 |------|-------------|
@@ -2244,7 +2346,7 @@ cached rate.
 
 Requires an `OPENAI_API_KEY` environment variable. Get your key at **platform.openai.com → API Keys**.
 
-**Best for:** complex reasoning, polished writing, professional documents, production-quality code. Also the only provider for Audiobook TTS.
+**Best for:** complex reasoning, polished writing, professional documents, production-quality code. Also one of Booth's three narration routes (`gpt-4o-mini-tts`, which OpenAI retires on 2027-01-06).
 
 **Model discovery:** queries `client.models.list()` and filters for GPT and o-series models.
 
@@ -2281,7 +2383,7 @@ bill at half; the app estimates at peak, the safe side.
 
 ### 9.5 Gemini
 
-Requires a `GOOGLE_API_KEY` environment variable. Get your key at **console.cloud.google.com**.
+Requires a `GEMINI_API_KEY` or `GOOGLE_API_KEY` environment variable. Get your key at **aistudio.google.com → Get API key**.
 
 **Best for:** broad summaries, very long context windows, general fallback.
 
@@ -2302,6 +2404,22 @@ provider reserve, not a free price. Gemini's image, audio, video, grounding,
 and non-standard priority tiers can carry separate charges, so verify the
 provider bill for those modalities. Rates and the 2027 Flash change should be
 reviewed against [Google's pricing page](https://ai.google.dev/gemini-api/docs/pricing).
+
+---
+
+### 9.6 Other providers: LM Studio, Kimi, Qwen, Higgsfield, ElevenLabs
+
+Each is optional. Keys go in **Settings → API keys** ([§19](#environment-variables-api-keys));
+current models and prices are in the **Model Guide** ([§13.4](#134-model-guide)) and in
+**Settings → Pricing**, the one place they are kept up to date.
+
+| Provider | Key | What Imprint uses it for | Permission box |
+|---|---|---|---|
+| **LM Studio** (local) | none; server at `http://localhost:1234/v1` (`LMSTUDIO_URL`) | Chat and text agents, on this Mac at no cost ([§6.2.1](#621-local-providers-ollama-and-lm-studio)) | none |
+| **Kimi** (Moonshot) | `KIMI_API_KEY` | Chat and text agents; default `kimi-k3` | **Kimi** |
+| **Qwen** (Alibaba DashScope) | `DASHSCOPE_API_KEY` (optional `DASHSCOPE_WORKSPACE_ID`) | Chat (default `qwen3.8-max`), Qwen Image scene visuals and Wan video in Reel | **Qwen** |
+| **Higgsfield** | `HF_API_KEY_ID` + `HF_API_KEY_SECRET` | Seedance video in Reel and Muse's promo video, after an exact provider quote | **Higgsfield** |
+| **ElevenLabs** | `ELEVENLABS_API_KEY` | One of Booth's narration routes (`eleven_multilingual_v2`) and an optional voice for Press Shorts | **ElevenLabs** |
 
 ---
 
@@ -2470,15 +2588,15 @@ After a successful response, `UsageTracker.log_request()` calculates the real co
 
 ### Budget Controls
 
-**Session budget** — Total cloud spend allowed in the current app session. Resets when you click Reset Session Spend or restart the app.
+**Session budget** — Total cloud spend allowed in the current app session. Resets when you click **Reset session spend** or restart the app.
 
 **Daily budget** — Total cloud spend allowed today (per calendar day). Aggregated from the `usage` table.
 
 Budget limits are checked by the validator before each request. A refusal says what the request can cost and what the cap has left, e.g. "Not sent: this request can cost up to €0.44 and your session cap has €0.05 left (of €1.00)", and how to proceed. They are editable in the right panel's input fields or in the Settings dialog.
 
-**Save Budget Limits** — Saves the current input field values to the database (settings table) and to the in-memory state. Applied immediately.
+**Save Limits** — Saves the current input field values to the database (settings table) and to the in-memory state. Applied immediately.
 
-**Reset Session Spend** — Resets only the in-memory session accumulator to zero. Does not delete usage log entries.
+**Reset session spend** — Resets only the in-memory session accumulator to zero. Does not delete usage log entries.
 
 ---
 
@@ -2516,7 +2634,10 @@ Status values are colour-coded: green (success), red (error), amber (cancelled).
 
 ### 13.3 Settings
 
-Opened by the **Settings** button in the header. A tabbed dialog with five tabs: General, Agents, Tools, Pricing and Projects.
+Opened by the **Settings** button in the header. A tabbed dialog with eight
+tabs (`ui/dialogs.py`), in this order: **General**, **API keys**, **Local
+models**, **Models**, **Agents**, **Tools**, **Pricing** and **Projects**.
+Each is described below.
 
 #### General Tab
 
@@ -2534,6 +2655,26 @@ The sentence above the picker (`ui/dialogs.appearance_intro()`) counts and
 names the themes from `ui/theme.THEMES` rather than hard-coding a number; it
 said "two themes" for a week after Blue shipped.
 
+#### API keys Tab
+
+One field per credential, grouped by provider: paste a key, **Test** it (a
+model-list call that bills nothing), then **Save All**. Keys are written to the
+`.env` the app loads, owner-only, and the running app rebuilds its provider
+clients, so no restart. Nothing on this page reaches the database or the run
+log. Full detail, including where `.env` lives: [§19](#environment-variables-api-keys).
+
+#### Local models Tab
+
+What runs on this Mac: LM Studio and Ollama status, free memory, and a table
+of local models (source, size, state, rating, used by), with **Start server**
+for LM Studio and **Measure** for an unrated model
+([§6.2.1](#621-local-providers-ollama-and-lm-studio), [§6.2.2](#622-rating-local-models)).
+
+#### Models Tab
+
+The routing mode, an override per agent, and the remembered "Always" rules
+with **Remove** ([§6.2.3](#623-hybrid-routing-one-check-per-new-job)).
+
 #### Agents Tab
 
 Lists every agent from the `agents` table with:
@@ -2550,7 +2691,8 @@ Lists every tool from the `tools` table with:
 
 #### Pricing Tab
 
-Shows every row in the `pricing` table with editable fields:
+Two views: **Token models** and **Images, audio + video** (per-unit prices).
+The token view shows every row in the `pricing` table with editable fields:
 
 - **Input /1M USD** — Cost per million input tokens for this provider/model.
 - **Output /1M USD** — Cost per million output tokens.
@@ -2561,7 +2703,7 @@ Pricing rows are created during the initial migration from `config/pricing.json`
 
 **Manage Projects** opens the project manager: group saved chats, reuse
 instructions and setup, and set an optional daily project spend cap. Archiving
-hides a project without deleting its chats. See §4.
+hides a project without deleting its chats. See [§4](#4-left-rail--projects).
 
 #### Save All
 
@@ -2591,7 +2733,13 @@ Opened by the **Model Guide** button. A four-tab reference dialog.
 
 ### 13.5 Docs
 
-Opened by the **Docs** button. Renders this file (`README.md`) inside a scrollable `QTextBrowser` using the `markdown` library. If the file is not found, a placeholder message is shown.
+Opened by **Docs** in the header. It is the documentation centre
+(`ui/docs_center.py`), not this README: it opens at the active agent's sheet
+from `docs/agents/` (the reference overview when the agent has none), with
+grouped contents from `docs/agents/manifest.json`, local search, an outline and
+links into the matching Learning Centre lesson. It makes no provider call. The
+operating lessons are in the Learning Centre ([section 20](#20-learning-centre)), opened
+from the right rail or with **F1**.
 
 ---
 
@@ -2776,7 +2924,7 @@ imprint/
 │   # osint_agent.py, osint_heavy_agent.py, wifi_agent.py, bug_bounty_agent.py,
 │   # nfl_bet_agent.py, nfl_stats_parser.py, manager_agent.py, coding_agent.py,
 │   # and writing_agent.py stayed with the security half of the split — see
-│   # FORK_PLAN.md and Chapter 16 (_purge_split_agents).
+│   # FORK_PLAN.md and §17 (_purge_split_agents).
 │
 ├── ui/                            # Extracted from main.py (refactor Phases 1-3)
 │   ├── workers.py                 # ChatWorker, SubprocessWorker, ModelPullWorker,
@@ -2801,7 +2949,7 @@ imprint/
 │
 ├── services/                      # Non-UI logic
 │   ├── database.py                # SQLite schema, connection, migration, seeding,
-│   │                              #   _purge_split_agents (Chapter 16)
+│   │                              #   _purge_split_agents (§17)
 │   ├── registry.py                # Agent/tool registry queries (DB-backed)
 │   ├── validator.py               # 10-check permission and budget gate
 │   ├── usage_tracker.py           # Token/cost accounting and queries
@@ -2809,7 +2957,7 @@ imprint/
 │   ├── api_limits.py              # Shared timeout/retry values for paid clients
 │   ├── ollama_client.py  openai_client.py  deepseek_client.py
 │   ├── kimi_client.py  gemini_client.py  anthropic_client.py  qwen_client.py
-│   ├── narrator/converter.py      # Ebook -> MP3 (Narrator agent)
+│   ├── narrator/converter.py      # Ebook -> MP3 (Booth)
 │   ├── history_store.py  report_exporter.py
 │   ├── resource_monitor.py  tool_runner.py  model_router.py  runtime_paths.py
 │
@@ -2829,7 +2977,7 @@ imprint/
 │   # domain_lookup.py, email_lookup.py, username_lookup.py, and
 │   # result_normalizer.py (the OSINT lookup layer) stayed with the security half.
 │
-├── tests/                         # ~1,000 tests — see §16.1
+├── tests/                         # the test suite — see §16.1
 │   ├── test_agents_scenarios.py   # agent prompt construction
 │   ├── test_cost_and_limits.py    # Validator gates + token/cost maths
 │   ├── test_request_guard.py      # authorize/record/abandon_request
@@ -2879,10 +3027,13 @@ imprint/
 .venv/bin/python -m pytest -q
 ```
 
-1,605 tests are collected (2026-10-14); the last full run in file order
-(`-p no:randomly`) gave 1,603 passed and 2 skipped. A full run takes
-**13 to 17 minutes** on the owner's Mac (793 s and 1,039 s measured on
-2026-10-14), not seconds; plan for that before starting one. Install the suite's own
+This is the one place the suite's size and run time are recorded; other
+documents point here. Count it yourself with
+`.venv/bin/python -m pytest --collect-only -q`. Last measurement: 2,637 tests
+collected on 2026-11-22; the last recorded full run (2026-11-20,
+`docs/specs/quill-draft-safety.md`) gave 2,191 passed and 17 skipped in
+24 min 35 s. A full run takes **about 15 to 30 minutes** on the owner's Mac,
+not seconds; plan for that before starting one. Install the suite's own
 dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
 covers pytest, `pytest-timeout` and `pytest-randomly`:
 
@@ -3084,7 +3235,7 @@ python.org framework Python (whose interpreter lives in a bundle called
 
 ### 18.1 Versioning
 
-Imprint's version is **`v<MAJOR>.<BUILD>`** — `v2.112` at the time of writing.
+Imprint's version is **`v<MAJOR>.<BUILD>`**, for example `v2.112`.
 It appears in the header bar beside the wordmark, and hovering it shows the
 commit, the date and whether the build is current.
 
@@ -3366,13 +3517,13 @@ The Audiobook agent reads its paths and defaults from `services/tool_runner.py`,
 
 ## 20. Learning Centre
 
-**Learning Centre** in the right rail (or **F1** anywhere) opens a 26-lesson operating academy
+**Learning Centre** in the right rail (or **F1** anywhere) opens a 28-lesson operating academy
 rendered from `docs/learn/manifest.json` and `docs/learn/modules/`:
 
 | Section | Covers |
 |---|---|
 | Start & paths | Readiness, a first verified result, and a narrow operating path |
-| Foundations | Navigation, projects, Best Fit, access/privacy, costs, files, and recovery |
+| Foundations | Navigation, projects, Best Fit, access/privacy (including adding a key), costs, files, recovery, troubleshooting, and a glossary |
 | Agent Academy | A control-by-control guide and acceptance checklist for every visible agent |
 | Income Lab | Evidence passports, fair experiments, economics, attribution, uncertainty, decisions, and automation gates |
 
@@ -3390,29 +3541,17 @@ opens the lesson for the focused control via `docs/learn/help_map.json`. Tests
 resolve every `show:` path and help-map entry against the built window, so a
 renamed or moved control fails the suite instead of the recipe.
 
-**Screenshots are generated, not pasted.** `scripts/make_learning_shots.py`
-drives the real window offscreen and writes `docs/learn/img/`:
-
-```bash
-.venv/bin/python scripts/make_learning_shots.py
-```
-
-Re-run it after any UI change and commit what moves — otherwise the guide
-slowly starts describing an app that no longer exists.
-
-It needs `vidforge/` beside the checkout and refuses to run without it, because
-the Video shots would otherwise show the "vidforge unavailable" notice. A Claude
-worktree has no `vidforge/` (it is its own git-ignored repo), so symlink the main
-checkout's copy in for the run and remove the link afterwards. Each shot's setup
-reaches its control through the owning panel (`w.video_panel.video_tabs`, not
-`w.video_tabs`) and selects sub-tabs by caption, not index, so a reordered tab
-raises instead of photographing the wrong page. `tests/test_learning_shots.py`
-runs every setup against a real window, so drift after a panel refactor fails
-the suite rather than the next regeneration.
+**No screenshots.** The lessons and sheets carry no images: the GUI
+screenshots were removed on 2026-11-05 (`docs/learn/img/` no longer exists),
+and **Show me** points at the real control instead, which no picture can let
+drift. `scripts/make_learning_shots.py` can still drive the real window
+offscreen and write `docs/learn/img/`, and `tests/test_learning_shots.py`
+keeps its setups working, so screenshots can be regenerated if a later
+decision wants them back; nothing references them today.
 
 `tests/test_learning_center.py` guards the parts that rot silently: manifest and
 module coverage, lesson contracts, anchored search, evidence taxonomy, Best Fit
-semantics, image/link resolution, reproducible screenshots, agent coverage, and
+semantics, image/link resolution, agent coverage, and
 packaging. Without the PyInstaller data entry the Learning Centre is empty in
 the installed `.app` while working perfectly from a source checkout.
 
@@ -3445,296 +3584,3 @@ afterward — see the Lab Project Monitor's own documentation for the full
 explanation). They are 0-byte and safe to delete by hand; kept here rather
 than left scattered in `.git/` so a future cleanup pass can remove them in
 one place.
-
-<!--
-Legacy pre-v2 income examples retained temporarily in source history for the
-documentation migration. They are intentionally hidden because their dated
-platform prices and broad earnings ranges do not meet the Income Lab evidence
-standard.
-
-## 21. Earning Income with Imprint (legacy)
-
-Imprint's agents are designed to produce **deliverables you can sell** — logos, websites, books, music, audiobooks, courses. This chapter is the practical, no-nonsense guide to converting agent output into income, broken down by income type.
-
-> ⚠️ Nothing in this chapter is financial, legal, or tax advice. Income from freelancing, music streaming, and self-publishing is taxable in most jurisdictions. Always check local laws, register your activity if required, and consult a qualified professional for serious decisions.
-
----
-
-### 21.1 Service-Based Income (Fiverr, Web Design, Author)
-
-Service income is the **fastest path to revenue**: you sell a deliverable, you get paid. These agents accelerate your output so you can take more orders or charge for premium work without burning hours.
-
----
-
-#### Atelier (Fiverr Logo Gigs)
-
-**Agent:** 5.2 Atelier
-
-**Setup:**
-
-1. Create a Fiverr seller account at https://fiverr.com — passport/ID verification required for payouts.
-2. Open a logo gig in the **Logo Design** category. Recommended starting prices:
-   - Basic — $5–$15 (1 concept, 1 revision, JPG only)
-   - Standard — $25–$45 (2 concepts, 3 revisions, PNG + source)
-   - Premium — $75–$150 (3 concepts, unlimited revisions, vector + brand guide)
-3. Use the Fiverr agent's **Gig Description** task to generate your gig listing. Paste it directly into the Fiverr gig builder.
-
-**Order workflow per delivery:**
-
-1. Buyer places an order — read their brief carefully.
-2. Fill in the Fiverr panel: business name, industry, style, colours, notes.
-3. Choose an image model (OpenAI, Gemini or Qwen) and click **Generate Logos**.
-4. Review the 2–3 logo variants Imprint saves locally.
-5. Refine in Figma / Illustrator / Photopea (free).
-6. Click **Generate Delivery Message**. Paste into the Fiverr order chat.
-7. Deliver the files. Wait for buyer approval.
-
-**Realistic earnings:**
-
-- Month 1 (no reviews): 2–5 orders at $5–$15 = **$10–$75**.
-- Month 3 (10+ five-star reviews): 15–30 orders/month at $25–$45 = **$375–$1,350**.
-- Top sellers: $3k–$10k/month doing volume logo work.
-
-**External costs:** Fiverr commission **20%** of gross. Image cost depends on the model ($0.03–$0.14 a concept); use Imprint's guarded estimate. Figma free tier sufficient.
-
----
-
-#### Site Builder (Freelance Front-End)
-
-**Agent:** 5.5 Site Builder
-
-**What you sell:**
-
-- **Landing pages** — single-page sites for small businesses, $200–$1,500.
-- **Component design** — hero sections, pricing tables, contact forms, $50–$200 each.
-- **Style migration** — convert an old site to modern responsive design, $500–$3,000.
-- **Tailwind / vanilla CSS conversion** — useful for clients moving off WordPress / page builders, $300–$1,500.
-
-**Where to sell:**
-
-- **Fiverr** (https://fiverr.com) — set up a Web Design gig alongside your Logo gig.
-- **Upwork** (https://upwork.com) — better for $500+ projects; client-driven proposals.
-- **Contra** (https://contra.com) — 0% commission, growing freelancer marketplace.
-- **Direct outreach** — message local businesses on Instagram / LinkedIn with a free Lighthouse audit and a redesigned hero section as a sample.
-
-**Workflow:**
-
-1. Client sends brief.
-2. Use the Web Design agent to generate the full HTML/CSS/JS in one shot.
-3. Drop it into CodePen / VSCode / Replit. Tweak fonts, copy, images.
-4. Host preview on Netlify / Vercel (both free).
-5. Deliver code + Figma preview + walkthrough video (Loom — free).
-
-**Realistic earnings:**
-
-- Side income: 2–4 small jobs/month at $200–$500 = **$400–$2,000/month**.
-- Full-time freelancer: $3k–$10k/month.
-
-**External costs:** Hosting free on Netlify/Vercel. Figma free. Domain registration $10/year on Cloudflare. No platform commission if working direct.
-
----
-
-#### Manuscript (Ghostwriting & Self-Publishing)
-
-**Agent:** 5.3 Manuscript
-
-**Income paths:**
-
-| Path | Earnings |
-|------|----------|
-| **Ghostwriting on Reedsy / Upwork** | $500–$10,000 per book project |
-| **Self-publish on Amazon KDP** | $0.35–$7 royalty per book; long-tail income from backlist |
-| **Self-publish on Wattpad → Premium / Paid Stories** | Wattpad Paid Stories program (invite-only) — $50–$500/month |
-| **Royalty-share publishing** | Audible ACX — 25–40% royalty on audio sales |
-| **Patreon / Substack subscriptions** | $5–$50/month per subscriber for serialised fiction |
-
-**Full self-publishing workflow (Amazon KDP):**
-
-1. **Write** — Use the **Write** mode: generate outline → characters → draft chapter by chapter using Continue to build the manuscript without clearing previous work.
-2. **Edit** — Edit directly in the Draft tab. AI prose needs a human voice pass — read it aloud, cut anything that sounds robotic.
-3. **Format** — Export via **Save Draft**. Import into Reedsy Studio (free) or Vellum ($249, Mac) for KDP-ready formatting.
-4. **Cover** — DIY in Canva, or hire on Fiverr for $20–$100.
-5. **Back-cover copy** — Switch to **Publish & Market → Publish**. Generate `Back-Cover Blurb`. Edit and use as your Amazon/KDP description.
-6. **Amazon listing** — In **Market**, generate `Amazon Description`. Paste directly into the KDP book details page.
-7. **Social launch** — Still in Market, generate `Instagram Post`, `Twitter/X Thread`, and `TikTok Caption` for launch week. Generate a `Newsletter` for your mailing list.
-8. **Publish** — Upload to Amazon KDP (https://kdp.amazon.com) — paperback + Kindle. Set price, categories, keywords.
-9. **Audio** — Optional: produce audio via the Narrator agent and publish on ACX/Findaway.
-
-**Ghostwriting workflow (Reedsy / Upwork):**
-
-1. Client sends brief — genre, tone, word count, any existing outline.
-2. Enter client details into the Project Bar (their title, genre, tone, POV).
-3. Generate outline with the Author agent. Share with client for approval before drafting.
-4. Draft chapter by chapter. Use **Continue** to extend. Deliver chapter-by-chapter for client review.
-5. On delivery: use **Publish → Synopsis** to produce a 1-page and 3-page synopsis the client can use for their pitch or back matter.
-6. Charge a premium for the synopsis and query letter as add-ons — clients often need these and don't know they can ask for them.
-
-**Realistic earnings:**
-
-- One self-published book: $20–$200/month long-tail (heavily dependent on niche and marketing).
-- Ghostwriting one book/month: $2k–$10k.
-- Romance / LitRPG / cozy mystery niches: $500–$5k/month for a steady writer with 5+ books.
-- Add-on publishing documents (query letter, synopsis, blurb): $50–$300 per deliverable on Fiverr/Reedsy.
-
-**External costs:** KDP free to publish. ISBN free via Amazon. Cover design $0–$100. Editing (recommended): $300–$1,500 per book.
-
----
-
-### 21.2 Recurring Revenue (Music, Audiobook, Courses)
-
-Recurring revenue compounds — once published, content keeps earning. These agents produce **assets that generate passive income** over months and years.
-
----
-
-#### Maestro (Spotify + Distribution)
-
-**Agent:** 5.4 Maestro
-
-**Income breakdown:**
-
-| Source | Per-stream / per-event | Notes |
-|--------|------------------------|-------|
-| **Spotify** | $0.003–$0.005 / stream | 1,000 streams ≈ $3–$5 |
-| **Apple Music** | $0.007–$0.010 / stream | Highest per-stream rate |
-| **YouTube Music** | $0.002 / stream | Lower per-stream, huge reach |
-| **TikTok / Meta licensing** | Lump sums via distributor | Pays from buyout pool |
-| **Sync licensing** | $50–$50,000 per placement | Film, TV, games, ads |
-| **PRO performance royalties** | Pennies per radio play / concert use | ASCAP, BMI, PRS, SOCAN |
-| **SoundExchange (US)** | Digital performance royalties | Register at https://soundexchange.com |
-| **Merch (Bandcamp, Big Cartel)** | $5–$50 / item | Bandcamp Fridays = 0% commission |
-| **Patreon / Bandcamp subscriptions** | $3–$20 / month / fan | Direct fan revenue |
-
-**Setup workflow:**
-
-1. Click **Music** in Imprint and fill in the artist brief.
-2. Use the generated Artist Profile (short + long bio) to claim your Spotify for Artists account at https://artists.spotify.com.
-3. Sign up with a distributor (DistroKid $22.99/year recommended for most independent artists; CD Baby for one-off releases).
-4. Upload the release with the generated metadata, ISRC handled by distributor.
-5. Submit the **Editorial Playlist Pitch** in Spotify for Artists **7+ days** before release.
-6. Upload a **Spotify Canvas** (3-second looping video) — Canvas-enabled tracks see ~20% higher stream-through.
-7. Register with a PRO (ASCAP/BMI/PRS/SOCAN) for performance royalties.
-8. Register with SoundExchange for US digital performance royalties.
-
-**Realistic earnings:**
-
-- 1k monthly listeners: **$5–$30/month**.
-- 10k monthly listeners: **$50–$300/month**.
-- 100k monthly listeners: **$500–$3,000/month**.
-- 1M+ streams over a track's lifetime: **$3,000–$5,000 single-track lifetime**.
-
-**External costs:** DistroKid $22.99/year. PRO registration $0–$50 one-time. Cover art $0–$100 (GPT Image or Fiverr). Mixing/mastering — DIY in Logic/Reaper, or hire ($50–$500/track).
-
----
-
-#### Narrator (Bulk Conversion + ACX)
-
-**Agent:** 5.6 Narrator
-
-**Income paths:**
-
-1. **Convert your own books** — if you self-published via 5.3 Manuscript, run them through the Audiobook agent and publish to:
-   - **Audible / ACX** (https://acx.com) — 25–40% royalty exclusive, 25% royalty non-exclusive.
-   - **Findaway Voices** (https://findawayvoices.com) — 80% royalty, distributes to Apple Books, Google Play, Scribd, libraries.
-   - **Google Play Books** — direct upload.
-2. **Sell as service** — convert client manuscripts via Fiverr or Upwork. Audiobook conversion gigs price at $50–$500 per book depending on length.
-
-**Workflow:**
-
-1. Drop ebooks (`.pdf`, `.epub`, `.txt`, `.mobi`) into the configured input folder.
-2. Click **Audiobooks**, refresh the list, select a book.
-3. Pick a voice (`alloy`, `verse`, `aria`, `coral`, `sage`).
-4. Confirm the cost estimate — the dialog compares the narrators for this book (roughly $10 with OpenAI or Gemini, $48 with ElevenLabs, for a 100,000-word novel).
-5. Click **Start**. Monitor progress in the progress bar, or open **Conversion log** beneath it for the converter's output.
-6. When finished, upload the MP3 files to ACX / Findaway / Google Play.
-
-**Realistic earnings:**
-
-- ACX exclusive bestseller: $200–$2,000/month per title in popular niche.
-- Findaway non-exclusive: 80% royalty across multiple platforms = compound revenue.
-- Service work: 5–10 books/month at $100/book = **$500–$1,000/month** with low effort (the agent does the conversion).
-
-**External costs:** narration — about $0.016 per 1k characters with OpenAI, $0.0137 per minute with Gemini (doubling on 2027-01-01), $0.08 per 1k characters with ElevenLabs. No platform fees on ACX/Findaway (royalty share only) — but ACX/Audible prohibits unauthorized text-to-speech narration, so check a store's AI-audio rules before uploading.
-
----
-
-#### Courses (Teachable / Gumroad / Udemy) — no agent
-
-The Primer that produced packaged courses was archived on 30 September 2026
-(§7.8), so Imprint no longer builds one for you. The selling paths below are
-unchanged if you produce the course another way — vidforge already renders
-PowerPoint course decks from a topic or outline, and Reel narrates video.
-
-1. **Sell the finished course** on Gumroad (0% listing fee, ~10% + payment
-   processing per sale) or Teachable (free tier caps transaction volume; paid
-   tiers from ~$39/month remove the per-sale fee).
-2. **Submit to Udemy** — free to list, but Udemy sets pricing/discounting and
-   takes a large revenue share (up to 63% on marketplace-driven sales; better
-   on instructor-referred sales).
-3. **Bundle with a book or Fiverr package** — e.g. a self-published manuscript
-   (§5.3) plus a companion course, sold together.
-
-**Realistic earnings:** highly platform- and topic-dependent; a first course
-with no existing audience is typically **$0–$200 in month 1**. Course income
-is closer to service/self-publishing income (needs marketing/distribution)
-than to true passive royalties.
-
----
-
-### 21.3 Required External Accounts & Tools
-
-A compact reference of everything you need for each income path.
-
-| Agent | Free / paid tier | Where to sign up |
-|-------|-------------------|------------------|
-| **Fiverr** | Free seller account | https://fiverr.com |
-| **Web Design (Upwork)** | Free | https://upwork.com |
-| **Web Design (hosting)** | Free | https://netlify.com / https://vercel.com |
-| **Author (Amazon KDP)** | Free | https://kdp.amazon.com |
-| **Author (ACX audiobook)** | Free | https://acx.com |
-| **Author (Findaway)** | Free | https://findawayvoices.com |
-| **Music (Spotify Artists)** | Free | https://artists.spotify.com |
-| **Music (DistroKid)** | $22.99/year | https://distrokid.com |
-| **Music (TuneCore)** | Per-release | https://tunecore.com |
-| **Music (CD Baby)** | Per-release | https://cdbaby.com |
-| **Music (SoundExchange)** | Free | https://soundexchange.com |
-| **Music (ASCAP)** | $50 one-time | https://ascap.com |
-| **Music (BMI)** | Free | https://bmi.com |
-| **Course (Gumroad)** | Free listing, ~10% + processing per sale | https://gumroad.com |
-| **Course (Teachable)** | Free tier, paid from ~$39/mo | https://teachable.com |
-| **Course (Udemy)** | Free to list, large revenue share | https://udemy.com |
-| **Course (ElevenLabs voice)** | Free tier, paid beyond quota | https://elevenlabs.io |
-| **Course (HeyGen avatar)** | Paid, per-minute credits | https://heygen.com |
-| **AI Provider (Anthropic)** | Pay-as-you-go | https://console.anthropic.com |
-| **AI Provider (OpenAI)** | Pay-as-you-go | https://platform.openai.com |
-| **AI Provider (DeepSeek)** | Pay-as-you-go (cheapest) | https://platform.deepseek.com |
-| **AI Provider (Gemini)** | Free tier available | https://aistudio.google.com |
-| **Ollama (local LLMs, free)** | Free | https://ollama.com |
-
----
-
-### 21.4 Realistic Earnings Expectations
-
-A summary of what you can realistically expect from each path, based on public data and platform averages.
-
-| Path | Month 1 | Month 6 | Year 2+ (if scaled) |
-|------|---------|---------|---------------------|
-| **Fiverr logo gigs** | $10–$75 | $400–$1,500 | $3k–$10k/mo (top sellers) |
-| **Freelance web design** | $0–$500 | $500–$2,500 | $5k–$15k/mo full-time |
-| **Self-published books (KDP)** | $5–$50 | $50–$500 | $500–$5k/mo (backlist) |
-| **Ghostwriting** | $0 (build samples) | $1k–$3k | $5k–$15k/mo |
-| **Music streaming (1 release)** | $5–$30 | $20–$100 | $200–$2k/mo (catalogue) |
-| **Audiobook royalties** | $20–$100 | $100–$500 | $500–$3k/mo (catalogue) |
-| **Online course (Gumroad/Teachable/Udemy)** | $0–$200 | $100–$800 | $500–$5k/mo (established topic) |
-
-**Combined strategy** — most successful Imprint users **stack 2–4 income paths**, e.g.:
-
-- Fiverr logo gigs (immediate cash) + freelance web design (medium ticket) + self-published books (backlist/passive).
-- Self-published book (§18.1) + companion online course (§18.2) sold as a bundle.
-- Music releases (passive) + audiobook narration service (active).
-
-Diversification matters more than maximising a single channel. The agents are tools — your work, taste, and follow-through are what make money.
-
-> ⚠️ **Tax & legal:** Treat all income as taxable. Register a sole trader / LLC / limited company if it grows. Set aside 20–30% of revenue for taxes. Keep receipts for API costs, software, hosting — they are deductible business expenses in most jurisdictions.
-
----
--->
