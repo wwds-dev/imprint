@@ -1,10 +1,20 @@
 """Site Builder panel behavior without a network call or paid provider."""
 
 import pytest
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QCoreApplication, QEvent, QObject, Signal
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from agents.webdesign import WebdesignAgent, WebdesignPanel
+
+
+def _dispose(panel):
+    """Delete the parentless panel now rather than leaving it to the cyclic
+    collector. Freed inside a later `gc.collect()`, its combos are destroyed
+    while the app-wide `_DropdownPolisher` still filters their events, and
+    the suite segfaulted there (2026-11-20, -21 and -22, seed 2481708264)."""
+    panel.close()
+    panel.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +96,7 @@ def test_denied_site_request_leaves_generate_usable(app):
         assert panel.webdesign_generate_btn.isEnabled()
         assert not panel.webdesign_save_btn.isEnabled()
     finally:
-        panel.close()
+        _dispose(panel)
 
 
 def test_generated_site_splits_tabs_and_saves_clean_html(app, tmp_path, monkeypatch):
@@ -129,4 +139,4 @@ def test_generated_site_splits_tabs_and_saves_clean_html(app, tmp_path, monkeypa
         assert panel.webdesign_html_box.toPlainText() == ""
         assert not panel.webdesign_save_btn.isEnabled()
     finally:
-        panel.close()
+        _dispose(panel)

@@ -361,7 +361,10 @@ class AuthorPanel(QWidget):
 
         # Non-fiction evidence: the sources the draft may assert from. The
         # tab only exists in Non-Fiction mode (toggled with the task list).
-        self.author_sources_box = QTextEdit()
+        # Parented and hidden until Non-Fiction adds it as a tab, so it is
+        # not a stray top-level widget that outlives the window.
+        self.author_sources_box = QTextEdit(self)
+        self.author_sources_box.hide()
         self.author_sources_box.setPlaceholderText(
             "One source per line — book, paper, URL, interview note. When "
             "anything is listed here, drafting may only assert facts these "

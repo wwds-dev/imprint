@@ -150,6 +150,10 @@ class CreatorPanel(QWidget):
         self.creator_campaign_input = line_edit("Campaign or test name")
 
         self.creator_channel_field = field("Channel", self.creator_channel_box)
+        # Only promo puts it in the grid; until then it must still belong to
+        # the panel, or it outlives the window as a top-level widget.
+        self.creator_channel_field.setParent(self)
+        self.creator_channel_field.hide()
         self.creator_campaign_field = field("Campaign", self.creator_campaign_input)
 
         # The grid is re-packed when the kind changes rather than hiding a
