@@ -6,7 +6,9 @@ systems they all route through (projects, the spend guard, budgets, history,
 Learning Centre, restart recovery).
 **Roster source:** `agents/catalog.py`. If a codename below disagrees with that
 file, the file is right and this document is stale.
-**Last revised:** 2026-10-05, after the P2 hardening wave (`a8235bb`).
+**Last revised:** 2026-11-22: B1 Test G (Quill's draft safety) and B2 Test G (Make
+Release Kit) added. Earlier revisions: 2026-10-19, and 2026-10-05 after the P2
+hardening wave (`a8235bb`).
 
 > **This replaces the Sentinel AI test pass.** Imprint was forked from
 > `sentinel_ai` and kept only the creative/publishing half, so the agents the
@@ -479,6 +481,25 @@ Write a one-page synopsis and a query letter for the book in the profile.
 - [ ] **Stop** during a Write cancels only Write — a Publish request running at
       the same time is untouched
 
+**Test G — Write never loses the Draft; Revise has a limit**  `FREE` (ollama) or `PAID`
+Since 2026-11-20 (`docs/specs/quill-draft-safety.md`). Start with about two
+paragraphs of your own text in the Draft and note its first sentence.
+- [ ] Task `Write Scene` (fiction) or `Write Chapter` (non-fiction), **Write**:
+      the new text appears **after** your paragraphs, separated by a blank line;
+      your first sentence is unchanged
+- [ ] Task `Generate Outline`, **Write**: the reply lands in **Outline** only;
+      the Draft is exactly as before
+- [ ] Select one of your paragraphs, Task `Revise / Improve`, Direction
+      `Make it tighter`, **Write**: only that paragraph is replaced; **⌘Z** in
+      the Draft brings the original paragraph back in one step
+- [ ] With nothing selected, `Revise / Improve` revises the whole Draft
+- [ ] Press **Stop** during a prose Write: everything that was already in the
+      Draft is still there; quit and reopen, and it is still there (autosave)
+- [ ] Paste more than 20,000 characters into the Draft (6,000 with a local
+      model), select none, run `Revise / Improve`: nothing is sent (no cost
+      dialog), and the status line asks you to select a passage
+- [ ] While a revision runs, the Draft cannot be edited
+
 ## B2. Author → **Press**  `FREE` where noted
 
 > **What it does:** prepares, distributes and measures a finished book —
@@ -533,6 +554,30 @@ Suggest 10 quotable lines from the approved version.
 - [ ] Shorts generate with narration and play back
 - [ ] The calendar exports CSV
 - [ ] Nothing in this tab claims a prepared calendar is a posted calendar
+
+**Test G — Make Release Kit, free path**  `FREE` (local model)
+Since 2026-11-21. Needs an approved version (Test A) with a title and byline,
+and a local model running in Ollama or LM Studio. Select a short book.
+- [ ] With no approved version, **Make Release Kit…** is off and the note under
+      the row says why
+- [ ] Click **Make Release Kit…**: the confirmation lists the Project, version,
+      word count, title and byline, a new output folder
+      `<Title>_v<N>_<date>`, and eight steps; it reads **No charge**, and the
+      Audiobook row reads **Not included**
+- [ ] Pick a cloud model for Quotes or Captions, if offered: Start is blocked
+      with a "Cannot start:" line. Escape: nothing is written
+- [ ] **Start**: the Release Kits window shows "Step N of 8" and fills its
+      table; closing the window does not stop the kit
+- [ ] **Stop** mid-kit: it finishes the current item and pauses; no file is
+      deleted. **Resume** shows the finished steps as "Done earlier"
+- [ ] Quit while it runs: the app asks **Keep Running** or **Quit and Pause**;
+      after **Quit and Pause** and a relaunch, the Release Kits window opens
+      once and **Resume** finishes the kit
+- [ ] The folder holds the EPUB, quote graphics, Shorts, `calendar.csv` (with
+      an **AI used** column), `release-kit-report.md` and `provenance.json`;
+      every quote appears word for word in the book
+- [ ] Nothing was posted, scheduled or submitted, and the report claims nothing
+      about income, reach or results; **Cost History** shows no paid entry
 
 ## B3. Audio + Music → **Booth**  `PAID-UNIT`
 
@@ -961,7 +1006,8 @@ A stack sample put the main thread in `QObject::disconnect` under
 `ui/widgets.py:polish_combo` → `QComboBox.setStyle()`, blocked on a Qt mutex,
 while three `QFFmpeg` audio threads from `tests/test_audiobook_player.py` were
 still alive — those tests build six `AudiobookPlayer` instances and never
-release them. The next full run passed (944 tests, 90s), so it is
+release them. The next full run passed (944 tests, 90 s, as the suite was then; today's
+size and run time are in README §16.1), so it is
 order-and-timing dependent, not deterministic.
 
 It matters here because a wedged run produces **no output at all** under `-q`

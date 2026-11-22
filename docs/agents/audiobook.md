@@ -45,6 +45,17 @@ The converter runs as a separate process via `QProcess`:
 
 `converter.convert()` does extraction (pypdf / ebooklib / BeautifulSoup), tiktoken chunking, and parallel TTS calls. `TTS_PROVIDERS` holds each route's model, default voice, key names and a per-request character cap on top of the token budget: none for OpenAI (so its chunk boundaries are unchanged), 9,000 for ElevenLabs, 6,000 for Gemini. Gemini returns WAV, which ffmpeg encodes to MP3 per chunk so the cache and the merge work as for the other routes. The first chunk that fails stops the run: queued chunks are skipped rather than narrated and paid for, and the cache keeps everything finished for a resume.
 
+## Deliberate limitations
+What Booth does not do, on purpose or not yet. Rows marked *open* have a `TODO.md` item from the code audit of 2026-11-18.
+
+- **Every narrator is paid.** OpenAI, Gemini and ElevenLabs each need a key and a ticked permission box; there is no free narrator. Booth's daily cap ships at €10, which refuses a whole ElevenLabs book rather than overspend.
+- **A paused book resumes only on the narrator that started it;** cached chunks belong to that narrator.
+- **No mastering:** no loudness normalisation, ID3 tags or ACX checks. Check the files against your distributor's rules before uploading.
+- **MOBI and AZW3 need Calibre** (`ebook-convert`); every book needs ffmpeg.
+- **Editing the source book after a partial run** can make the next run re-narrate the whole book while authorizing only the remaining share (*open*, audit QB-2). Until that is fixed, start a changed book as a new conversion.
+- **Stop discards chunks that were in flight** (they are paid and narrated again on resume) and reports a failure instead of a stop (*open*, QH-6).
+- **Choosing M4B after an MP3 exists narrates the book again,** and the confirmation does not say so (*open*, QM-8).
+
 ## Under the hood — files & functions
 | Location | Role |
 |---|---|

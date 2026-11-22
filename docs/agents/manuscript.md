@@ -1,6 +1,6 @@
 # PUBLISHING MANAGER — Publishing metrics, marketing content, and launch tracking
 
-`key: manuscript` · class: `agents/manuscript_agent.py → ManuscriptAgent` · panel: `build_manuscript_panel()` · handlers: `manuscript_refresh()`, `manuscript_ingest_kdp()`, `manuscript_ask()`, `quote_finder_suggest()`, `manuscript_generate_quote_graphic()`, `manuscript_generate_short()`, `manuscript_generate_calendar()`, `manuscript_add_todo()`
+`key: manuscript` · class: `agents/manuscript/agent.py → ManuscriptAgent` · panel: `build_manuscript_panel()` · handlers: `manuscript_refresh()`, `manuscript_ingest_kdp()`, `manuscript_ask()`, `quote_finder_suggest()`, `manuscript_generate_quote_graphic()`, `manuscript_generate_short()`, `manuscript_generate_calendar()`, `manuscript_add_todo()`
 
 > The **Quill** (`key: author`, see [author.md](author.md)) owns the writing studio. Press picks up once a draft exists: sales data, launch content, and the publishing checklist.
 
@@ -35,6 +35,33 @@ Sales JSON and chat responses in the Overview text browser. PNGs in `data/quote_
 `ManuscriptAgent.build_messages()` injects the last-fetched sales JSON as system-prompt context so Q&A stays grounded. `build_quote_suggestions_messages()` uses a dedicated prompt that requires quotes to be exact substrings of the source (verified in testing — the model does not paraphrase). `agents/manuscript/quote_graphics.py` renders a vertical gradient + wrapped serif text with Pillow — no external API. `agents/manuscript/shorts_generator.py` narrates via `providers/voice/` (mock/system `say` by default, ElevenLabs optional) then combines the narration with the quote-graphic PNG via a single `ffmpeg -loop 1 -i image -i audio` call — the exact pattern used by `agents/course/video_assembler.py`.
 
 **Calendar** splits scheduling from writing deliberately: `agents/manuscript/content_calendar.py: build_calendar()` is pure Python (no LLM) that assigns quotes to day/platform/format slots by a fixed weekly cadence per platform (TikTok 4/wk short, Instagram 3/wk alternating graphic/short, Pinterest 7/wk graphic), cycling quotes if there are more slots than quotes — deterministic and free. Captions are the one LLM step: all slots go out in a *single* batched call (`build_calendar_caption_messages()`), not one call per post, and come back as a JSON array parsed by the same `_parse_quote_list()` helper Quote Finder uses. Each row's Graphic / Short button reuses the exact same generation path as Quote Finder and Shorts — `render_quote_graphic()` / `ShortsWorker` — so there's one asset pipeline, not three.
+
+## Make Release Kit
+**Make Release Kit…** (Quote Finder tab, right after **Export Approved…**) makes a set of release files from the approved version selected in that row, on this Mac, with one confirmation. Slice 1, shipped 2026-11-21, runs the free path only. Lesson: Learning Centre → Press → *Make a release kit*. Full description: README §7.7.
+
+| Step | What it makes |
+|---|---|
+| 1 EPUB | The approved version as EPUB, with a SHA-256 receipt. |
+| 2 Audiobook | Not included: narration is always paid; use Booth. |
+| 3 Quotes | Up to 20, from 12 windows of up to 2,500 characters across the book (a book of 30,000 characters or fewer is sent whole); a quote is kept only if it is in the book word for word and at most 280 characters. Local model only (Ollama or LM Studio on this Mac). |
+| 4 Calendar | 4 weeks from the start date, for the platforms ticked, with the Calendar tab's cadence. |
+| 5 Graphics | One quote graphic (PNG) per unique quote. |
+| 6 Shorts | One MP4 per Short slot, with the macOS `say` voice (personal, non-commercial use only under Apple's licence). |
+| 7 Captions | One request for every post (reply capped at 8,192 tokens), then `calendar.csv` with an **AI used** column. Short replies leave later posts blank and mark the step Incomplete. |
+| 8 Report | Links every file to the Project; writes `release-kit-report.md` and `provenance.json`. |
+
+The confirmation shows "No charge"; any paid route blocks Start with a "Cannot start:" line. The **Release Kits** window (non-modal) shows the step, a Step · State · Spent · Line table, **Stop** (pauses; deletes nothing), **Resume** (checks each finished file's SHA-256 and skips the good ones), **Discard**, **Show Folder** and **Show Report**. Quitting while a kit runs asks **Keep Running** or **Quit and Pause**; progress is in the database (`release_jobs` and related tables), so a paused or crashed kit resumes at the next launch. The Mac is kept awake with `caffeinate -i` while a kit runs. Nothing is posted, scheduled or submitted, and the kit makes no claim about income, reach or results.
+
+## Deliberate limitations
+What Press does not do, on purpose or not yet. Rows marked *open* have a `TODO.md` item from the code audit of 2026-11-18.
+
+- **Nothing is submitted to a store.** The submission ledger is self-reported: it records what you say you sent. The release kit does not post, schedule or submit.
+- **No local provider.** Press's text tasks need a cloud model; the release kit's quotes and captions are the exception and run on a local model only.
+- **PublishDrive has never been called against a live account.** Connections shows "connected" when a key is present, not when a fetch has worked (*open*, audit QH-5).
+- **Ask sees only the last PublishDrive data.** Ingested KDP reports are not given to it, though its prompt mentions them (*open*, QH-5).
+- **The Period selector is not read yet;** Refresh fetches 30 days (*open*, QM-10).
+- **A KDP CSV with unexpected headers reads as zero sales, not as an error** (*open*, QM-13). Check the totals against the KDP report.
+- **Quote Finder sends the first ~30,000 characters** of the text; only the release kit samples the whole book.
 
 ## Under the hood — files & functions
 | Location | Role |

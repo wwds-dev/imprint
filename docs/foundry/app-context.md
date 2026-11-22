@@ -33,7 +33,7 @@ other honest option today is to make the repo private and set `internal`.
 ## Commands
 - Install deps: `uv pip install -r requirements.txt -r requirements-dev.txt`
 - Run app: `.venv/bin/python main.py`
-- Run tests: `.venv/bin/python -m pytest -q` (1826+ collected via `--collect-only`, 2026-10-19; a full run takes 13 to 17 minutes, README §16.1; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
+- Run tests: `.venv/bin/python -m pytest -q` (size and last measured run time: README §16.1, the one place they are kept; `tests/conftest.py` forces `QT_QPA_PLATFORM=offscreen` and a temp DB; 300 s thread timeout in `pytest.ini`). No other test mode is documented.
 - Test timeout: 60 min (Lab Hub's Land: a full run took 29 minutes on 2026-11-16, against its 30-minute default)
 - Lint / types: `ruff.toml` (E4, E7, E9, F, B) with a CI ratchet against `docs/foundry/tooling/baseline.json`; no type checker.
 - Setup checks: `scripts/check_setup.py`, `scripts/check_keys.py`.
@@ -42,9 +42,9 @@ other honest option today is to make the repo private and set `internal`.
 - Ignore `_run_checks.command` (temporary diagnostic).
 
 ## Docs and process files
-- `README.md` (3,435 lines, numbered sections; section 18.1 Versioning), `TODO.md`, `SUGGESTIONS.md`, `FORK_PLAN.md`, `AGENTS.md` (pipeline), `CLAUDE.md`, `agents/README.md` and per-agent READMEs, `docs/agents/*.md`, `docs/learn/` (Learning Centre, `help_map.json`), `tests/TEST_PLAN.md`, `tests/READINESS_GATE.md`, `tests/manual_test_cases.md`, `CHANGELOG.md` (Keep a Changelog, grouped by date; how versions are numbered is in its header). `docs/specs` and `docs/audit` hold feature specs and review reports; `docs/adr` holds decision records (first: `0001-model-watch-state-additive-v1.md`, 2026-10-14).
+- `README.md` (about 3,600 lines, numbered sections; "Start here" at the top; sections 1-13, 20, 21 are "Using the app", 14-19 "Engineering reference"; section 18.1 Versioning), `TODO.md`, `SUGGESTIONS.md`, `FORK_PLAN.md`, `AGENTS.md` (pipeline), `CLAUDE.md`, `agents/README.md` and per-agent READMEs, `docs/agents/*.md`, `docs/learn/` (Learning Centre, `help_map.json`), `tests/TEST_PLAN.md`, `tests/READINESS_GATE.md`, `tests/manual_test_cases.md`, `CHANGELOG.md` (Keep a Changelog, grouped by date; how versions are numbered is in its header). `docs/specs` and `docs/audit` hold feature specs and review reports; `docs/adr` holds decision records (first: `0001-model-watch-state-additive-v1.md`, 2026-10-14).
 - Version is derived, never typed: `VERSION` (major) + `git rev-list --count HEAD`.
-- GUI entry: `main.py` (about 4,400 lines per TODO); widgets in `ui/` (`forms.py`, `panels/`, `theme.py`).
+- GUI entry: `main.py` (about 6,700 lines, 2026-11-22); widgets in `ui/` (`forms.py`, `panels/`, `theme.py`).
 - Invariant from CLAUDE.md: `TODO.md` and `SUGGESTIONS.md` feed the Lab Projects Monitor; keep their format exactly. TODO line: `- [ ] \`P1\` \`bug\` \`@me\` Text` (P0-P3; category from the legend at top; owner `@me` or `@ai`; done = `- [x]`; long reasoning under **Detail**). SUGGESTIONS tags: IDEA, CONSIDERING, PLANNED, DONE, REJECTED.
 - After code changes, list out-of-date README/TODO/SUGGESTIONS entries; update only if told.
 
@@ -65,7 +65,7 @@ other honest option today is to make the repo private and set `internal`.
 - Packaging: ad-hoc signed only (no notarization found); the live launcher executes this source tree. Dependencies: `requirements.txt` has several unpinned packages. `pip-audit` runs in `.github/workflows/security.yml` (non-blocking); it cannot audit the unpinned lines.
 
 ## Test bar
-- Layout: flat `tests/test_*.py` (1826 collected), shared `tests/conftest.py`; `tests/TEST_PLAN.md` defines tiers T0-T6. Suite runs in an isolated DB; no test may touch `data/imprint.db`.
+- Layout: flat `tests/test_*.py` (count: README §16.1), shared `tests/conftest.py`; `tests/TEST_PLAN.md` defines tiers T0-T6. Suite runs in an isolated DB; no test may touch `data/imprint.db`.
 - Last recorded (2026-10-19, full run with `--randomly-seed=5`): 1820 passed, 6 skipped, 6 subtests passed (7 min 39 s).
 - Coverage target: none found. Flaky = any order-dependent hang or failure under `pytest-randomly`; a wedge is a bug, not a retry. No xdist (Qt).
 - CI: `.github/workflows/quality.yml` (tests with coverage on macOS; ruff lint ratchet on Ubuntu), `.github/workflows/security.yml` (gitleaks secret scan, blocking; pip-audit, not blocking; also weekly), `.github/dependabot.yml` (weekly: pip for root, `vidforge/`, `cloud/`; GitHub Actions). Whether runs pass on GitHub: UNVERIFIED.
