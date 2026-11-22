@@ -188,7 +188,9 @@ def test_income_pages_use_measured_unit_economics_not_income_forecasts():
 
 
 def test_manifest_defines_the_complete_v2_curriculum():
-    assert len(_pages()) == 26
+    # 28 since 2026-11-22: Troubleshooting and Glossary (spec
+    # docs-learning-centre-readiness, D6).
+    assert len(_pages()) == 28
     assert {page.section for page in _pages()} == {
         "home", "foundations", "agents", "income"}
     assert len({page.id for page in _pages()}) == len(_pages())

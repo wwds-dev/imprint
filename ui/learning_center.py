@@ -39,26 +39,6 @@ class LearnPage:
     description: str
 
 
-# Deliberate reading order. A directory scan would turn filename order into
-# information architecture and leave no room for a useful navigation summary.
-PAGES: list[LearnPage] = [
-    LearnPage("01-getting-started.md", "Start here",
-              "Set up, orient yourself, and complete one proof-of-work."),
-    LearnPage("02-agents.md", "Controls & agents",
-              "What every workspace, field, button, and output is for."),
-    LearnPage("03-profit.md", "Income science",
-              "Model unit economics and run bounded revenue experiments."),
-    LearnPage("04-workflows.md", "Automation playbooks",
-              "Turn validated offers into repeatable human-in-the-loop loops."),
-    LearnPage("05-best-practices.md", "Operate safely",
-              "Control quality, spend, rights, data, and provider failures."),
-    LearnPage("06-measure-and-improve.md", "Measure & improve",
-              "Review one scoreboard and decide what to stop, fix, or scale."),
-    LearnPage("07-troubleshooting.md", "Troubleshooting",
-              "Recover from missing keys, stuck jobs, empty outputs, and more."),
-]
-
-
 DOCUMENT_CSS = f"""
 body {{ color: {TEXT}; background: {SUNKEN}; font-family: -apple-system,
        BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 15px;

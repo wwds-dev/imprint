@@ -41,10 +41,15 @@ releases feed the next plan's prompt. See `SUNO_WORKFLOW.md`.
      Spotify limit), a Canvas video brief, a profile-optimization checklist,
      and 5 curator-type targets, plus how to submit the pitch and Canvas
      (minimum 7 days before release).
-  5. **Income Roadmap** — streaming payout math at $0.003–$0.005/stream
-     projected at 1k/10k/100k streams, revenue streams beyond streaming
-     (sync, merch, live, Patreon/Bandcamp, YouTube Content ID, TikTok/Meta
-     licensing), a Month 1/3/6 priority list, and tracking tools, plus payout
+  5. **Income Roadmap** — no forecast: the prompt forbids forecasting
+     earnings or quoting a universal per-stream payout, and explains that
+     payouts vary by platform, territory, listener mix, rights split,
+     distributor and period (`agents/music/agent.py`, section 5). It gives a
+     blank scenario worksheet for your own sourced payout range, stream count,
+     currency, splits, fees and costs, labelled HYPOTHETICAL SCENARIO — NOT A
+     FORECAST; keeps observed events, receipts, arithmetic, estimates and
+     model ideas apart; lists revenue-route hypotheses beyond streaming (sync,
+     merch, live, memberships, Content ID, platform licensing); plus payout
      setup and PRO registration (ASCAP/BMI/SESAC/PRS/SOCAN) and SoundExchange
      steps.
 

@@ -41,6 +41,7 @@
   "quote_graphic_generate_btn": "publish#worked-run",
   "shorts_generate_btn": "publish#cost-cancellation-and-gates",
   "calendar_generate_btn": "publish#worked-run",
+  "release_kit_btn": "publish#make-a-release-kit",
   "calendar_export_btn": "publish#acceptance-checklist",
   "audiobook_tabs": "audiobooks#control-atlas",
   "audiobook_refresh_btn": "audiobooks#worked-run",

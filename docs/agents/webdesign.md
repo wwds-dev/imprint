@@ -19,6 +19,15 @@ Generated code streams into HTML / CSS / JS tabs; a row of stats above them show
 ## How it works
 `WebdesignAgent.build_messages()` uses a system prompt that: delivers complete self-contained code in one block, prefers CSS variables and vanilla ES6 (no jQuery), uses placeholder/SVG assets when none given, and shows code first then a short rationale.
 
+## Deliberate limitations
+What Sitebuilder does not do, on purpose.
+
+- **One page at a time,** as HTML, CSS and JavaScript. No hosting, publishing or domain set-up: you upload the files yourself.
+- **External assets are not bundled.** Fonts, images and framework files the page links to stay on their CDNs; check them before calling the page self-contained.
+- **The output indicators are not tests:** the framework shown repeats your selection, and "Mobile-first" only means the page contains a `viewport` tag or an `@media` rule. Test the saved page in a real browser at phone and desktop widths.
+- **Split files:** JSON-LD and module scripts move into `script.js` when the page is split into files.
+- **No accessibility or SEO audit.** Run your own checker on the saved page.
+
 ## Under the hood — files & functions
 | Location | Role |
 |---|---|

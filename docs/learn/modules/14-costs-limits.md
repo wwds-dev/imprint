@@ -13,7 +13,7 @@
 
 | Label | Meaning | Decision allowed |
 |---|---|---|
-| Estimated request cost | Local preflight/reserve using known pricing inputs | Decide whether the attempt fits the cap |
+| Estimated request cost | Local [preflight](18-glossary.md#preflight)/[reserve](18-glossary.md#reserve) using known pricing inputs | Decide whether the attempt fits the cap |
 | Last request cost | Best locally recorded post-request amount | Reconcile, but do not treat as provider invoice automatically |
 | Session / daily / project | Recorded usage against guardrails | Stop or reduce scope before another request |
 | Unpriced / unknown | No trustworthy local rate for this action | Investigate externally; never interpret as zero |

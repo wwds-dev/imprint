@@ -6,7 +6,7 @@ budgets, history, storage, and recovery. Use this reference when you need to
 understand **what a control changes, where work is stored, which service a task
 uses, or why a run did not complete**.
 
-For step-by-step teaching, screenshots, and income experiments, open the
+For step-by-step teaching and income experiments, open the
 **Learning Centre**. Docs are the precise reference; Learning is the guided
 course.
 
@@ -21,10 +21,10 @@ course.
 | Understand files, keys, costs, or privacy | This page → Shared systems |
 | Test whether a workflow makes money | Learning Centre → Income Lab |
 
-The Docs button in the header opens the sheet for the agent currently visible.
-The general Docs button opens this overview. Both use the same searchable
-reference centre, so a search for an exact control name can jump directly to
-the matching heading.
+The Docs button in the header opens the sheet for the agent currently visible;
+this overview is the first entry in its contents. The reference centre is
+searchable, so a search for an exact control name can jump directly to the
+matching heading.
 
 ## How Imprint is organised
 
@@ -162,6 +162,17 @@ or packaged application must be rebuilt to contain new bundled resources.
 When reporting a problem, include the active agent, task, provider/model, the
 exact status or error text, and whether the source or packaged app was opened.
 Never include an API key.
+
+## Deliberate limitations
+Shared limits that apply to every agent. Each sheet lists its own under the same heading.
+
+- **No income or results claims.** Imprint does not forecast earnings, sales or reach, and does not present generated output as evidence of demand.
+- **Nothing posts or publishes by itself.** Posting needs your click; Press's submission ledger and the release kit record, they do not submit.
+- **A zero price means unknown, not free.** An image, audio or video route with no known rate is refused; an unlisted text model is estimated at its provider's default price, never at €0 (unless that row is blanked in Settings → Pricing, audit QM-3).
+- **Permission boxes start unticked at every launch** and gate every agent's cloud request.
+- **The hosted web companion (`cloud/`) is outside the desktop request guard:** its worker narrates books with no cap (*open*, audit QH-1).
+- **A new local model is measured automatically,** which makes paid cloud judge calls without a confirmation once a key exists and the box is ticked (*open*, QM-1).
+- **No screenshots.** The Learning Centre's **Show me** points at the real control instead.
 
 ## Documentation contract
 

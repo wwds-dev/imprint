@@ -1,0 +1,516 @@
+# Controls the docs quote by name (tests/test_docs_integrity.py, T4).
+# One label per line, exactly as the docs write it. Each must be a string
+# literal in the app's Python or config (a longer label may contain it, as
+# "Make Release Kit…" contains "Make Release Kit"). When a doc quotes a new
+# control, add it here; when a label changes in the code, the test names
+# the phrase that no longer matches (find the doc lines with grep).
+#
+# Seeded on 2026-11-22 from the bold phrases in README.md, the lessons, the
+# sheets, the package READMEs and tests/manual_test_cases.md that matched a
+# label in the code, plus the five README quotes of audit DL-5 (removed
+# again once the README quoted the real labels).
+AI used
+API key
+API keys
+Accepted
+Accounts
+Add
+All account work
+All audiobooks
+All projects
+All videos
+Angle
+Appearance
+Apply
+Approve Write Draft…
+Artist / Project Name
+Artist / project name
+Artist Profile
+Ask
+Aspect
+Assistant
+Audio + Music
+AudiobookConnector
+Author
+Author name
+Auto Route
+Auto-Apply
+BEST FIT
+Back to lesson
+Best fit
+Best for
+Blocked
+Blue (Cyberpunk)
+Book Profile
+Booth
+Brief
+Business name
+CD Baby
+CSS
+Calendar
+Cancel
+Cancel Teaser
+Cancelled
+Centre
+Change
+Change…
+Chapters
+Characters
+Chat
+Chat routing
+Check failed
+Check now
+Check when Imprint starts
+Checks passed
+Clear
+Clear log
+Clip length
+Close order
+Cloud only
+Colour Palette
+Command
+Comp Titles
+Comp titles
+Compose
+Concepts
+Configured
+Continue
+Conversion log
+Convert
+Convert audiobook
+Copy All
+Copy Text
+Copy selected / all
+Copy to Clipboard
+Cost
+Cost History
+Creative
+Current Project
+DOCX
+Daily budget
+DeepSeek
+Delivered
+Delivery Message
+Delivery message
+Describe your music
+Dev
+Direction
+Discard
+Dismiss
+Distribution
+Distributor
+DistroKid
+Docs
+Done
+Draft
+EPUB
+Editing pass
+Enabled
+Estimate Cost
+Estimated cost
+Export
+Export Approved…
+Export Book
+Export CSV
+Export Calendar (CSV)
+Export Project…
+Export Report
+Export anyway?
+Export…
+Extra Notes
+F1
+Fiverr
+Fiverr gig description
+Format
+Framework
+Gemini
+Gemini Omni 1.1 Flash
+Gemini · 3.8 Flash TTS
+General
+Generate
+Generate Calendar
+Generate Logos
+Generate Plan
+Generate Teaser
+Genre
+Get Muse Glimmer
+Gig Description
+Gig description
+Gigs
+Google Drive folder
+Graphic
+Green (Matrix)
+HTML
+Herald
+Herald publishing
+Higgsfield
+Hook
+Hook / Logline
+Hybrid allowed
+INCOME ROADMAP
+Image model
+Import audio
+Income Lab
+Income Roadmap
+Incomplete
+Industry
+Industry / niche
+Ingest KDP
+Ingest KDP CSV
+Input
+JS
+Keep Running
+Keep local
+LM Studio
+LMArena
+Label
+Learning Centre
+Library
+Limits
+Listen
+Load File
+Load File…
+Local only
+Logo Preview
+M4B (chapters)
+Make Release Kit…
+Make a Clip
+Manage Projects
+Manuscript text
+Mark Posted
+Market
+Measure
+Measured
+Media
+Mode
+Model
+Model Guide
+Model providers
+Model updates
+More ▾
+Muse
+Music
+NEW
+Narrator
+New Campaign
+New Chat
+New Project
+Next request
+No
+No books
+Not configured
+Not enough budget left
+Notes
+Ollama
+On this Mac
+Open
+Open Folder
+Open Output Folder
+Open Release Kit…
+Open Suno
+Open input
+OpenAI
+Orders
+Outcome
+Outline
+Output
+Output Folder
+Output Type
+Overview
+PDF
+POV
+Page Type
+Page type
+Paid media
+Period
+Pitch Tone
+Platform
+Play
+Player
+Post Now
+Press
+Press publishing data
+Primary colours
+Progress folder
+Project Overview
+Provider
+Publish
+Publishing path
+Publishing todos
+Quill
+Quit and Pause
+Quote Finder
+Quote Graphics
+Quotes
+Qwen
+Re-check
+Ready
+Realtime Monitor
+Record Outcome…
+Record metrics
+Record self-reported submission
+Red
+Reel
+Refresh Data
+Refresh List
+Refresh Models
+Release Kits…
+Release Setup
+Release Type
+Release kit
+Remembered choices
+Remove
+Remove Chat
+Render Video
+Reopen
+Rescan
+Reschedule…
+Reset session spend
+Resume
+Resume at
+Retry After Checking
+Retry available
+Review-outreach tracking
+Routing
+Royalties by marketplace
+Run Log
+Running
+Save
+Save .html
+Save All
+Save All Images
+Save Campaign
+Save Current Setup
+Save Draft
+Save Full Plan
+Save Limits
+Save Profile
+Save as File
+Save converted audio
+Save listening progress
+Save to Schedule
+Saved chats
+Schedule Drafts
+Scope
+Search
+Self-reported
+Send
+Session budget
+Set output
+Settings
+Settings → Models
+Setup
+Short
+Shorts
+Show Folder
+Show Report
+Show in Finder
+Show keys
+Sitebuilder
+Size
+Sleep
+Sources
+Speed
+Spend
+Spotify Strategy
+Stack
+Stamp
+Start
+Start Over
+Start server
+Status
+Steps
+Stop
+Style
+Submission Ledger…
+Suggest Quotes
+Switch for this job
+System
+Tab
+Target Audience
+Target reader
+Task
+Teaser renderer
+Test
+Text
+Theme
+Time
+Title
+Tone
+Tool
+Tooltips
+Tracks
+Try
+TuneCore
+Type
+Unfiled
+Update selected
+Use Approved Version
+Use Project Book
+Use Project Draft
+Use Recommended
+VIDEO AND IMAGE
+Verify platform
+Version
+Video and image
+Visual model
+Visual provider
+Voice
+Voice source
+Weeks
+Whole day
+Word Count Target
+Words
+World
+World Notes
+Write
+Write Posts
+Yes
+
+[not controls]
+# Bold phrases in a lesson's "Control atlas" that are not labels: section
+# names, states, emphasis.
+⌘Z
+# Added 2026-11-22 when T4 widened to README 3-7 and 13, the sheets and
+# every lesson (review R-3): emphasis, section and widget descriptions,
+# outside products, roadmap items, prompt headings and status tokens.
+), an agent's cap in
+. Use
+22 October 2026
+8s
+A visible lead
+ARTIST PROFILE
+Ad-campaign briefs
+Add a Tool
+Add command scaffolds
+Agent Academy
+Agent controls
+Agent filter
+Agents tab
+All three modes
+Another image provider
+Another narrator
+Autonomous drive loop
+Backstage
+Best Qwen model for …
+BookProfile auto-fill
+Chapters tab
+Consistency memory
+Cover art
+DISTRIBUTION GUIDE
+Distribution integration
+Does not post yet
+Draft safety
+ElevenLabs API key
+Foundations
+Framework switch
+Frozen app
+HYPOTHESIS
+Keeps the Mac awake
+Live data
+Live preview
+Logo concepts
+MOBI and AZW3 need Calibre
+Market mode
+Mode tabs
+Model BEST FIT
+Model best fit
+Models tab
+Multi-file output
+New distributor
+No evidence of improvement
+Nothing changes the agent's selection
+One narrator key
+Other gig types
+Output box
+PRO registration
+Per-chapter files
+Per-section export
+Permission boxes
+Project Bar
+Project selector
+Prompt input
+Provider BEST FIT
+Provider best fit
+Provider filter
+Publish mode
+PublishDrive API key
+RELEASE SETUP
+Reedsy Studio
+Release Kits window
+Removed models
+Repeat
+Responsive
+Routing tab
+SPOTIFY STRATEGY
+Saved-chat list
+Scrivener
+Search bar
+Seedance paths not answering
+Show me
+Status filter
+Storage and history
+Structured chapter model
+Summary bar
+System Prompt preview
+System tab
+Table rows
+The agent
+The confirmation
+The picker groups local models
+The request gate
+Theme dots
+Ulysses
+Undated
+Unrated models
+Vector export
+Vellum
+When a run fails
+Workspace navigation
+Write mode
+[CHARACTER]
+[DRAFT]
+[No answer]
+[OUTLINE]
+a few seconds after startup
+actually generates the logo images
+address
+always tagged
+any
+assessed before approval
+baseline
+before
+character bible
+conversion worker
+dated snapshot
+delivery message
+digital distributor
+drafting available
+file path
+held
+image model
+in addition to
+in the model dropdowns
+narrator
+never added to a menu
+no price of its own
+not runnable
+observed transaction
+posting ready
+pricing table
+progress bar
+qualified opportunity
+quality gap
+relative to each other
+relative to the other routes
+standard ``
+start LM Studio's server with
+status label
+style prompt
+that
+that request
+three distinct modes
+voice profile
+▶ Show me
+Booth finds no books
+Herald cannot post

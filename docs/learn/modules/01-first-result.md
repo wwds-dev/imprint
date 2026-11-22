@@ -6,7 +6,7 @@
 ## Prerequisites
 
 - Imprint opens and shows **Ready** or an understandable diagnostic state.
-- At least one eligible provider/model appears in Draft.
+- At least one [eligible route](18-glossary.md#eligible-route) (provider and model) appears in Quill. None yet? [Add a key](13-access-privacy.md#add-a-key), or start a local model in Ollama or LM Studio.
 - Session and daily limits are comfortable for a short text request.
 - You can create a disposable project.
 

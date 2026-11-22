@@ -51,6 +51,12 @@ There is **no scoring, no model and no network call.** It is a pure, dependency-
 ## When it gets it wrong
 Pick the workspace yourself from the mode tabs. Auto Route is a convenience, not a gate, and nothing downstream depends on having been routed rather than chosen.
 
+## Deliberate limitations
+- **No model and no score.** It is a keyword and codename matcher; order decides ties, and substrings match inside words.
+- **It never runs anything.** It returns an agent key; the chosen agent does the work under the usual request guard.
+- **Keyword gaps:** a bare "logo" does not reach Stamp (only "logo order" does), and `author` is checked last, so some requests fall through to Chat. Pick the workspace yourself when it guesses wrong.
+- **No lesson.** The router has no panel or controls, so the Learning Centre has no lesson for it; this sheet is its only document.
+
 ## Under the hood — files & functions
 | Location | Role |
 |---|---|

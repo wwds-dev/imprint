@@ -15,7 +15,7 @@ The Assistant workspace's agent. Plain text in, plain text out, with full multi-
 | Prompt box | Your message. Send, or Stop to cancel. |
 
 ## Outputs
-Streaming text into the **Output** box (auto-hidden until there's content). Each turn is appended to `current_messages`, so follow-ups keep context. Conversations auto-save to `data/chats/` and appear in **Saved Chats**.
+Streaming text into the **Output** box (auto-hidden until there's content). Each turn is appended to `current_messages`, so follow-ups keep context. Conversations auto-save to `data/chats/` and appear in **Saved chats**.
 
 ## How it works
 `ChatAgent.build_messages()` returns `[system(tool prompt), user]`. On later turns the prior assistant reply is included so the model sees the whole thread. Token-by-token streaming for streaming backends, word-by-word emulation otherwise.
@@ -52,7 +52,7 @@ chat when old turns are no longer relevant.
   constraints from an earlier turn.
 - Treat code, financial reasoning, platform rules, and publishable copy as a
   draft until the relevant specialist agent or a human review passes it.
-- Verify that the conversation appears under Saved Chats before relying on it
+- Verify that the conversation appears under Saved chats before relying on it
   as the only copy.
 
 ## Storage, cost, and privacy

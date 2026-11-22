@@ -1,6 +1,5 @@
 {
   "version": 1,
-  "updated_at": "2026-10-07",
   "sections": [
     {"id": "start", "title": "Start here", "description": "Architecture and shared systems"},
     {"id": "production", "title": "Create & publish", "description": "Writing, publishing, audio, music, and video"},
@@ -8,7 +7,7 @@
     {"id": "advanced", "title": "Advanced", "description": "Compatibility and command-line capabilities"}
   ],
   "pages": [
-    {"id": "overview", "filename": "overview.md", "title": "Imprint reference", "summary": "Architecture, shared systems, files, costs, and recovery.", "section": "start", "order": 1, "audience": "Everyone", "estimated_minutes": 8, "keywords": ["architecture", "routing", "api keys", "cost", "storage", "errors", "model updates", "assessment"], "updated_at": "2026-10-07"},
+    {"id": "overview", "filename": "overview.md", "title": "Imprint reference", "summary": "Architecture, shared systems, files, costs, and recovery.", "section": "start", "order": 1, "audience": "Everyone", "estimated_minutes": 8, "keywords": ["architecture", "routing", "api keys", "cost", "storage", "errors", "model updates", "assessment"]},
     {"id": "author", "filename": "author.md", "title": "Quill", "summary": "Long-form writing, continuity, profiles, and export.", "section": "production", "order": 10, "agent": "author", "workspace": "Author", "estimated_minutes": 9, "keywords": ["book", "fiction", "non-fiction", "characters", "epub"]},
     {"id": "manuscript", "filename": "manuscript.md", "title": "Press", "summary": "Sales data, quote assets, shorts, calendars, and launch tracking.", "section": "production", "order": 11, "agent": "manuscript", "workspace": "Author", "estimated_minutes": 9, "keywords": ["publisher", "kdp", "quotes", "calendar", "sales"]},
     {"id": "audiobook", "filename": "audiobook.md", "title": "Booth", "summary": "Ebook extraction, speech generation, resume state, and MP3 output.", "section": "production", "order": 12, "agent": "audiobook", "workspace": "Audio + Music", "estimated_minutes": 7, "keywords": ["narrator", "voice", "tts", "mp3", "chunks"]},
@@ -19,6 +18,6 @@
     {"id": "fiverr", "filename": "fiverr.md", "title": "Stamp", "summary": "Brand concepts, logo designs, client copy, and image exports.", "section": "growth", "order": 22, "agent": "fiverr", "workspace": "Brand Design", "estimated_minutes": 5, "keywords": ["brand", "logo", "client", "delivery", "gig"]},
     {"id": "creator", "filename": "creator.md", "title": "Muse", "summary": "Campaign assets, identity, content operations, and the plan calendar.", "section": "growth", "order": 23, "agent": "creator", "workspace": "Brand Content", "estimated_minutes": 9, "keywords": ["brand", "creator", "campaign", "character", "calendar", "assets", "higgsfield"]},
     {"id": "chat", "filename": "chat.md", "title": "Chat", "summary": "General chat compatibility capability and shared routing.", "section": "advanced", "order": 30, "agent": "chat", "estimated_minutes": 4, "keywords": ["chat", "assistant", "router"]},
-    {"id": "router", "filename": "router.md", "title": "Router", "summary": "How Auto Route picks a workspace, and what it will not do.", "section": "advanced", "order": 32, "agent": "router", "estimated_minutes": 3, "keywords": ["router", "routing", "auto route", "intent", "classifier"]}
+    {"id": "router", "filename": "router.md", "title": "Intent Router", "summary": "How Auto Route picks a workspace, and what it will not do.", "section": "advanced", "order": 32, "agent": "router", "estimated_minutes": 3, "keywords": ["router", "routing", "auto route", "intent", "classifier"]}
   ]
 }

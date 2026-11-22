@@ -5,11 +5,12 @@ All notable changes to Imprint, newest first. The format follows
 
 ## How versions are numbered
 
-Imprint's version is `v<MAJOR>.<BUILD>` (for example `v2.248`), shown in the
+Imprint's version is `v<MAJOR>.<BUILD>` (for example `v2.400`), shown in the
 header bar. `MAJOR` is the single integer in the `VERSION` file (currently 2).
 `BUILD` is the number of commits on the branch (`git rev-list --count HEAD`),
-so it goes up by one with every commit and is never typed by hand. See
-README section 18.1.
+so it goes up by one with every commit and is never typed by hand. This is
+not semantic versioning: the number says which commit you run, not what
+changed (README section 18.1 explains why).
 
 There are no git tags and `VERSION` has changed once (set to 2 on
 2026-09-22), so there are no named releases to group by. Entries are grouped
@@ -21,6 +22,49 @@ a change shipped in, look up its commit.
 This file is generated from `git log`; see the note at the bottom for how to
 regenerate it. It states what the code does, not how well it works for you:
 nothing here is a claim about income, sales or publishing results.
+
+Work that is on a branch or in `main` but not yet in a released build is
+listed under **Unreleased** until it ships.
+
+## Unreleased
+
+### Changed
+- **Documentation and Learning Centre made ready for the hand test**
+  (`docs/specs/docs-learning-centre-readiness.md`, packages 1 to 4). README:
+  a "Start here" block, the two parts marked (*Using the app*, *Engineering
+  reference*), section 1 rewritten, sections 6, 7, 9 and 13 brought up to the
+  current app (ten agents in eight workspaces, eight Settings tabs, eight
+  permission boxes, Booth's three narrators and real requirements, Quill's
+  draft safety, the real button labels), and the hidden income chapter
+  deleted. Learning Centre: Quill's "What Write changes", Press's "Make a
+  release kit" (with F1 help), "Add a key", and two new lessons,
+  Troubleshooting and Glossary (28 lessons); the seven legacy pages that were
+  shipped but never shown are deleted. Agent sheets: a "Deliberate
+  limitations" section on nine sheets, a release-kit section on Press's, Veo
+  in the past tense. Hand-test script: cases for draft safety and the release
+  kit. Readiness gate and test plan carry a banner naming the 2026-11-18
+  audit as the current verdict. No screenshots (they were removed on
+  2026-11-05; Show me points at the real control).
+
+### Added
+- **`tests/test_docs_integrity.py`**: links and anchors, README section
+  references, orphan lessons, quoted controls (`tests/docs_controls.txt`),
+  retired names, titles, income wording, local paths, limitation sections and
+  the Settings tabs and permission boxes, checked in the normal suite. Cases
+  that wait for the rename are strict expected failures. After review
+  (`docs/audit/docs-learning-centre-readiness-code-reviewer.md`, R-3 and R-4):
+  the label check also covers README sections 3 to 7 and 13, every sheet and
+  every lesson, ignores docstrings, and Troubleshooting's quoted messages are
+  checked against the app's strings.
+
+### Fixed
+- **Docs after review (R-1, R-2, R-4, R-7, R-12):** Herald's Pinterest posting
+  is described as not working yet everywhere (it did say both); Label's two
+  tabs, not Label and Muse, share the "music" authorization; Troubleshooting
+  quotes the real "[Too long]", "too big now" and "_API_KEY is not set."
+  messages and points to the video, posting and audiobook lessons; the
+  Tighten Structure threshold (a quarter) is named; seven labels quoted with
+  the wrong wording or case now match the panels.
 
 ## 2026-11-21
 
@@ -475,5 +519,4 @@ match.
 Run `git log --reverse --format='%ad %h %s' --date=short`, drop lines that
 start with `autosync:` and pure merges, and group by date. Read the commit
 body where a subject is unclear. Keep one line per user-visible change.
-Cross-check each line against the code. As of the 2026-10-13 build
-(248 commits), 21 are autosync commits and 16 are merges.
+Cross-check each line against the code.

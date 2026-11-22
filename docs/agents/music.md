@@ -12,7 +12,7 @@ A music-business consultant that produces a complete, copy-paste-ready release-a
 | Genre | Primary sound. |
 | Release Type | Single / EP / Album / Mixtape. |
 | Distributor | Not signed up yet / DistroKid / TuneCore / CD Baby / etc. |
-| Target Audience, Describe Your Music | Optional context. |
+| Target Audience, Describe your music | Optional context. |
 | Provider / Model, Generate Plan / Stop / Help / Save / Clear | Run + manage. |
 
 ## Outputs
@@ -20,6 +20,15 @@ Five tabs mirror the plan: **Artist Profile** (short+long bio, genre tags, simil
 
 ## How it works
 `MusicAgent.build_messages()` uses a system prompt with the exact five-section format, real distributor names/prices, and the AI/HUMAN action markers. Streamed then split into tabs.
+
+## Deliberate limitations
+What Label does not do, on purpose or not yet.
+
+- **No audio.** Songs are made in Suno; Label opens it as a link and sends nothing to a music API.
+- **No upload or distribution.** Label plans a release; you submit it to your distributor yourself.
+- **No earnings forecast.** The prompt forbids forecasting income or quoting a universal per-stream payout (`agents/music/agent.py`); any streaming scenario is your own input, labelled hypothetical.
+- **No live streaming data.** Label does not read Spotify for Artists or any chart; numbers you paste in are your observations.
+- **Label's plan and Suno tabs both authorize as "music";** two Label runs at the same time can bill each other's usage (*open*, audit QM-15).
 
 ## Under the hood — files & functions
 | Location | Role |
@@ -34,7 +43,7 @@ Five tabs mirror the plan: **Artist Profile** (short+long bio, genre tags, simil
 - **New distributor**: add to the combo + a note in the system prompt's comparison.
 
 ## Requirements
-Provider key (Claude best for long structured plans). External accounts to act on it: Spotify for Artists, a distributor, a PRO (see the Income Roadmap output and README §18).
+Provider key (Claude best for long structured plans). External accounts to act on it: Spotify for Artists, a distributor, a PRO (the Income Roadmap output lists them; README §7.4 describes Label).
 
 ## Before you run
 
@@ -68,7 +77,7 @@ production charges are not inferred by the agent.
 
 | Symptom | Check |
 |---|---|
-| Generate Plan asks for input | Describe Your Music is empty. |
+| Generate Plan asks for input | Describe your music is empty. |
 | A tab is empty | The response missed its numbered section marker; inspect the first tab/full saved response. |
 | Advice contains exact prices or deadlines | Treat them as unverified and check the provider's current terms. |
 | Income Roadmap predicts earnings | Reject the output and rerun with measured inputs and explicit hypothesis labels. |

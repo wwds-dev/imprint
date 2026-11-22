@@ -2,6 +2,13 @@
 
 **Status:** audit, 2026-10-09 at `e23f3cd` · **Owner:** `@me` · **Precedes:** `tests/TEST_PLAN.md`
 
+> **Banner, 2026-11-22: this is the October snapshot, not the current verdict.**
+> The current verdict is the code-level readiness audit of 2026-11-18,
+> [`docs/audit/code-readiness-audit-2026-11-18.md`](../docs/audit/code-readiness-audit-2026-11-18.md),
+> with its open items in `TODO.md` ("Audit Q…"). It left blockers open on Booth
+> (QB-2) and Herald (QB-3) and a P0 on Reel (QH-2); Quill's QB-1 is fixed since
+> 2026-11-20. The "✅ ready" marks below for Quill, Booth and Reel predate that audit, and Veo, named below as retiring on 2026-10-22, has left the menus. The text below is kept as written on its date.
+
 The test plan assumes the build under test does what the app says it does.
 This document checks that assumption agent by agent — the promise (catalog
 line, README, agent sheet, UAT script) against the code — and lists what has

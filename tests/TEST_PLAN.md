@@ -1,6 +1,13 @@
 # Imprint — QA Test Plan
 
 **Status:** draft for review · **Revised:** 2026-10-09 · **Baseline commit:** `e23f3cd`
+
+> **Banner, 2026-11-22: this is the October snapshot, not the current verdict.**
+> The current verdict is the code-level readiness audit of 2026-11-18,
+> [`docs/audit/code-readiness-audit-2026-11-18.md`](../docs/audit/code-readiness-audit-2026-11-18.md),
+> with its open items in `TODO.md` ("Audit Q…"). It left blockers open on Booth
+> (QB-2) and Herald (QB-3) and a P0 on Reel (QH-2); Quill's QB-1 is fixed since
+> 2026-11-20. The suite's size and run time are in README §16.1, not the figures below. The text below is kept as written on its date.
 **Owner:** `@me` decides scope and budget; `@ai` writes and runs tests, same tags as `TODO.md`.
 **Companions:** `tests/manual_test_cases.md` (the hand-driven UAT script),
 `tests/conftest.py` (what every automated run guarantees), `TODO.md` (where
@@ -195,7 +202,7 @@ commit. The tiers are additive: a release runs all of them.
 | **UAT** | `tests/manual_test_cases.md` | Everything a human has to judge | FREE pass ~2 h; PAID pass budgeted | pre-release; after any S0/S1 fix in that area |
 
 `pytest.ini` gains `addopts = -m "not live and not build and not soak"` so a
-bare `pytest -q` stays the ~90 s run it is today, and the markers are
+bare `pytest -q` stays the default run (its size and run time: README §16.1), and the markers are
 registered so a typo in one fails collection instead of silently selecting
 nothing.
 
@@ -527,7 +534,7 @@ pip-audit           # dependency CVEs, weekly
 
 Deliberately **not** added: `pytest-xdist`. Qt offscreen tests in parallel
 processes work in principle, but the suite's fixtures share one `DB_PATH`
-and one Qt application per process; the 90 s run does not justify the new
+and one Qt application per process; the run time then (about 90 s) did not justify the new
 failure class. Revisit if the bare run passes 150 s.
 
 `pytest.ini` additions:

@@ -12,9 +12,9 @@
 
 ## Live launcher versus frozen app
 
-The installed development launcher runs the live project and its virtual
+The installed development launcher (the [live launcher](18-glossary.md#live-launcher)) runs the live project and its virtual
 environment. Opening it after a source change loads current project code once
-the previous Imprint process is fully quit. A frozen production app runs bundled
+the previous Imprint process is fully quit. A [frozen](18-glossary.md#frozen-app) production app runs bundled
 code and uses seeded writable state under `~/Library/Application Support/Imprint/`.
 
 If two launcher results appear, resolve their filesystem paths before removing

@@ -40,7 +40,7 @@ The same announcement is a different piece of writing on each platform, and not 
 |---|---|
 | YouTube | **Can post.** Through vidforge's existing uploader — not a second implementation. Needs an OAuth client secret and one browser sign-in. |
 | Reddit | **Can post.** A personal "script" app on your own account; no review needed. |
-| Pinterest | **Can post.** Needs a business account, which is free to convert to. |
+| Pinterest | **Does not post yet** (audit QH-3; see Deliberate limitations). Would need a business account, which is free to convert to. |
 | X / Twitter | Drafting only — posting needs a paid API tier. |
 | Instagram | Drafting only — needs a linked Business/Creator account and a reviewed app. |
 | TikTok | Drafting only — direct posting requires passing their audit. |
@@ -49,7 +49,15 @@ The same announcement is a different piece of writing on each platform, and not 
 
 The Accounts tab shows this live, including exactly which environment variables are missing. None of it is verified against the live APIs from the app, and platform terms change often — treat it as a starting point for your own check.
 
-## What it will not do
+## Deliberate limitations
+What Herald does not do, on purpose or not yet. Rows marked *open* have a `TODO.md` item from the code audit of 2026-11-18.
+
+- **Five of eight platforms are drafting only** (X, Instagram, TikTok, Threads, LinkedIn); see the table above.
+- **Pinterest posting does not work from the panel yet:** there is no image picker, and the clip's MP4 is sent as an image (*open*, audit QH-3). The table above changes when QH-3 is decided.
+- **YouTube reads "ready to post" for any `client_secret*.json`,** but the uploader needs exactly `client_secret.json` (*open*, QH-4).
+- **A clip's scene images can go to Gemini or Qwen while the clip is authorized as OpenAI,** so that provider's box is not checked (*open*, QB-3). Until it is fixed, keep the clip on OpenAI visuals.
+- **Posting runs on the main thread,** so the window can freeze during a YouTube upload (*open*, QM-11).
+- **Schedule Drafts also re-dates posted and needs-review posts** (*open*, QM-14).
 - **Nothing posts unattended.** No scheduler thread, no "publish all". The schedule is a plan you work through, one confirmed click at a time. A tool that posts on its own behalf while nobody is watching is how an account gets banned for something the owner never saw.
 - **No blind retry after an unknown result.** Imprint writes one durable delivery row before the network call and atomically claims it. A definite rejection becomes **Retry available**. A timeout, app close, or response that does not prove whether the platform accepted the post becomes **Verify platform**. Check the account, then either **Mark Posted** or use the deliberately labelled **Retry After Checking** action. Imprint never makes that risky decision on restart.
 - **No invented evidence.** Reviews, testimonials, sales figures, chart positions and follower counts are forbidden in the system prompt rather than left to chance. A promotion tool that fabricates a happy customer is a liability its owner finds out about last.

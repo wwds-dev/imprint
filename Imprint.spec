@@ -79,7 +79,7 @@ datas += [
     ("README.md", "."),
     (".env.example", "."),
     ("docs/agents", "docs/agents"),   # per-agent capability sheets (Docs button)
-    ("docs/learn", "docs/learn"),     # Learning Centre pages + their screenshots
+    ("docs/learn", "docs/learn"),     # Learning Centre lessons and manifests
 ]
 
 # Per-agent project documents are part of the product architecture, not dev-only

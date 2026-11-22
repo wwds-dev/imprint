@@ -123,6 +123,7 @@ folder instead: `index.html` with the styles and scripts moved into
 
 ### Step 8 — Test it in a real browser
 
+This step happens in your browser, outside Imprint, so it has no Show me.
 Double-click the saved file to open it in your browser, then:
 
 1. Make the window as narrow as a phone. Nothing should be cut off or need
