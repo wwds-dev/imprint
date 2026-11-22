@@ -128,3 +128,5 @@
 {"ts": "2026-11-22T03:51:52", "phase": "define", "state": "done", "spec": "rename-imprint-studio"}
 {"ts": "2026-11-22T03:51:53", "phase": "define", "state": "done", "spec": "model-updates"}
 {"ts": "2026-11-22T03:51:53", "phase": "define", "state": "done", "spec": "docs-learning-centre-readiness"}
+{"ts": "2026-11-22T10:15:12", "phase": "review", "state": "start", "spec": "docs-learning-centre-readiness"}
+{"ts": "2026-11-22T10:22:30", "phase": "review", "state": "done", "spec": "docs-learning-centre-readiness"}
