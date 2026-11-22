@@ -40,7 +40,7 @@ The same announcement is a different piece of writing on each platform, and not 
 |---|---|
 | YouTube | **Can post.** Through vidforge's existing uploader — not a second implementation. Needs an OAuth client secret and one browser sign-in. |
 | Reddit | **Can post.** A personal "script" app on your own account; no review needed. |
-| Pinterest | **Can post.** Needs a business account, which is free to convert to. |
+| Pinterest | **Does not post yet** (audit QH-3; see Deliberate limitations). Would need a business account, which is free to convert to. |
 | X / Twitter | Drafting only — posting needs a paid API tier. |
 | Instagram | Drafting only — needs a linked Business/Creator account and a reviewed app. |
 | TikTok | Drafting only — direct posting requires passing their audit. |

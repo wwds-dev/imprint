@@ -13,7 +13,7 @@ the text Imprint shows.
 
 ## Keys and providers
 
-**"… API key is not set"** (for example `ANTHROPIC_API_KEY is not set.`)
+**"…_API_KEY is not set."** (for example `ANTHROPIC_API_KEY is not set.`)
 The provider has no key. Add one in **Settings → API keys**, press **Test**,
 then **Save All** ([Add a key](13-access-privacy.md#add-a-key)), or switch to a
 local model.
@@ -42,8 +42,8 @@ server is not started. Open Ollama, wait until it is running, then press
 LM Studio's server is off. Start it in LM Studio, or press **Start server** in
 **Settings → Local models**.
 
-**"too big now"** or **"too big right now"** The model needs more free memory than the Mac has at
-the moment. Close other apps, or pick a smaller model. A model that can never
+**"too big now"** (in the model menu) or **"… needs ~… GB; … GB free."** The
+model needs more free memory than the Mac has at the moment. Close other apps, or pick a smaller model. A model that can never
 fit this Mac is refused.
 
 ## Spend and budgets
@@ -78,14 +78,23 @@ whichever narrator ran; top up the provider you chose.
 
 ## Quill
 
-**"Select a passage" and nothing was sent** A revise task's text is longer than
-it can handle in one run (20,000 characters, 6,000 with a local model). Select
-one chapter in the Draft and run the task on it.
+**"[Too long] Revise works on up to …" and nothing was sent** A revise task's
+text is longer than it can handle in one run (20,000 characters, 6,000 with a
+local model). Select one chapter or passage in the Draft and press **Write**
+again.
 
 **The same chapter appears twice in the Draft** A prose task adds after the
 existing Draft; it never replaces it. Delete the copy you do not want, or
 select it and use **Revise / Improve**. See
 [Quill: What Write changes](20-draft.md#what-write-changes).
+
+## Other agents
+
+**A video seems stuck, or Stop does not stop it** See
+[Video: Common failures](24-video.md#common-failures).  
+**Herald cannot post** See [Social: Common failures](25-social.md#common-failures).  
+**Booth finds no books** See
+[Audiobooks: Common failures](22-audiobooks.md#common-failures).
 
 ## The app itself
 
@@ -95,7 +104,8 @@ the live launcher writes its reason to `/tmp/imprint_launch.log`.
 
 **A status you cannot find here** Keep its exact wording, note the time, and
 open **Run Log** in the right rail: every request's lifecycle is recorded
-there.
+there. For a bug report, give that wording, the time, the agent, provider and
+model, and what you clicked last; never a key or a screenshot of Settings.
 
 ## Verification
 

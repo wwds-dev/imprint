@@ -740,7 +740,7 @@ Accounts tab → open the guide for Reddit.
       guidance, and that the three posting platforms' terms are checked before
       a publishing pass
 
-> **Before any `PAID` case that actually posts** (Reddit, YouTube, Pinterest):
+> **Before any `PAID` case that actually posts** (Reddit, YouTube; Pinterest does not post yet, QH-3):
 > read each platform's current API terms and rate rules once, and note the date
 > in `agents/social/TODO.md`. A wrong tone note costs a weak post; a wrong
 > terms assumption can cost the account.
@@ -912,7 +912,7 @@ published neither.
 - [ ] Selecting a **Tool** adds its task frame; a **Command** inserts a scaffold
 - [ ] **Stop** mid-stream ends it and closes the stream (check `ollama ps`)
 - [ ] An ollama error frame surfaces as an error, not as silence
-- [ ] Saved Chats reopens the thread with its context; a new chat starts clean
+- [ ] Saved chats reopens the thread with its context; a new chat starts clean
 - [ ] Switching provider mid-conversation carries the context
 
 ---

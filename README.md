@@ -132,7 +132,7 @@ narrate, make music plans, video, social posts, brand designs and web pages:
 | Author | **Quill** (plan, draft and revise long-form work), **Press** (prepare, export, log submissions and measure finished books) |
 | Audio + Music | **Booth** (ebook to audiobook), **Label** (songs, albums and releases; the audio itself is made in Suno) |
 | Video + Ads | **Reel** (script, generate, narrate and assemble video) |
-| Social | **Herald** (draft and schedule posts; publish to Reddit, YouTube and Pinterest) |
+| Social | **Herald** (draft and schedule posts; publish to Reddit and YouTube; Pinterest posting does not work yet) |
 | Web | **Sitebuilder** (responsive HTML, CSS and JavaScript) |
 | Brand Design | **Stamp** (client-ready concepts, listings and delivery messages) |
 | Brand Content | **Muse** (reusable campaigns, captions and promotional assets) |
@@ -882,7 +882,7 @@ The documentation centre opens from **Docs** in the header ([§13.5](#135-docs))
 
 #### 6.2.1 Local providers: Ollama and LM Studio
 
-Local is a property of a provider's spec (`services/providers.py`, a byte-identical copy of Sentinel's; `tests/test_providers_drift.py` keeps them equal), not a name check. Ollama and **LM Studio** are the local providers. LM Studio is priced as free (a zero price still means *unknown* for cloud only), scored as private, needs no permission checkbox, never raises the paid-request dialog and is not counted as paid usage; an agent that allows `ollama` allows every local runtime. LM Studio's address is `http://localhost:1234/v1` (`LMSTUDIO_URL` overrides) and chat goes through `/v1/chat/completions`. Before a local model runs, its file size × 1.2 is compared with free memory (`providers.fit_check`): *too big right now* warns, a file that cannot fit this machine is refused. Uncensored, abliterated and Dolphin models are offered in every agent that offers local models and **always tagged** — an amber ABLITERATED or UNCENSORED pill in the dropdown and on the closed picker, with a hover note — derived from the model's name and publisher, never typed in. Local models are rated from evidence only (§6.2.2); one with no rating is never picked by the ranker. The Manuscript and Creator agents still do not offer local providers: their registry rows exclude `ollama` on purpose.
+Local is a property of a provider's spec (`services/providers.py`, a byte-identical copy of Sentinel's; `tests/test_providers_drift.py` keeps them equal), not a name check. Ollama and **LM Studio** are the local providers. LM Studio is priced as free (a zero price still means *unknown* for cloud only), scored as private, needs no permission checkbox, never raises the paid-request dialog and is not counted as paid usage; an agent that allows `ollama` allows every local runtime. LM Studio's address is `http://localhost:1234/v1` (`LMSTUDIO_URL` overrides) and chat goes through `/v1/chat/completions`. Before a local model runs, its file size × 1.2 is compared with free memory (`providers.fit_check`): *too big now* warns, a file that cannot fit this machine is refused. Uncensored, abliterated and Dolphin models are offered in every agent that offers local models and **always tagged** — an amber ABLITERATED or UNCENSORED pill in the dropdown and on the closed picker, with a hover note — derived from the model's name and publisher, never typed in. Local models are rated from evidence only (§6.2.2); one with no rating is never picked by the ranker. The Manuscript and Creator agents still do not offer local providers: their registry rows exclude `ollama` on purpose.
 
 **The picker groups local models** (`services/local_models.py`, identical in Sentinel): sections *On this Mac · LM Studio*, *On this Mac · Ollama* and *Cloud*; each local row shows quant, state (loaded / on disk, loads on first use / on disk, server off / too big now), size, rating (*measured writing 1281 · code 1240*, *base model 1338 − 10*, *measuring… 12/80* or *unrated*) and €0, with the uncensored/abliterated pill on the row and on the closed picker. Discovery runs on a background thread into a cached snapshot, so the GUI never fetches. Local models are BEST FIT candidates whichever provider is selected (an unrated one still never beats a rated one). **Settings → Local models** shows LM Studio/Ollama status, free RAM and a table (model, source, size, state, rating, used by) with **Start server** (`lms server start`, or a hint to start it in LM Studio when `lms` is missing).
 
@@ -1013,7 +1013,7 @@ The default, general-purpose agent. Chat is the one agent that does *not* swap i
 
 #### What the Chat Agent Does
 
-The Chat agent sends the prompt with the active Tool's instructions (General Chat, Writing, Coding, Summarize, Rewrite — see [§6.1](#61-control-bar--row-1-tool--command)). After the first reply, later messages in the same conversation include prior user and assistant turns. Saved chats are persisted as JSON files in `data/chats/` and re-appear in **Saved Chats**. Reopening one restores the transcript and leaves the input empty for a follow-up. It uses the *current* Tool and project instructions, not a system prompt stored in the old file. Changing the agent, Tool, or project starts a different context; **New Chat** explicitly clears it. The preflight estimate includes earlier turns that will be sent again.
+The Chat agent sends the prompt with the active Tool's instructions (General Chat, Writing, Coding, Summarize, Rewrite — see [§6.1](#61-control-bar--row-1-tool--command)). After the first reply, later messages in the same conversation include prior user and assistant turns. Saved chats are persisted as JSON files in `data/chats/` and re-appear in **Saved chats**. Reopening one restores the transcript and leaves the input empty for a follow-up. It uses the *current* Tool and project instructions, not a system prompt stored in the old file. Changing the agent, Tool, or project starts a different context; **New Chat** explicitly clears it. The preflight estimate includes earlier turns that will be sent again.
 
 ---
 
@@ -1044,7 +1044,7 @@ Chat uses the **standard `normal_panel`** described in [section 6](#6-centre-pan
 5. Type a message in the prompt input and click **Send** (or press the configured submit shortcut).
 6. The response streams into the output box. Type a follow-up to continue the same conversation.
 7. Use **New Chat** to clear conversation context while keeping the active project. Use **New Project** only for a different client, product, or venture. Previous conversations are auto-saved to `data/chats/`.
-8. To re-open an older chat, click it in **Saved Chats**. Review the transcript,
+8. To re-open an older chat, click it in **Saved chats**. Review the transcript,
    then type a new follow-up; the old prompt is not copied into the input.
 
 ---
@@ -1326,7 +1326,7 @@ Task is one of three kinds:
 3,300 words) per run, 6,000 (about 1,000 words) with a local model, because
 one reply is capped at 8,192 tokens; above it nothing is sent and the status
 line asks you to select a passage. A revision cut off at the length limit, or
-under half the length of its text, leaves the Draft unchanged, and an error or
+under half the length of its text (a quarter for Tighten Structure), leaves the Draft unchanged, and an error or
 **Stop** never removes Draft text. The Draft is read-only while a revision
 runs.
 
@@ -1522,7 +1522,7 @@ Five-section release plan:
 | **Release Type** | Single / EP (3–6 tracks) / Album (7+) / Mixtape. |
 | **Distributor** | Not signed up yet / DistroKid / TuneCore / CD Baby / Amuse / AWAL / Other. |
 | **Target Audience** | Optional — demographic and listener profile. |
-| **Describe Your Music** | Multi-line — sound, influences, vibe, release concept. |
+| **Describe your music** | Multi-line — sound, influences, vibe, release concept. |
 | **Provider / Model** | Default Anthropic. |
 
 ##### Action Buttons
@@ -1560,7 +1560,7 @@ full step-by-step.
 #### How to Use — Step by Step
 
 1. Open the **Audio + Music** workspace in the header and pick **Label**.
-2. Fill in **Artist / Project Name**, **Genre**, **Release Type**, **Distributor**, and **Describe Your Music**.
+2. Fill in **Artist / Project Name**, **Genre**, **Release Type**, **Distributor**, and **Describe your music**.
 3. (Optional) Specify **Target Audience**.
 4. Pick **Provider** and **Model** (Claude works well for long structured plans).
 5. Click **Generate Plan**.
@@ -1665,8 +1665,8 @@ The panel shows the extracted HTML and any inline `<style>` / `<script>` blocks 
 | Indicator | Description |
 |-----------|-------------|
 | **Responsive** | Mobile-first or Desktop based on a viewport tag or media query. |
-| **Framework Used** | Echoes the selected framework. |
-| **Lines of Code** | Line count in the extracted HTML. |
+| **framework used** | Echoes the selected framework. |
+| **lines of code** | Line count in the extracted HTML. |
 
 ---
 
@@ -1972,7 +1972,7 @@ One action on an approved Project version makes a set of files for a release, on
 | **Theme** | Same 3 themes as Quote Graphics. |
 | **Voice source** | System (Free) or ElevenLabs. |
 | **Voice** | Populated from the selected source. |
-| **Short Generate Short** | Narrates + renders on a background thread; saved to `data/shorts/`. |
+| **Generate Short** | Narrates + renders on a background thread; saved to `data/shorts/`. |
 | **Play / 📂 Folder** | Open the last-generated short or its folder. |
 
 ##### Calendar Tab
@@ -2164,7 +2164,7 @@ finished mp4 against the campaign.
 |---|---|
 | YouTube | Can post — through vidforge's existing uploader. Needs an OAuth client secret and one browser sign-in. |
 | Reddit | Can post — a personal "script" app on your own account, no review. The subreddit you type (`books`, `r/books`) must be one name of 2 to 21 letters, digits or underscores, and "Post now?" names it (`r/books`) before anything is sent. |
-| Pinterest | Can post — needs a business account, free to convert to. |
+| Pinterest | Does not post from the panel yet: there is no image picker, and a clip's MP4 is sent as an image, which Pinterest refuses (audit QH-3). The Accounts tab and the catalog line still list it as able to post until QH-3 is decided. |
 | X, Instagram, TikTok, Threads, LinkedIn | Drafting only — each needs a paid tier, a linked business account, or an app review Imprint cannot obtain for you. |
 
 The Accounts tab shows this live, naming the exact environment variables that
@@ -2173,9 +2173,9 @@ and platform terms change often, so treat it as a starting point for your own
 check rather than current fact — the tab now says so itself, in a line above
 the platform notes (`platforms.NOTES_CAVEAT`): the drafting guidance is
 general knowledge, and only the three posting platforms' terms are checked
-before a publishing test pass. Herald's catalog line states the same limit:
+before a publishing test pass. Herald's catalog line reads
 *Draft and schedule posts for eight platforms; publish to Reddit, YouTube and
-Pinterest.*
+Pinterest.*; its Pinterest part is wrong today (see the table above, QH-3).
 
 **Nothing posts unattended.** There is no scheduler thread and no "publish
 all" — the schedule is a plan you work through, one confirmed click at a time.
@@ -2523,7 +2523,7 @@ finished. Chat writes `[Cut off] … To get the rest, send "continue"` instead o
 `[Finished]`; Quill's Write says `[Cut off] N words, stopped at the length
 limit. Press Continue to write more.`; every other panel shows the cut-off line
 in its status instead of `[Done]`. The notice sits beside the text and is never
-saved with it (Saved Chats and the conversation Chat sends next hold the answer
+saved with it (Saved chats and the conversation Chat sends next hold the answer
 alone). Chat's **Export Report** exports the whole transcript, so the
 `[Cut off]` line is in the report. A Gemini thinking model can use the whole
 limit thinking: the notice then says so, and an empty answer is still billed.
@@ -2680,7 +2680,7 @@ with **Remove** ([§6.2.3](#623-hybrid-routing-one-check-per-new-job)).
 Lists every agent from the `agents` table with:
 
 - **Enabled** checkbox — Toggle the agent on or off.
-- **Budget cap (€)** — Per-day spending cap for this agent. Leave blank for no limit.
+- **Agent budget (€)** — Per-day spending cap for this agent. Leave blank for no limit.
 
 #### Tools Tab
 

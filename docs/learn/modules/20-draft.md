@@ -35,8 +35,8 @@ A revise task works on up to 20,000 characters (about 3,300 words) per run,
 or 6,000 (about 1,000 words) with a local model, because one reply is capped
 at 8,192 tokens. Above that nothing is sent and the status line asks you to
 select a passage: select one chapter and revise it, then the next. A revision
-cut off at the length limit, or under half the length of its text, leaves the
-Draft unchanged. An error or **Stop** never removes Draft text. The Draft is
+cut off at the length limit, or under half the length of its text (a quarter
+for Tighten Structure), leaves the Draft unchanged. An error or **Stop** never removes Draft text. The Draft is
 read-only while a revision runs.
 
 ## Worked input and run
@@ -95,8 +95,8 @@ perfect memory.
 **Two versions of the same chapter in Draft:** you pressed Write again with a
 prose task, which adds rather than replaces. Delete the version you do not
 want, or select it and run **Revise / Improve** with your correction.  
-**"Select a passage" and nothing sent:** the revise task's text is over the
-limit (20,000 characters, 6,000 with a local model). Select one chapter.  
+**"[Too long] Revise works on up to …" and nothing sent:** the revise task's
+text is over the limit (20,000 characters, 6,000 with a local model). Select one chapter.  
 **Empty Chapters:** use consistent Markdown-style headings and refresh.  
 **Export looks wrong:** verify chapter headings and author metadata first.
 

@@ -20,7 +20,7 @@
 | Mode and API permissions | Limit local/cloud access and which keys may be used. |
 | Prompt | The exact request. Include audience, format, constraints, and acceptance test. |
 | Send / Stop | Start the guarded request or stop local work; a provider may already have billed. |
-| Saved Chats | Reopen a previous thread or create a clean one. |
+| Saved chats | Reopen a previous thread or create a clean one. |
 
 ## Worked run
 
@@ -34,7 +34,7 @@
 4. Press **Send** once. Read the status and Run Log if a result stalls. Do not
    repeat a paid request just because the local status has not refreshed.
 5. Check the answer against your input, save the useful output outside the chat
-   when it becomes an authoritative asset, and reopen it from Saved Chats.
+   when it becomes an authoritative asset, and reopen it from Saved chats.
 
 ## How to read the output
 
