@@ -194,7 +194,7 @@ def _seeded_labels() -> dict[str, str]:
         if isinstance(node, ast.Dict):
             keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]
             if "name" in keys and "label" in keys:
-                values = dict(zip(keys, node.values))
+                values = dict(zip(keys, node.values, strict=False))
                 labels[values["name"].value] = values["label"].value
     return labels
 
