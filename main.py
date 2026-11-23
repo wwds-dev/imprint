@@ -2628,7 +2628,8 @@ class GodAI(QWidget):
         normal_layout.setContentsMargins(0, 0, 0, 0)
         normal_layout.setSpacing(MD)
 
-        self.agent_box = QComboBox()
+        # Parented so it dies with the window: it is never in a layout.
+        self.agent_box = QComboBox(self)
         # Shared general-chat panel; the selector itself is hidden because the
         # workspace tabs already choose the agent.
         # The catalog, not config/agents.json plus an accumulating patch list,
