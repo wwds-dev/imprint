@@ -29,6 +29,13 @@ listed under **Unreleased** until it ships.
 ## Unreleased
 
 ### Changed
+- **Model updates is easier to spot.** Its section in the side rail is open by
+  default (it was collapsed, and the owner could not find the tile), and a
+  check that finds a new model says so in the chat status line: *New model
+  available: Qwen · qwen4-max. See Model updates in the side rail.* Only what
+  that check found is named, and a running request keeps its progress line.
+  This is the visibility part (G5) of `docs/specs/model-updates.md`; the
+  review window in that spec is not built.
 - **Documentation and Learning Centre made ready for the hand test**
   (`docs/specs/docs-learning-centre-readiness.md`, packages 1 to 4). README:
   a "Start here" block, the two parts marked (*Using the app*, *Engineering

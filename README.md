@@ -428,10 +428,12 @@ takes numbers of 0 or more only and otherwise keeps the old limits.
 **Cost History · Run Log · Learning Centre** — utilities that open a window and
 change nothing, so they read as links rather than buttons.
 
-**System · Routing · API keys · Model updates** — collapsed by default. Each
-opens a compact status card with separate values and state badges instead of a
-paragraph of diagnostic text. Model updates puts its counts in its own title
-(*Model updates · 2 new · 1 warning*), so news is visible without opening it.
+**System · Routing · API keys · Model updates** — the first three are collapsed
+by default; **Model updates is open by default** (since 2026-11-22), because
+collapsed it was easy to miss. Each is a compact status card with separate
+values and state badges instead of a paragraph of diagnostic text. Model
+updates also puts its counts in its own title
+(*Model updates · 2 new · 1 warning*), so news stays visible if you close it.
 It covers chat models and, in a section of its own, video and image models.
 
 ### Resource Monitor
@@ -515,6 +517,12 @@ are not billed. Imprint remembers every id each provider has listed before, in
 never seen is announced. It runs **a few seconds after startup** (turn it off
 with **Check when Imprint starts**) and on **Check now**. Any panel's own model
 fetch also counts as a look, so news arrives with the startup check off.
+
+**A check that finds something says so in the chat status line**: *New model
+available: Qwen · qwen4-max. See Model updates in the side rail.* It names up
+to three models and counts the rest, names only what that check found (a
+notice you have not dismissed is not announced again at the next start), and
+stays quiet while a request is running, so it never replaces a progress line.
 
 **What counts as new.**
 - The first list from a provider is a **baseline**, recorded silently —
