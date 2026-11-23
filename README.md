@@ -432,10 +432,12 @@ takes numbers of 0 or more only and otherwise keeps the old limits.
 **Cost History · Run Log · Learning Centre** — utilities that open a window and
 change nothing, so they read as links rather than buttons.
 
-**System · Routing · API keys · Model updates** — collapsed by default. Each
-opens a compact status card with separate values and state badges instead of a
-paragraph of diagnostic text. Model updates puts its counts in its own title
-(*Model updates · 2 new · 1 warning*), so news is visible without opening it.
+**System · Routing · API keys · Model updates** — the first three are collapsed
+by default; **Model updates is open by default** (since 2026-11-22), because
+collapsed it was easy to miss. Each is a compact status card with separate
+values and state badges instead of a paragraph of diagnostic text. Model
+updates also puts its counts in its own title
+(*Model updates · 2 new · 1 warning*), so news stays visible if you close it.
 It covers chat models and, in a section of its own, video and image models.
 
 ### Resource Monitor

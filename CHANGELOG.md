@@ -47,6 +47,10 @@ listed under **Unreleased** until it ships.
   new names; the Kernel, Nova and Vector sheets gained "Deliberate
   limitations".
 
+- **Model updates is easier to spot.** Its section in the side rail is open by
+  default (it was collapsed, and the owner could not find the tile). Nothing
+  else changes; saying so in a status line when a check finds something (G5 of
+  `docs/specs/model-updates.md`) and that spec's review window are not built.
 - **Documentation and Learning Centre made ready for the hand test**
   (`docs/specs/docs-learning-centre-readiness.md`, packages 1 to 4). README:
   a "Start here" block, the two parts marked (*Using the app*, *Engineering

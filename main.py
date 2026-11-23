@@ -3493,10 +3493,11 @@ class GodAI(QWidget):
         reference.addWidget(keys_card)
 
         # Beside the keys: what the providers behind them have shipped since
-        # Imprint last looked. The title carries the count, so news shows
-        # while the section is collapsed like its neighbours.
+        # Imprint last looked. Open by default, unlike its neighbours: the
+        # owner could not find the tile while it was collapsed. The title
+        # still carries the count for a user who closes it.
         self.model_updates_section = CollapsibleSection(
-            "Model updates", expanded=False)
+            "Model updates", expanded=True)
         updates_body = QWidget()
         updates_body.setObjectName("Transparent")
         updates_layout = QVBoxLayout(updates_body)
