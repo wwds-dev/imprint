@@ -138,3 +138,5 @@
 {"ts": "2026-11-22T21:01:47", "phase": "review", "state": "done", "spec": "rename-imprint-studio"}
 {"ts": "2026-11-22T21:33:35", "phase": "build", "state": "start", "spec": "rename-imprint-studio"}
 {"ts": "2026-11-22T22:16:51", "phase": "build", "state": "done", "spec": "rename-imprint-studio"}
+{"ts": "2026-11-22T23:35:02", "phase": "build", "state": "start", "spec": "model-updates-visibility"}
+{"ts": "2026-11-23T00:39:04", "phase": "build", "state": "done", "spec": "model-updates-visibility"}
