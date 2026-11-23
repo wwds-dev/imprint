@@ -108,3 +108,11 @@ right way to settle it.
   status line" is not true in the P1-1 and P1-2 cases.
 - "Up to three and counts the rest", "not announced again at the next start" and "open by default"
   match the code. The `TODO.md` entries are accurate.
+
+## Resolution (author, 2026-11-23)
+The owner chose to drop the status-line sentence ("Drop the sentence"). Removed from the branch:
+`_announce_scan_finds`, `_pending_model_keys`, the snapshot in `check_for_new_models`,
+`scan_announcement`, its three tests, and the README and CHANGELOG claims. That retires P1-1, P1-2,
+P2-1 to P2-4 and every P3 except the private-state read in the section test, which is fixed. What
+remains is the section open by default and one test. Not re-reviewed; G5 stays open in
+`docs/specs/model-updates.md`.

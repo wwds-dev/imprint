@@ -191,30 +191,3 @@ def media_digest(watch, today: date | None = None) -> MediaDigest:
         # answering" row clears when a later probe answers.
         dismissable=bool(pending or watch.removals("media")),
         visible=bool(rows) or offered_dates)
-
-
-# The status line names this many models; the rest are a count.
-ANNOUNCED_MODELS = 3
-
-
-def scan_announcement(chat: list[tuple[str, str]], media: int = 0) -> str:
-    """The status-line sentence after a check that found something.
-
-    `chat` is (provider label, model id) for each chat model this check
-    found; `media` counts the video and image models it found. Empty when it
-    found nothing: a check with no news says nothing outside the tile.
-    """
-    parts = []
-    if chat:
-        names = ", ".join(f"{provider} · {model}"
-                          for provider, model in chat[:ANNOUNCED_MODELS])
-        extra = len(chat) - ANNOUNCED_MODELS
-        more = f" and {extra} more" if extra > 0 else ""
-        noun = "New model" if len(chat) == 1 else "New models"
-        parts.append(f"{noun} available: {names}{more}.")
-    if media > 0:
-        parts.append("1 new video or image model listed." if media == 1 else
-                     f"{media} new video or image models listed.")
-    if not parts:
-        return ""
-    return " ".join(parts) + " See Model updates in the side rail."

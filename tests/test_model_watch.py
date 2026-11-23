@@ -257,64 +257,8 @@ def test_check_with_no_keys_says_so_and_calls_nothing(app, watched_window,
 
 def test_the_model_updates_section_is_open_at_start(window):
     section = window.model_updates_section
-    assert section._expanded is True
     assert section.header_btn.isChecked()
     assert not section.content.isHidden()
-
-
-def test_a_check_that_finds_a_model_says_so_in_the_status_line(app, watched_window):
-    window = watched_window
-    window._set_chat_status("")
-    window.qwen = _FakeQwen(["qwen3.8-max", "qwen-plus"])
-    _run_check(app, window)                         # baseline: silent
-    assert window.chat_status_label.text() == ""
-
-    window.qwen.models.append("qwen4-max")
-    _run_check(app, window)
-    assert window.chat_status_label.text() == (
-        "New model available: Qwen · qwen4-max. "
-        "See Model updates in the side rail.")
-    assert not window.chat_status_label.isHidden()
-
-    # Still undismissed at the next check: the tile keeps it, the line is quiet.
-    window._set_chat_status("")
-    _run_check(app, window)
-    assert window.chat_status_label.text() == ""
-
-
-def test_the_announcement_leaves_a_running_request_its_status_line(
-        app, watched_window):
-    window = watched_window
-    window.qwen = _FakeQwen(["qwen3.8-max"])
-    _run_check(app, window)
-    window.start_chat_timer("OpenAI", "gpt-4.1", "hello")
-    try:
-        window.qwen.models.append("qwen4-max")
-        _run_check(app, window)
-        assert window.chat_status_label.text().startswith("Processing")
-    finally:
-        window.stop_chat_timer()
-        window._set_chat_status("")
-
-
-def test_scan_announcement_copy():
-    from services.model_watch_digest import scan_announcement
-    tail = " See Model updates in the side rail."
-    assert scan_announcement([]) == ""
-    assert scan_announcement([], 0) == ""
-    assert scan_announcement([("Qwen", "qwen4-max")]) == (
-        "New model available: Qwen · qwen4-max." + tail)
-    assert scan_announcement([("Qwen", "a"), ("OpenAI", "b")]) == (
-        "New models available: Qwen · a, OpenAI · b." + tail)
-    assert scan_announcement([("Qwen", c) for c in "abc"]) == (
-        "New models available: Qwen · a, Qwen · b, Qwen · c." + tail)
-    five = [("Qwen", c) for c in "abcde"]
-    assert scan_announcement(five) == (
-        "New models available: Qwen · a, Qwen · b, Qwen · c and 2 more." + tail)
-    assert scan_announcement([], 1) == "1 new video or image model listed." + tail
-    assert scan_announcement([("Qwen", "a")], 2) == (
-        "New model available: Qwen · a. "
-        "2 new video or image models listed." + tail)
 
 
 def test_a_new_model_reaches_the_tile_the_menu_and_the_ranking(app, watched_window):

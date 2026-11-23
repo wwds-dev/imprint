@@ -518,12 +518,6 @@ never seen is announced. It runs **a few seconds after startup** (turn it off
 with **Check when Imprint starts**) and on **Check now**. Any panel's own model
 fetch also counts as a look, so news arrives with the startup check off.
 
-**A check that finds something says so in the chat status line**: *New model
-available: Qwen · qwen4-max. See Model updates in the side rail.* It names up
-to three models and counts the rest, names only what that check found (a
-notice you have not dismissed is not announced again at the next start), and
-stays quiet while a request is running, so it never replaces a progress line.
-
 **What counts as new.**
 - The first list from a provider is a **baseline**, recorded silently —
   otherwise the first launch would announce the whole catalogue.

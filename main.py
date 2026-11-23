@@ -111,7 +111,7 @@ from services.model_watch import (
     MEDIA_LIST_UNSUPPORTED, MEDIA_WATCHED_PROVIDERS, WATCHED_PROVIDERS,
     ModelWatch, is_chat_model,
 )
-from services.model_watch_digest import media_digest, scan_announcement
+from services.model_watch_digest import media_digest
 from services.higgsfield_client import SEEDANCE_ENDPOINTS, HiggsfieldClient
 from services.pricing_catalog import PROVIDER_LABELS, has_exact_price
 
@@ -4924,9 +4924,6 @@ class GodAI(QWidget):
             if provider in clients
             and callable(getattr(clients[provider], "list_media_models_live", None))}
         self._model_scan_skipped = skipped
-        # What was already announced, so the status line names only what
-        # this check finds.
-        self._model_scan_known = self._pending_model_keys()
         self._model_scan_failed = {}
         self._model_scan_probe = self._higgsfield_probe_allowed()
         probe, probe_paths = None, ()
@@ -5081,34 +5078,6 @@ class GodAI(QWidget):
         # every other candidate, and the BEST FIT marks move if it wins.
         self.refresh_all_recommendations()
         self.refresh_model_updates()
-        self._announce_scan_finds()
-
-    def _pending_model_keys(self) -> set:
-        return ({("chat", n.provider, n.model_id)
-                 for n in self.model_watch.pending()}
-                | {("media", n.provider, n.model_id)
-                   for n in self.model_watch.pending_media()})
-
-    def _announce_scan_finds(self) -> None:
-        """Say in the status line what this check found, and where to look.
-
-        Only what is new since the check began, so a notice left undismissed
-        is not announced again at every start. A running request keeps the
-        line: its timer would overwrite the sentence within a second.
-        """
-        known = getattr(self, "_model_scan_known", None)
-        self._model_scan_known = None
-        if known is None:
-            return
-        chat = [(PROVIDER_LABELS.get(n.provider, n.provider.title()), n.model_id)
-                for n in self.model_watch.pending()
-                if ("chat", n.provider, n.model_id) not in known]
-        media = sum(1 for n in self.model_watch.pending_media()
-                    if ("media", n.provider, n.model_id) not in known)
-        text = scan_announcement(chat, media)
-        timer = getattr(self, "chat_timer", None)
-        if text and not (timer is not None and timer.isActive()):
-            self._set_chat_status(text)
 
     def dismiss_new_models(self) -> None:
         try:
