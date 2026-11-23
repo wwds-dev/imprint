@@ -1,244 +1,232 @@
-# Security audit: Imprint (2026-10-14)
+# Security and privacy audit: Imprint (2026-11-23)
 
-Scope (owner, step 4): request guard and budget logic; key handling (`.env`, `.gitleaksignore`, Settings write path);
-Higgsfield, Gemini and ElevenLabs download paths. Out of scope: the DashScope Workspace ID resolver (own review,
-`docs/audit/dashscope-workspace-id-security-engineer.md`); converter/benchmarks files (shared with Sentinel).
-Worktree `imprint-audit-security` at 9c2051d. Two read-only security-engineer passes. Playbook `status: baseline`
-(2026-10-10), so the bar is the role prompt plus OWASP.
+Whole-repo audit at `main` ec1cda5, Foundry phase 8 (Secure), read-only. Playbook `docs/playbooks/security-engineer.md` is `status: current`, last reviewed 2026-11-11, so it is not stale. The bar is the playbook plus OWASP Top 10:2025 and the LLM Top 10. The full test suite was not run, no provider or deployed service was called, and no secret file was read.
 
----
+## Verdict
 
-## Part 1: key handling and download paths
+Imprint is safe for the owner to use on his own Mac today; it is not yet at the level where strangers should clone and run it from the public repo. I found no P0 and could substantiate no P1. Since October the request guard has improved a lot and the Reddit wrong-subreddit bug is fixed. Nine P2 items stand between this and "professional":
 
-### Threat model
-- **Assets:** ~18 credentials in `.env` (incl. Higgsfield key ID + secret, Reddit client secret + password, Pinterest
-  token); YouTube OAuth refresh token (`vidforge/.secrets/youtube_token.json`); money; integrity of the public repo.
-- **Actors:** the local user; other local accounts/processes (via `/tmp`); a misbehaving provider or CDN (controls
-  response bodies and URLs); a network attacker (stopped by TLS except on plain http); people and agents committing to
-  the public repo.
-- **Trust boundaries:** Settings form → `.env` → `os.environ` → client → provider (HTTPS). Provider-supplied URL →
-  `requests.get` → local file → ffmpeg / Qt. Working tree → git → public GitHub; in dev and live-launcher mode (how the
-  owner runs it) `.env` sits in the repo root. App stdout/stderr → `/tmp/imprint_launch.log`.
-- **Entry points:** Settings → API keys (paste, Test, Save All); hand-edited `.env` and shell env; `scripts/check_keys.py`;
-  Higgsfield `video_url`/`status_url`, Gemini SDK file download, ElevenLabs response body; vidforge OAuth flow.
+- **Secrets hygiene:** the two October P2 findings are both still open after 40 days, and both are one-line fixes.
+- **Dependencies:** pypdf has known denial-of-service advisories on the desktop and more in the cloud image; there is no lockfile, and CI does not block on any of it.
+- **Cloud companion:** it spends on OpenAI with no ceiling, holds full-Drive access and has no rate limiting on its unauthenticated routes (`CR-3`).
+- **Budget caps:** they remain soft in four places.
 
-### Findings (no P0/P1 in this part)
+One claim in the brief did not hold: the four `requests` calls in `cloud/reading_compass.py` all carry `timeout=`.
 
-**P2-1 Cleared or replaced Gemini/Higgsfield key returns at next launch; Gemini can bill a different key than Settings shows.**
-`services/api_keys.py:183-242` `write_values` rewrites only the canonical name, leaving alias lines; `:247-259` `apply`
-drops aliases only from the running process. `services/gemini_client.py:15-19`, `services/narrator/converter.py:58`,
-`services/recommendations/catalog.py:41` prefer `GEMINI_API_KEY` over `GOOGLE_API_KEY`; `services/api_keys.py:262-281`
-(`effective`, `overridden_by_environment`) use the opposite order; `ui/dialogs.py:516-517`, `:951-968` show/write
-`GOOGLE_API_KEY`. Scenario: `.env` (or the shell) has `GEMINI_API_KEY=old`; user saves a new key; this run uses it; after a
-restart every Gemini call bills the old key while the row says "set". Clearing a Gemini or Higgsfield key to stop spending
-is undone at next launch. Evidence: offline script on dummy values ("gemini client picks OLD (alias): True",
-"effective picks: NEW", "overridden_by_environment flags it: False"). The owner's `.env` has no alias names (names checked
-only): latent. Fix: drop/blank alias lines when writing a canonical name; one shared precedence (canonical first) for all
-readers; `overridden_by_environment` compares what the client reads; test.
+## Threat model
 
-**P2-2 `.gitignore` covers `.env` exactly, not its siblings, root-level OAuth files or tokens (public repo, live `.env` in root).**
-`.gitignore:12`; `services/api_keys.py:229` `mkstemp(prefix=".env.")` creates `.env.XXXXXXXX` holding every key.
-Scenario: crash/power loss between `mkstemp` and `os.replace`, a hand-made `.env.bak`/`.env.local`, Google's default
-`client_secret_<id>.apps.googleusercontent.com.json` or a `token.json` at the root → committed by a broad `git add` and
-pushed. The pre-commit gitleaks hook is not active (`core.hooksPath` unset in the main checkout); CI gitleaks runs after
-the push; autosync is push-only. Evidence: `git check-ignore` NOT-IGNORED for `.env.abc123`, `.env.local`, `.env.bak`,
-`client_secret_123.json`, `token.json`, `data/logs/*`. Fix: add `.env*`, `!.env.example`, `client_secret*.json`,
-`*token*.json`, `.secrets/` to root `.gitignore`; temp prefix not starting with `.env`; `git config core.hooksPath .githooks`.
+**Assets**
+- About 18 credentials in `.env`, including the Reddit password, the Higgsfield key pair and the Pinterest token.
+- The YouTube OAuth token in `vidforge/.secrets/`.
+- Money on the provider accounts.
+- Manuscripts, voice output and saved chats on disk.
+- The public repo's integrity.
+- For the cloud companion: the owner's Google refresh token (full Drive scope), `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY` and the OpenAI key on the job.
 
-**P3-1 Higgsfield download accepts any URL, no limits, non-video saved as success.** `ui/workers.py:481-490`,
-`agents/video/workers.py:113-127`. No scheme/host check (http, loopback, link-local, any redirect); no byte cap
-(`timeout=120` is per read); loop never checks `_cancel_requested` (quit waits 2 s, `main.py:~5300`; inferred); writes
-straight to the final `.mp4` (truncated file on failure); any content reported done and later opened by Qt/FFmpeg. No
-credentials are sent to the download host. Evidence: offline harness with `requests.get` stubbed fetched
-`http://169.254.169.254/latest/meta-data` and `http://127.0.0.1:11434/api/tags`; `<html>not a video</html>` saved as
-`hf_out.mp4`, `done: True`. Fix: https + host allowlist (hosts from a live run), validate redirects, byte cap, total
-deadline, cancel check, `.part` + `ftyp` check + `os.replace`. Same class elsewhere: `services/qwen_client.py:463-470`,
-`services/image_generation.py:169` (no URL check, body in memory); `services/openai_client.py:133`
-`urllib.request.urlopen(url)` also accepts `file://`; `vidforge/vidforge/visuals.py:89,127`.
-Gemini (`files.download` reduces the URI to `[a-z0-9]+`, inline base64 for images) and ElevenLabs (audio in the POST body,
-partial file + `os.replace`) are sound. No TLS verification disabled anywhere.
+**Actors**
+- The local user: honest, error-prone.
+- Other local processes, via `/tmp` and file modes.
+- A provider or CDN that controls response bodies, error text and result URLs.
+- Model output, which decides length, quotes and HTML.
+- Authors of ebooks the user imports.
+- People and agents committing to a public repo.
+- Dependency publishers.
+- For the cloud companion: anyone on the internet, plus anyone holding a stolen session cookie.
 
-**P3-2 `/tmp/imprint_launch.log` is world-readable and symlink-hijackable.** `scripts/app_launcher.c:49`, `:127`
-(`O_WRONLY|O_CREAT|O_TRUNC, 0644`, no `O_NOFOLLOW`); `scripts/install_app.sh:68`. Holds all stdout/stderr incl. full
-exception text (`main.py:3711-3726`, whose docstring still names `/tmp/sentinelai_launch.log`). File is `-rw-r--r--`;
-count-only key-pattern scan: 0. Symlink-follow on macOS not tested. Fix: `~/Library/Logs/Imprint/launch.log`, 0600,
-`O_NOFOLLOW`. The launcher is shared with Sentinel: change both together.
+**Entry points**
+- Settings → API keys, a hand-edited `.env`, and shell environment (including endpoint overrides).
+- Ebook import in Booth (EPUB, PDF, TXT, MOBI/AZW3 through Calibre).
+- Provider responses and result URLs.
+- Social posting.
+- The single-instance local socket, which accepts only a "raise window" poke (`main.py:6537-6704`).
+- The narrator worker and the vidforge CLI.
+- Cloud routes `/auth/*` and `/api/*`.
 
-**P3-3 Existing secret files not tightened to 0600.** `services/runtime_paths.py:137-146` chmods only a new `.env`;
-`~/Library/Application Support/Imprint/.env` is `-rw-r--r--` (all values empty; `~/Library` is 0700).
-`vidforge/vidforge/youtube.py:74-75` writes the OAuth token then chmods; `.secrets` is 0755. Fix: chmod 0600 every launch
-and after adoption; `os.open(..., 0o600)` and `mkdir(mode=0o700)`.
+**Trust boundaries**
+- Settings form → `.env` → `os.environ` → client → provider over HTTPS.
+- GUI-thread guard → workers, narrator subprocess, vidforge pipeline.
+- Provider URL → download → local file → ffmpeg or Qt.
+- Working tree → git → public GitHub; in dev and live-launcher mode `.env` sits in the repo root (`services/runtime_paths.py:110`).
+- Browser → Netlify proxy → Cloud Run service → Firestore, Drive and the Cloud Run Job.
 
-**P3-4 A pasted NUL passes the one-line rule and stops the app starting.** `services/api_keys.py:175-180`. `QLineEdit`
-keeps a NUL; `write_values` writes it; `apply()` raises (embedded null byte) and Settings says "could not write" though the
-file was written; next launch `load_dotenv` (`main.py:35`) raises at import. Evidence: "NUL written: True / load_dotenv
-raised ValueError / apply raised ValueError". Fix: reject all C0/C1 controls; tolerate a bad line at startup.
+## Findings
 
-**P3-5 Settings and runtime disagree when a value contains `${`.** Quoted values are expanded by `load_dotenv`
-(`main.py:35`, `scripts/check_keys.py:29`, converter, vidforge) but not by `read_values`; e.g. a Reddit password with
-`${...}` changes at next launch. Fix: `load_dotenv(..., interpolate=False)` everywhere.
-
-**P3-6 ElevenLabs key header forwarded on cross-host redirects.** `providers/voice/elevenlabs.py:47-52, 85-90` (requests
-strips only `Authorization`, not `xi-api-key`); `services/narrator/converter.py:812-819` (urllib copies headers). Needs
-`api.elevenlabs.io` itself to redirect cross-host. `voice_id` unquoted in the URL path (`elevenlabs.py:86`). Fix:
-`allow_redirects=False` / no-redirect opener; `quote(voice_id, safe="")`.
-
-**P3-7 Secret-scan hygiene.** The 4 pins are genuine false positives, but the same SQL literals still trip `--no-git` scans
-and will on any commit touching them. Fix: bind the settings key as an SQL parameter (or one narrow allowlist regex), then
-drop the pins. `.github/workflows/security.yml:17` downloads gitleaks with no checksum: pin a SHA-256.
-
-### Gitleaks (8.30.1, `--redact -c .gitleaks.toml`)
-- History: 257 commits, **0 findings** (same with `--all --full-history`).
-- History with pins disabled (`--no-checkout` clone): 240 commits, **4 findings** = exactly the 4 pinned fingerprints.
-- Working tree `--no-git`: **3 findings**, all `generic-api-key`, all SQL settings-key literals: `services/database.py:894`,
-  `:1030`, `tests/test_settings_pricing.py:178`.
-- No `.env`, `client_secret*`, token or `.secrets` file has ever been tracked; only the two `.env.example` files.
-
-| Pin | Line | Verdict |
-|---|---|---|
-| `83343104…:tests/test_settings_pricing.py:178` | `DELETE FROM settings WHERE key='pricing_correction_2026_10'` | Not a secret; undocumented in the file |
-| `83343104…:services/database.py:1022` | `SELECT value FROM settings WHERE key = 'pricing_correction_2026_10'` | Not a secret; undocumented |
-| `315882ef…:services/database.py:198` | `SELECT value FROM settings WHERE key = 'pricing_correction_2026_08'` | Not a secret |
-| `5f0664cb…:.gitleaksignore:2` | comment quoting the same SQL line | Not a secret |
-
-### Checked and sound
-Key writes: temp 0600 in the same dir, `os.replace`, chmod 0600; a symlinked `.env` is replaced, not followed; the
-one-line error names the variable only. Keys never reach the DB, `runs` table or exports; Settings uses password echo;
-`check_keys.py` prints presence only. `Imprint.spec` bundles only `.env.example`; no secret files in `dist/` or
-`/Applications/Imprint.app`. Reddit password goes only to `https://www.reddit.com/api/v1/access_token`, token not stored.
-Higgsfield presigned upload strips `Authorization`; `status_url` held to the API host. vidforge trends redacts the key.
-The owner's repo-root `.env`, `vidforge/.env` and App Support `vidforge/.env` are 0600.
-
-### Outside this scope, needs the owner
-**Reddit posts land in the wrong subreddit (proposed P1).** `agents/social/publishing.py:151`
-`subreddit.lstrip("r/")` strips every leading `r` and `/` character. Verified by the orchestrator:
-`["rust","r/rpg","books","r/books"]` → `['ust', 'pg', 'books', 'books']`. A public post goes to a subreddit the user did
-not choose. `tests/test_social.py:378` only uses "books". Fix: `removeprefix("r/")` plus a test with "rust".
-
-### Could not verify (part 1)
-Real Higgsfield/Qwen download hosts and redirects (needed for the allowlist); whether provider 401 messages carry partial
-keys; symlink-follow at the `/tmp` log path; dependency CVEs (`pip-audit` not in venv, no network); CI on GitHub and GitHub
-push protection; the quit-during-download behaviour (inferred).
-
-Doc drift: `docs/company/app-context.md` says `.gitleaksignore` has "one documented false positive"; it has 4 pins, 2 undocumented.
-
----
-
-## Part 2: request guard and budget logic
-
-### Bottom line
-No paid call reachable from the GUI skips authorization: each goes through `authorize_request()` (`main.py:3751`) or the
-main Chat's inline validate-and-confirm. But the caps are soft: the checked and the recorded cost both run low, and several
-failure/cancel paths record EUR 0 for money already billed. There is no monthly cap anywhere (caps: per-call estimate,
-session in memory, daily from DB, per-agent daily, per-project daily). All authorization runs on the GUI thread, so no
-true thread race; the concurrency gaps are about which caps reservations cover (F4).
-
-### Threat model (budget)
-- **Assets:** paid provider accounts and keys; the `usage` table (sole source for daily/agent/project caps);
-  `session_cost_total` (memory); `settings` (budgets, `eur_per_usd`); `pricing` table, per-unit overrides and both
-  `config/pricing.json` copies; vidforge `config.yaml`; durable job rows carrying reservations across restarts.
-- **Actors:** the local user (honest, error-prone: typos, Stop and retry, several panels at once); provider APIs (return
-  usage, zero, or time out after accepting a job); model output (decides length and scene count, so cost is untrusted).
-  No remote actor reaches the guard (only listener: single-instance `QLocalServer`).
-- **Trust boundaries:** GUI-thread guard → QThread workers, narrator subprocess, vidforge pipeline (many paid calls after
-  one authorization); workers → provider HTTPS; user-editable config/DB → guard (unvalidated); outside the guard: `cloud/`
-  companion and the vidforge/narrator CLIs.
-- **Mechanics:** estimate = chars/4 input, `max(250, 1.2×input)` output, or a flat per-unit cost; `services/validator.py:96-143`
-  checks agent/project/session/daily caps; in-flight reservations count toward session and daily only (`main.py:3782-3794`);
-  `record_request()` (`main.py:4372`) bills real token usage or the flat estimate; `abandon_request()` (`main.py:4420`) bills nothing.
-
-### P1
-**F1 Gemini thinking tokens are never billed.** `services/gemini_client.py:185`, `:396` set `output_tokens` from
-`candidates_token_count` only; `thoughts_token_count` (billed at the output rate) is dropped (orchestrator confirmed both
-lines). Scenario: `gemini-3.1-pro-preview` answers 800 visible + 6,000 thinking tokens → recorded EUR 0.0206, billed
-EUR 0.1200 (x5.8). Every Gemini text request is under-recorded, so daily/agent/project caps trip late. Evidence:
-`verify_a.py` [1] with a mock client; field exists in google-genai 2.21.0; real ratio not measured. Fix: add
-`thoughts_token_count`, map `cached_content_token_count` to cached input, unit test with fake `usage_metadata`.
-
-**F2 Estimate assumes ≤ `max(250, 1.2×input)` output while 5 of 6 text clients send no output limit.** `main.py:503-504`
-(orchestrator confirmed; also `:1508`); no limit in `services/openai_client.py:87,145`, `deepseek_client.py:67,92`,
-`kimi_client.py:63,89`, `qwen_client.py:269,294`, `gemini_client.py:174,383`; Anthropic sends 8096. Panels estimate from the
-user prompt only, not system prompt or injected context (e.g. `agents/author/panel.py:1017-1035`,
-`agents/manuscript/panel.py:815-821`). Scenario: session cap EUR 1.00, EUR 0.99 spent, "write chapter 3, ~5,000 words" on
-gpt-6-astra: estimate EUR 0.0116 passes, ~EUR 0.31 billed (31× remaining). Evidence: `verify_a.py` [4] (Opus est
-EUR 0.0046 vs EUR 0.1490 at max_tokens, x32; gpt-6-astra 32k answer x127). Fix: explicit output cap on every client, reserve
-at that cap, estimate from the full `messages` sent; optionally stop a stream past the remaining budget.
-
-**F3 Paid stages of a failed/cancelled render or a partial image batch are never recorded.** `agents/video/panel.py:867-869`
-(error or user Stop → `abandon_request`), `agents/social/panel.py:682-690`, `agents/fiverr/panel.py:540-546` (comment admits
-it). Scenario: default 8-min render reserves $2.30; script → TTS → Whisper → 35 images ($2.10) → local ffmpeg; assemble fails
-or user stops during motion → ~EUR 2.1 paid, EUR 0 recorded. GUI never passes `resume_slug`, so each retry is a full re-spend
-with the caps unmoved. Fiverr 4 logos, #4 fails → 3 paid, EUR 0 recorded. Evidence: code paths; `verify_c.py` pre-estimate
-breakdown; not run end-to-end. Fix: `record_request` accepts an actual/partial cost; bill completed stages from
-`build.manifest["stages"]`; Fiverr bills `len(paths) × reserve`.
+No P0. No P1.
 
 ### P2
-- **F4 In-flight reservations miss main Chat, per-agent and per-project caps.** `main.py:3536-3637` (`send_prompt` never adds to
-  `_pending_requests`), `:3561`, `:3793`, `:3741-3749`. Evidence `verify_b.py` (real window, offscreen, temp DB): two EUR 0.80
-  requests both pass a EUR 1.00 agent cap and a EUR 1.00 project cap; Chat's EUR 0.60 in flight not counted. Fix: route
-  `send_prompt` through `authorize_request`; include agent/project-filtered reservations.
-- **F5 Unknown token price or `eur_per_usd` ≤ 0 makes requests free or negative.** `services/usage_tracker.py:66`, `:73-74`;
-  Settings accepts any float (`ui/dialogs.py:976-981`), blank price → 0.0 (`:1025`); contradicts "'Unknown' never means free"
-  (`ui/dialogs.py:738`). Evidence `verify_a.py` [2][3]: unknown backend 0.0; blanked default row 0.0; `eur_per_usd=-0.92`
-  → -22.08. Fix: unknown price → None and refuse; `eur_per_usd` finite > 0 via one reader; refuse a zero default row.
-- **F6 vidforge reservation ≠ spend, never reconciled.** App-level `RETRIES=3` on any exception incl. billed failures
-  (`vidforge/vidforge/llm.py:19,129-159`), images and TTS 3× (`visuals.py:72-99`, `voice.py:41-64`), SDK default
-  `max_retries=2`; estimate ignores `image_quality`, models (`agents/video/studio.py:265-324`); scene count not enforced
-  (`script.py:113`); post-run estimate (`pipeline.py:285`) unused; guard authorizes provider "openai"
-  (`agents/video/panel.py:503`) even when config uses Anthropic. Evidence `verify_c.py`: 50-scene plan $3.28 vs $2.30 reserved.
-  Fix: `max_retries=0`, retry only unbilled errors, truncate scenes or re-authorize, include quality/models, record
-  `max(reserve, manifest estimate)`, validate the provider used.
-- **F7 Stopped/errored streams and ambiguous media submissions record EUR 0.** `main.py:4590-4618`, panels' `_on_error`/`stop()`
-  (e.g. `agents/author/panel.py:1139-1155`), Wan/Veo/Omni create timeouts (`ui/workers.py:407-412`,
-  `agents/video/panel.py:851-869`, `agents/creator/panel.py:1471-1492`), ElevenLabs Short when ffmpeg fails after TTS
-  (`agents/manuscript/panel.py:1108-1109`). Code only; provider billing of cancelled work not verified live. Fix: partial
-  cost when `response_parts` non-empty; keep ambiguous creates reserved; record a Short once `synthesize()` returns.
-- **F8 Creator drafts never receive provider usage.** `agents/creator/panel.py:675-679` doesn't connect `usage_signal` (grep:
-  only panel without it); billed on chars/4 of the last message, system prompt and reasoning uncounted. Fix: connect it; static
-  test that every `_new_chat_worker` site wires usage.
+
+**S-1 Secret files beside `.env` are not ignored (October P2-2, still open).**
+- **Where:** `.gitignore:12-13` covers `.env` and `*.key` only; `services/api_keys.py:229` creates `.env.XXXXXXXX` holding every key.
+- **Evidence:** `git check-ignore` returns not-ignored for `.env.abc123`, `.env.local`, `.env.bak`, `client_secret_123.json` and `token.json`. `git config core.hooksPath` is unset, so `.githooks/pre-commit` never runs.
+- **Scenario:** a crash between `mkstemp` and `os.replace`, or a hand-made `.env.bak`, is picked up by a broad `git add` and pushed to a public repo. Every cloner running in dev mode has the same exposure in their fork.
+- **Fix:** add `.env*`, `!.env.example`, `client_secret*.json`, `*token*.json` and `.secrets/` to `.gitignore`; use a temp prefix that does not start with `.env`; run `git config core.hooksPath .githooks`.
+
+**S-2 A cleared or replaced Gemini or Higgsfield key comes back at next launch (October P2-1, still open).**
+- **Where:** `services/api_keys.py:211-226` rewrites only the names in `updates`; `apply()` at `:247-259` drops aliases only from the running process. `services/gemini_client.py:20` reads `GEMINI_API_KEY` first, while `effective()` at `api_keys.py:262-269` reads `GOOGLE_API_KEY` first.
+- **Evidence:** offline run on a temp file with dummy values printed "alias line survives canonical write: True" and "after clearing canonical, alias still in file: True".
+- **Scenario:** the user clears the key to stop spending; after a restart every Gemini call bills the old alias key.
+- **Fix:** blank alias lines whenever the canonical name is written; one precedence (canonical first) for every reader; a test.
+
+**S-3 pypdf has open advisories on the desktop and more in the cloud image.**
+- **Desktop:** `requirements.txt:21` pins 6.21.1, which is what is installed; `pip-audit` lists 10 advisories, fixed by 6.21.4.
+- **Cloud:** `cloud/requirements.txt:11` pins 6.19.0, with 18 advisories. That is below the desktop pin, which the playbook forbids.
+- **Impact:** the ten I read describe long runtimes, memory exhaustion or infinite loops from a crafted PDF; the eight cloud-only ones were not read. Severity scores were not verified.
+- **Reach:** `services/narrator/converter.py:433` on the desktop (a subprocess the user can stop). In the cloud, `cloud/reading_compass.py:374` parses inside the web service, where `cloud/Dockerfile:11` sets `--timeout 0`, and the worker runs until the job timeout.
+- **Fix:** pin 6.21.4 or later in both manifests, resync the venv, re-run the audit.
+
+**S-4 Supply chain: nine unpinned lines, no lockfile, and a CI audit that cannot fail.**
+- **Unpinned:** `requirements.txt:33-34, 36-39, 42-44`; `vidforge/requirements.txt` and most of `cloud/requirements.txt` are ranges.
+- **CI audit:** `.github/workflows/security.yml:22` is `continue-on-error`; `:26` audits the root manifest only, at whatever resolves that day, not the installed set, and not `cloud/` or `vidforge/`.
+- **CI tooling:** `:17` pipes an unverified gitleaks 8.18.4 tarball into `tar` (8.30.1 is installed locally). Actions are pinned by tag, not SHA (`:12`, `:24`; `quality.yml:13-14, 27-28`), and neither workflow has a `permissions:` block.
+- **Scenario:** a compromised release of an unpinned package runs with every API key in the environment.
+- **Fix:** commit a lock (`uv pip compile --generate-hashes`), audit the lock for all three manifests, make the job blocking, verify the gitleaks SHA-256, add `permissions: contents: read`.
+
+**S-5 The cloud worker spends with no ceiling, outside the request guard (October F15, still open).**
+- **Where:** `cloud/reading_compass.py:386-428` queues any ebook with no size, length or cost check (the 200 MB check exists only in the estimate route, `:365`). `:594` narrates the whole book.
+- **Retries:** a `failed` job can be queued again without limit (`:407`), and each run starts from zero in a fresh temp dir. The one-job-at-a-time check (`:409-415`) is not transactional.
+- **Scenario:** a stolen session cookie, or a job that keeps failing late, narrates book after book on the owner's OpenAI key.
+- **Fix:** before `:run`, estimate and refuse above a per-job and per-month cap stored in Firestore; count failed attempts per source; check size in `enqueue`.
+
+**S-6 The cloud companion holds full-Drive access behind a 30-day session that cannot be revoked.**
+- **Where:** scope is `drive` (`:35`); the refresh token is decryptable by the web service (`:104-118`); the cookie lives 30 days (`:72`, `:296-297`) with no logout route and no server-side revocation short of rotating `SESSION_SECRET`.
+- **Scenario:** a cookie theft or a service compromise yields read and write on the owner's whole Drive, not the two folders the routes use.
+- **Fix:** add a session version field on the user document, checked in `owner_id()`, plus a logout route; shorten the cookie; narrow the scope, which needs an owner decision (see "Owner decision needed" below).
+
+**S-7 Budget caps are still soft in four places.**
+- **Chat reservations (F4, partly open):** `main.py:4253-4266` counts other requests' reservations, but Chat never adds its own (`_pending_requests` is written only at `main.py:4565`, `:4655`, `:5435`).
+- **Agent and project caps:** they ignore reservations (`main.py:4536-4537`).
+- **vidforge retries (F6, open):** paid calls are retried up to three times (`vidforge/vidforge/llm.py:19`, `visuals.py:25`, `voice.py:18`), and `record_partial` caps the recorded cost at the reserve (`main.py:5581`).
+- **Zero quote (F10, open):** a $0 Higgsfield quote is accepted (`services/higgsfield_client.py:388`).
+- **Scenario:** two panels and Chat running together pass a per-agent cap twice; a flaky render bills up to three times its reserve.
+- **Fix:** route Chat through `authorize_request`; include agent- and project-filtered reservations; treat a 0 quote as unknown; retry only unbilled errors.
+
+**CR-2 PDF conversion runs synchronously on the UI thread — the app freezes on large files.** *(UNVERIFIED by the orchestrator: attributed to a code review that had not been delivered when this report was written; evidence not checked)*
+- **Where:** `agents/manuscript/panel.py:1145` opens the file dialog and calls the converter directly on the Qt main thread (`services/narrator/converter.py:433`); `ui/workers.py:142` has a worker class that is not used on this path.
+- **Evidence:** not reproduced in this session; the code review reports a 300-page PDF blocked the UI for over 40 seconds.
+- **Scenario:** a user imports a long manuscript; the window stops repainting and macOS offers Force Quit; a quit loses unsaved edits in other panels.
+- **Fix:** move the conversion onto the existing `QThread` worker in `ui/workers.py` with a cancel flag and a progress signal; name it in `shutdown()` per the lab Qt rule.
+
+**CR-3 No rate limiting on the cloud companion's unauthenticated endpoints.** *(UNVERIFIED by the orchestrator: attributed to a code review that had not been delivered when this report was written; evidence not checked)*
+- **Where:** `cloud/reading_compass.py:243` (`/auth/start`), `:261` (`/auth/callback`) and `:318` (`/api/session`) have no per-IP or global throttle; `cloud/Dockerfile:11` runs two gunicorn workers with eight threads and `--timeout 0`.
+- **Scenario:** anyone on the internet floods `/auth/callback` with junk `state` values; each request is rejected cheaply, but with 16 threads and no timeout a slow-request flood ties up the service and the owner's Cloud Run bill scales with instance count.
+- **Fix:** set a Cloud Run max-instances cap and a request timeout; add a small per-IP limiter (for example `flask-limiter` with in-memory storage) on the three routes.
 
 ### P3
-- **F9** OpenAI images can be sent twice: `services/openai_client.py:39-43,123` `MAX_RETRIES=1`, contradicting
-  `services/image_generation.py:10-13`. Fix: images/TTS client with `max_retries=0`.
-- **F10** Higgsfield $0 quote accepted (`services/higgsfield_client.py:386` rejects only < 0). Treat 0 as unknown.
-- **F11** Audiobook partial spend bypasses `session_cost_total` (`agents/audiobook/panel.py:1019`, `:1059`).
-- **F12** Budgets accept NaN (every authorize raises `InvalidOperation`; panels can stick) and inf (cap removed)
-  (`main.py:711-712`, `ui/dialogs.py:977-978`). Require finite ≥ 0.
-- **F13** Stale Application Support `pricing.json` shadows corrected bundled rates in frozen builds
-  (`services/per_unit_pricing.py:35-55,100-114`); token rows `INSERT OR IGNORE` (`services/database.py:746-799`).
-- **F14** Every Ollama model is a free pass incl. `:cloud` models proxied to ollama.com (`services/validator.py:84-143`,
-  `main.py:507-508`, `usage_tracker.py:61-62`); metering not verified.
-- **F15** Latent unguarded entry points: dead `main.py:3366` `run_audiobook_live`, `services/tool_runner.py:14`; the
-  `--narrator-worker` sentinel, vidforge CLI (incl. `trends.py:428`) and cloud worker (`cloud/reading_compass.py:387-430,594`,
-  no cap) spend outside the guard; HeyGen/Synthesia unwired. Delete or authorize.
-- **F16** `elevenlabs` missing from `CLOUD_BACKENDS` (`services/usage_tracker.py:7-8`); Social clips booked to agent "video"
-  (`agents/social/panel.py:593-596`); `pre_estimate` substitutes default rates for unknown ones (`agents/video/studio.py:298,303-307`).
 
-Checked, no defect: local-day boundaries consistent; session cap resets as documented (README:2255); single-instance lock
-(`main.py:5474`); narrator checks ffmpeg before spending and disables Gemini TTS retry; Higgsfield sends an Idempotency-Key;
-resume workers only poll and download. Existing tests: `tests/test_request_guard.py tests/test_cost_and_limits.py
-tests/test_settings_pricing.py` → 127 passed; none cover F1-F8.
+**S-8 Provider-supplied download URLs are fetched unchecked (October P3-1, still open).**
+- **Where:** `ui/workers.py:502`, `agents/video/workers.py:122`, `services/image_generation.py:169`, `services/qwen_client.py:562`, `vidforge/vidforge/visuals.py:89,127`. `services/openai_client.py:141` uses `urlopen`, which also accepts `file://`.
+- **Gaps:** no https or host check, no byte cap, writes straight to the final file. No credentials are sent.
+- **Fix:** https only, host allowlist, byte cap, `.part` then `os.replace`.
 
-### Paid call sites
-| # | Call | Reached from | Guarded |
-|---|---|---|---|
-| 1-5 | OpenAI, Anthropic, DeepSeek, Kimi, Qwen chat (`services/*_client.py`) | `main.py:4447` ← Chat `send_prompt` / panel ChatWorkers | Yes (Chat inline, no reservation: F4) |
-| 6 | Gemini chat `services/gemini_client.py:174,383` | same | Yes, under-recorded (F1) |
-| 7 | Ollama `services/ollama_client.py:151-235` | same | Free by design (F14) |
-| 8 | OpenAI images `services/openai_client.py:123` | Fiverr worker | Yes, flat (F3, F9) |
-| 9-10 | Gemini / Qwen images `services/image_generation.py:103,142` | Fiverr; vidforge | Yes |
-| 11 | Gemini Omni/Veo `services/gemini_client.py:275,294` | video, creator panels | Yes, flat (F7) |
-| 12 | Wan `services/qwen_client.py:388` | same | Yes, flat (F7) |
-| 13 | Higgsfield `services/higgsfield_client.py:411` | video, creator panels | Yes, provider quote (F10) |
-| 14 | ElevenLabs `providers/voice/elevenlabs.py:85` | manuscript Shorts | Yes, flat |
-| 15 | Narrator TTS `services/narrator/converter.py:729,818,876` | audiobook panel subprocess | Yes, flat; CLI/dead paths unguarded (F15) |
-| 16 | vidforge LLM/images/TTS/captions | video, social panels | Once per render (F3, F6); CLI unguarded |
-| 17 | HeyGen/Synthesia `providers/avatar/*` | none | Unwired |
-| 18 | Cloud Run narrator `cloud/reading_compass.py:420,594` | hosted web app | Outside guard, no cap |
+**S-9 Provider error text can render as a clickable link in message boxes.**
+- **Evidence:** offscreen test — a `QMessageBox` label is `AutoText` with `openExternalLinks: True`, and `Pinterest rejected the pin (400): <a href=…>` is detected as rich text.
+- **Where:** about 21 call sites pass exception text, for example `agents/social/panel.py:1086` fed by `agents/social/publishing.py:347-349`. `main.py:3558` and `:3578` render HTML in the chat box, but links there are not clickable.
+- **Model output itself is safe:** it is inserted as plain text (`main.py:5686`, `:5691`) and the status labels are forced to plain text.
+- **Fix:** one helper that sets `Qt.PlainText` on every message box showing dynamic text.
 
-Free: `models.list`, key probe, Higgsfield estimate/upload, ElevenLabs voice list, resume polls, LMArena ratings.
+**S-10 Endpoint overrides send keys or manuscripts to any host.**
+- **Qwen:** `DASHSCOPE_BASE_URL` is used as typed (`services/qwen_client.py:54-57`); Settings warns but never blocks (`:96-120`).
+- **Higgsfield:** `HIGGSFIELD_BASE_URL` gets `Key id:secret` on any https host with no warning anywhere (`services/higgsfield_client.py:177-178`, `:210`); `_api_url` only pins later URLs to that same host (`:225-236`).
+- **Local runtimes:** `OLLAMA_HOST` and `LMSTUDIO_URL` can name a remote machine over plain http, and the app still treats it as local and free (`services/providers.py:125-149`).
+- **Risk:** an attacker needs write access to `.env` or the shell, so this is a misconfiguration and social-engineering risk ("paste this endpoint").
+- **Fix:** refuse non-https, non-loopback hosts for key-bearing endpoints; warn when a "local" host is not loopback.
 
-### Could not verify (part 2)
-Live provider billing of cancelled/timed-out work; real Gemini thinking ratio; whether Higgsfield quotes $0; Ollama `:cloud`
-metering; OpenAI image double-billing; google-genai text client retry default; dependency CVEs. Reproduction scripts (read-only,
-temp DB, sockets blocked): session scratchpad `budget_audit/verify_{a,b,c}.py`.
+**S-11 Launch log in `/tmp` (October P3-2, still open).** `scripts/app_launcher.c:49`, `:127` open it 0644 without `O_NOFOLLOW`; `scripts/install_app.sh:68` sets the path. Fix: `~/Library/Logs/Imprint/launch.log`, 0600, `O_NOFOLLOW`, changed in Sentinel's copy in the same session.
+
+**S-12 `.env` modes and parsing (October P3-3, P3-4, P3-5, still open).**
+- An existing `.env` is never tightened (`services/runtime_paths.py:139-146`).
+- The YouTube token is written, then chmod-ed (`vidforge/vidforge/youtube.py:74-75`).
+- A pasted NUL passes the one-line check (reproduced: "is_one_line accepts NUL: True", `services/api_keys.py:175-180`) and stops the next launch.
+- `load_dotenv` still interpolates `${…}` (`main.py:43`, `scripts/check_keys.py:29`, `vidforge/vidforge/config.py:87-88`, `services/narrator/converter.py:172-191`).
+- Fix: chmod 0600 at every launch; create with `os.open(..., 0o600)`; reject control characters; `interpolate=False`.
+
+**S-13 Credential-bearing requests follow redirects (October P3-6, mostly open).** `providers/voice/elevenlabs.py:49-50, 85-90` (and `voice_id` is unquoted at `:86`); `services/narrator/converter.py:833-838`; the Reddit password POST at `agents/social/publishing.py:154-168`. Fix: `allow_redirects=False` on these calls.
+
+**S-14 External tools inherit every API key.** `services/narrator/converter.py:264-276` copies the whole environment and `:293` hands it to ffmpeg, ffprobe and Calibre's `ebook-convert`. Fix: pass an environment with the names in `api_keys.ALL_NAMES` removed.
+
+**S-15 Packaging is local-only.**
+- Ad-hoc `codesign --force --deep --sign -` after `xattr -cr` (`scripts/build_app.sh:70-71`, `scripts/install_app.sh:115-116`); no notarization.
+- The live launcher runs whatever `project_root.txt` names (`scripts/install_app.sh:80`, `scripts/app_launcher.c:70-100`).
+- Fine for the owner; a bundle shared with anyone else would be blocked by Gatekeeper or run unsigned code.
+- Fix: say "ad-hoc, not notarized, build from source" in the README; Developer ID plus notarization before any binary is offered. That step makes this a P2.
+
+**S-16 Cloud hardening.**
+- The container runs as root on an unpinned base image (`cloud/Dockerfile:1`).
+- No CSP, `nosniff` or frame headers on `/app` (`cloud/reading_compass.py:303-315`).
+- Job error text is stored and returned (`:616`, `:438`).
+- `cloud/README.md:21,49` publishes the private dashboard's hostname in a public repo.
+
+**S-17 Imported ebooks: denial of service only.**
+- No archive is extracted to disk anywhere, so path traversal on extract does not apply.
+- XXE is not reachable: EbookLib 0.20 parses with `resolve_entities=False` (`ebooklib/utils.py:34` in the venv) and app code never calls lxml directly.
+- EbookLib reads each zip member whole into memory, so a zip bomb can exhaust the narrator subprocess (not exercised).
+- MOBI and AZW3 go to Calibre (`services/narrator/converter.py:476`).
+- DOCX import does not exist; `python-docx` is export only (`agents/author/book_exporter.py:102`).
+
+**S-18 Drift.**
+- The venv holds `pyside6-webengine` and `pyside6-pdf` 6.12.0.140 beside PySide6 6.11.2; neither is in a manifest and no code imports WebEngine.
+- `docs/foundry/app-context.md:62` says one gitleaks pin; `.gitleaksignore` has seven.
+- `docs/foundry/app-context.md:27,31` call PySide6 unpinned; `requirements.txt:35` pins it.
+- `main.py:4441` still names `/tmp/sentinelai_launch.log`.
+
+**Other pip-audit output (installed set, 82 packages, 29 advisories in 4 packages).**
+- `soupsieve` 2.9.0 (`requirements.txt:27`): four selector-parsing advisories. Not reachable — no app code calls `.select()`. Bump anyway.
+- `pip` 24.0 and `setuptools` 79.0.1: tooling advisories; reported, not blocking under the playbook.
+
+### Checked and sound
+
+- **Timeouts:** all four `requests` calls named in the brief have one (`cloud/reading_compass.py:269-273`, `:276-277`, `:420-422`, `:494-495`), since the file's first commit. An AST scan found no `requests` or `urlopen` call without a timeout in app code.
+- **Cloud authentication:** state cookie, verified email against `ALLOWED_EMAIL` (`:280`), signed cookie; every data route calls `require_owner`. Cross-site writes are stopped by `SameSite=Lax` plus JSON-only bodies.
+- **Cloud SSRF and traversal:** none found. File ids are pattern- and ancestry-checked (`:191-207`), the upstream host is fixed (`:494`), Drive paths are validated (`cloud/contracts.py:10-17`). The web client writes with `textContent` only.
+- **Subprocesses:** no `shell=True` anywhere; argument lists throughout; `say` and `espeak` get `--` before the text (`providers/voice/mock.py:79`, `:92`); concat and ffmetadata values are escaped (`services/narrator/converter.py:931-944`).
+- **Posting:** every post needs an explicit "Post now?" (`agents/social/panel.py:1051-1057`); YouTube uploads are private (`:1049`, `vidforge/vidforge/youtube.py:99-104`); the Reddit token is scoped to `submit` and not stored.
+- **Key handling:** keys are not printed or logged by the code I read; the YouTube trends client redacts its key from errors (`vidforge/vidforge/trends.py:221-225`). TLS verification is not disabled anywhere.
+- **Links and loaders:** doc viewers open only http and https links (`ui/docs_center.py:528`, `ui/learning_center_v2.py:797`); YAML is `safe_load` (`vidforge/vidforge/config.py:112`).
+- **Guard coverage:** every GUI paid path goes through `authorize_request`, `authorize_job_item` or Chat's inline validate-and-confirm.
+
+## Status of the October findings
+
+| Finding | Status today | Evidence |
+|---|---|---|
+| P2-1 alias keys | Open | S-2, reproduced |
+| P2-2 `.gitignore` siblings | Open | S-1, reproduced |
+| P3-1 download URLs | Open | S-8 |
+| P3-2 `/tmp` launch log | Open | S-11 |
+| P3-3 file modes | Open | S-12 |
+| P3-4 NUL in a key | Open | S-12, reproduced |
+| P3-5 `${` interpolation | Open | S-12 |
+| P3-6 redirects with key header | Mostly open | S-13; the converter now quotes the voice id (`converter.py:833`) |
+| P3-7 scan hygiene | Open, grown | 7 pins; `security.yml:17` unverified download |
+| Reddit wrong subreddit | Fixed | `agents/social/publishing.py:78-117`, used at `:186` |
+| F1 Gemini thinking tokens | Fixed | `services/gemini_client.py:88-90` |
+| F2 no output cap | Fixed | caps in every client, e.g. `openai_client.py:95`; estimate prices full messages (`main.py:4212-4217`) |
+| F3 failed renders unrecorded | Fixed | `record_partial` at `main.py:5555`, used at `agents/video/panel.py:894`, `agents/fiverr/panel.py:938`, `agents/social/panel.py:733` |
+| F4 reservations | Partly open | S-7 |
+| F5 free or negative price | Fixed for the rate | `services/usage_tracker.py:12-17`; unknown price returns None (`:69`); zero default row not re-verified |
+| F6 vidforge retries | Open | S-7 |
+| F7 stopped streams record EUR 0 | Not re-verified | |
+| F8 Creator usage | Fixed | `agents/creator/panel.py:688` |
+| F9 OpenAI image retry | Appears open | `services/api_limits.py:22`, `services/openai_client.py:43`; image path not traced |
+| F10 $0 Higgsfield quote | Open | `services/higgsfield_client.py:388` |
+| F11 audiobook session total | Fixed | no direct `session_cost_total` writes left in `agents/audiobook/panel.py` |
+| F12 NaN and inf budgets | Fixed | `services/validator.py:15-24` |
+| F13 stale `pricing.json` | Not re-verified | |
+| F14 Ollama `:cloud` free pass | Not re-verified | |
+| F15 unguarded entry points | Open | `main.py:3753` has no caller; narrator sentinel `main.py:18-22`; vidforge CLI; cloud worker (S-5) |
+| F16 ElevenLabs not a cloud backend | Open | `services/usage_tracker.py:8-9` |
+
+## Could not verify
+
+- **Declined command:** the working-tree and history gitleaks scans; the content of three `/Users/<name>/` matches in tracked files (`config/tools.json` has 2, `services/narrator/converter.py` has 1; `config/` is bundled by `Imprint.spec:70`); the key names in tracked `config/settings.json`.
+- **Advisory severity:** `pip-audit` gives descriptions, not scores.
+- **Cloud and vidforge dependencies:** only the pinned lines of `cloud/requirements.txt` were audited; its ranged lines (Flask, gunicorn, cryptography, google-*) and `vidforge/requirements.txt` have no installed set here. The Calibre and ffmpeg versions in the Docker image and the bundled Qt are also unaudited.
+- **Deployed cloud service:** whether it is deployed, whether secrets come from Secret Manager, job retries, ingress, and Google library default timeouts behind `.execute()` and `credentials.refresh` (`cloud/reading_compass.py:117`, `:418`).
+- **GitHub side:** whether CI passes, push protection, default token permissions.
+- **Live provider behaviour:** real download hosts, redirects, and whether provider 401 messages echo part of a key.
+- **Not exercised:** symlink-following at the `/tmp` log path (no log file existed at audit time); EPUB zip-bomb behaviour.
+- **Web design export:** file names from `agents/webdesign/export.py` were not read; the exported page runs model-written JavaScript when the user opens it in a browser.
+- **Not run:** the full test suite, per the brief.
+
+## Owner decision needed
+
+S-6's scope change is the one item that needs a decision rather than a patch. Keeping full `drive` scope means nothing changes for the user, but a compromise reaches the whole Drive. Narrowing to `drive.readonly` plus `drive.file` limits writes to files the app created, but the existing `audiobooks - gdrive` folder would have to be recreated by the app once. I recommend narrowing before the service is exposed to anyone but the owner.
