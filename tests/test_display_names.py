@@ -111,6 +111,29 @@ def test_sub_window_titles_carry_the_display_name(qt_app, kind, title):
         host.deleteLater()
 
 
+def _non_docstring_strings(path: Path):
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    docstrings = {id(node.body[0].value) for node in ast.walk(tree)
+                  if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                       ast.AsyncFunctionDef))
+                  and node.body and isinstance(node.body[0], ast.Expr)
+                  and isinstance(node.body[0].value, ast.Constant)}
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and id(node) not in docstrings):
+            yield node.lineno, node.value
+
+
+@pytest.mark.parametrize("rel", _NAME_SOURCES)
+def test_no_user_text_names_the_retired_client_gigs_workspace(rel):
+    """The image-model tooltip said "Best image model for Client Gigs", a
+    workspace name retired in September; it now reads Vector's label."""
+    hits = [f"{rel}:{line} {text!r}"
+            for line, text in _non_docstring_strings(ROOT / rel)
+            if "Client Gigs" in text]
+    assert not hits, "\n".join(hits)
+
+
 def test_bundle_metadata_names_imprint_studio():
     spec = (ROOT / "Imprint.spec").read_text(encoding="utf-8")
     assert '"CFBundleName": "Imprint Studio"' in spec

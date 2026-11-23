@@ -2236,7 +2236,8 @@ class GodAI(QWidget):
             RecommendationContext(agent="fiverr", modality="visual", task="client image"),
         )
         if result:
-            tip = (f"Best image model for Client Gigs: {result.candidate.label}\n"
+            tip = (f"Best image model for {AGENTS_BY_KEY['fiverr'].label}: "
+                   f"{result.candidate.label}\n"
                    f"{result.reason}\nConfidence: {result.confidence}")
             self._paint_recommended_item(
                 combo, self._find_model_index(combo, result.candidate.model_id), tip,

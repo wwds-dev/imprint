@@ -82,6 +82,8 @@ listed under **Unreleased** until it ships.
   background; the panel, sheet and lesson say "Vector makes PNG images, not
   vector files". The ban now covers delivery messages too, and the README no
   longer says the prompt asks for a transparent, vector-like logo.
+  The image-model tooltip says "Best image model for Vector", not the retired
+  "Client Gigs".
 - **Docs after review (R-1, R-2, R-4, R-7, R-12):** Herald's Pinterest posting
   is described as not working yet everywhere (it did say both); Label's two
   tabs, not Label and Muse, share the "music" authorization; Troubleshooting
