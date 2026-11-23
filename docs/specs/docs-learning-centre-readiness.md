@@ -1,5 +1,7 @@
 # Spec: documentation and Learning Centre ready for the hand test
 
+Needs: build, review, verify, docs, comply
+
 Status: APPROVED by the owner 2026-11-22 (Define gate); D1 to D7 decided as recommended. Priority: P1 (two P0 and fourteen P1 findings in
 `docs/audit/docs-learning-centre-readiness-tech-writer.md`, 2026-11-22). Type: documentation, plus
 tests that keep it correct. No app behaviour changes. Written 2026-11-22 at `134365a` (v2.407).

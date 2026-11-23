@@ -1,5 +1,7 @@
 # Audit P1 fixes: Reddit subreddit and billing accuracy (2026-10-14)
 
+Needs: design, architect, build, review, verify, secure, docs
+
 Phase: Define, waiting for the owner gate. Sources: `docs/audit/SUMMARY.md` (P1 table), `docs/audit/security.md`
 part 2 (B-F1 to B-F3) and "Outside this scope" (X-1); backlog: the four P1 lines at the top of TODO.md §v2. Feature
 freeze (TODO.md §v2): every item here is a bug fix. Parts that would add features are listed under Non-goals.

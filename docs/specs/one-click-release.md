@@ -1,5 +1,7 @@
 # Spec: One-click release (approved manuscript → release kit overnight)
 
+Needs: design, architect, plan, build, review, verify, secure, docs, comply
+
 Status: **Define and Architect approved by the owner 2026-11-18 (freeze exception granted). Next: Plan, then slice 1 Build.** Source: `SUGGESTIONS.md` #79 (portfolio review 2026-11-18). Priority: not set (owner). Product-manager playbook: `status: current`, last-reviewed 2026-10-14.
 
 > **Feature freeze (2026-10-09) applies.** `TODO.md` allows bug fixes, tests and wording only until `tests/READINESS_GATE.md` §3 A–E are ticked on one commit. This feature needs an explicit owner exception, like local-model routing got on 2026-10-21. Declining it is a valid outcome of this gate.

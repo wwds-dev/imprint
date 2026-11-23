@@ -1,5 +1,7 @@
 # Spec: Quill never loses the Draft (audit QB-1)
 
+Needs: build, review, verify, docs
+
 Status: Define approved by the owner 2026-11-20 ("Yes, as recommended": D1–D3 as recommended). Built 2026-11-20. Priority: P0 (audit blocker QB-1,
 `docs/audit/code-readiness-audit-2026-11-18.md`). Type: user-visible bug fix. Owner session:
 `claude/quill-draft-qb1-5d96fa`.

@@ -1,5 +1,7 @@
 # Audit tier-1 fixes (2026-10-12)
 
+Needs: define (Shipped 2026-10 before activity logging; its review and QA are recorded in this spec's Round 2 section, not in docs/audit/.)
+
 Source: `foundry/audits/imprint/` (code-review.md P1-1 and P3-8, qa.md P0, security.md P3-1).
 Phases skipped: Define/Design/Architect gates (test additions plus two tiny defensive changes, no new
 behaviour); Document (no user-visible change).

@@ -1,5 +1,7 @@
 # Spec: Model updates, closing the gap to Sentinel
 
+Needs: design, architect, build, review, verify, secure, docs, comply
+
 Status: DRAFT, awaiting owner approval (Define gate)
 
 Defined 2026-11-22. Priority: P2 (feature; slices below carry their own). Tier: `public`.

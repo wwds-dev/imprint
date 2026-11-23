@@ -1,5 +1,7 @@
 # Spec: DashScope Workspace ID in Settings
 
+Needs: design, architect, build, review, verify, secure, docs
+
 Status: Define, 2026-10-13. Priority: P2 (feature, TODO.md line ~86). Radar: `docs/company/radar-notes/2026-10-13-feature.md`. Product-manager playbook is `status: baseline` (last-reviewed 2026-10-10, within 90 days but not yet verified by a radar run).
 
 ## Problem

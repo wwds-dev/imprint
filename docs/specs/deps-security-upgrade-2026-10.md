@@ -1,5 +1,7 @@
 # Spec: dependency security upgrade, 2026-10
 
+Needs: build, review, verify, secure
+
 Status: Define, 2026-10-14. Priority: P1 (blocks PR wwds-dev/imprint#23). Radar: `docs/company/radar-notes/2026-10-14-upgrade.md`.
 
 ## Problem

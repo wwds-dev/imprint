@@ -1,5 +1,7 @@
 # Spec: Model updates also watch video and image routes
 
+Needs: design, architect, build, review, verify, secure, docs
+
 Status: Built and documented 2026-10-14 (uncommitted on `feature/model-watch-media`; see "As built" at the end). Defined 2026-10-14. Priority: P2 overall (feature). Part 4 (doc drift) is P2 and can ship alone today. Radar: `docs/company/radar-notes/2026-10-14-feature.md`. Product-manager playbook: `status: current`, last-reviewed 2026-10-14.
 
 ## Problem

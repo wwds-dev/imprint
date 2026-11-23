@@ -1,5 +1,7 @@
 # Spec: the app is shown as "Imprint Studio"; three agents become Kernel, Nova and Vector
 
+Needs: design, architect, build, review, verify, secure, docs, comply, release (the next release ships under the new name)
+
 Status: APPROVED by the owner 2026-11-22 (Define gate), all recommendations accepted. Written 2026-11-22. Priority: P1 (below the
 open P0 billing bugs QB-2 and QB-3, `TODO.md:61-62`). Type: user-visible rename, no behaviour
 change except one router guard (R3). Slug: `rename-imprint-studio`. Product-manager playbook:
