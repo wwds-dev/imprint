@@ -80,6 +80,12 @@ listed under **Unreleased** until it ships.
   checked against the app's strings.
 
 ### Fixed
+- **Four leftover widgets now belong to the window** (2026-11-23). The agent
+  box, Quill's Sources box, Press's "Done" button and Nova's channel field
+  were built without a parent, so they outlived the window; in the test suite
+  that ended in an intermittent crash. Nothing looks different, except that
+  the Sources box now shows the same text caret as the other editors. A test
+  fails if a new parentless widget appears.
 - **Vector no longer promises vector files or an invented track record**
   (audit QM-18). Its prompt dropped the "5-star reputation", leaves prices as
   `[PRICE]` unless you give them, and asks for a flat logo on a plain
