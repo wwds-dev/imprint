@@ -705,7 +705,29 @@ class AudiobookPanel(QWidget):
         # an explicit fresh start at full cost, never a silent one.
         open_row = conversions.find_open(book_path, str(expected_output))
         fresh_start = False
-        if open_row and (open_row.get("voice", "") != voice
+        # The cache is also denominated in the book's text: the converter
+        # throws it away when the text changed and narrates everything again
+        # (audit QB-2), so a changed book is a fresh start at full cost.
+        source_hash = conversions.text_sha256(self._text(Path(book_path)))
+        if open_row and conversions.source_changed(
+                open_row, source_hash, book_path):
+            done = open_row.get("chunks_done", 0)
+            total = open_row.get("chunks_total", 0)
+            choice = QMessageBox.question(
+                self, "Book changed since the interrupted run",
+                f"{Path(book_path).name} was interrupted with {done} of "
+                f"{total} chapters cached, but its text has changed since "
+                "then (or Imprint cannot tell that it has not).\n\n"
+                "The cached chapters cannot be reused: the whole book is "
+                f"narrated again at full cost (about €{estimate['eur']:.2f})."
+                "\n\nStart over?")
+            if choice != QMessageBox.Yes:
+                self.audiobook_status_label.setText(
+                    "[Cancelled] The book changed since the interrupted run; "
+                    "nothing was started.")
+                return
+            fresh_start = True
+        elif open_row and (open_row.get("voice", "") != voice
                          or int(open_row.get("chunk_tokens") or 0)
                          != chunk_tokens
                          or (open_row.get("provider") or "openai") != route
@@ -791,7 +813,8 @@ class AudiobookPanel(QWidget):
                 voice=voice, chunk_tokens=chunk_tokens,
                 estimate_eur=estimate["eur"],
                 project=self._conversion_project_id,
-                reset_progress=fresh_start, provider=route, model=model)
+                reset_progress=fresh_start, provider=route, model=model,
+                source_sha256=source_hash)
             self._conversion_job_id = job["id"]
         except Exception as exc:
             self._conversion_job_id = None

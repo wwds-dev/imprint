@@ -28,6 +28,38 @@ from services.higgsfield_client import HiggsfieldClient
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
 from ui.widgets import scrollable
 
+# Renders in one synchronous call: no job to stop watching or to resume.
+OMNI_MODEL = "gemini-omni-1.1-flash"
+
+
+def scene_provider_refused(parent, host, selection) -> bool:
+    """Refuse a scene-image render whose image provider is not keyed or not
+    permitted, and say why. True means: send nothing.
+
+    The script and narration still run on OpenAI (the guard checks that when
+    the render is authorized as "openai"); the scene images are this
+    provider's, billed in the same estimate, so they need its key and
+    permission too. Shared by the Video tab and Herald's clips (audit QB-3).
+    """
+    if (selection is None or selection.kind != "scene_images"
+            or selection.provider == "OpenAI"):
+        return False
+    from services.recommendations.catalog import provider_configured
+    key = selection.provider.lower()
+    if not provider_configured(key):
+        QMessageBox.information(
+            parent, f"{selection.provider} Key Needed",
+            f"{selection.label} needs a {selection.provider} key in "
+            "Imprint's private .env file.")
+        return True
+    if not host._provider_permission(key):
+        QMessageBox.warning(
+            parent, f"{selection.provider} Not Enabled",
+            f"Enable {selection.provider} in the API permissions row "
+            "first.")
+        return True
+    return False
+
 
 class VideoPanel(QWidget):
     """Topic in, finished video out — vidforge driven in-process."""
@@ -491,25 +523,8 @@ class VideoPanel(QWidget):
             return
 
         topic = self.video_topic_input.text().strip()
-        if (selection is not None and selection.kind == "scene_images"
-                and selection.provider != "OpenAI"):
-            # The script and narration still run on OpenAI (the guard checks
-            # that below); the scene images are this provider's, billed in
-            # the same estimate, so they need its key and permission too.
-            from services.recommendations.catalog import provider_configured
-            key = selection.provider.lower()
-            if not provider_configured(key):
-                QMessageBox.information(
-                    self, f"{selection.provider} Key Needed",
-                    f"{selection.label} needs a {selection.provider} key in "
-                    "Imprint's private .env file.")
-                return
-            if not self.host._provider_permission(key):
-                QMessageBox.warning(
-                    self, f"{selection.provider} Not Enabled",
-                    f"Enable {selection.provider} in the API permissions row "
-                    "first.")
-                return
+        if scene_provider_refused(self, self.host, selection):
+            return
         eur_rate = eur_per_usd()
         cost_eur = round(estimate["total"] * eur_rate, 4)
         assessment = self._assessment(selection, topic, cost_eur)
@@ -646,11 +661,21 @@ class VideoPanel(QWidget):
             self._persist_submission(token, provider_key,
                                      selection.model_id, cost_eur)
             active_kind = f"{provider_key}-video"
-            self._begin(active_kind, can_cancel=True)
-            self.video_status_label.setText(
-                f"Submitting to {selection.provider}… Stop stops watching: "
-                "the job stays tracked, and the paid result is saved on the "
-                "next launch.")
+            if selection.model_id == OMNI_MODEL:
+                # Omni renders in one synchronous call: there is no job to
+                # stop watching or to resume next launch, so Stop would only
+                # throw the paid clip away (audit QH-2). It is not offered.
+                self._begin(active_kind, can_cancel=False)
+                self.video_status_label.setText(
+                    "Rendering with Gemini Omni… This is one call that "
+                    "cannot be stopped; the clip is saved and billed when it "
+                    "returns.")
+            else:
+                self._begin(active_kind, can_cancel=True)
+                self.video_status_label.setText(
+                    f"Submitting to {selection.provider}… Stop stops "
+                    "watching: the job stays tracked, and the paid result is "
+                    "saved on the next launch.")
             worker = VideoGenerationWorker(
                 client, topic, output_path, provider=selection.provider,
                 model=selection.model_id, seconds=seconds,
@@ -1011,10 +1036,56 @@ class VideoPanel(QWidget):
         for row in rows:
             self._spawn_resume(row)
 
+    def _settle_omni_row(self, row: dict) -> None:
+        """Close a Gemini Omni row a previous process left open (audit QH-2).
+
+        Omni renders synchronously and has no job to re-poll
+        (GeminiClient.resume_video refuses it), so a worker would fail on
+        every launch. A saved clip lands and bills like a resumed render;
+        a clip the provider completed but that never reached the disk was
+        still charged, so it bills too and says the clip was lost; anything
+        else has nothing to resume and releases its reservation.
+        """
+        from agents.video import jobs
+
+        path = Path(row.get("output_path") or "")
+        saved = path.is_file() and path.stat().st_size > 0
+        if saved or row.get("status") == "completed":
+            token = self.host.restore_request(
+                row["agent"] or "video", row["provider"], row["model"],
+                row["topic"], label="direct video (resumed)",
+                flat_cost_eur=row["flat_cost_eur"], project=row["project"],
+                run_id=row["run_id"])
+            if saved:
+                self._resume_done(row, token, None, str(path))
+                return
+            error = ("Gemini Omni completed this clip, but it was not saved "
+                     "before Imprint closed; the provider charged for it.")
+            try:
+                jobs.mark_terminal(row["id"], spend_state="billed",
+                                   fallback_status="completed", error=error)
+                self.host.record_request(
+                    token, "provider completed Omni render; clip not saved")
+            except Exception as exc:
+                self.host._note_failure("video: close Omni job", exc)
+            self.video_log.append(f"[Resume] {row['slug']}: {error}")
+            return
+        error = ("Gemini Omni renders in one call and has nothing to resume; "
+                 "check your Gemini usage before rendering again.")
+        try:
+            jobs.mark_terminal(row["id"], spend_state="released",
+                               fallback_status="failed", error=error)
+        except Exception as exc:
+            self.host._note_failure("video: close Omni job", exc)
+        self.video_log.append(f"[Resume] {row['slug']}: {error}")
+
     def _spawn_resume(self, row: dict) -> None:
         from agents.video.workers import VideoResumeWorker
 
         provider = row["provider"]
+        if provider == "gemini" and row.get("model") == OMNI_MODEL:
+            self._settle_omni_row(row)
+            return
         if provider == "higgsfield":
             client = HiggsfieldClient()
             ready = client.configured
@@ -1134,6 +1205,11 @@ class VideoPanel(QWidget):
         (Gemini, or a render already in progress) Stop simply stops
         WATCHING, and says so.
         """
+        if (self._active_kind == "gemini-video"
+                and self._external_context.get("model") == OMNI_MODEL):
+            # Stop is disabled for Omni (see render_direct); a stray call
+            # must not discard the synchronous, already-paid result.
+            return
         if self._active_kind in {"gemini-video", "qwen-video"}:
             worker = self.host.video_worker
             if worker is not None and hasattr(worker, "cancel"):

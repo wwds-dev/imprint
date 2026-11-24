@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 )
 
 from services.output_limits import result_notice
+from agents.video.panel import scene_provider_refused
 from agents.social.agent import (
     ANGLES, SUBJECT_KINDS, build_clip_brief_messages, build_post_messages,
     over_limit, split_variants,
@@ -595,6 +596,15 @@ class SocialPanel(QWidget):
         overrides = {**video_studio.clip_overrides(aspect, seconds),
                      **self._clip_visuals}
         cfg = video_studio.load_config(overrides)
+        # Authorized below as "openai" (script and narration); the scene
+        # images may be Gemini's or Qwen's, which need their own key and
+        # permission, exactly as on the Video tab (audit QB-3).
+        if scene_provider_refused(self, self.host, self._scene_model(cfg)):
+            self.social_status_label.setText(
+                "Clip: [Refused] The scene-image provider is not set up; "
+                "nothing was rendered.")
+            self._clip_done()
+            return
         estimate = video_studio.pre_estimate(cfg)
         eur_rate = eur_per_usd()
         cost_eur = round(estimate["total"] * eur_rate, 4)
@@ -644,6 +654,16 @@ class SocialPanel(QWidget):
         clip_worker.done_signal.connect(self._on_clip_rendered)
         clip_worker.error_signal.connect(self._on_clip_render_error)
         clip_worker.start()
+
+    @staticmethod
+    def _scene_model(cfg):
+        """The catalog entry that will draw this clip's scene images, if any."""
+        if cfg.get("visuals.source") != "ai":
+            return None
+        from services.media_catalog import MODELS
+        model_id = str(cfg.get("visuals.image_model", "gpt-image-2"))
+        return next((m for m in MODELS if m.kind == "scene_images"
+                     and m.model_id == model_id), None)
 
     @staticmethod
     def _visuals_for(model) -> dict:

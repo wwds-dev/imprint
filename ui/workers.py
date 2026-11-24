@@ -406,6 +406,14 @@ class VideoGenerationWorker(QThread):
                 job, timeout=self.timeout, on_progress=progress,
                 should_cancel=lambda: self._cancelled)
             if self._cancelled:
+                # A synchronous render (Gemini Omni) returns the finished,
+                # paid clip from the create call itself: there is no job to
+                # resume, so it is written to disk even for a closing
+                # window, where the next launch settles it (audit QH-2).
+                if (job.status == "completed"
+                        and getattr(job, "video_bytes", None) is not None):
+                    self.output_path.parent.mkdir(parents=True, exist_ok=True)
+                    self.output_path.write_bytes(job.video_bytes)
                 return
             if job.status != "completed":
                 self.timed_out = (job.error or "").startswith("Timed out after")
