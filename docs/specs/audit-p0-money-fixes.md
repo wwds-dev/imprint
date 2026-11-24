@@ -34,3 +34,5 @@ key). Full suite green.
 Skipped phases: Define and Design (restores the behaviour the UI already promised), Architect
 (one additive column, no thread or boundary change), Comply and Launch (no legal or public-claim
 change).
+
+Verify (2026-11-24): full suite on `7041255` plus the two test-isolation commits from `claude/happy-dubinsky-48c27c` (`4c926c3` segfault fix, `836ca99` Booth row leak; not on this branch, they reach `main` with that branch): 2875 passed, 17 skipped, 17 xfailed, 6 subtests passed in 58 min 35 s, `-p randomly`. On `7041255` alone the run hit the known full-suite segfault at 74% (`tests/test_settings_keys.py:410`, no failures before it); on `68010c8` alone: 2 failed, 2865 passed (one docs label, fixed in `7041255`; the known Booth row leak).
