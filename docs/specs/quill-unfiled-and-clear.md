@@ -2,7 +2,7 @@
 
 Needs: build, review, verify, docs
 
-Status: Define draft 2026-11-24, waiting for the owner (D1–D3). Priority: P0 (audit
+Status: Define approved by the owner 2026-11-24 ("Yes, as recommended": D1–D3 as recommended). Priority: P0 (audit
 `docs/audit/SUMMARY.md` findings 4 and 5, `docs/audit/ux.md` UX-01, UX-02). Type: user-visible
 bug fix. Owner session: `claude/angry-matsumoto-ac520a`. Not covered by `quill-draft-safety`
 (QB-1: Write, error and Stop), which is on `main`.

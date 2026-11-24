@@ -378,3 +378,15 @@ def test_only_one_release_kit_can_be_running(db):
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(insert, ("d", "running"))
     conn.close()
+
+
+def test_an_older_database_gains_the_booth_text_fingerprint(db):
+    """Audit QB-2: open_job writes source_sha256; without the migration an
+    existing install raised "no such column" and ran with no job row."""
+    _pre_kit_database(db)
+    database.init_db()
+    assert "source_sha256" in _columns(db, "audiobook_conversions")
+    conn = sqlite3.connect(db)
+    assert [r[0] for r in conn.execute(
+        "SELECT source_sha256 FROM audiobook_conversions")] == [""]
+    conn.close()

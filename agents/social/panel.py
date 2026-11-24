@@ -547,6 +547,18 @@ class SocialPanel(QWidget):
             return
 
         seconds = 30
+        # Checked before the brief too, so a clip that cannot render does not
+        # pay for a brief first (the check repeats after Apply).
+        aspect = ("Square 1:1" if platform.key == "pinterest"
+                  else "Vertical 9:16")
+        try:
+            preview = video_studio.load_config(
+                {**video_studio.clip_overrides(aspect, seconds),
+                 **self._clip_visuals})
+        except Exception:
+            preview = None
+        if preview is not None and self._clip_provider_refused(preview):
+            return
         messages = build_clip_brief_messages(campaign, platform, seconds,
                                              self.social_notes_input.text().strip())
         token = self.host.authorize_request("social", provider, model,
@@ -599,7 +611,7 @@ class SocialPanel(QWidget):
         # Authorized below as "openai" (script and narration); the scene
         # images may be Gemini's or Qwen's, which need their own key and
         # permission, exactly as on the Video tab (audit QB-3).
-        if scene_provider_refused(self, self.host, self._scene_model(cfg)):
+        if self._clip_provider_refused(cfg):
             self.social_status_label.setText(
                 "Clip: [Refused] The scene-image provider is not set up; "
                 "nothing was rendered.")
@@ -655,15 +667,24 @@ class SocialPanel(QWidget):
         clip_worker.error_signal.connect(self._on_clip_render_error)
         clip_worker.start()
 
-    @staticmethod
-    def _scene_model(cfg):
-        """The catalog entry that will draw this clip's scene images, if any."""
-        if cfg.get("visuals.source") != "ai":
-            return None
+    def _clip_provider_refused(self, cfg) -> bool:
+        """Refuse a clip whose scene-image provider is not keyed or not
+        permitted (the Video tab's check), or whose image model is not in the
+        catalog, so its provider cannot be checked at all. True: send nothing."""
+        if str(cfg.get("visuals.source", "")).strip().lower() != "ai":
+            return False
         from services.media_catalog import MODELS
         model_id = str(cfg.get("visuals.image_model", "gpt-image-2"))
-        return next((m for m in MODELS if m.kind == "scene_images"
-                     and m.model_id == model_id), None)
+        model = next((m for m in MODELS if m.kind == "scene_images"
+                      and m.model_id == model_id), None)
+        if model is None:
+            QMessageBox.warning(
+                self, "Unknown Image Model",
+                f"{model_id} is not in Imprint's media catalog, so the "
+                "provider it would spend on cannot be checked. Pick a scene "
+                "image model in the Video tab.")
+            return True
+        return scene_provider_refused(self, self.host, model)
 
     @staticmethod
     def _visuals_for(model) -> dict:

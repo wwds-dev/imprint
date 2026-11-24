@@ -6478,6 +6478,25 @@ class GodAI(QWidget):
                 event.ignore()
                 return
             driver.stop_now("quit")
+        video_panel = getattr(self, "video_panel", None)
+        if video_panel is not None and video_panel.omni_rendering():
+            # Omni renders in one call that cannot be resumed: quitting now
+            # loses the clip, and Gemini may still charge for it (audit QH-2).
+            box = QMessageBox(self)
+            box.setWindowTitle("A Gemini Omni clip is rendering")
+            box.setText("A Gemini Omni clip is rendering")
+            box.setInformativeText(
+                "It renders in one call that cannot be resumed. If you quit "
+                "now the clip is lost if it has not arrived, and Gemini may "
+                "still charge for it; Imprint will count it next launch.")
+            keep = box.addButton("Keep Running", QMessageBox.RejectRole)
+            box.addButton("Quit Anyway", QMessageBox.AcceptRole)
+            box.setDefaultButton(keep)
+            box.setEscapeButton(keep)
+            box.exec()
+            if box.clickedButton() is keep:
+                event.ignore()
+                return
         try:
             self.author_panel._project_save_timer.stop()
             self.author_panel._persist_project_state()

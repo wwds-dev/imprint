@@ -166,6 +166,17 @@ def _collect_the_last_modules_windows():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _no_unfiled_quill_draft_carries_over():
+    """Quill saves its no-Project workspace to the shared test database
+    (audit UX-01); without this, any test that types a Draft would hand it to
+    every window built after it, and the order would decide the result."""
+    yield
+    with _database.get_connection() as conn:
+        conn.execute("DELETE FROM settings WHERE key = ?",
+                     ("author_unfiled_workspace",))
+
+
 # ── Public model ratings: the shipped snapshot, and no network ────────────────
 # The window loads services/recommendations/ratings at startup and refreshes it
 # from Hugging Face beside the Model updates check — a minute of paced GETs.

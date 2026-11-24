@@ -568,7 +568,8 @@ class VideoPanel(QWidget):
         self.video_status_label.setText("Starting…")
         self.video_render_btn.setEnabled(False)
         self.video_stop_btn.setText(
-            "Stop" if kind in ("pipeline", "gemini-video", "qwen-video")
+            "Cannot Stop" if not can_cancel and kind == "gemini-video"
+            else "Stop" if kind in ("pipeline", "gemini-video", "qwen-video")
             else "Cancel" if can_cancel else "Cannot Cancel")
         self.video_stop_btn.setEnabled(can_cancel)
         self.video_stop_btn.show()
@@ -666,10 +667,12 @@ class VideoPanel(QWidget):
                 # stop watching or to resume next launch, so Stop would only
                 # throw the paid clip away (audit QH-2). It is not offered.
                 self._begin(active_kind, can_cancel=False)
-                self.video_status_label.setText(
-                    "Rendering with Gemini Omni… This is one call that "
-                    "cannot be stopped; the clip is saved and billed when it "
-                    "returns.")
+                note = ("Gemini Omni renders in one call that cannot be "
+                        "stopped; the clip is saved and billed when it "
+                        "returns.")
+                self.video_status_label.setText(note)
+                # The worker's status lines replace the label; the log keeps it.
+                self.video_log.append(note)
             else:
                 self._begin(active_kind, can_cancel=True)
                 self.video_status_label.setText(
@@ -1005,6 +1008,7 @@ class VideoPanel(QWidget):
         try:
             lost = jobs.sweep_lost()
             rows = jobs.pending_rows()
+            unacknowledged = jobs.unacknowledged_synchronous()
         except Exception as exc:
             self.host._note_failure("video: read pending jobs", exc)
             return
@@ -1019,7 +1023,7 @@ class VideoPanel(QWidget):
                         "still submitting when the app last closed and has "
                         "no job id; nothing was billed here — check the "
                         "provider dashboard"))
-            for row in rows:
+            for row in rows + unacknowledged:
                 self.host._note_failure(
                     "video: pending provider job", RuntimeError(
                         f"a {row['provider']} render ({row['slug']}, job "
@@ -1027,6 +1031,8 @@ class VideoPanel(QWidget):
                         "waiting, but Video mode is unavailable in this "
                         "build"))
             return
+        for row in unacknowledged:
+            self._settle_omni_row(row)
         for row in lost:
             self.video_log.append(
                 f"[Resume] A {row['provider']} render was still submitting "
@@ -1050,7 +1056,11 @@ class VideoPanel(QWidget):
 
         path = Path(row.get("output_path") or "")
         saved = path.is_file() and path.stat().st_size > 0
-        if saved or row.get("status") == "completed":
+        # No job id: Imprint closed while the create call was running (its
+        # id is written on the window thread, which was waiting to quit).
+        # The call may well have been charged, so it is not counted as free.
+        unacknowledged = not row.get("job_id")
+        if saved or unacknowledged or row.get("status") == "completed":
             token = self.host.restore_request(
                 row["agent"] or "video", row["provider"], row["model"],
                 row["topic"], label="direct video (resumed)",
@@ -1059,8 +1069,13 @@ class VideoPanel(QWidget):
             if saved:
                 self._resume_done(row, token, None, str(path))
                 return
-            error = ("Gemini Omni completed this clip, but it was not saved "
-                     "before Imprint closed; the provider charged for it.")
+            error = ("Imprint closed while Gemini Omni was rendering and the "
+                     "clip never arrived. Gemini may have charged for it, so "
+                     "it is counted; check your Gemini usage."
+                     if unacknowledged and row.get("status") != "completed"
+                     else "Gemini Omni completed this clip, but it was not "
+                     "saved before Imprint closed; the provider charged for "
+                     "it.")
             try:
                 jobs.mark_terminal(row["id"], spend_state="billed",
                                    fallback_status="completed", error=error)
@@ -1194,6 +1209,13 @@ class VideoPanel(QWidget):
         self.video_stop_btn.hide()
         self._active_kind = ""
         self._visual_model_changed()
+
+    def omni_rendering(self) -> bool:
+        """True while a Gemini Omni render is inside its one create call."""
+        worker = self.host.video_worker
+        return (self._active_kind == "gemini-video"
+                and self._external_context.get("model") == OMNI_MODEL
+                and worker is not None and worker.isRunning())
 
     def stop(self):
         """One contract for every direct provider: Stop always works.

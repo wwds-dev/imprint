@@ -4,6 +4,7 @@ Moved verbatim out of main.py (see docs/refactor_plan.md, phase 1). These are
 standalone QThread subclasses: they take everything they need as constructor
 arguments and touch no application state, which is why they move first.
 """
+import os
 import re
 import subprocess
 import time
@@ -412,8 +413,13 @@ class VideoGenerationWorker(QThread):
                 # window, where the next launch settles it (audit QH-2).
                 if (job.status == "completed"
                         and getattr(job, "video_bytes", None) is not None):
+                    # Atomic: a half-written file must never be taken for
+                    # the saved clip and billed next launch.
                     self.output_path.parent.mkdir(parents=True, exist_ok=True)
-                    self.output_path.write_bytes(job.video_bytes)
+                    partial = self.output_path.with_name(
+                        self.output_path.name + ".partial")
+                    partial.write_bytes(job.video_bytes)
+                    os.replace(partial, self.output_path)
                 return
             if job.status != "completed":
                 self.timed_out = (job.error or "").startswith("Timed out after")

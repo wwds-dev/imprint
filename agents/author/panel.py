@@ -73,6 +73,10 @@ REVISE_TOO_LONG_LOCAL = (
     "the text and its revision together. Select a passage, or choose a "
     "cloud model, and press Write again.")
 
+# The workspace written with no Project selected (audit UX-01): saved and
+# restored like a Project's, in one settings row of the local database.
+UNFILED_WORKSPACE_KEY = "author_unfiled_workspace"
+
 
 def _is_local(provider: str) -> bool:
     return provider.lower().replace(" ", "") in LOCAL_PROVIDERS
@@ -711,6 +715,7 @@ class AuthorPanel(QWidget):
 
         self._on_content_type_changed(self.author_content_type_box.currentText())
         self._load_profile()
+        self._load_unfiled_workspace()
         for widget in (
             self.author_title_input, self.author_name_input,
             self.author_profile_hook_input, self.author_profile_reader_input,
@@ -879,11 +884,13 @@ class AuthorPanel(QWidget):
             self._loading_project_state = False
 
     def _schedule_project_save(self, *_args) -> None:
-        if self._project_id and not self._loading_project_state:
+        # With or without a Project: unfiled work is saved too (audit UX-01).
+        if not self._loading_project_state:
             self._project_save_timer.start()
 
     def _persist_project_state(self) -> None:
         if not self._project_id:
+            self._persist_unfiled_state()
             return
         from services.project_workspaces import save
         title = self.author_title_input.text().strip()
@@ -891,6 +898,30 @@ class AuthorPanel(QWidget):
         save(self._project_id, "author", self._capture_project_state(),
              work_title=title, byline=byline)
         self._last_project_identity = (title, byline)
+
+    def _persist_unfiled_state(self) -> None:
+        """Save the workspace written with no Project (audit UX-01)."""
+        import json
+        from services.database import save_setting
+        state = self._capture_project_state()
+        save_setting(UNFILED_WORKSPACE_KEY, json.dumps(state))
+        self._unfiled_state = state
+
+    def _load_unfiled_workspace(self) -> None:
+        """Restore the unfiled workspace a previous session saved, if any."""
+        import json
+        from services.database import get_setting
+        raw = get_setting(UNFILED_WORKSPACE_KEY, "")
+        if not raw:
+            return
+        try:
+            state = json.loads(raw)
+        except ValueError:
+            return
+        if not isinstance(state, dict):
+            return
+        self._unfiled_state = state
+        self._apply_project_state(state)
 
     def _sync_project_identity(self, project: dict) -> None:
         """Apply identity changed in Project Manager without clearing the draft."""
@@ -926,8 +957,14 @@ class AuthorPanel(QWidget):
             # workspace row was cascaded already; never recreate orphan work.
             if self.host.registry.get_project(self._project_id):
                 self._persist_project_state()
-        elif self._unfiled_state is None:
-            self._unfiled_state = self._capture_project_state()
+        else:
+            # Leaving unfiled work: keep what is on screen now, in memory and
+            # on disk, so it returns when no Project is selected again.
+            try:
+                self._persist_unfiled_state()
+            except Exception as exc:
+                self._unfiled_state = self._capture_project_state()
+                self.host._note_failure("author: save unfiled draft", exc)
         self._project_id = next_id
         if next_id:
             self._apply_project_state(load(next_id, "author"), project)
@@ -1400,18 +1437,58 @@ class AuthorPanel(QWidget):
         except Exception as e:
             self.author_status_label.setText(f"[Error] {e}")
 
+    def _writing_boxes(self):
+        return (self.author_draft_box, self.author_outline_box,
+                self.author_characters_box, self.author_world_box,
+                self.author_sources_box)
+
     def clear(self):
-        self._clear_displays()
+        """Empty the writing, after asking (audit UX-02).
+
+        Title and the Book Profile stay: Title is the Project's work title,
+        and clearing it renamed the Project. Each box is emptied as one
+        undoable edit, so Cmd-Z in it brings the text back.
+        """
+        has_text = (any(box.toPlainText() for box in self._writing_boxes())
+                    or self.author_direction_input.text())
+        if has_text:
+            title = self.author_title_input.text().strip()
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Warning)
+            # macOS ignores a message box's window title: the question is
+            # the main text and the detail the informative text.
+            box.setWindowTitle("Clear the Draft and notes?")
+            box.setText("Clear the Draft and notes?")
+            box.setInformativeText(
+                "This empties the Draft, Outline, Characters, World Notes, "
+                "Sources and Direction"
+                + (f" for \u201c{title}\u201d" if title else "")
+                + ". Title and the Book Profile stay.\n\nCmd-Z in a box "
+                "brings its text back while Imprint is open.")
+            clear_btn = box.addButton("Clear", QMessageBox.DestructiveRole)
+            cancel_btn = box.addButton(QMessageBox.Cancel)
+            box.setDefaultButton(cancel_btn)
+            box.setEscapeButton(cancel_btn)
+            box.exec()
+            if box.clickedButton() is not clear_btn:
+                return
+        self._clear_displays(undoable=True)
         self.author_direction_input.clear()
-        self.author_title_input.clear()
         self.author_status_label.setText("")
         self._last_response = ""
 
-    def _clear_displays(self):
-        for box in (self.author_draft_box, self.author_outline_box,
-                    self.author_characters_box, self.author_world_box,
-                    self.author_sources_box):
-            box.clear()
+    def _clear_displays(self, undoable: bool = False):
+        for box in self._writing_boxes():
+            if undoable and box.toPlainText():
+                # One edit block, not QTextEdit.clear(): clear() drops the
+                # undo history, so the text could never come back.
+                cursor = box.textCursor()
+                cursor.beginEditBlock()
+                cursor.select(QTextCursor.Document)
+                cursor.removeSelectedText()
+                cursor.endEditBlock()
+            else:
+                box.clear()
         self.author_word_count_label.setText("0")
         self.author_scene_count_label.setText("0")
         self.author_save_btn.setEnabled(False)

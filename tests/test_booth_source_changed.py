@@ -133,6 +133,18 @@ def _interrupted_row(panel, book, *, done=7, total=10, source_sha256=None):
     return row
 
 
+def _cache(panel, book, count):
+    """`count` narrated chunk files where the converter keeps them."""
+    from services.narrator.converter import TEMP_DIRNAME
+    expected = panel._converted_output(
+        book, Path(panel.audiobook_output_path.text()), "mp3")
+    temp = expected.parent / TEMP_DIRNAME
+    temp.mkdir(parents=True, exist_ok=True)
+    for i in range(count):
+        (temp / f"chunk_{i}.mp3").write_bytes(b"audio")
+    return temp
+
+
 def _full_estimate(panel, book):
     return panel._estimate(book, "openai")["eur"]
 
@@ -160,6 +172,7 @@ def test_unchanged_text_still_resumes_at_the_remaining_fraction(
         booth, monkeypatch):
     panel, book, started, authorized = booth
     _interrupted_row(panel, book, done=7, total=10)
+    _cache(panel, book, 7)
     shown = _answers(monkeypatch)
     panel.start_conversion()
     assert authorized[0] == pytest.approx(
@@ -192,6 +205,33 @@ def test_a_row_from_before_the_hash_counts_an_edited_file_as_changed(
     _answers(monkeypatch)
     panel.start_conversion()
     assert authorized[0] == pytest.approx(_full_estimate(panel, book))
+
+
+def test_a_finished_run_with_its_cache_deleted_is_not_authorized_at_zero(
+        booth, monkeypatch):
+    """Code review P1-1: done == total with no chunk files on disk
+    authorized €0, and the converter narrated every chunk again."""
+    panel, book, started, authorized = booth
+    row = _interrupted_row(panel, book, done=10, total=10)
+    _answers(monkeypatch)
+    panel.start_conversion()
+    assert authorized[0] == pytest.approx(_full_estimate(panel, book))
+    resumed = conversions.get_job(row["id"])
+    # The run is measured from what is really cached, so it bills in full.
+    assert (resumed["chunks_done"], resumed["run_baseline"]) == (0, 0)
+
+
+def test_a_partly_deleted_cache_authorizes_the_missing_chunks(
+        booth, monkeypatch):
+    panel, book, started, authorized = booth
+    row = _interrupted_row(panel, book, done=7, total=10)
+    _cache(panel, book, 4)
+    _answers(monkeypatch)
+    panel.start_conversion()
+    assert authorized[0] == pytest.approx(
+        _full_estimate(panel, book) * 0.6)
+    resumed = conversions.get_job(row["id"])
+    assert (resumed["chunks_done"], resumed["run_baseline"]) == (4, 4)
 
 
 # ── the ledger helper ───────────────────────────────────────────────────────

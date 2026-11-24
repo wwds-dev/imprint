@@ -164,3 +164,30 @@ def test_the_video_tab_still_refuses_an_unticked_image_provider(
     assert scene_provider_refused(
         window, window, find_model("OpenAI", "gpt-image-2")) is False
     assert scene_provider_refused(window, window, None) is False
+
+
+def test_an_image_model_missing_from_the_catalog_is_refused(
+        herald, monkeypatch):
+    """Fail closed: an unknown id's provider cannot be checked."""
+    window, panel, asked, made, shown = herald
+    _scene_images(monkeypatch, "someone-elses-image-model")
+    panel._on_clip_brief(BRIEF)
+    assert asked == [] and made == []
+    assert shown == ["Unknown Image Model"]
+
+
+def test_the_check_runs_before_the_brief_is_paid_for(herald, monkeypatch):
+    """Code review P3-1: refusing after the brief still billed the brief."""
+    window, panel, asked, made, shown = herald
+    monkeypatch.setenv("GEMINI_API_KEY", "test-not-a-real-key")
+    _scene_images(monkeypatch, "gemini-nano-banana-2.1")
+    from agents.video import video_studio
+    monkeypatch.setattr(video_studio, "available", lambda: True)
+    monkeypatch.setattr(panel, "current_campaign",
+                        lambda: {"id": 1, "name": "Launch", "brief": "x"})
+    monkeypatch.setattr(panel, "_platform", lambda: __import__("types")
+                        .SimpleNamespace(key="tiktok", name="TikTok",
+                                         formats=("clip",)))
+    panel.make_clip()
+    assert asked == []                     # neither the brief nor the clip
+    assert shown == ["Gemini Not Enabled"]

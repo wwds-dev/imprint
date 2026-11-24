@@ -77,17 +77,36 @@ def source_changed(row, text_hash: str, source_path: str) -> bool:
     return modified >= touched + timedelta(seconds=1)
 
 
+def cached_chunks(temp_dir, total: int) -> int:
+    """Chunk files the converter will reuse: present under their final name
+    and not empty (its sync_manifest_with_files rule)."""
+    from pathlib import Path
+    temp_dir = Path(temp_dir)
+    count = 0
+    for i in range(max(0, int(total or 0))):
+        chunk = temp_dir / f"chunk_{i}.mp3"
+        try:
+            if chunk.stat().st_size > 0:
+                count += 1
+        except OSError:
+            pass
+    return count
+
+
 def open_job(*, source_path: str, output_path: str, voice: str,
              chunk_tokens: int, estimate_eur: float, project=None,
              reset_progress: bool = False, provider: str = "",
-             model: str = "", source_sha256: str = "") -> dict:
+             model: str = "", source_sha256: str = "",
+             cached: int | None = None) -> dict:
     """Reuse the book's unfinished row (keeping billed_eur) or create one.
 
     run_baseline records where this run starts, so its own spend can be
     measured as (chunks_done - run_baseline) even after a crash.
     reset_progress=True is the fresh-start path (settings changed, cache
     invalid): the chunk counts restart at zero — billed_eur is history
-    and always survives.
+    and always survives. `cached` is the number of chunk files still on
+    disk when fewer remain than the row counts (a deleted or emptied cache):
+    the run then starts, and is measured, from that count.
     """
     if not provider:
         # No route named: the one the converter would run today, never a
@@ -112,6 +131,20 @@ def open_job(*, source_path: str, output_path: str, voice: str,
                         WHERE id = ?""",
                     (voice, int(chunk_tokens), float(estimate_eur),
                      provider, model, project, now,
+                     source_sha256, source_sha256, existing["id"]))
+            elif cached is not None:
+                conn.execute(
+                    """UPDATE audiobook_conversions
+                          SET voice = ?, chunk_tokens = ?, estimate_eur = ?,
+                              provider = ?, model = ?,
+                              project = ?, status = 'running', error = '',
+                              chunks_done = ?, run_baseline = ?,
+                              updated_at = ?,
+                              source_sha256 = CASE WHEN ? = ''
+                                  THEN source_sha256 ELSE ? END
+                        WHERE id = ?""",
+                    (voice, int(chunk_tokens), float(estimate_eur),
+                     provider, model, project, int(cached), int(cached), now,
                      source_sha256, source_sha256, existing["id"]))
             else:
                 conn.execute(

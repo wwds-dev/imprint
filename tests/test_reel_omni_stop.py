@@ -169,7 +169,10 @@ def test_omni_offers_no_stop_once_submitted(window, monkeypatch, tmp_path):
     try:
         assert started == [True]
         assert not panel.video_stop_btn.isEnabled()
-        assert "cannot be stopped" in panel.video_status_label.text()
+        assert panel.video_stop_btn.text() == "Cannot Stop"
+        assert "cannot be stopped" in panel.video_log.toPlainText()
+        window.video_worker = types.SimpleNamespace(isRunning=lambda: True)
+        assert panel.omni_rendering() is True
         # A stray Stop changes nothing: the token and the worker stay.
         window.video_worker = types.SimpleNamespace(
             cancel=lambda: started.append("cancelled"))
@@ -271,4 +274,80 @@ def test_a_completed_omni_clip_that_never_reached_disk_bills_and_closes(
     assert window.usage_tracker.get_agent_today_total("video") == \
         pytest.approx(before + 0.5)
     assert jobs.pending_rows() == []
+    assert not window._pending_requests
+
+
+def _omni_row_at_quit(output_path):
+    """What a quit during the create call really leaves: no job id, because
+    the id is written on the window thread, which was waiting to close."""
+    return jobs.record_submission(
+        provider="gemini", model=OMNI, topic="a fox in the snow",
+        slug="fox", output_path=str(output_path), seconds=6,
+        aspect_ratio="9:16", flat_cost_eur=0.5, project=None, run_id="run-1")
+
+
+def test_a_quit_during_the_omni_call_lands_the_saved_clip_next_launch(
+        window, clean_jobs_table, tmp_path, monkeypatch):
+    """Security review P1: sweep_lost used to release this row as free."""
+    if not window.video_panel._available:
+        pytest.skip("vidforge is not importable in this checkout")
+    clip = tmp_path / "fox.mp4"
+    clip.write_bytes(b"paid-clip")
+    row_id = _omni_row_at_quit(clip)
+    before = window.usage_tracker.get_agent_today_total("video")
+    recorded = _resume(window, monkeypatch, tmp_path)
+    assert recorded and recorded[0]["slug"] == "fox"
+    row = _row(row_id)
+    assert (row["status"], row["spend_state"]) == ("completed", "billed")
+    assert window.usage_tracker.get_agent_today_total("video") == \
+        pytest.approx(before + 0.5)
+    assert not window._pending_requests
+
+
+def test_a_quit_during_the_omni_call_with_no_clip_is_not_counted_as_free(
+        window, clean_jobs_table, tmp_path, monkeypatch):
+    if not window.video_panel._available:
+        pytest.skip("vidforge is not importable in this checkout")
+    row_id = _omni_row_at_quit(tmp_path / "never.mp4")
+    before = window.usage_tracker.get_agent_today_total("video")
+    _resume(window, monkeypatch, tmp_path)
+    row = _row(row_id)
+    assert row["spend_state"] == "billed"
+    assert "may have charged" in row["error"]
+    assert window.usage_tracker.get_agent_today_total("video") == \
+        pytest.approx(before + 0.5)
+    assert not window._pending_requests
+
+
+def test_sweep_lost_still_releases_an_asynchronous_submission(
+        clean_jobs_table):
+    veo = jobs.record_submission(
+        provider="gemini", model="veo-3.1-fast-generate-preview", topic="t",
+        slug="veo", output_path="/tmp/veo.mp4", seconds=6,
+        aspect_ratio="9:16", flat_cost_eur=0.5, project=None, run_id="r")
+    omni = _omni_row_at_quit("/tmp/omni.mp4")
+    assert [r["id"] for r in jobs.sweep_lost()] == [veo]
+    assert [r["id"] for r in jobs.unacknowledged_synchronous()] == [omni]
+
+
+def test_the_shutdown_save_leaves_no_partial_file(app, tmp_path):
+    holder = {}
+    worker = _worker(_OmniClient(lambda: holder["w"].cancel()), tmp_path)
+    holder["w"] = worker
+    worker.run()
+    assert sorted(p.name for p in (tmp_path / "clip").iterdir()) == ["fox.mp4"]
+
+
+def test_an_acknowledged_omni_row_that_never_completed_is_released(
+        window, clean_jobs_table, tmp_path, monkeypatch):
+    """Code review P2-2: the release branch had no test."""
+    if not window.video_panel._available:
+        pytest.skip("vidforge is not importable in this checkout")
+    row_id = _omni_row(tmp_path / "none.mp4", status="failed")
+    before = window.usage_tracker.get_agent_today_total("video")
+    _resume(window, monkeypatch, tmp_path)
+    row = _row(row_id)
+    assert row["spend_state"] == "released"
+    assert window.usage_tracker.get_agent_today_total("video") == \
+        pytest.approx(before)
     assert not window._pending_requests

@@ -768,6 +768,19 @@ class AudiobookPanel(QWidget):
                 fresh_start = True
         fraction = (1.0 if fresh_start
                     else conversions.remaining_fraction(open_row))
+        # The fraction trusts the row's count; the converter trusts the files
+        # (sync_manifest_with_files). A deleted or emptied cache means it
+        # narrates the missing chunks again, so they are authorized again
+        # (audit QB-2: done == total with no cache authorized €0).
+        cached = None
+        total = int((open_row or {}).get("chunks_total") or 0)
+        if open_row and not fresh_start and total:
+            from services.narrator.converter import TEMP_DIRNAME
+            present = conversions.cached_chunks(
+                expected_output.parent / TEMP_DIRNAME, total)
+            if present < min(int(open_row.get("chunks_done") or 0), total):
+                cached = present
+                fraction = 1.0 - present / total
         remaining_eur = round(estimate["eur"] * fraction, 6)
         # Assessed like every paid request, across every narrator: this
         # route at what this run still has to pay (cached chunks were paid
@@ -814,7 +827,7 @@ class AudiobookPanel(QWidget):
                 estimate_eur=estimate["eur"],
                 project=self._conversion_project_id,
                 reset_progress=fresh_start, provider=route, model=model,
-                source_sha256=source_hash)
+                source_sha256=source_hash, cached=cached)
             self._conversion_job_id = job["id"]
         except Exception as exc:
             self._conversion_job_id = None
