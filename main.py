@@ -5729,8 +5729,13 @@ class GodAI(QWidget):
                 "stop_reason": stop_kind(usage.get("stop_reason")),
                 "thought_tokens": int(usage.get("thought_tokens") or 0)}
 
-    def record_request(self, agent, response, messages=None):
+    def record_request(self, agent, response, messages=None, *,
+                       bill_flat_eur=None):
         """Bill, save and close out a request authorised by authorize_request().
+
+        `bill_flat_eur` bills less than a flat-priced request's confirmed
+        amount (a render whose refused scenes were never sent); never more
+        than what was confirmed, never below 0.
 
         Returns the usage entry, with "stop_reason" and "thought_tokens", so
         the panel can tell a reply cut at the length limit from a complete
@@ -5740,6 +5745,16 @@ class GodAI(QWidget):
         if context is None:          # never authorised (or already recorded)
             return None
 
+        flat = context.get("flat_cost_eur")
+        if flat is not None and bill_flat_eur is not None:
+            # A figure that is not a finite number bills what was confirmed,
+            # like record_partial: never a silent 0.
+            try:
+                bill = float(bill_flat_eur)
+            except (TypeError, ValueError):
+                bill = float("nan")
+            if bill == bill and abs(bill) != float("inf"):
+                flat = round(min(float(flat), max(0.0, bill)), 6)
         entry = self.usage_tracker.log_request(
             agent=context["agent"],
             backend=context["provider"],
@@ -5747,7 +5762,7 @@ class GodAI(QWidget):
             prompt_text=context["prompt"] + "\n" + context.get("project_instructions", ""),
             response_text=response,
             usage=context["usage"],
-            flat_cost_eur=context.get("flat_cost_eur"),
+            flat_cost_eur=flat,
             project=context.get("project"),
         )
 

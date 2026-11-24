@@ -2345,12 +2345,15 @@ clip and the image prompt Vector writes for logo concepts are checked before the
 render or the images are reserved; the text call that wrote them is already
 paid (a *[Refused]* status line). An empty narrated-video topic lets vidforge pick
 one, which only the scene check below sees. Each scene image of a narrated video, on any provider, is checked again
-just before it is sent; a refused scene becomes a plain gradient card. It matches
+just before it is sent; a refused scene becomes a plain gradient card, is listed in the
+render's log as not billed, and is left out of the render's cost. It matches
 word forms ("nudes", "face-swap"), folds fullwidth letters and drops invisible
 characters; a negation counts directly before the word or at the head of a short
 list ("no nudity" and "no gore or nudity" pass, "no watermark nude photo" does
-not). Look-alike letters from other scripts and
-other languages are not caught. Generated Qwen images and Wan videos carry
+not). It is a narrow list, not a classifier, and is known to miss: look-alike letters from
+other scripts (Cyrillic `е` for `e`), spaced-out letters ("n u d e"), digit substitutions
+("nud3") and every language but English ("nacktes Foto"). Whether a provider's own filter
+catches those is not tested here. Generated Qwen images and Wan videos carry
 Alibaba's visible AI watermark; Imprint Studio no longer asks for it to be
 removed.
 

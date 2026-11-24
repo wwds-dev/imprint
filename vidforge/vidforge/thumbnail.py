@@ -10,8 +10,12 @@ from . import fonts, visuals
 from .config import Config
 
 
-def render(cfg: Config, plan: dict[str, Any], dst: Path) -> Path | None:
-    """Draw a 1280x720 thumbnail. Returns None if disabled or unrenderable."""
+def render(cfg: Config, plan: dict[str, Any], dst: Path,
+           reporter: Any = None) -> Path | None:
+    """Draw a 1280x720 thumbnail. Returns None if disabled or unrenderable.
+
+    `reporter` is told when the host's content policy refused the background
+    prompt (a gradient is drawn instead), so the host can leave it unbilled."""
     if not cfg.get("thumbnail.enabled", True):
         return None
 
@@ -28,6 +32,8 @@ def render(cfg: Config, plan: dict[str, Any], dst: Path) -> Path | None:
         except Exception as exc:  # noqa: BLE001
             print(f"   ! thumbnail background failed ({exc}); using a gradient")
             visuals.generate(cfg, "gradient", prompt, background)
+            if visuals.is_policy_refusal(exc):
+                visuals.note_refused(reporter)
 
     image = Image.open(background).convert("RGB")
 

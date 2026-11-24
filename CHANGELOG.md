@@ -37,6 +37,11 @@ listed under **Unreleased** until it ships.
   plurals and inflections, fullwidth and invisible characters, and "non-" forms; a negation counts
   directly before the word or at the head of a short list ("no gore or nudity"). Qwen images and Wan videos no longer ask
   Alibaba to drop its AI watermark. Legal audit L-03, L-04.
+- **A scene image the content policy refuses is no longer billed** (2026-11-24, leftovers of
+  `ai-act-safeguards`): a narrated video or Herald clip whose scene prompt is refused draws a
+  gradient card, says so in the log and takes that image off the render's cost, on success and on
+  failure. A teaser the backstop refuses is closed as failed in the creator's job list. The README
+  now lists what the check does not catch (look-alike letters, spaced letters, other languages).
 - **Privacy note and third-party notices published** (2026-11-24): README gains *Privacy*
   (what stays on your Mac, which provider gets what, local runtimes on another machine,
   measurement prompts) and *Licence*; the access-and-privacy lesson gains a recipient table;

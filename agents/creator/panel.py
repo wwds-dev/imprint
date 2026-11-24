@@ -1467,14 +1467,25 @@ class CreatorPanel(QWidget):
         if attached:
             self.refresh_calendar()
 
-    def _settle_teaser_job(self, job_id: str, spend_state: str) -> None:
+    def _settle_teaser_job(self, job_id: str, spend_state: str,
+                           refusal: str = "") -> None:
         """Close the delivery row's money state; billed rows also settle
-        actual cost from the preflight estimate."""
+        actual cost from the preflight estimate. A `refusal` marks a row the
+        content policy stopped before any submission as failed."""
         if not job_id:
             return
         try:
             with get_connection() as conn:
-                if spend_state == "billed":
+                if refusal:
+                    conn.execute(
+                        """UPDATE creator_video_jobs
+                              SET spend_state = ?, status = 'failed',
+                                  policy_result = 'local-refused', error = ?,
+                                  updated_at = ?
+                            WHERE request_id = ?""",
+                        (spend_state, refusal,
+                         datetime.now().isoformat(timespec="seconds"), job_id))
+                elif spend_state == "billed":
                     conn.execute(
                         """UPDATE creator_video_jobs
                               SET spend_state = 'billed',
@@ -1514,7 +1525,11 @@ class CreatorPanel(QWidget):
                      and bool(context.get("job_id"))
                      and getattr(self.host.creator_video_worker,
                                  "retryable", False))
-        keep_open = timed_out or retryable
+        # The worker's backstop refused the prompt: nothing was submitted, so
+        # no flag a worker carries can keep the row pending.
+        refused = bool(token) and bool(getattr(
+            self.host.creator_video_worker, "refused", False))
+        keep_open = (timed_out or retryable) and not refused
         if token:
             if provider_completed:
                 # A completed render is charged even if the local download
@@ -1528,7 +1543,9 @@ class CreatorPanel(QWidget):
                     token, reason="timeout" if timed_out else "error")
             else:
                 self.host.abandon_request(token)
-                self._settle_teaser_job(context.get("job_id", ""), "released")
+                self._settle_teaser_job(
+                    context.get("job_id", ""), "released",
+                    refusal=error if refused else "")
         self._video_reset(f"[Error] {error}")
         if keep_open:
             provider = TEASER_ROUTES[(context or {}).get(

@@ -1007,3 +1007,108 @@ def test_a_panel_error_with_markup_reads_as_text(win):
     label = panel.author_status_label
     assert (label.text(), label.textFormat()) == (f"[Error] {MARKUP}",
                                                   Qt.PlainText)
+
+
+# ── 11. Scenes the content policy refused are not billed ─────────────────────
+# Spec ai-act-safeguards, review P2-2: a refused scene prompt becomes a
+# gradient card that no provider saw.
+
+REFUSED_3 = {"stages": ALL_PIPELINE + ["thumbnail"], "images": 35, "refused": 3}
+# Confirmed 2.29 USD, less 3 refused scenes x 0.06 = 2.11 USD x 0.92 by hand.
+REFUSED_3_EUR = 1.9412
+
+
+def test_a_finished_render_costs_the_total_less_its_refused_scenes():
+    from agents.video.studio import completed_render_cost_usd
+    assert completed_render_cost_usd(ESTIMATE, REFUSED_3) == pytest.approx(2.11)
+    assert completed_render_cost_usd(ESTIMATE, _trace()) == pytest.approx(2.29)
+    # A source without a per-image rate (pexels, gradient) has nothing to credit.
+    flat = dict(ESTIMATE, per_image=0.0)
+    assert completed_render_cost_usd(flat, REFUSED_3) == pytest.approx(2.29)
+    # Never below zero.
+    assert completed_render_cost_usd(ESTIMATE, {"refused": 999}) == 0.0
+
+
+def test_a_failed_render_does_not_bill_the_refused_scenes():
+    # 35 images saved, 3 of them gradient cards: 32 billed at 0.06.
+    trace = {"stages": ALL_PIPELINE, "images": 35, "refused": 3}
+    assert partial_render_cost_usd(ESTIMATE, trace) == pytest.approx(
+        0.03 + 0.112 + 0.048 + 32 * 0.06)
+
+
+def test_the_worker_counts_refused_scenes_into_its_trace(app, monkeypatch):
+    def produce(cfg, *, topic=None, resume_slug=None, reporter=None):
+        reporter.begin("visuals")
+        reporter.note_refused()
+        reporter.note_refused()
+        raise RuntimeError("stop")
+
+    _worker, events = _run_worker(monkeypatch, produce)
+    assert events[0] == ("trace", {"stages": ["visuals"], "images": 0,
+                                   "refused": 2})
+
+
+def test_a_video_render_bills_less_when_scenes_were_refused(win):
+    panel = _video(win)
+    confirmed, run_id = _arm_video(win, panel, dict(REFUSED_3))
+    assert confirmed == 2.1068
+
+    panel._on_done("fox", "/nowhere/fox.mp4")
+
+    assert [(r["cost_type"], r["cost_eur"]) for r in _rows()] == [
+        ("per_unit", pytest.approx(REFUSED_3_EUR, abs=1e-9))]
+    assert win.session_cost_total == pytest.approx(REFUSED_3_EUR)
+    assert "3 scene images refused by the content policy" in (
+        panel.video_log.toPlainText())
+
+
+def test_a_video_render_without_refusals_bills_the_confirmed_total(win):
+    panel = _video(win)
+    confirmed, _run_id = _arm_video(
+        win, panel, _trace(ALL_PIPELINE + ["thumbnail"], 35))
+
+    panel._on_done("fox", "/nowhere/fox.mp4")
+
+    assert [r["cost_eur"] for r in _rows()] == [
+        pytest.approx(confirmed, abs=1e-9)]
+
+
+def test_a_social_clip_bills_less_when_scenes_were_refused(win, monkeypatch):
+    panel = win.social_panel
+    confirmed = round(ESTIMATE["total"] * EUR, 4)
+    token, _run_id = _authorize(win, confirmed, label="tiktok clip")
+    panel._clip_video_token = token
+    panel._clip_estimate = dict(ESTIMATE)
+    panel._clip_eur_rate = EUR
+    panel._on_clip_trace(dict(REFUSED_3))
+    panel._pending_clip = ("tiktok", 30)
+    monkeypatch.setattr(panel, "current_campaign", lambda: None)
+    monkeypatch.setattr(win, "refresh_video_library", lambda: None)
+
+    panel._on_clip_rendered("fox", "/nowhere/fox.mp4")
+
+    assert [(r["cost_type"], r["cost_eur"]) for r in _rows()] == [
+        ("per_unit", pytest.approx(REFUSED_3_EUR, abs=1e-9))]
+    assert "3 scene images refused" in panel.social_status_label.toolTip()
+
+
+def test_record_request_never_bills_more_than_confirmed(win):
+    token, _run_id = _authorize(win, 0.25)
+    win.record_request(token, "rendered", bill_flat_eur=9.99)
+    assert [r["cost_eur"] for r in _rows()] == [pytest.approx(0.25)]
+
+
+def test_record_request_bills_the_confirmed_flat_for_a_figure_that_is_not_a_number(win):
+    """Review P3-1: like record_partial, never a silent 0."""
+    for bad in (math.nan, math.inf, "x"):
+        token, _run_id = _authorize(win, 0.25)
+        win.record_request(token, "rendered", bill_flat_eur=bad)
+    assert [r["cost_eur"] for r in _rows()] == [pytest.approx(0.25)] * 3
+
+
+def test_the_failure_log_names_the_refused_scenes():
+    trace = {"stages": ALL_PIPELINE, "images": 35, "refused": 3}
+    _status, log = partial_render_notice(
+        ESTIMATE, trace, recorded_eur=1.9, confirmed_eur=2.1068,
+        eur_rate=EUR, error="boom", stopped=False)
+    assert "3 scene images refused by the content policy" in log

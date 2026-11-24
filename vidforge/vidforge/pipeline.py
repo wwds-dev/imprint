@@ -269,7 +269,7 @@ def produce(
     if cfg.get("thumbnail.enabled", True):
         reporter.begin("thumbnail")
         try:
-            thumbnail.render(cfg, build.plan, build.thumbnail_path)
+            thumbnail.render(cfg, build.plan, build.thumbnail_path, reporter)
             build.mark("thumbnail")
         except Exception as exc:  # noqa: BLE001 - never fail a render over this
             reporter.log(f"! thumbnail failed ({exc}); video is fine")

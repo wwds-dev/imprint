@@ -156,9 +156,13 @@ def _video_worker(prompt, calls):
 def test_video_worker_never_submits_a_refused_prompt(app):
     calls = []
     worker, errors = _video_worker(REFUSED, calls)
+    # Pre-set, so the assertion below can fail: a refusal is a verdict and
+    # clears whatever the worker carried (review QA P3-1).
+    worker.retryable = worker.timed_out = True
     worker.run()
     assert calls == []
     assert errors and errors[0].startswith("Not sent: ")
+    assert worker.refused      # the panel keys its release on this flag
     # A local refusal is a verdict: the panel releases the reservation.
     assert not worker.retryable and not worker.timed_out
 
@@ -303,6 +307,92 @@ def test_vidforge_openai_scene_is_checked_before_openai_is_called(monkeypatch, t
     assert sent == []
     visuals._generate_ai(cfg, ALLOWED, tmp_path / "scene.png")
     assert len(sent) == 1 and (tmp_path / "scene.png").read_bytes() == b"PNG"
+
+
+def test_a_refused_vidforge_scene_is_counted_and_drawn_as_a_gradient_card(
+        monkeypatch, tmp_path):
+    from agents.video import video_studio
+    if not video_studio.available():
+        pytest.skip(video_studio.unavailable_reason())
+    from vidforge import visuals
+    from vidforge.progress import Reporter
+
+    sent = []
+
+    class Images:
+        def generate(self, **kwargs):
+            sent.append(kwargs["prompt"])
+            return types.SimpleNamespace(data=[types.SimpleNamespace(
+                b64_json=base64.b64encode(b"P" * 2048).decode(), url=None)])
+
+    class Counting(Reporter):
+        refused = 0
+
+        def note_refused(self):
+            self.refused += 1
+
+    monkeypatch.setattr(visuals, "_openai",
+                        lambda: types.SimpleNamespace(images=Images()))
+    cfg = video_studio.load_config({"visuals.source": "ai",
+                                    "visuals.image_model": "gpt-image-2.5-flare"})
+    reporter = Counting()
+    scenes = [{"index": 0, "visual_prompt": REFUSED},
+              {"index": 1, "visual_prompt": ALLOWED}]
+    paths = visuals.render_scenes(cfg, scenes, tmp_path, reporter)
+    assert len(paths) == 2 and all(p.exists() for p in paths)
+    assert reporter.refused == 1          # only the refused scene
+    assert len(sent) == 1 and sent[0].startswith(ALLOWED)
+
+
+def test_a_refused_thumbnail_prompt_is_counted_too(monkeypatch, tmp_path):
+    """Review P2-1: the thumbnail background does not go through
+    render_scenes, but it is one of the images the estimate reserves."""
+    from agents.video import video_studio
+    if not video_studio.available():
+        pytest.skip(video_studio.unavailable_reason())
+    from vidforge import thumbnail, visuals
+    from vidforge.progress import Reporter
+
+    class Images:
+        def generate(self, **kwargs):
+            raise AssertionError("a refused prompt must not reach OpenAI")
+
+    class Counting(Reporter):
+        refused = 0
+
+        def note_refused(self):
+            self.refused += 1
+
+    monkeypatch.setattr(visuals, "_openai",
+                        lambda: types.SimpleNamespace(images=Images()))
+    cfg = video_studio.load_config({"visuals.source": "ai",
+                                    "visuals.image_model": "gpt-image-2.5-flare"})
+    reporter = Counting()
+    thumbnail.render(cfg, {"thumbnail_prompt": REFUSED, "title": "T"},
+                     tmp_path / "thumbnail.jpg", reporter)
+    assert reporter.refused == 1
+
+
+def test_a_host_that_fails_counting_cannot_abort_the_render():
+    from vidforge import visuals
+
+    class Broken:
+        def note_refused(self):
+            raise RuntimeError("host bug")
+
+    visuals.note_refused(Broken())          # swallowed
+    visuals.note_refused(None)
+
+
+def test_policy_refusal_is_matched_by_class_name_including_subclasses():
+    from vidforge import visuals
+
+    class Later(ContentPolicyError):
+        pass
+
+    assert visuals.is_policy_refusal(ContentPolicyError("x"))
+    assert visuals.is_policy_refusal(Later("x"))
+    assert not visuals.is_policy_refusal(ValueError("x"))
 
 
 def test_video_pipeline_topic_is_refused_before_reserving(window, monkeypatch):

@@ -274,6 +274,35 @@ def test_live_local_exception_keeps_the_teaser_reserved(window, account):
     assert row["spend_state"] == "reserved"
 
 
+def test_a_backstop_refusal_closes_the_teaser_row_as_failed(window, account):
+    """The worker's backstop refused the prompt: nothing was submitted, so the
+    row is released and failed even if the worker carries a stale keep-open
+    flag (ai-act-safeguards review P3-3, QA P3-1)."""
+    panel = window.creator_panel
+    request_id = _insert_job(account, request_id="req-refused",
+                             status="submitted")
+    token = window.restore_request(
+        "creator", "higgsfield", "/bytedance/x", "a teaser",
+        label="promo teaser", flat_cost_eur=0.5)
+    panel._video_context = {
+        "account_id": account, "request_token": token,
+        "job_id": request_id, "provider_completed": False}
+    window.creator_video_worker = types.SimpleNamespace(
+        timed_out=True, retryable=True, refused=True)
+    try:
+        panel._video_error("Not sent: Imprint Studio does not generate X.")
+    finally:
+        window.creator_video_worker = None
+        panel._video_context = {}
+    assert token not in window._pending_requests
+    row = _job_row(request_id)
+    assert row["spend_state"] == "released"
+    assert row["status"] == "failed"
+    assert row["policy_result"] == "local-refused"
+    assert row["error"].startswith("Not sent: ")
+    assert "may still finish" not in panel.creator_video_status.text()
+
+
 def test_stale_worker_flag_cannot_mislabel_an_estimate_failure(
         window, account):
     """The estimate stage has no token; a leftover timed-out worker from an

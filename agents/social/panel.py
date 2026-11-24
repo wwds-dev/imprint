@@ -745,8 +745,18 @@ class SocialPanel(QWidget):
     def _on_clip_rendered(self, slug: str, path: str):
         from agents.social import store
         token, self._clip_video_token = self._clip_video_token, None
+        trace, self._clip_trace = self._clip_trace, None
+        bill_eur, note = None, ""
+        if trace:
+            from agents.video import video_studio
+            note = video_studio.refused_scenes_note(trace)
+            if (note and float(self._clip_estimate.get("total") or 0) > 0
+                    and self._clip_eur_rate > 0):
+                bill_eur = (video_studio.completed_render_cost_usd(
+                    self._clip_estimate, trace) * self._clip_eur_rate)
         if token:
-            self.host.record_request(token, f"social clip {slug}")
+            self.host.record_request(token, f"social clip {slug}",
+                                     bill_flat_eur=bill_eur)
         campaign = self.current_campaign()
         platform_key, _seconds = self._pending_clip
         if campaign:
@@ -757,7 +767,7 @@ class SocialPanel(QWidget):
                 angle=self.social_angle_box.currentText())
             self.refresh_schedule()
         self.social_status_label.setText(f"Clip ready — {Path(path).name}")
-        self.social_status_label.setToolTip("")
+        self.social_status_label.setToolTip(note)
         self._clip_done()
         self.host.refresh_video_library()
 

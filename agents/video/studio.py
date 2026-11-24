@@ -340,7 +340,32 @@ def _billed(estimate: dict, trace: dict | None) -> tuple[list, int]:
     images = max(0, int((trace or {}).get("images") or 0))
     if "thumbnail" in stages:
         images += 1
+    # A scene the content policy refused became a gradient card that no
+    # provider saw: not an image anyone is billed for.
+    images = max(0, images - refused_scenes(trace))
     return lines, images
+
+
+def refused_scenes(trace: dict | None) -> int:
+    """Scene images the content policy refused during this render."""
+    return max(0, int((trace or {}).get("refused") or 0))
+
+
+def completed_render_cost_usd(estimate: dict, trace: dict | None) -> float:
+    """What a finished render costs: the confirmed total, less each scene the
+    content policy refused at the per-image rate (never below 0). Refused
+    scenes are drawn as gradient cards and no provider is called for them."""
+    total = float(estimate.get("total") or 0.0)
+    credit = refused_scenes(trace) * float(estimate.get("per_image") or 0.0)
+    return round(max(0.0, total - credit), 6)
+
+
+def refused_scenes_note(trace: dict | None) -> str:
+    n = refused_scenes(trace)
+    if not n:
+        return ""
+    return (f"{n} scene image{'s' if n != 1 else ''} refused by the content "
+            "policy: drawn as plain gradient cards and not billed.")
 
 
 def partial_render_cost_usd(estimate: dict, trace: dict | None) -> float:
@@ -403,4 +428,7 @@ def partial_render_notice(estimate: dict, trace: dict | None, *,
     log = (f"[Billing] Recorded {money_text.paid(recorded_eur)} of "
            f"{money_text.up_to(confirmed_eur)} confirmed: {', '.join(items)}. "
            "A new render starts from the beginning and is paid again.")
+    refused = refused_scenes_note(trace)
+    if refused:
+        log += f" {refused}"
     return status, log

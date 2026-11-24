@@ -77,6 +77,10 @@ class Reporter:
     def log(self, message: str) -> None:
         self.on_log(message)
 
+    def note_refused(self) -> None:
+        """A scene image was refused by the host's content policy and drawn as
+        a gradient card instead. The host can count it (and not bill it)."""
+
     # -- hooks -------------------------------------------------------------
     def on_stage(self, stage_key: str, detail: str) -> None:  # pragma: no cover
         pass

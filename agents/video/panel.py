@@ -890,8 +890,20 @@ class VideoPanel(QWidget):
         # Settle before billing: a crash between the two must resolve as
         # a one-time undercount, never a double-bill on resume.
         self._close_job_row(billed=True)
+        trace, self._render_trace = self._render_trace, None
+        bill_eur, note = None, ""
+        if self._active_kind == "pipeline" and trace:
+            from agents.video import video_studio
+            note = video_studio.refused_scenes_note(trace)
+            if (note and float(self._render_estimate.get("total") or 0) > 0
+                    and self._render_eur_rate > 0):
+                bill_eur = (video_studio.completed_render_cost_usd(
+                    self._render_estimate, trace) * self._render_eur_rate)
         if token:
-            self.host.record_request(token, f"rendered {slug}")
+            self.host.record_request(token, f"rendered {slug}",
+                                     bill_flat_eur=bill_eur)
+        if note:
+            self.video_log.append(f"[Billing] {note}")
         self._reset(f"Done — {Path(path).name}")
         self.refresh_library()
 

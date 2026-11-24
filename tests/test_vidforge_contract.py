@@ -63,6 +63,15 @@ class TestPipelineEntryPoint:
                 f"produce() no longer accepts {name!r}; "
                 "ui/workers.VideoWorker passes it by keyword")
 
+    def test_the_thumbnail_stage_gets_the_reporter(self):
+        """A refused thumbnail prompt must reach the host's reporter, so the
+        refused image is not billed (ai-act-safeguards review P2-1)."""
+        from vidforge import pipeline, thumbnail
+
+        assert "reporter" in inspect.signature(thumbnail.render).parameters
+        assert ("thumbnail.render(cfg, build.plan, build.thumbnail_path, reporter)"
+                in inspect.getsource(pipeline.produce))
+
     def test_the_build_it_returns_still_carries_slug_and_path(self):
         """`_video_on_done` reads `build.slug` and `build.video_path`."""
         from vidforge.pipeline import Build

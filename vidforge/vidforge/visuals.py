@@ -182,6 +182,22 @@ def _generate_gradient(cfg: Config, prompt: str, dst: Path) -> None:
 # --------------------------------------------------------------------------
 
 
+def is_policy_refusal(exc: BaseException) -> bool:
+    """True for the host's ContentPolicyError (or a subclass), matched by name:
+    vidforge cannot import Imprint's class when it runs on its own."""
+    return any(c.__name__ == "ContentPolicyError" for c in type(exc).__mro__)
+
+
+def note_refused(reporter: Reporter | None) -> None:
+    """Tell the host a refused image became a gradient card. A host that fails
+    here must not abort the render: one image degrades, not the run."""
+    try:
+        if reporter is not None:
+            reporter.note_refused()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def render_scenes(
     cfg: Config,
     scenes: list[dict[str, Any]],
@@ -212,6 +228,11 @@ def render_scenes(
         except Exception as exc:  # noqa: BLE001 - degrade one scene, not the run
             reporter.log(f"! {source} failed for scene {scene['index'] + 1}: {exc}")
             reporter.log("  falling back to a gradient card for this scene")
+            # A refused prompt never reached a provider: tell the host, so
+            # the scene is not billed (spec ai-act-safeguards, review P2-2).
+            # After the card is drawn: a failed card must not count as one.
+            if is_policy_refusal(exc):
+                note_refused(reporter)
             _generate_gradient(cfg, scene["visual_prompt"], tmp)
         tmp.replace(dst)
 

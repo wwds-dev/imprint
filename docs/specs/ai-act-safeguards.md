@@ -73,8 +73,14 @@ All three reports found the same P1s; fixed without widening the word list:
   NFKC-folded with invisible characters dropped; a negation counts only directly before the word
   (one filler allowed). Higgsfield refusals in the Video workspace keep Higgsfield's wording; the
   creator teaser refusal sets "Not sent: content policy."
-Left for later (TODO P3): refused LLM-written scene prompts still counted in spend; creator backstop
-row status; look-alike letters and other languages.
+Fixed 2026-11-24 (leftovers pass, `docs/audit/ai-act-safeguards-leftovers-code-reviewer.md`): a
+refused LLM-written scene is counted by the worker (`Reporter.note_refused`, trace key `refused`) and
+not billed (`completed_render_cost_usd`; failed renders leave it out of the image count); the creator
+backstop closes its row `failed` / `local-refused` / `released`; the worker test can now fail.
+**Accepted residual risk (the spec keeps the check narrow):** look-alike letters from other
+scripts, spaced-out letters ("n u d e"), digit substitutions ("nud3") and languages other than English
+pass the check. Whether provider models read such forms as the word was not tested. Documented in the
+README (Video and image) and `services/content_policy.py`; closing them is a new spec, not a bug fix.
 
 ## Owner decisions (Define gate)
 - **D1 Watermark:** always on (recommended; a setting lets it be switched off again) or a

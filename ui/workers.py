@@ -379,6 +379,8 @@ class VideoGenerationWorker(QThread):
         # flag is set.
         self.timed_out = False
         self.retryable = False
+        # True when the backstop below refused the prompt: nothing was sent.
+        self.refused = False
         self._cancelled = False
 
     def cancel(self):
@@ -402,6 +404,8 @@ class VideoGenerationWorker(QThread):
         from services.content_policy import refusal
         reason = refusal(self.prompt)
         if reason:
+            self.timed_out = self.retryable = False
+            self.refused = True
             self.error_signal.emit(f"Not sent: {reason}")
             return
         try:
@@ -578,6 +582,10 @@ class VideoWorker(QThread):
         self._stages: list[str] = []
         self._images = 0
         self._image_total = 0
+        self._refused = 0
+
+    def note_refused(self) -> None:
+        self._refused += 1
 
     def _note_stage(self, stage_key: str) -> None:
         if stage_key not in self._stages:
@@ -598,7 +606,12 @@ class VideoWorker(QThread):
         self._images = max(self._images, self._image_total)
 
     def trace(self) -> dict:
-        return {"stages": list(self._stages), "images": self._images}
+        trace = {"stages": list(self._stages), "images": self._images}
+        if self._refused:
+            # Scenes the content policy refused: gradient cards, never sent
+            # to a provider, so never billed (key only when there are any).
+            trace["refused"] = self._refused
+        return trace
 
     def cancel(self):
         self._cancel_requested = True
@@ -629,6 +642,9 @@ class VideoWorker(QThread):
                     if getattr(self, "stage_key", None) == "visuals":
                         worker._note_scene(done, total)
                     super().substep(done, total, detail)
+
+                def note_refused(self):
+                    worker.note_refused()
 
                 def on_stage(self, stage_key, detail):
                     from agents.video.studio import overall_fraction

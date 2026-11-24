@@ -108,8 +108,9 @@ def _normalise(prompt: str | None) -> str:
     Fullwidth letters and ligatures fold to plain ones (NFKC), and zero-width
     joiners, soft hyphens and other format characters are removed, so they
     cannot split a word past the patterns (security review P2-2). Look-alike
-    letters from other scripts are not folded: a residual risk the spec
-    accepts by keeping this check narrow.
+    letters from other scripts, spaced-out letters, digit substitutions and
+    languages other than English are not caught: a residual risk the spec
+    accepts by keeping this check narrow (README, "Video and image").
     """
     text = unicodedata.normalize("NFKC", prompt or "")
     text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
