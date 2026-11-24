@@ -73,6 +73,25 @@ REVISE_TOO_LONG_LOCAL = (
     "the text and its revision together. Select a passage, or choose a "
     "cloud model, and press Write again.")
 
+# Section markers the system prompt asks for (agents/author/agent.py). A
+# Revise reply keeps only a [DRAFT] heading on its first line out of the
+# text; a prose stream cut by Stop or an error loses its marker lines, so a
+# later Revise never meets one inside the manuscript (security review
+# 2026-11-24, quill-draft-safety P1-1).
+_LEADING_DRAFT_MARKER = re.compile(r"\A\s*\**\s*\[DRAFT\]\s*\**[ \t]*\n?",
+                                   re.IGNORECASE)
+_SECTION_MARKER = re.compile(
+    r"\**[ \t]*\[(?:DRAFT|OUTLINE|CHARACTER|WORLD)\][ \t]*\**[ \t]*\n?",
+    re.IGNORECASE)
+
+
+def revise_text(reply: str) -> str:
+    """The text a Revise reply puts in place of what was sent: the whole
+    reply, less a [DRAFT] heading on its first line. Never split into
+    sections: a marker inside the text must not decide what survives."""
+    return _LEADING_DRAFT_MARKER.sub("", reply.strip(), count=1).strip()
+
+
 # The workspace written with no Project selected (audit UX-01): saved and
 # restored like a Project's, in one settings row of the local database.
 UNFILED_WORKSPACE_KEY = "author_unfiled_workspace"
@@ -1262,6 +1281,27 @@ class AuthorPanel(QWidget):
         """Where the streamed reply begins in the Draft."""
         return self._stream_anchor.position() + 1 if self._stream_anchor else 0
 
+    def _strip_stream_markers(self) -> None:
+        """A prose stream cut by Stop or an error stays in the Draft (its text
+        is kept), but not its section markers: left there, a later Revise
+        would meet them inside the manuscript."""
+        if self._stream_mode != "append" or not self._stream_open:
+            return
+        box = self.author_draft_box
+        start = self._stream_start()
+        cursor = QTextCursor(box.document())
+        cursor.setPosition(min(start, box.document().characterCount() - 1))
+        cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
+        streamed = cursor.selection().toPlainText()
+        cleaned = _SECTION_MARKER.sub("", streamed)
+        if cleaned != streamed:
+            cursor.beginEditBlock()
+            cursor.insertText(cleaned)
+            cursor.endEditBlock()
+        self._stream_open = False
+        self._stream_anchor = None
+        self._stream_sep = 0
+
     def _end_stream(self) -> str | None:
         mode, self._stream_mode = self._stream_mode, None
         self.author_draft_box.setReadOnly(False)
@@ -1304,9 +1344,7 @@ class AuthorPanel(QWidget):
             return
         cut = result_notice(entry, full_response, "author") is not None
         if mode == "revise" and revise is not None:
-            sections = self._parse_sections(full_response)
-            revised = (sections["draft"] if any(sections.values())
-                       else full_response.strip())
+            revised = revise_text(full_response)
             source = revise.selection().toPlainText().strip()
             ratio = REVISE_MIN_RATIO_BY_TASK.get(self._run_task,
                                                  REVISE_MIN_RATIO)
@@ -1355,8 +1393,9 @@ class AuthorPanel(QWidget):
         if token:
             self.host.abandon_request(token, error=error)
         # Nothing is undone or overwritten: prose written so far stays after
-        # the old Draft (as with Continue); notes and revisions were never
-        # applied.
+        # the old Draft (as with Continue), without its section markers;
+        # notes and revisions were never applied.
+        self._strip_stream_markers()
         self._end_stream()
         self._revise_cursor = None
         self.author_status_label.setText(f"[Error] {error}")
@@ -1370,6 +1409,7 @@ class AuthorPanel(QWidget):
         token, self._write_token = self._write_token, None
         if token:
             self.host.abandon_request(token, reason="stopped")
+        self._strip_stream_markers()
         mode = self._end_stream()
         self._revise_cursor = None
         self._run_stopped = True
@@ -1507,6 +1547,18 @@ class AuthorPanel(QWidget):
         # reroute (and lose) the reply.
         task = ((self._run_task if mode else "")
                 or self.author_task_box.currentText())
+        if mode == "revise":
+            # Replace exactly the text that was sent, as one edit so Ctrl+Z
+            # brings it back. The whole reply is the revision: it is never
+            # split into sections and never writes the notes tabs. An empty
+            # reply replaces nothing.
+            clean = revise_text(response)
+            if revise is not None and clean:
+                revise.beginEditBlock()
+                head, tail = self._revise_edges
+                revise.insertText(head + clean + tail)
+                revise.endEditBlock()
+            return
         sections = self._parse_sections(response)
         marked = any(sections.values())
         clean = sections["draft"] if marked else response.strip()
@@ -1523,14 +1575,6 @@ class AuthorPanel(QWidget):
             self.author_characters_box.setPlainText(response)
         elif task == "Build World" and not sections.get("world"):
             self.author_world_box.setPlainText(response)
-        elif mode == "revise" and revise is not None:
-            # Replace exactly the text that was sent, as one edit so Ctrl+Z
-            # brings it back. An empty reply replaces nothing.
-            if clean:
-                revise.beginEditBlock()
-                head, tail = self._revise_edges
-                revise.insertText(head + clean + tail)
-                revise.endEditBlock()
         elif mode == "notes" or task in NOTES_TASKS or self._is_continuing:
             return
         else:

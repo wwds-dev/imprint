@@ -442,3 +442,76 @@ def test_tighten_structure_may_cut_below_half(h):
     h.panel.write()
     h.worker.finished_signal.emit("w " * 30)          # 30% of the source
     assert h.draft.strip() == ("w " * 30).strip()
+
+
+# ── section markers never decide what a Revise keeps (security P1-1) ────
+# docs/audit/quill-draft-safety-security-engineer.md, 2026-11-24.
+
+def test_a_stopped_write_leaves_no_marker_in_the_draft(h):
+    h.setup("Write Scene", draft="My hand-written opening.")
+    h.panel.write()
+    h.stream("**[DRAFT]**\n", "The tide came in, ")
+    h.panel.stop()
+    assert "[DRAFT]" not in h.draft.upper()
+    assert h.draft.startswith("My hand-written opening.")
+    assert "The tide came in," in h.draft
+
+
+def test_a_failed_write_leaves_no_marker_in_the_draft(h):
+    h.setup("Write Scene", draft="My hand-written opening.")
+    h.panel.write()
+    h.stream("[DRAFT]\nThe tide ", "[CHARACTER]\nMira: ")
+    h.worker.error_signal.emit("HTTP 500")
+    assert "[DRAFT]" not in h.draft and "[CHARACTER]" not in h.draft
+    assert h.draft.startswith("My hand-written opening.")
+    assert "Mira:" in h.draft
+
+
+def test_scenario_a_revise_keeps_text_before_a_marker(h):
+    """Stop a Write, then Revise the whole Draft: a faithful reply repeats
+    whatever marker survived. Only the text after it used to be kept."""
+    opening = "My hand-written opening, which matters. " * 5
+    scene = "The tide came in over the drawings. " * 5
+    draft = opening + "\n\n**[DRAFT]**\n" + scene
+    h.setup("Revise / Improve", draft=draft)
+    h.panel.write()
+    reply = draft.replace("matters", "counts")
+    h.worker.finished_signal.emit(reply)
+    assert "which counts" in h.draft, "the text before the marker was dropped"
+    assert "The tide came in" in h.draft
+    assert h.panel.author_outline_box.toPlainText() == "OLD OUTLINE"
+
+
+def test_scenario_b_a_section_in_a_revise_reply_never_writes_a_tab(h):
+    from PySide6.QtGui import QTextCursor
+    passage = "x" * 1000
+    h.setup("Revise / Improve", draft="Keep A. " + passage + " Keep B.")
+    h.panel.author_world_box.setPlainText("MY WORLD NOTES")
+    box = h.panel.author_draft_box
+    cursor = box.textCursor()
+    start = box.toPlainText().index(passage)
+    cursor.setPosition(start)
+    cursor.setPosition(start + len(passage), QTextCursor.KeepAnchor)
+    box.setTextCursor(cursor)
+    h.panel.write()
+    reply = "[DRAFT] " + "y" * 600 + " [WORLD] " + "y" * 400
+    h.worker.finished_signal.emit(reply)
+    assert h.panel.author_world_box.toPlainText() == "MY WORLD NOTES"
+    assert "y" * 600 in h.draft and "y" * 400 in h.draft
+    assert h.draft.startswith("Keep A. ") and h.draft.endswith(" Keep B.")
+
+
+def test_a_leading_draft_heading_is_not_put_into_the_manuscript(h):
+    h.setup("Revise / Improve", draft="The ink ran. " * 20)
+    h.panel.write()
+    h.worker.finished_signal.emit("**[DRAFT]**\n" + "The ink bled. " * 20)
+    assert "[DRAFT]" not in h.draft
+    assert h.draft.strip() == ("The ink bled. " * 20).strip()
+
+
+def test_revise_text_rules():
+    from agents.author.panel import revise_text
+    assert revise_text("**[DRAFT]**\nBody") == "Body"
+    assert revise_text("[draft] Body on the same line") == "Body on the same line"
+    assert revise_text("Intro\n[DRAFT]\nBody") == "Intro\n[DRAFT]\nBody"
+    assert revise_text("Plain reply") == "Plain reply"

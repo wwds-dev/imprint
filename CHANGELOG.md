@@ -103,6 +103,12 @@ listed under **Unreleased** until it ships.
   An Omni render cut off by a quit with no clip is recorded at its confirmed
   cost, since Gemini may have charged; any Omni render stranded by the old Stop
   is recorded on the next launch, at that day's date.
+- **Quill's Revise keeps the whole text even when a reply carries a section
+  marker** (2026-11-24, `quill-draft-safety` security review P1-1). A Revise
+  reply is used whole, less a [DRAFT] heading on its first line; it is never
+  split into sections and never writes the Outline, Characters or World tabs.
+  A Write stopped or failed mid-stream keeps its text but drops its section
+  markers, so a later Revise never meets one inside the manuscript.
 - **Quill keeps a Draft written with no Project** (2026-11-24, audit UX-01,
   `docs/specs/quill-unfiled-and-clear.md`). It autosaves like a Project's and
   is there after a quit and relaunch, and when you switch back from a Project.
