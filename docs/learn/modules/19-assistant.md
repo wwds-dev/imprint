@@ -101,7 +101,8 @@ resend is a second request and shows a second estimate.
 
 ### Step 1 — Start a clean project
 
-Click **New Project** and name it. Imprint Studio switches the Projects dropdown to
+Open the project actions menu beside the project selector in the left rail,
+choose **New Project** and name it. Imprint Studio switches the project selector to
 it and opens a fresh chat, so this question starts without leftover context
 and everything you ask now files under it.
 
@@ -180,12 +181,13 @@ format line and send again, knowing that costs a second request.
 
 ### Step 7 — Keep or discard, deliberately
 
-The finished chat appears under **Saved chats** in the left rail, filed in
-*Field Notes* and titled by its first prompt until you rename it.
-Double-click it and name it something you will recognise, for example
-`Decisions — weekly template`; right-click to rename or move it to another
-project; **Remove Chat** deletes a dead end. If this setup earned its keep,
-click **Save Current Setup** so the project reopens with the same agent,
-provider and model.
+The finished chat appears in the saved-chat list in the left rail, under
+Today, filed in *Field Notes* and titled by its first prompt until you rename
+it. Double-click it and name it something you will recognise, for example
+`Decisions — weekly template`; right-click to rename it, move it to another
+project, or delete a dead end with **Remove Chat**. If this setup earned its
+keep, open the project actions menu beside the project selector and choose
+**Save Current Setup** so the project reopens with the same agent, provider
+and model.
 
 [Show me](show:history_list)

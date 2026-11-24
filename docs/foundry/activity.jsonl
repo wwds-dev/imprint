@@ -210,3 +210,10 @@
 {"ts": "2026-11-24T18:28:43", "phase": "release", "state": "done", "spec": "local-model-routing"}
 {"ts": "2026-11-24T18:28:44", "phase": "release", "state": "done", "spec": "rename-imprint-studio"}
 {"ts": "2026-11-24T18:28:44", "phase": "release", "state": "done", "spec": "ai-act-safeguards"}
+{"ts": "2026-11-24T17:22:30", "phase": "define", "state": "done", "spec": "side-rails-redesign"}
+{"ts": "2026-11-24T17:22:30", "phase": "build", "state": "start", "spec": "side-rails-redesign"}
+{"ts": "2026-11-24T21:36:02", "phase": "build", "state": "done", "spec": "side-rails-redesign"}
+{"ts": "2026-11-24T21:36:02", "phase": "review", "state": "done", "spec": "side-rails-redesign"}
+{"ts": "2026-11-24T21:36:02", "phase": "document", "state": "done", "spec": "side-rails-redesign"}
+{"ts": "2026-11-24T21:36:02", "phase": "verify", "state": "start", "spec": "side-rails-redesign"}
+{"ts": "2026-11-24T22:26:21", "phase": "verify", "state": "done", "spec": "side-rails-redesign"}

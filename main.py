@@ -44,11 +44,11 @@ from dotenv import load_dotenv
 load_dotenv(user_data_base() / ".env")
 
 
-from PySide6.QtCore import Qt, QTimer, QProcess, QEvent
+from PySide6.QtCore import Qt, QTimer, QProcess, QEvent, QPoint
 from PySide6.QtGui import QTextCursor, QColor, QKeySequence, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
-    QApplication, QSizePolicy, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QApplication, QSizePolicy, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QTextEdit, QPushButton, QComboBox, QListWidget, QListWidgetItem,
     QMessageBox, QTextBrowser, QLineEdit, QProgressBar, QDialog, QTabWidget,
     QTabBar, QFrame, QInputDialog, QMenu, QToolButton,
@@ -234,8 +234,12 @@ from ui.workers import (
 )
 from ui.forms import (
     HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH, RAIL_RIGHT_WIDTH, SM, XS,
-    FieldGridLayout, Meter, StatBlock, field, field_note, icon_button,
+    FieldGridLayout, Meter, field, field_note, icon_button,
     line_edit, link_button, micro, quiet, rail, rule, section, toggle_chip,
+)
+from ui.rail import (
+    AGENT_ROLE, DAY_ROLE, TITLE_ROLE, BudgetRow, ChatList, KeyValueRow,
+    MenuFilterButton, chat_when, day_group, format_limit, nav_row,
 )
 from ui.text_fit import install_text_fit
 from ui.widgets import (
@@ -835,7 +839,32 @@ class GodAI(QWidget):
     # arithmetic, and it duplicated (worse) what the Decimal validator does
     # inside authorize_request().
 
-    def save_budget_limits(self):
+    def _commit_budget_limits(self):
+        """A limit field was committed (Enter, or focus moved on).
+
+        Nothing was typed: do nothing, say nothing. A valid change is saved
+        and the bar moves, which is the confirmation. A bad one is refused
+        aloud and both fields go back to the limits in force, so the rail
+        never shows a cap that is not the one being applied.
+        """
+        if getattr(self, "_committing_budget", False):
+            return      # the warning box takes focus, which commits again
+        typed = (valid_budget_eur(self.session_budget_input.text()),
+                 valid_budget_eur(self.daily_budget_input.text()))
+        if typed == (self.session_budget_eur, self.daily_budget_eur):
+            return
+        self._committing_budget = True
+        try:
+            if not self.save_budget_limits(announce=False):
+                self.session_budget_input.setText(
+                    format_limit(self.session_budget_eur))
+                self.daily_budget_input.setText(
+                    format_limit(self.daily_budget_eur))
+        finally:
+            self._committing_budget = False
+
+    def save_budget_limits(self, announce: bool = True) -> bool:
+        """Validate and keep both limits; True when they were saved."""
         # The Settings dialog's check (valid_budget_eur): float() alone took
         # "inf", which removed the cap, and "nan", which made every guarded
         # request raise. Both fields are checked before either is kept, so a
@@ -847,7 +876,7 @@ class GodAI(QWidget):
                 self, "Invalid Budget",
                 "Session and Daily budgets must be numbers of 0 or more. "
                 "The limits were not saved.")
-            return
+            return False
 
         self.session_budget_eur = session
         self.daily_budget_eur = daily
@@ -856,7 +885,9 @@ class GodAI(QWidget):
 
         self.update_usage_labels()
         self.refresh_all_recommendations()
-        QMessageBox.information(self, "Budget Saved", "Budget limits saved.")
+        if announce:
+            QMessageBox.information(self, "Budget Saved", "Budget limits saved.")
+        return True
 
     def reset_session_spend(self):
         self.session_cost_total = 0.0
@@ -2601,73 +2632,108 @@ class GodAI(QWidget):
         # for projects, where persistent context is genuinely useful.
         self.agent_buttons = {}
 
-        left_layout.addWidget(section("Projects"))
-
+        # Project: the dropdown is the heading. What you do *to* a project is
+        # three rare actions, so they share one button instead of three rows.
+        project_row = QHBoxLayout()
+        project_row.setContentsMargins(0, 0, 0, 0)
+        project_row.setSpacing(SM)
         self.history_project_filter = QComboBox()
+        self.history_project_filter.setAccessibleName("Project")
+        # Shares a 184px row with the actions button. The compact chevron
+        # leaves "All projects" its full width; its own minimum, because a
+        # combo's default one (eight wide characters plus the arrow) is the
+        # whole row and pushed the button past the rail's edge.
+        self.history_project_filter.setObjectName("CompactCombo")
+        self.history_project_filter.setMinimumWidth(96)
         self.history_project_filter.currentIndexChanged.connect(self._switch_project)
-        left_layout.addWidget(self.history_project_filter)
+        project_row.addWidget(self.history_project_filter, 1)
 
-        self.active_project_label = QLabel("No project context")
-        self.active_project_label.setObjectName("SettingsHelp")
-        self.active_project_label.setWordWrap(True)
-        left_layout.addWidget(self.active_project_label)
-
-        self.project_overview_btn = quiet("Project Overview")
+        self.project_menu = QMenu(left_widget)
+        self.project_menu.setToolTipsVisible(True)
+        self.new_project_btn = self.project_menu.addAction("New Project")
+        self.new_project_btn.triggered.connect(self.create_project)
+        self.project_overview_btn = self.project_menu.addAction("Project Overview")
         self.project_overview_btn.setToolTip(
             "See this Project's working draft, linked files and Creator content.")
         self.project_overview_btn.setEnabled(False)
-        self.project_overview_btn.clicked.connect(self.show_project_overview)
-        left_layout.addWidget(self.project_overview_btn)
+        self.project_overview_btn.triggered.connect(self.show_project_overview)
+        self.project_defaults_btn = self.project_menu.addAction("Save Current Setup")
+        self.project_defaults_btn.setToolTip(
+            "Use this agent, provider and model when this project is opened."
+        )
+        self.project_defaults_btn.setEnabled(False)
+        self.project_defaults_btn.triggered.connect(self.save_project_defaults)
+        # Opened on click, not through setMenu(): the menu indicator Qt adds
+        # pushes the icon off centre.
+        self.project_menu_btn = icon_button("more", "Project actions")
+        self.project_menu_btn.clicked.connect(self._open_project_menu)
+        project_row.addWidget(self.project_menu_btn)
+        left_layout.addLayout(project_row)
+
+        # Says something only while a project is active ("Working in …").
+        self.active_project_label = QLabel("No project context")
+        self.active_project_label.setObjectName("SettingsHelp")
+        self.active_project_label.setWordWrap(True)
+        self.active_project_label.hide()
+        left_layout.addWidget(self.active_project_label)
+
+        search_row = QHBoxLayout()
+        search_row.setContentsMargins(0, 0, 0, 0)
+        search_row.setSpacing(SM)
+        self.history_search = QLineEdit()
+        self.history_search.setPlaceholderText("Search chats")
+        self.history_search.setAccessibleName("Search saved chats")
+        self.history_search.textChanged.connect(self.load_history_list)
+        search_row.addWidget(self.history_search, 1)
 
         # Narrow the list to one agent. Populated from the chats that exist, so
         # it only ever offers agents you have actually used.
-        self.history_agent_filter = QComboBox()
-        self.history_agent_filter.addItem(ALL_AGENTS_FILTER)
+        self.history_agent_filter = MenuFilterButton(
+            ALL_AGENTS_FILTER, "Filter saved chats by agent",
+            label_for=self._agent_label)
         self.history_agent_filter.currentTextChanged.connect(self.load_history_list)
-        left_layout.addWidget(self.history_agent_filter)
+        search_row.addWidget(self.history_agent_filter)
+        left_layout.addLayout(search_row)
 
-        self.history_search = QLineEdit()
-        self.history_search.setPlaceholderText("Search saved chats")
-        self.history_search.textChanged.connect(self.load_history_list)
-        left_layout.addWidget(self.history_search)
-
-        left_layout.addWidget(section("Saved chats"))
-        self.history_list = QListWidget()
+        self.history_list = ChatList()
+        self.history_list.setAccessibleName("Saved chats")
         self.history_list.itemClicked.connect(self.open_selected_chat)
         # Double-click renames: chat_title_from_data already prefers a stored
         # "title" over the truncated first prompt, it was just never written.
         self.history_list.itemDoubleClicked.connect(self.rename_selected_chat)
         self.history_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.history_list.customContextMenuRequested.connect(self._chat_context_menu)
+        # Removing a chat is rare and destructive: the context menu and the
+        # Delete key, not a button that is always on screen.
+        for key in (QKeySequence.StandardKey.Delete, QKeySequence("Backspace")):
+            shortcut = QShortcut(key, self.history_list)
+            shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
+            shortcut.activated.connect(self._delete_current_chat)
         # The list takes the rail's spare height rather than being capped at
         # 200px with the buttons stranded at the bottom of the window.
         self.history_list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         left_layout.addWidget(self.history_list, 1)
 
-        left_layout.addWidget(rule())
-
-        self.new_project_btn = QPushButton("New Project")
-        self.new_project_btn.clicked.connect(self.create_project)
-        left_layout.addWidget(self.new_project_btn)
-
-        self.project_defaults_btn = quiet("Save Current Setup")
-        self.project_defaults_btn.setToolTip(
-            "Use this agent, provider and model when this project is opened."
-        )
-        self.project_defaults_btn.setEnabled(False)
-        self.project_defaults_btn.clicked.connect(self.save_project_defaults)
-        left_layout.addWidget(self.project_defaults_btn)
-
-        self.new_chat_btn = quiet("New Chat")
+        self.new_chat_btn = QPushButton("New Chat")
         self.new_chat_btn.clicked.connect(self.new_chat)
         left_layout.addWidget(self.new_chat_btn)
 
-        # Destructive and rarely wanted: quiet, and below the thing it acts on.
-        self.delete_chat_btn = quiet("Remove Chat")
-        self.delete_chat_btn.clicked.connect(self.delete_selected_chat)
-        left_layout.addWidget(self.delete_chat_btn)
-
         return left_widget
+
+    def _open_project_menu(self):
+        button = self.project_menu_btn
+        self.project_menu.exec(button.mapToGlobal(QPoint(0, button.height() + 2)))
+
+    @staticmethod
+    def _agent_label(key: str) -> str:
+        """An agent's name as the header tabs show it ("Booth"), for a key
+        stored in a chat file ("audiobook")."""
+        spec = AGENTS_BY_KEY.get(key)
+        return spec.label if spec else str(key).replace("_", " ").title()
+
+    def _delete_current_chat(self):
+        if self.history_list.currentItem() is not None:
+            self.delete_selected_chat()
 
     def build_center_panel(self) -> QWidget:
         center_widget = QWidget()
@@ -3440,88 +3506,77 @@ class GodAI(QWidget):
         layout.setContentsMargins(MD + XS, LG, MD + XS, LG)
         layout.setSpacing(MD)
 
-        layout.addWidget(section("Spend"))
-
-        stats = QGridLayout()
-        stats.setHorizontalSpacing(MD)
-        stats.setVerticalSpacing(MD)
-        self.session_cost_stat = StatBlock("this session", "€0.00")
-        self.today_cost_stat = StatBlock("today", "€0.00")
-        self.request_count_stat = StatBlock("requests", "0")
-        self.last_request_stat = StatBlock("last request", "—")
-        stats.addWidget(self.session_cost_stat, 0, 0)
-        stats.addWidget(self.today_cost_stat, 0, 1)
-        stats.addWidget(self.request_count_stat, 1, 0)
-        stats.addWidget(self.last_request_stat, 1, 1)
-        # Hybrid routing: saved by running local, spent on suggestions you
-        # accepted (services/routing_advisor.SavingsTally); totals on hover.
-        self.local_savings_stat = StatBlock("saved local", "€0.00")
-        self.local_spent_stat = StatBlock("advice spent", "€0.00")
-        stats.addWidget(self.local_savings_stat, 2, 0)
-        stats.addWidget(self.local_spent_stat, 2, 1)
-        stats.setColumnStretch(0, 1)
-        stats.setColumnStretch(1, 1)
-        layout.addLayout(stats)
+        # Heading row: the one action on the whole block sits in it as a link.
+        spend_head = QHBoxLayout()
+        spend_head.setContentsMargins(0, 0, 0, 0)
+        spend_head.addWidget(section("Spend"))
+        spend_head.addStretch()
+        self.reset_session_budget_btn = link_button("Reset session spend")
+        self.reset_session_budget_btn.clicked.connect(self.reset_session_spend)
+        spend_head.addWidget(self.reset_session_budget_btn, 0, Qt.AlignBottom)
+        layout.addLayout(spend_head)
 
         # "Session remaining: €1 / €1" is two numbers you have to subtract. A
-        # bar answers the question before you have read anything.
-        self.session_meter = Meter("Session budget")
-        self.daily_meter = Meter("Daily budget")
+        # bar answers the question before you have read anything — and the
+        # cap beside it is the field that sets it, so there is no second
+        # Limits block repeating the same two numbers under a Save button.
+        self.session_meter = BudgetRow(
+            "Session", format_limit(self.session_budget_eur))
+        self.daily_meter = BudgetRow("Today", format_limit(self.daily_budget_eur))
+        self.session_budget_input = self.session_meter.limit_input
+        self.daily_budget_input = self.daily_meter.limit_input
+        for budget_input in (self.session_budget_input, self.daily_budget_input):
+            # Enter, or leaving the field, is the save.
+            budget_input.editingFinished.connect(self._commit_budget_limits)
         self.project_meter = Meter("Project budget")
         layout.addWidget(self.session_meter)
         layout.addWidget(self.daily_meter)
         layout.addWidget(self.project_meter)
         self.project_meter.hide()
 
+        # The numbers you glance at, not act on: one line each. Detail (which
+        # tool ran last, the routing totals) is on hover.
+        figures = QVBoxLayout()
+        figures.setContentsMargins(0, 0, 0, 0)
+        figures.setSpacing(XS + 2)
+        self.request_count_stat = KeyValueRow("Requests", "0")
+        self.last_request_stat = KeyValueRow("Last request", "—")
+        # Hybrid routing: saved by running local, spent on suggestions you
+        # accepted (services/routing_advisor.SavingsTally); totals on hover.
+        self.local_savings_stat = KeyValueRow("Saved by local", "€0.00")
+        self.local_spent_stat = KeyValueRow("Advice spent", "€0.00")
+        for row in (self.request_count_stat, self.last_request_stat,
+                    self.local_savings_stat, self.local_spent_stat):
+            figures.addWidget(row)
+        layout.addLayout(figures)
+
         self.live_estimate_label = QLabel("No request pending")
         self.live_estimate_label.setObjectName("EstimateLine")
         self.live_estimate_label.setWordWrap(True)
         layout.addWidget(self.live_estimate_label)
 
-        layout.addWidget(section("Limits"))
-        limits_row = QHBoxLayout()
-        limits_row.setSpacing(SM)
-        self.session_budget_input = line_edit("1", str(int(self.session_budget_eur)))
-        self.session_budget_input.setAlignment(Qt.AlignRight)
-        self.daily_budget_input = line_edit("5", str(int(self.daily_budget_eur)))
-        self.daily_budget_input.setAlignment(Qt.AlignRight)
-        # A few digits each, side by side in a 244px rail: their own minimum,
-        # so the app-wide ten-character floor (ui/text_fit.py) does not push
-        # the row — and Save Limits under it — past the rail's edge.
-        for budget_input in (self.session_budget_input, self.daily_budget_input):
-            budget_input.setMinimumWidth(56)
-        limits_row.addWidget(field("Session €", self.session_budget_input))
-        limits_row.addWidget(field("Daily €", self.daily_budget_input))
-        layout.addLayout(limits_row)
-
-        self.save_budget_btn = QPushButton("Save Limits")
-        self.save_budget_btn.clicked.connect(self.save_budget_limits)
-        layout.addWidget(self.save_budget_btn)
-
-        self.reset_session_budget_btn = quiet("Reset session spend")
-        self.reset_session_budget_btn.clicked.connect(self.reset_session_spend)
-        layout.addWidget(self.reset_session_budget_btn)
-
         # ── Utilities: open a window, change nothing. Keep them with the
         # spend controls instead of marooning them below an elastic void. ──
-        layout.addWidget(rule())
         layout.addWidget(section("Activity"))
         links = QVBoxLayout()
         links.setSpacing(0)
-        self.cost_history_btn = quiet("Cost History")
+        self.cost_history_btn = nav_row("Cost History")
         self.cost_history_btn.clicked.connect(self.show_cost_history)
         links.addWidget(self.cost_history_btn)
 
-        self.run_log_btn = quiet("Run Log")
+        self.run_log_btn = nav_row("Run Log")
         self.run_log_btn.clicked.connect(self.show_run_log)
         links.addWidget(self.run_log_btn)
 
-        self.learn_btn = quiet("Learning Centre")
+        self.learn_btn = nav_row("Learning Centre")
         self.learn_btn.clicked.connect(lambda: self.show_learning_center())
         links.addWidget(self.learn_btn)
         layout.addLayout(links)
 
-        # ── Reference: wanted only when something looks wrong ──────────────
+        # ── Reference: wanted only when something looks wrong. Each section
+        # says its state in a word while closed, so "wrong" is visible
+        # without opening four of them. ──
+        layout.addWidget(section("Status"))
         reference = QVBoxLayout()
         reference.setSpacing(0)
 
@@ -3532,6 +3587,7 @@ class GodAI(QWidget):
         system_layout.setContentsMargins(SM, XS, SM, SM)
         system_layout.setSpacing(SM)
         self.resource_status_card = ResourceStatusCard()
+        self.resource_status_card.summary_changed.connect(system_card.set_summary)
         theme.themed(self.resource_status_card, STATUS_CARD_STYLES)
         # Compatibility alias for tooltips and existing extensions.  The old
         # object was one long rich-text QLabel; the new card owns four rows.
@@ -3550,6 +3606,7 @@ class GodAI(QWidget):
         routing_layout.setContentsMargins(SM, XS, SM, SM)
         routing_layout.setSpacing(XS)
         self.routing_status_card = RoutingStatusCard()
+        self.routing_status_card.summary_changed.connect(routing_card.set_summary)
         theme.themed(self.routing_status_card, STATUS_CARD_STYLES)
         # These aliases retain the public widget attributes used by tooltips
         # and integrations while avoiding the original paragraph-style UI.
@@ -3567,6 +3624,7 @@ class GodAI(QWidget):
         keys_layout.setSpacing(XS)
         self.api_keys_status_card = ApiKeysStatusCard(
             ("OpenAI", "DeepSeek", "Kimi", "Gemini", "Anthropic", "Qwen"))
+        self.api_keys_status_card.summary_changed.connect(keys_card.set_summary)
         theme.themed(self.api_keys_status_card, STATUS_CARD_STYLES)
         key_classes = {
             "OpenAI": OpenAIClientWrapper, "DeepSeek": DeepSeekClientWrapper,
@@ -3593,7 +3651,7 @@ class GodAI(QWidget):
         # owner could not find the tile while it was collapsed. The title
         # still carries the count for a user who closes it.
         self.model_updates_section = CollapsibleSection(
-            "Model updates", expanded=True)
+            "Model updates", expanded=True, summary_from_title=True)
         updates_body = QWidget()
         updates_body.setObjectName("Transparent")
         updates_layout = QVBoxLayout(updates_body)
@@ -6022,15 +6080,13 @@ class GodAI(QWidget):
             f"Swap {stats['swap_percent']:.0f}%")
 
     def update_usage_labels(self):
-        """Push spend into the stat blocks and the two budget bars."""
-        if not hasattr(self, "session_cost_stat"):
+        """Push spend into the budget rows and the figures under them."""
+        if not hasattr(self, "session_meter"):
             return
         today_total = self.usage_tracker.get_today_total()
         today_requests = self.usage_tracker.get_total_requests_today()
         tool_name = getattr(self, "last_tool_name", "") or "-"
 
-        self.session_cost_stat.set_value(f"€{self.session_cost_total:.2f}")
-        self.today_cost_stat.set_value(f"€{today_total:.2f}")
         self.request_count_stat.set_value(str(today_requests))
         # Detail goes in the tooltip. A caption that grows with its data clips
         # the stat sitting next to it, which is how the rail got ragged.
@@ -6100,12 +6156,24 @@ class GodAI(QWidget):
         query = self.history_search.text().strip().lower() if hasattr(self, "history_search") else ""
         try:
             loaded = []
+            stamps = {}
             for file in sorted(CHATS_DIR.glob("*.json"), reverse=True):
                 try:
                     data = self.history.load_chat(str(file))
                 except Exception:
                     data = {}
                 loaded.append((file, data))
+                try:
+                    mtime = file.stat().st_mtime
+                except OSError:
+                    mtime = None
+                stamps[file] = chat_when(file.name, data, mtime)
+            # Newest first by when the chat was written. File names carry the
+            # stamp, so this is the old order for every chat the app saved;
+            # it only moves a file that was renamed or copied in by hand.
+            loaded.sort(key=lambda pair: stamps[pair[0]] or datetime.min,
+                        reverse=True)
+            today = datetime.now().date()
 
             self._refresh_history_project_filter()
             self._refresh_history_agent_filter(loaded)
@@ -6129,8 +6197,20 @@ class GodAI(QWidget):
                 title = self.chat_title_from_data(file, data)
                 if query and query not in title.lower():
                     continue
+                agent = data.get("agent", "chat")
                 item = QListWidgetItem(title)
                 item.setData(Qt.UserRole, str(file))
+                # The agent has its own column, so the "agent: " prefix a
+                # title gets when it has no stored name is not drawn twice.
+                prefix = f"{agent}: "
+                item.setData(TITLE_ROLE, title[len(prefix):]
+                             if title.startswith(prefix) else title)
+                item.setData(AGENT_ROLE, self._agent_label(agent))
+                when = stamps[file]
+                item.setData(DAY_ROLE, day_group(when, today))
+                item.setToolTip(
+                    f"{title}\n{self._agent_label(agent)}"
+                    + (f" · {when:%-d %b %Y, %H:%M}" if when else ""))
                 self.history_list.addItem(item)
         except Exception as exc:
             self._note_failure("saved chats: load list", exc)
@@ -6194,6 +6274,7 @@ class GodAI(QWidget):
             self.active_project_label.setText(
                 f"Working in {project['name']}" if project else "No project context"
             )
+            self.active_project_label.setVisible(bool(project))
         if hasattr(self, "project_defaults_btn"):
             self.project_defaults_btn.setEnabled(bool(project))
         if hasattr(self, "project_overview_btn"):
@@ -6285,6 +6366,7 @@ class GodAI(QWidget):
         item = self.history_list.itemAt(point)
         if item is None:
             return
+        self.history_list.setCurrentItem(item)
         menu = QMenu(self.history_list)
         rename = menu.addAction("Rename chat")
         assign = menu.addMenu("Assign to project")
@@ -6292,9 +6374,13 @@ class GodAI(QWidget):
         actions[assign.addAction("Unfiled")] = ""
         for project in self.registry.list_projects():
             actions[assign.addAction(project["name"])] = project["id"]
+        menu.addSeparator()
+        remove = menu.addAction("Remove Chat")
         chosen = menu.exec(self.history_list.mapToGlobal(point))
         if chosen == rename:
             self.rename_selected_chat(item)
+        elif chosen == remove:
+            self.delete_selected_chat()
         elif chosen in actions:
             self.assign_chat_to_project(item, actions[chosen])
 
@@ -6321,19 +6407,9 @@ class GodAI(QWidget):
         if not hasattr(self, "history_agent_filter"):
             return
         agents = sorted({data.get("agent", "chat") for _f, data in loaded})
-        options = [ALL_AGENTS_FILTER] + agents
-        current = self.history_agent_filter.currentText()
-        if options == [self.history_agent_filter.itemText(i)
-                       for i in range(self.history_agent_filter.count())]:
-            return                                   # nothing changed
-        self.history_agent_filter.blockSignals(True)
-        self.history_agent_filter.clear()
-        self.history_agent_filter.addItems(options)
-        # keep the user's selection when its agent still has chats
-        self.history_agent_filter.setCurrentText(
-            current if current in options else ALL_AGENTS_FILTER
-        )
-        self.history_agent_filter.blockSignals(False)
+        # Keeps the user's selection when its agent still has chats, and
+        # emits nothing: load_history_list is the caller.
+        self.history_agent_filter.set_options([ALL_AGENTS_FILTER] + agents)
 
     def rename_selected_chat(self, item):
         """Give a saved chat a name of your own instead of its first prompt."""

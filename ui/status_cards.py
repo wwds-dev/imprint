@@ -48,8 +48,13 @@ class RailCard(QFrame):
 class ResourceStatusCard(RailCard):
     """Four live resource readings arranged for quick scanning."""
 
+    # (word, tone) for the section header, sent when it changes.
+    summary_changed = Signal(str, str)
+    _SUMMARIES = {"red": ("Stressed", "danger"), "yellow": ("Busy", "warning")}
+
     def __init__(self):
         super().__init__("Live system resources")
+        self._summary: tuple[str, str] | None = None
         layout = QGridLayout(self)
         layout.setContentsMargins(SM, SM, SM, SM)
         layout.setHorizontalSpacing(SM)
@@ -105,10 +110,21 @@ class ResourceStatusCard(RailCard):
             self.values[key].setText(value)
             self.values[key].setStyleSheet(f"color: {self._tone(level)};")
             self.details[key].setText(detail)
+        # The worst of memory, processor and swap. Battery is left out: a low
+        # battery is not the machine being busy.
+        levels = {readings[key][1] for key in ("ram", "cpu", "swap")}
+        worst = "red" if "red" in levels else "yellow" if "yellow" in levels else ""
+        summary = self._SUMMARIES.get(worst, ("OK", ""))
+        if summary != self._summary:
+            self._summary = summary
+            self.summary_changed.emit(*summary)
 
 
 class RoutingStatusCard(RailCard):
     """Last Chat route and recommendation for the current Chat prompt."""
+
+    # The provider of the last route, or "" before any request, for the header.
+    summary_changed = Signal(str, str)
 
     def __init__(self):
         super().__init__("Chat routing and recommendation for the current prompt")
@@ -145,12 +161,14 @@ class RoutingStatusCard(RailCard):
     def reset_route(self) -> None:
         self.route_value.setText("Not computed")
         self.route_value.setToolTip("No request has been routed in this session.")
+        self.summary_changed.emit("", "")
 
     def set_route(self, agent: str, provider: str, model: str) -> None:
         pretty_agent = str(agent or "Unknown").replace("_", " ").title()
         self.route_value.setText(f"{pretty_agent}\n{provider} · {model}")
         self.route_value.setToolTip(
             f"Last request route: {agent} · {provider} · {model}")
+        self.summary_changed.emit(str(provider or ""), "")
 
     @staticmethod
     def _concise_reason(reason: str) -> str:
@@ -182,8 +200,12 @@ class RoutingStatusCard(RailCard):
 class ApiKeysStatusCard(RailCard):
     """Provider key availability as individual rows, not one text paragraph."""
 
+    # "4 of 6" for the section header; "warning" when a check failed.
+    summary_changed = Signal(str, str)
+
     def __init__(self, providers: tuple[str, ...]):
         super().__init__("Cloud provider key status")
+        self._tones: dict[str, str] = {}
         layout = QVBoxLayout(self)
         layout.setContentsMargins(SM, XS, SM, XS)
         layout.setSpacing(0)
@@ -229,12 +251,21 @@ class ApiKeysStatusCard(RailCard):
             display, tone = "Check failed", "warning"
         label.setText(display)
         label.setProperty("status", tone)
+        self._tones[provider.casefold()] = tone
+        self.summary_changed.emit(*self.summary())
         dot = self.dot_labels.get(provider.casefold())
         for widget in (label, dot):
             if widget is not None:
                 widget.setProperty("status", tone)
                 widget.style().unpolish(widget)
                 widget.style().polish(widget)
+
+
+    def summary(self) -> tuple[str, str]:
+        ready = sum(1 for tone in self._tones.values() if tone == "ready")
+        failed = any(tone == "warning" for tone in self._tones.values())
+        return (f"{ready} of {len(self.status_labels)}",
+                "warning" if failed else "")
 
 
 class ElidedLabel(QLabel):

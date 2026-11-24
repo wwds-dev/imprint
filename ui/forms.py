@@ -136,10 +136,20 @@ def icon_button(icon_name: str, tooltip: str) -> QPushButton:
     emoji baseline and the label test rejects it. The accessible name is the
     tooltip, so a screen reader still hears what it does.
     """
+    return style_icon_button(QPushButton(), icon_name, tooltip)
+
+
+def style_icon_button(button: QPushButton, icon_name: str,
+                      tooltip: str) -> QPushButton:
+    """Dress `button` as an icon_button(); for subclasses that are one.
+
+    A button dressed here opens any menu itself on click rather than through
+    setMenu(): Qt reserves room for a menu indicator beside the icon, and the
+    icon then sits left of centre.
+    """
     from PySide6.QtGui import QIcon
     from services.runtime_paths import resource_base
 
-    button = QPushButton()
     button.setObjectName("IconAction")
     button.setIcon(QIcon(str(resource_base() / "assets" / f"{icon_name}.svg")))
     button.setIconSize(QSize(16, 16))

@@ -52,8 +52,8 @@ fit this Mac is refused.
 request before anything was sent, so nothing was spent. The rest of the
 sentence names the cap (the agent's daily cap, the project's, the session's or
 today's) and what is left. Pick a cheaper or local model, or raise the cap: the
-session and daily caps are under **Limits** in the right rail (**Save
-Limits**), an agent's cap in **Settings → Agents**. See
+session and daily caps are the limit fields under **Spend** in the right rail
+(type a number and press Enter), an agent's cap in **Settings → Agents**. See
 [Costs, estimates, and limits](14-costs-limits.md).
 
 **"[Cut off] … stopped at the length limit"** The reply reached the most one

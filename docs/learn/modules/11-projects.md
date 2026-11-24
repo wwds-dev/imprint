@@ -18,12 +18,14 @@ you intended to measure.
 
 ## Walkthrough
 
-1. Press **New Project**, give it a stable name such as
+1. Open the project actions menu beside the project selector in the left
+   rail, choose **New Project**, give it a stable name such as
    `Client — deliverable — date`, and check that its name appears in the header.
 2. Open **Settings → Projects**. Set the work type, title, byline or brand, and
    a short creative brief. Add only reusable instructions that really belong
    to this project; optionally set a daily euro cap. Save the current
-   agent/provider/model with **Save Current Setup** in the left rail.
+   agent/provider/model with **Save Current Setup** in the project actions
+   menu beside the project selector in the left rail.
 3. New chats inherit the selected project. Use **New Chat** for a clean
    conversation in the same project; **All projects** and **Unfiled** have no
    active project context. The project, agent and search filters intersect.
@@ -84,7 +86,7 @@ you intended to measure.
    every agent shares one output directory.
 12. Switch projects and return. Verify the expected chats and defaults before
    removing or overwriting anything.
-13. Before **Remove Chat**, export or copy the approved result and confirm its file.
+13. Before **Remove Chat** (in the chat's right-click menu), export or copy the approved result and confirm its file.
 
 Project instructions are sent to the model and count toward estimated tokens.
 They are not a substitute for the agent's own saved profile or an approved

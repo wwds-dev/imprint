@@ -42,6 +42,16 @@ listed under **Unreleased** until it ships.
   measurement prompts) and *Licence*; the access-and-privacy lesson gains a recipient table;
   new `THIRD_PARTY_NOTICES.md` names the AGPL (EbookLib) and LGPL (PySide6/Qt) dependencies.
   Legal audit L-02 and L-05.
+- **Both side rails redesigned** (2026-11-24, `docs/specs/side-rails-redesign.md`). Left: the
+  project selector has an actions menu beside it (New Project, Project Overview, Save Current
+  Setup); the agent filter is a button beside Search; saved chats are grouped under Today,
+  Yesterday and Earlier with the agent beside each title and no sideways scrollbar; New Chat is
+  the button under the list; Remove Chat moved to the chat's right-click menu and the Delete key.
+  Right: Session and Today each show spend "of €" an editable limit over a bar, saved with Enter
+  (the Limits block and Save Limits are gone); Requests, Last request, Saved by local and Advice
+  spent are one list; System, Chat routing, API keys and Model updates show their state while
+  collapsed. A limit with decimals is no longer shown truncated (1.5 read "1"). The session and
+  daily refusal messages point at the new fields.
 - **Routing advisor re-synced with Sentinel** (2026-11-23): `services/routing_advisor.py` gains
   `HYBRID_MODE` (what "Hybrid allowed" restores from Local only or Cloud only) and a test that a saved
   mode is never overwritten. The default stays "Local, advise per job", the best-fit route; the owner

@@ -38,6 +38,7 @@ from ui.style import (
     TEXT_DIM, TEXT_MUTE,
 )
 from ui.forms import SM, field
+from ui.rail import format_limit
 from ui.project_manager import ProjectManagerDialog
 
 
@@ -1024,8 +1025,8 @@ def show_settings(app):
         # General. A rate of 0, below 0, NaN or infinity prices every request
         # at €0, a negative amount or NaN, and a NaN or infinite budget never
         # refuses anything: each would switch the caps off without a word.
-        # Any bad field keeps all three as they were. Save Limits in the
-        # right rail checks the budgets with the same function.
+        # Any bad field keeps all three as they were. The limit fields in the
+        # right rail check the budgets with the same function.
         eur = valid_eur_per_usd(eur_input.text())
         sess = valid_budget_eur(sess_input.text())
         daily = valid_budget_eur(daily_input.text())
@@ -1042,9 +1043,9 @@ def show_settings(app):
             app.session_budget_eur = sess
             app.daily_budget_eur = daily
             if hasattr(app, "session_budget_input"):
-                app.session_budget_input.setText(str(sess))
+                app.session_budget_input.setText(format_limit(sess))
             if hasattr(app, "daily_budget_input"):
-                app.daily_budget_input.setText(str(daily))
+                app.daily_budget_input.setText(format_limit(daily))
 
         # Agents
         with get_connection() as conn:

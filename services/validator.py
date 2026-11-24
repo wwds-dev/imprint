@@ -14,7 +14,7 @@ def valid_budget_eur(raw) -> float | None:
     An infinite cap never refuses anything, NaN makes the Decimal comparison
     below raise (and a panel that disabled its buttons first stays stuck),
     and a negative one refuses everything with a figure that makes no sense.
-    The Settings dialog and the right rail's Save Limits both check with
+    The Settings dialog and the right rail's limit fields both check with
     this, so neither can switch the caps off (audit B-F5; code review P3-1).
     """
     try:
@@ -172,8 +172,8 @@ class Validator:
                               f"your session cap has "
                               f"{money_text.left(session_remaining)} left "
                               f"(of {money_text.paid(session_budget)})",
-                              "Pick a cheaper or local model, or raise Session € "
-                              "under Limits and press Save Limits."),
+                              "Pick a cheaper or local model, or raise the Session "
+                              "limit under Spend and press Enter."),
                     scope="session_cap",
                 )
 
@@ -187,8 +187,8 @@ class Validator:
                               f"today's cap has "
                               f"{money_text.left(daily_remaining)} left "
                               f"(of {money_text.paid(daily_budget)})",
-                              "Pick a cheaper or local model, raise Daily € "
-                              "under Limits, or wait until tomorrow."),
+                              "Pick a cheaper or local model, raise the Today "
+                              "limit under Spend, or wait until tomorrow."),
                     scope="daily_cap",
                 )
 
