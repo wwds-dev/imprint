@@ -6,4 +6,5 @@
 {"ts": "2026-11-22T04:39:01", "gate": "define", "by": "owner", "words": "Approve docs plan", "recorded_by": "agent", "spec": "docs-learning-centre-readiness"}
 {"ts": "2026-11-22T04:46:40", "gate": "define", "by": "owner", "words": "approve rename spec, accept all five recommendations", "recorded_by": "agent", "spec": "rename-imprint-studio"}
 {"ts": "2026-11-22T23:35:02", "gate": "define", "by": "owner", "words": "go", "recorded_by": "agent", "spec": "model-updates-visibility", "note": "Visibility part only (G5 of docs/specs/model-updates.md): Model updates section expanded by default plus one status-line sentence when a check finds something. Owner said 'make the tile easier to spot', then 'go' to that recommendation. The Define gate of model-updates itself (review window, questions 2-7) stays open."}
+{"ts": "2026-11-24T01:58:16", "gate": "define", "by": "owner", "words": "Yes, as recommended", "recorded_by": "agent", "spec": "quill-unfiled-and-clear"}
 {"ts": "2026-11-24T16:39:31", "gate": "define", "by": "owner", "words": "Yes, as recommended", "recorded_by": "agent", "spec": "ai-act-safeguards"}

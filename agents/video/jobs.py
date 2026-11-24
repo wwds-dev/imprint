@@ -111,23 +111,45 @@ def pending_rows() -> list[dict]:
     return [dict(row) for row in rows]
 
 
+# Models that render inside the create call itself (Gemini Omni): the job id
+# arrives with the finished clip, so a missing id is no evidence that nothing
+# was charged. sweep_lost leaves their rows to the panel (audit QH-2).
+SYNCHRONOUS_MODELS = ("gemini-omni-1.1-flash",)
+_SYNC_SQL = ", ".join("?" for _ in SYNCHRONOUS_MODELS)
+
+
 def sweep_lost() -> list[dict]:
     """Mark submissions the provider never acknowledged and return them.
 
     No job id means no way to poll and no evidence money moved, so the
     reservation is released and the row surfaces to the user instead of
-    being silently billed or silently dropped.
+    being silently billed or silently dropped. Synchronous renders are the
+    exception (see SYNCHRONOUS_MODELS) and are not touched here.
     """
     with get_connection() as conn:
         rows = conn.execute(
-            """SELECT * FROM video_jobs
-                WHERE job_id = '' AND status = 'submitted'
-                ORDER BY id""").fetchall()
+            f"""SELECT * FROM video_jobs
+                 WHERE job_id = '' AND status = 'submitted'
+                   AND model NOT IN ({_SYNC_SQL})
+                 ORDER BY id""", SYNCHRONOUS_MODELS).fetchall()
         if rows:
             now = _now()
             conn.execute(
-                """UPDATE video_jobs
-                      SET status = 'lost', spend_state = 'released',
-                          updated_at = ?
-                    WHERE job_id = '' AND status = 'submitted'""", (now,))
+                f"""UPDATE video_jobs
+                       SET status = 'lost', spend_state = 'released',
+                           updated_at = ?
+                     WHERE job_id = '' AND status = 'submitted'
+                       AND model NOT IN ({_SYNC_SQL})""",
+                (now, *SYNCHRONOUS_MODELS))
+    return [dict(row) for row in rows]
+
+
+def unacknowledged_synchronous() -> list[dict]:
+    """Synchronous renders a previous process left in the create call."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""SELECT * FROM video_jobs
+                 WHERE job_id = '' AND status = 'submitted'
+                   AND spend_state = 'reserved' AND model IN ({_SYNC_SQL})
+                 ORDER BY id""", SYNCHRONOUS_MODELS).fetchall()
     return [dict(row) for row in rows]

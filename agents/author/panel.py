@@ -73,6 +73,50 @@ REVISE_TOO_LONG_LOCAL = (
     "the text and its revision together. Select a passage, or choose a "
     "cloud model, and press Write again.")
 
+# Section markers the system prompt asks for (agents/author/agent.py). A
+# marker in the manuscript no longer changes what a Revise keeps: its reply
+# is used whole, less a [DRAFT] heading on its first line. A prose stream
+# cut by Stop or an error also loses its markers (security review
+# 2026-11-24, quill-draft-safety P1-1). Asterisks count as part of a marker
+# only when they balance around it, so the text's own *italics* stay.
+_MARKER_NAMES = r"\[(?:DRAFT|OUTLINE|CHARACTER|WORLD)\]"
+_LEADING_DRAFT_MARKER = re.compile(
+    r"\A[ \t]*(\*{0,2})[ \t]*\[DRAFT\][ \t]*\1(?:[ \t]*\r?\n|[ \t]+|\Z)",
+    re.IGNORECASE)
+_MARKER_LINE = re.compile(
+    r"^[ \t]*(\*{0,2})[ \t]*" + _MARKER_NAMES + r"[ \t]*\1[ \t]*(?:\r?\n|\Z)",
+    re.IGNORECASE | re.MULTILINE)
+_INLINE_MARKER = re.compile(
+    r"[ \t]*(\*{0,2})" + _MARKER_NAMES + r"\1[ \t]*", re.IGNORECASE)
+_ANY_MARKER = re.compile(_MARKER_NAMES, re.IGNORECASE)
+
+
+def strip_section_markers(text: str) -> str:
+    """Remove section markers and keep every other character: a marker on its
+    own line goes with its line; an inline one becomes one space between
+    words, or nothing at a line's edge."""
+    text = _MARKER_LINE.sub("", text)
+
+    def inline(match):
+        before = match.string[match.start() - 1] if match.start() else "\n"
+        after = (match.string[match.end()] if match.end() < len(match.string)
+                 else "\n")
+        return "" if before == "\n" or after in "\r\n" else " "
+
+    return _INLINE_MARKER.sub(inline, text)
+
+
+def revise_text(reply: str) -> str:
+    """The text a Revise reply puts in place of what was sent: the whole
+    reply, less a [DRAFT] heading on its first line. Never split into
+    sections: a marker inside the text must not decide what survives."""
+    return _LEADING_DRAFT_MARKER.sub("", reply.strip(), count=1).strip()
+
+
+# The workspace written with no Project selected (audit UX-01): saved and
+# restored like a Project's, in one settings row of the local database.
+UNFILED_WORKSPACE_KEY = "author_unfiled_workspace"
+
 
 def _is_local(provider: str) -> bool:
     return provider.lower().replace(" ", "") in LOCAL_PROVIDERS
@@ -714,6 +758,7 @@ class AuthorPanel(QWidget):
 
         self._on_content_type_changed(self.author_content_type_box.currentText())
         self._load_profile()
+        self._load_unfiled_workspace()
         for widget in (
             self.author_title_input, self.author_name_input,
             self.author_profile_hook_input, self.author_profile_reader_input,
@@ -882,11 +927,13 @@ class AuthorPanel(QWidget):
             self._loading_project_state = False
 
     def _schedule_project_save(self, *_args) -> None:
-        if self._project_id and not self._loading_project_state:
+        # With or without a Project: unfiled work is saved too (audit UX-01).
+        if not self._loading_project_state:
             self._project_save_timer.start()
 
     def _persist_project_state(self) -> None:
         if not self._project_id:
+            self._persist_unfiled_state()
             return
         from services.project_workspaces import save
         title = self.author_title_input.text().strip()
@@ -894,6 +941,30 @@ class AuthorPanel(QWidget):
         save(self._project_id, "author", self._capture_project_state(),
              work_title=title, byline=byline)
         self._last_project_identity = (title, byline)
+
+    def _persist_unfiled_state(self) -> None:
+        """Save the workspace written with no Project (audit UX-01)."""
+        import json
+        from services.database import save_setting
+        state = self._capture_project_state()
+        save_setting(UNFILED_WORKSPACE_KEY, json.dumps(state))
+        self._unfiled_state = state
+
+    def _load_unfiled_workspace(self) -> None:
+        """Restore the unfiled workspace a previous session saved, if any."""
+        import json
+        from services.database import get_setting
+        raw = get_setting(UNFILED_WORKSPACE_KEY, "")
+        if not raw:
+            return
+        try:
+            state = json.loads(raw)
+        except ValueError:
+            return
+        if not isinstance(state, dict):
+            return
+        self._unfiled_state = state
+        self._apply_project_state(state)
 
     def _sync_project_identity(self, project: dict) -> None:
         """Apply identity changed in Project Manager without clearing the draft."""
@@ -929,8 +1000,14 @@ class AuthorPanel(QWidget):
             # workspace row was cascaded already; never recreate orphan work.
             if self.host.registry.get_project(self._project_id):
                 self._persist_project_state()
-        elif self._unfiled_state is None:
-            self._unfiled_state = self._capture_project_state()
+        else:
+            # Leaving unfiled work: keep what is on screen now, in memory and
+            # on disk, so it returns when no Project is selected again.
+            try:
+                self._persist_unfiled_state()
+            except Exception as exc:
+                self._unfiled_state = self._capture_project_state()
+                self.host._note_failure("author: save unfiled draft", exc)
         self._project_id = next_id
         if next_id:
             self._apply_project_state(load(next_id, "author"), project)
@@ -1087,6 +1164,9 @@ class AuthorPanel(QWidget):
         self.author_status_label.setText("[Working…]")
         self.author_write_btn.setEnabled(False)
         self.author_continue_btn.setEnabled(False)
+        # Clear mid-run would cut the stream's anchor or the revise
+        # selection out from under the reply (review 2026-11-24 P2-1).
+        self.author_clear_btn.setEnabled(False)
         self.author_stop_btn.setEnabled(True)
         # Keep the token: "author" is shared by the write, publish and
         # market flows, and resolving by name pops whichever is oldest.
@@ -1098,6 +1178,7 @@ class AuthorPanel(QWidget):
             self._revise_cursor = None
             self.author_write_btn.setEnabled(True)
             self.author_continue_btn.setEnabled(True)
+            self.author_clear_btn.setEnabled(True)
             self.author_stop_btn.setEnabled(False)
             self.author_status_label.setText("")
             return
@@ -1224,12 +1305,41 @@ class AuthorPanel(QWidget):
         """Where the streamed reply begins in the Draft."""
         return self._stream_anchor.position() + 1 if self._stream_anchor else 0
 
+    def _strip_stream_markers(self) -> None:
+        """A prose stream cut by Stop or an error stays in the Draft (its text
+        is kept), but not its section markers: left there, a later Revise
+        would meet them inside the manuscript."""
+        if self._stream_mode != "append" or not self._stream_open:
+            return
+        box = self.author_draft_box
+        start = self._stream_start()
+        cursor = QTextCursor(box.document())
+        cursor.setPosition(min(start, box.document().characterCount() - 1))
+        cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
+        streamed = cursor.selection().toPlainText()
+        cleaned = strip_section_markers(streamed)
+        if cleaned != streamed:
+            cursor.beginEditBlock()
+            cursor.insertText(cleaned)
+            cursor.endEditBlock()
+        self._stream_open = False
+        self._stream_anchor = None
+        self._stream_sep = 0
+
     def _end_stream(self) -> str | None:
         mode, self._stream_mode = self._stream_mode, None
         self.author_draft_box.setReadOnly(False)
         return mode
 
+    def _from_old_worker(self) -> bool:
+        """A signal from a run that is no longer the current one (stopped and
+        replaced): it must not touch the new run's stream or token."""
+        sender = self.sender()
+        return sender is not None and sender is not self.host.author_worker
+
     def _on_token(self, token: str):
+        if self._from_old_worker():
+            return
         mode = self._stream_mode
         if mode is None:            # stopped or failed: late tokens go nowhere
             return
@@ -1256,6 +1366,8 @@ class AuthorPanel(QWidget):
         self.author_scene_count_label.setText(str(scene_count))
 
     def _on_finished(self, full_response: str):
+        if self._from_old_worker():
+            return
         token, self._write_token = self._write_token, None
         entry = self.host.record_request(token, full_response) if token else None
         mode = self._end_stream()
@@ -1266,9 +1378,7 @@ class AuthorPanel(QWidget):
             return
         cut = result_notice(entry, full_response, "author") is not None
         if mode == "revise" and revise is not None:
-            sections = self._parse_sections(full_response)
-            revised = (sections["draft"] if any(sections.values())
-                       else full_response.strip())
+            revised = revise_text(full_response)
             source = revise.selection().toPlainText().strip()
             ratio = REVISE_MIN_RATIO_BY_TASK.get(self._run_task,
                                                  REVISE_MIN_RATIO)
@@ -1292,6 +1402,9 @@ class AuthorPanel(QWidget):
                   or (f"[Done] Revised — {word_count:,} words. Ctrl+Z in the "
                       "Draft brings back the earlier text." if mode == "revise"
                       else f"[Done] {word_count:,} words"))
+        if mode == "revise" and _ANY_MARKER.search(revise_text(full_response)):
+            status += (" [Check] The reply contained a section marker; it is "
+                       "in the Draft as text.")
         # Count in the text that will actually be published: a clean
         # Continue must not hide chapter one's unverified claims — and a
         # sectioned response must not hide marks routed to other tabs.
@@ -1309,15 +1422,19 @@ class AuthorPanel(QWidget):
     def _finish_buttons(self):
         self.author_write_btn.setEnabled(True)
         self.author_continue_btn.setEnabled(True)
+        self.author_clear_btn.setEnabled(True)
         self.author_stop_btn.setEnabled(False)
 
     def _on_error(self, error: str):
+        if self._from_old_worker():
+            return
         token, self._write_token = self._write_token, None
         if token:
             self.host.abandon_request(token, error=error)
         # Nothing is undone or overwritten: prose written so far stays after
-        # the old Draft (as with Continue); notes and revisions were never
-        # applied.
+        # the old Draft (as with Continue), without its section markers;
+        # notes and revisions were never applied.
+        self._strip_stream_markers()
         self._end_stream()
         self._revise_cursor = None
         self.author_status_label.setText(f"[Error] {error}")
@@ -1331,6 +1448,7 @@ class AuthorPanel(QWidget):
         token, self._write_token = self._write_token, None
         if token:
             self.host.abandon_request(token, reason="stopped")
+        self._strip_stream_markers()
         mode = self._end_stream()
         self._revise_cursor = None
         self._run_stopped = True
@@ -1403,18 +1521,61 @@ class AuthorPanel(QWidget):
         except Exception as e:
             self.author_status_label.setText(f"[Error] {e}")
 
+    def _writing_boxes(self):
+        return (self.author_draft_box, self.author_outline_box,
+                self.author_characters_box, self.author_world_box,
+                self.author_sources_box)
+
     def clear(self):
+        """Empty the writing, after asking (audit UX-02).
+
+        Title and the Book Profile stay: Title is the Project's work title,
+        and clearing it renamed the Project. Each box is emptied as one
+        undoable edit, so Cmd-Z in it brings the text back.
+        """
+        if self._stream_mode is not None:
+            self.author_status_label.setText(
+                "[Busy] Stop or finish the current Write before clearing.")
+            return
+        has_text = (any(box.toPlainText() for box in self._writing_boxes())
+                    or self.author_direction_input.text())
+        if has_text:
+            title = self.author_title_input.text().strip()
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Warning)
+            # macOS ignores a message box's window title: the question is
+            # the main text and the detail the informative text.
+            box.setWindowTitle("Clear the Draft and notes?")
+            box.setText("Clear the Draft and notes?")
+            box.setInformativeText(
+                "This empties the Draft, Outline, Characters, World Notes, "
+                "Sources and Direction"
+                + (f" for \u201c{title}\u201d" if title else "")
+                + ". Title and the Book Profile stay.\n\nCmd-Z in a box "
+                "brings its text back, until you switch Project or Write "
+                "again.")
+            clear_btn = box.addButton("Clear", QMessageBox.DestructiveRole)
+            cancel_btn = box.addButton(QMessageBox.Cancel)
+            box.setDefaultButton(cancel_btn)
+            box.setEscapeButton(cancel_btn)
+            box.exec()
+            if box.clickedButton() is not clear_btn:
+                return
         self._clear_displays()
         self.author_direction_input.clear()
-        self.author_title_input.clear()
         self.author_status_label.setText("")
         self._last_response = ""
 
     def _clear_displays(self):
-        for box in (self.author_draft_box, self.author_outline_box,
-                    self.author_characters_box, self.author_world_box,
-                    self.author_sources_box):
-            box.clear()
+        for box in self._writing_boxes():
+            if box.toPlainText():
+                # One edit block, not QTextEdit.clear(): clear() drops the
+                # undo history, so the text could never come back.
+                cursor = box.textCursor()
+                cursor.beginEditBlock()
+                cursor.select(QTextCursor.Document)
+                cursor.removeSelectedText()
+                cursor.endEditBlock()
         self.author_word_count_label.setText("0")
         self.author_scene_count_label.setText("0")
         self.author_save_btn.setEnabled(False)
@@ -1425,6 +1586,18 @@ class AuthorPanel(QWidget):
         # reroute (and lose) the reply.
         task = ((self._run_task if mode else "")
                 or self.author_task_box.currentText())
+        if mode == "revise":
+            # Replace exactly the text that was sent, as one edit so Ctrl+Z
+            # brings it back. The whole reply is the revision: it is never
+            # split into sections and never writes the notes tabs. An empty
+            # reply replaces nothing.
+            clean = revise_text(response)
+            if revise is not None and clean:
+                revise.beginEditBlock()
+                head, tail = self._revise_edges
+                revise.insertText(head + clean + tail)
+                revise.endEditBlock()
+            return
         sections = self._parse_sections(response)
         marked = any(sections.values())
         clean = sections["draft"] if marked else response.strip()
@@ -1441,14 +1614,6 @@ class AuthorPanel(QWidget):
             self.author_characters_box.setPlainText(response)
         elif task == "Build World" and not sections.get("world"):
             self.author_world_box.setPlainText(response)
-        elif mode == "revise" and revise is not None:
-            # Replace exactly the text that was sent, as one edit so Ctrl+Z
-            # brings it back. An empty reply replaces nothing.
-            if clean:
-                revise.beginEditBlock()
-                head, tail = self._revise_edges
-                revise.insertText(head + clean + tail)
-                revise.endEditBlock()
         elif mode == "notes" or task in NOTES_TASKS or self._is_continuing:
             return
         else:

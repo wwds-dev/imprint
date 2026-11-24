@@ -142,6 +142,17 @@
 {"ts": "2026-11-23T00:39:04", "phase": "build", "state": "done", "spec": "model-updates-visibility"}
 {"ts": "2026-11-23T00:52:37", "phase": "review", "state": "start", "spec": "model-updates-visibility"}
 {"ts": "2026-11-23T00:57:10", "phase": "review", "state": "done", "spec": "model-updates-visibility"}
+{"ts": "2026-11-24T01:53:48", "phase": "define", "state": "start", "spec": "quill-unfiled-and-clear"}
+{"ts": "2026-11-24T01:53:48", "phase": "define", "state": "done", "spec": "quill-unfiled-and-clear"}
+{"ts": "2026-11-24T01:53:55", "phase": "build", "state": "start", "spec": "audit-p0-money-fixes", "note": "built in 2a66694"}
+{"ts": "2026-11-24T01:53:55", "phase": "build", "state": "done", "spec": "audit-p0-money-fixes"}
+{"ts": "2026-11-24T01:53:55", "phase": "review", "state": "start", "spec": "audit-p0-money-fixes"}
+{"ts": "2026-11-24T01:58:16", "phase": "build", "state": "start", "spec": "quill-unfiled-and-clear"}
+{"ts": "2026-11-24T02:06:15", "phase": "build", "state": "done", "spec": "quill-unfiled-and-clear"}
+{"ts": "2026-11-24T02:06:15", "phase": "review", "state": "done", "spec": "audit-p0-money-fixes"}
+{"ts": "2026-11-24T02:06:15", "phase": "secure", "state": "done", "spec": "audit-p0-money-fixes"}
+{"ts": "2026-11-24T02:06:15", "phase": "document", "state": "done", "spec": "audit-p0-money-fixes"}
+{"ts": "2026-11-24T02:06:15", "phase": "document", "state": "done", "spec": "quill-unfiled-and-clear"}
 {"ts": "2026-11-24T02:20:27", "phase": "build", "state": "start"}
 {"ts": "2026-11-24T02:20:27", "phase": "review", "state": "start", "spec": "audit-p1-billing"}
 {"ts": "2026-11-24T02:20:27", "phase": "review", "state": "start", "spec": "rename-imprint-studio"}
@@ -167,5 +178,7 @@
 {"ts": "2026-11-24T11:16:52", "phase": "verify", "state": "done", "spec": "rename-imprint-studio"}
 {"ts": "2026-11-24T11:16:52", "phase": "verify", "state": "done", "spec": "model-updates-visibility"}
 {"ts": "2026-11-24T11:16:52", "phase": "secure", "state": "done", "spec": "rename-imprint-studio"}
+{"ts": "2026-11-24T11:24:53", "phase": "verify", "state": "done", "spec": "audit-p0-money-fixes"}
+{"ts": "2026-11-24T11:24:53", "phase": "verify", "state": "done", "spec": "quill-unfiled-and-clear"}
 {"ts": "2026-11-24T16:36:01", "phase": "define", "state": "start", "spec": "ai-act-safeguards"}
 {"ts": "2026-11-24T16:36:55", "phase": "define", "state": "done", "spec": "ai-act-safeguards"}

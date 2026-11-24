@@ -469,7 +469,11 @@ CREATE TABLE IF NOT EXISTS audiobook_conversions (
     error         TEXT NOT NULL DEFAULT '',
     created_at    TEXT NOT NULL,
     updated_at    TEXT NOT NULL,
-    job_id        TEXT NOT NULL DEFAULT ''
+    job_id        TEXT NOT NULL DEFAULT '',
+    -- sha256 of the book's extracted text when the run started. A different
+    -- hash means the converter discards its cache and narrates it all again,
+    -- so the next Start is authorized at full cost (audit QB-2).
+    source_sha256 TEXT NOT NULL DEFAULT ''
 );
 
 -- Release kits (docs/specs/one-click-release.md, A4): one approved job that
@@ -798,6 +802,7 @@ def _add_missing_columns(conn: sqlite3.Connection) -> None:
             ("provider", "TEXT NOT NULL DEFAULT 'openai'"),
             ("model", "TEXT NOT NULL DEFAULT 'gpt-4o-mini-tts'"),
             ("job_id", "TEXT NOT NULL DEFAULT ''"),
+            ("source_sha256", "TEXT NOT NULL DEFAULT ''"),
         ],
         "pricing": [("cached_input_per_1m_usd", "REAL NOT NULL DEFAULT 0.0")],
         "creator_content": [
