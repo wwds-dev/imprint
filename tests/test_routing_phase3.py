@@ -313,10 +313,11 @@ def test_starting_a_measurement_does_no_model_work_on_the_gui_thread(app, monkey
 def test_the_measure_worker_runs_the_engine_off_the_gui_thread(qapp, tmp_path):
     from ui.workers import LocalMeasureWorker
     seen = []
+    verdicts = iter(("B", "A") * 8)          # the reference wins in both orders
 
     def ask(provider, model, prompt):
         seen.append(threading.current_thread())
-        return "A" if provider == "gemini" else "answer"
+        return next(verdicts) if provider == "gemini" else "answer"
 
     prompts = lr.PromptSet(1, {k: (("x", "p"),) for k in lr.KINDS})
     worker = LocalMeasureWorker(DOLPHIN, PLAN, prompts, ask,
@@ -334,3 +335,66 @@ def test_closing_the_window_cancels_a_running_measurement():
     import inspect
     import main
     assert '"local_measure_worker"' in inspect.getsource(main.GodAI.closeEvent)
+
+
+# ── review L-1: the run is capped, billed on real usage and reserved ────────
+
+class _CappedClient:
+    """A cloud client that records the cap it was sent and reports usage."""
+
+    def __init__(self, reply, usage):
+        self.reply, self.usage, self.caps = reply, usage, []
+
+    def chat(self, messages, model, max_output_tokens):
+        self.caps.append(max_output_tokens)
+        return self.reply, dict(self.usage)
+
+
+def test_measurement_calls_carry_an_output_cap_and_keep_their_usage(app, monkeypatch):
+    import main
+    judge = _CappedClient("A", {"input_tokens": 900, "output_tokens": 300})
+    monkeypatch.setattr(app, "gemini", judge)
+    judge_prompt = lr.JUDGE_PROMPT.format(prompt="p", a="x", b="y")
+    assert app._measure_ask("gemini", "gemini-3.8-flash", judge_prompt) == "A"
+    assert app._measure_ask("gemini", "gemini-3.8-flash", "write a scene") == "A"
+    assert judge.caps == [main.MEASURE_VERDICT_TOKENS, main.MEASURE_ANSWER_TOKENS]
+    # Billed on the provider's counts, not characters / 4 of "A".
+    by_tokens, by_usage = app._measurement_cost(PLAN)
+    monkeypatch.setattr(app, "_measure_usage", {
+        ("gemini", "gemini-3.8-flash", judge_prompt, "A"):
+            {"input_tokens": 900, "output_tokens": 300}})
+    assert by_usage("gemini", "gemini-3.8-flash", judge_prompt, "A") == pytest.approx(
+        by_tokens("gemini", "gemini-3.8-flash", 900, 300))
+    logged = []
+    monkeypatch.setattr(app.usage_tracker, "log_request",
+                        lambda **kw: logged.append(kw) or {"estimated_cost": 0.002})
+    monkeypatch.setattr(app, "_measure_reserved_eur", 0.5)
+    app._on_measure_usage("gemini", "gemini-3.8-flash", judge_prompt, "A")
+    assert logged[0]["usage"] == {"input_tokens": 900, "output_tokens": 300}
+    assert app._measure_reserved_eur == pytest.approx(0.498)
+    assert app._measure_usage == {}                              # popped once billed
+
+
+def test_a_local_answer_is_cut_before_the_judge_sees_it(app, monkeypatch):
+    import main
+    monkeypatch.setattr(app, "run_backend", lambda *a, **k: "x" * 50_000)
+    assert len(app._measure_ask("lmstudio", DOLPHIN.id, "p")) == main.MEASURE_ANSWER_CHARS
+
+
+def test_the_ceiling_is_priced_on_the_caps_and_held_for_the_run(app, monkeypatch):
+    import main
+    _allow(app, monkeypatch)
+    def outputs_only(provider, model, tokens_in, tokens_out):
+        return tokens_out / 1_000_000
+    prompts = app.local_measure_prompts()
+    pairs = sum(len(rows) for rows in prompts.kinds.values())
+    expected = pairs * (main.MEASURE_ANSWER_TOKENS + 2 * main.MEASURE_VERDICT_TOKENS) / 1_000_000
+    assert app._measurement_ceiling(PLAN, prompts, outputs_only) == pytest.approx(
+        round(expected + 0.01, 2))
+    before = app._reserved_in_flight_eur()
+    assert app.start_local_measure(DOLPHIN, automatic=False)
+    worker = FakeWorker.started[-1]
+    assert app._reserved_in_flight_eur() == pytest.approx(before + worker.budget)
+    worker._running = False
+    worker.finished_signal.emit(lr.MeasureResult(lr.STATUS_FAILED, "stub"))
+    assert app._reserved_in_flight_eur() == pytest.approx(before)
