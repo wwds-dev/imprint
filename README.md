@@ -477,11 +477,15 @@ which tool ran last, the routing totals).
 the tokens it sends plus the output reserve ("+ up to 8,192").
 
 **Cost History · Run Log · Learning Centre** — utilities that open a window and
-change nothing: plain rows with a chevron rather than buttons.
+change nothing: plain rows with a chevron rather than buttons. Since the rails
+rebalance (2026-11-24) they sit on the left rail under New Chat, with the
+Project budget bar under the project dropdown; the right rail keeps spend and
+status.
 
 **System · Routing · API keys · Model updates** — the first three are collapsed
-by default; **Model updates is open by default** (since 2026-11-22), because
-collapsed it was easy to miss. Each is a compact status card with separate
+by default; **Model updates** was open by default from 2026-11-22 and is
+collapsed again since the rails rebalance, because its count pill keeps it
+visible. Each is a compact status card with separate
 values and state badges instead of a paragraph of diagnostic text. Model
 updates also shows its counts beside its title (*2 new · 1 warning*), so
 news stays visible if you close it. The other three say their state in a word

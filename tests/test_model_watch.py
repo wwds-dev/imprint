@@ -255,10 +255,11 @@ def test_check_with_no_keys_says_so_and_calls_nothing(app, watched_window,
     assert "Add a provider key" in window.model_updates_card.skipped_label.text()
 
 
-def test_the_model_updates_section_is_open_at_start(window):
+def test_the_model_updates_section_is_collapsed_at_start(window):
+    # rails-rebalance option B: the count pill carries it while closed.
     section = window.model_updates_section
-    assert section.header_btn.isChecked()
-    assert not section.content.isHidden()
+    assert not section.header_btn.isChecked()
+    assert section.content.isHidden()
 
 
 def test_a_new_model_reaches_the_tile_the_menu_and_the_ranking(app, watched_window):

@@ -2,8 +2,9 @@
 
 Needs: design, build, review, verify, docs
 
-Status: **Define written 2026-11-24; waiting for the owner's pick of a layout option (GATE).** No
-code is written. Priority: P2. Type: user-visible layout change, no new capability, no change to
+Status: **Owner approved option B 2026-11-24 ("B (recommended)"); built same day, review and
+verify pending.** Model updates start collapsed (open question 2 answered by the pick); Chat
+routing stays right. Priority: P2. Type: user-visible layout change, no new capability, no change to
 what is stored. Follow-up to `side-rails-redesign.md` (merged, 46c65fa); it keeps that spec's
 accepted parts: project rail B (project dropdown with "more" button, search with filter, chats by
 day, full-width New Chat), spend rail A (Session and Today rows with the limit as the field,

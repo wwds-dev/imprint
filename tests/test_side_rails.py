@@ -496,3 +496,17 @@ def test_the_status_sections_start_with_a_state(window):
     assert sections["Chat routing"].summary_label.text() == "openai"
     window.routing_status_card.reset_route()
     assert sections["Chat routing"].summary_label.text() == ""
+
+
+def test_each_item_sits_on_the_rail_the_rebalance_spec_gives_it(window):
+    """docs/specs/rails-rebalance.md, option B."""
+    from PySide6.QtWidgets import QWidget
+    left = window.findChild(QWidget, "RailLeft")
+    right = window.findChild(QWidget, "RailRight")
+    for name in ("cost_history_btn", "run_log_btn", "learn_btn", "project_meter"):
+        widget = getattr(window, name)
+        assert left.isAncestorOf(widget), f"{name} belongs on the left rail"
+        assert not right.isAncestorOf(widget), f"{name} left on the right rail"
+    for name in ("session_meter", "daily_meter", "model_updates_section"):
+        assert right.isAncestorOf(getattr(window, name)), f"{name} belongs on the right"
+    assert not window.model_updates_section.header_btn.isChecked()

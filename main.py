@@ -2677,6 +2677,12 @@ class GodAI(QWidget):
         self.active_project_label.hide()
         left_layout.addWidget(self.active_project_label)
 
+        # Project budget: measures the active project, so it sits with the
+        # project and shows only while one is active.
+        self.project_meter = Meter("Project budget")
+        self.project_meter.hide()
+        left_layout.addWidget(self.project_meter)
+
         search_row = QHBoxLayout()
         search_row.setContentsMargins(0, 0, 0, 0)
         search_row.setSpacing(SM)
@@ -2712,11 +2718,29 @@ class GodAI(QWidget):
         # The list takes the rail's spare height rather than being capped at
         # 200px with the buttons stranded at the bottom of the window.
         self.history_list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        self.history_list.setMinimumHeight(150)
         left_layout.addWidget(self.history_list, 1)
 
         self.new_chat_btn = QPushButton("New Chat")
         self.new_chat_btn.clicked.connect(self.new_chat)
         left_layout.addWidget(self.new_chat_btn)
+
+        # Places that open a window: navigation, so they live with the chats
+        # (rails-rebalance, option B).
+        links = QVBoxLayout()
+        links.setSpacing(0)
+        self.cost_history_btn = nav_row("Cost History")
+        self.cost_history_btn.clicked.connect(self.show_cost_history)
+        links.addWidget(self.cost_history_btn)
+
+        self.run_log_btn = nav_row("Run Log")
+        self.run_log_btn.clicked.connect(self.show_run_log)
+        links.addWidget(self.run_log_btn)
+
+        self.learn_btn = nav_row("Learning Centre")
+        self.learn_btn.clicked.connect(lambda: self.show_learning_center())
+        links.addWidget(self.learn_btn)
+        left_layout.addLayout(links)
 
         return left_widget
 
@@ -3528,11 +3552,8 @@ class GodAI(QWidget):
         for budget_input in (self.session_budget_input, self.daily_budget_input):
             # Enter, or leaving the field, is the save.
             budget_input.editingFinished.connect(self._commit_budget_limits)
-        self.project_meter = Meter("Project budget")
         layout.addWidget(self.session_meter)
         layout.addWidget(self.daily_meter)
-        layout.addWidget(self.project_meter)
-        self.project_meter.hide()
 
         # The numbers you glance at, not act on: one line each. Detail (which
         # tool ran last, the routing totals) is on hover.
@@ -3554,24 +3575,6 @@ class GodAI(QWidget):
         self.live_estimate_label.setObjectName("EstimateLine")
         self.live_estimate_label.setWordWrap(True)
         layout.addWidget(self.live_estimate_label)
-
-        # ── Utilities: open a window, change nothing. Keep them with the
-        # spend controls instead of marooning them below an elastic void. ──
-        layout.addWidget(section("Activity"))
-        links = QVBoxLayout()
-        links.setSpacing(0)
-        self.cost_history_btn = nav_row("Cost History")
-        self.cost_history_btn.clicked.connect(self.show_cost_history)
-        links.addWidget(self.cost_history_btn)
-
-        self.run_log_btn = nav_row("Run Log")
-        self.run_log_btn.clicked.connect(self.show_run_log)
-        links.addWidget(self.run_log_btn)
-
-        self.learn_btn = nav_row("Learning Centre")
-        self.learn_btn.clicked.connect(lambda: self.show_learning_center())
-        links.addWidget(self.learn_btn)
-        layout.addLayout(links)
 
         # ── Reference: wanted only when something looks wrong. Each section
         # says its state in a word while closed, so "wrong" is visible
@@ -3647,11 +3650,10 @@ class GodAI(QWidget):
         reference.addWidget(keys_card)
 
         # Beside the keys: what the providers behind them have shipped since
-        # Imprint last looked. Open by default, unlike its neighbours: the
-        # owner could not find the tile while it was collapsed. The title
-        # still carries the count for a user who closes it.
+        # Imprint last looked. Collapsed like its neighbours now that the
+        # title carries the count as a pill (rails-rebalance, option B).
         self.model_updates_section = CollapsibleSection(
-            "Model updates", expanded=True, summary_from_title=True)
+            "Model updates", expanded=False, summary_from_title=True)
         updates_body = QWidget()
         updates_body.setObjectName("Transparent")
         updates_layout = QVBoxLayout(updates_body)

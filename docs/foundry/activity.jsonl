@@ -220,3 +220,5 @@
 {"ts": "2026-11-24T23:39:14", "phase": "build", "state": "done", "spec": "ai-act-safeguards-leftovers"}
 {"ts": "2026-11-24T23:39:14", "phase": "verify", "state": "done", "spec": "ai-act-safeguards-leftovers"}
 {"ts": "2026-11-24T23:57:35", "phase": "define", "state": "done", "spec": "rails-rebalance"}
+{"ts": "2026-11-24T23:57:55", "phase": "build", "state": "start", "spec": "rails-rebalance"}
+{"ts": "2026-11-24T23:58:47", "phase": "build", "state": "done", "spec": "rails-rebalance"}
