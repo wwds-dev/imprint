@@ -4,6 +4,7 @@ Moved verbatim out of main.py (see docs/refactor_plan.md, phase 1). These are
 standalone QThread subclasses: they take everything they need as constructor
 arguments and touch no application state, which is why they move first.
 """
+import os
 import re
 import subprocess
 import time
@@ -386,6 +387,14 @@ class VideoGenerationWorker(QThread):
         launch resumes watching; nothing is emitted for a closing window."""
         self._cancelled = True
 
+    def _save(self, data: bytes) -> None:
+        """Atomic: a half-written file must never be taken for the saved
+        clip, landed and billed by the next launch (audit QH-2)."""
+        self.output_path.parent.mkdir(parents=True, exist_ok=True)
+        partial = self.output_path.with_name(self.output_path.name + ".partial")
+        partial.write_bytes(data)
+        os.replace(partial, self.output_path)
+
     def run(self):
         try:
             self.status_signal.emit(f"Submitting to {self.provider}…")
@@ -406,6 +415,13 @@ class VideoGenerationWorker(QThread):
                 job, timeout=self.timeout, on_progress=progress,
                 should_cancel=lambda: self._cancelled)
             if self._cancelled:
+                # A synchronous render (Gemini Omni) returns the finished,
+                # paid clip from the create call itself: there is no job to
+                # resume, so it is written to disk even for a closing
+                # window, where the next launch settles it (audit QH-2).
+                if (job.status == "completed"
+                        and getattr(job, "video_bytes", None) is not None):
+                    self._save(job.video_bytes)
                 return
             if job.status != "completed":
                 self.timed_out = (job.error or "").startswith("Timed out after")
@@ -419,8 +435,7 @@ class VideoGenerationWorker(QThread):
             self.job_signal.emit(job)
 
             self.status_signal.emit(f"Downloading {self.provider} video…")
-            self.output_path.parent.mkdir(parents=True, exist_ok=True)
-            self.output_path.write_bytes(self.client.download_video(job))
+            self._save(self.client.download_video(job))
             self.done_signal.emit(str(self.output_path))
         except Exception as exc:
             # Provider verdicts exit through the status branch above; only

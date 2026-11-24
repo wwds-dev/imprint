@@ -606,6 +606,11 @@ chunk_tokens=1200
 - [ ] The cost estimate is computed from the **exact text**, not a page guess
 - [ ] An EPUB is read in **spine order**, not filename order
 - [ ] A source file changed since the last run is noticed and said so
+- [ ] Edit an interrupted book's text, then **Start**: Booth asks "Book changed
+      since the interrupted run", and **Yes** confirms the **whole** estimate,
+      not the remaining share; **No** starts nothing (audit QB-2)
+- [ ] Delete an interrupted book's `temp_audio` folder, then **Start**: the
+      confirmed cost is the whole estimate, never €0 (audit QB-2)
 
 **Test C — convert a short book**  `PAID-UNIT`
 - [ ] Progress and log advance per chunk
@@ -687,8 +692,11 @@ Help me release my music.
 
 **Test C — the direct-provider Stop contract**  `PAID-UNIT`
 This is the case most recently fixed — check it closely.
-- [ ] For a Gemini/Wan direct render the button is **enabled** and labelled
+- [ ] For a Veo or Wan direct render the button is **enabled** and labelled
       **Stop** — not disabled and labelled "Cannot Cancel"
+- [ ] For a **Gemini Omni** render the button reads **Cannot Stop** and is
+      disabled: Omni renders in one call; the log says the clip is saved and
+      billed when it returns. Quitting while it renders asks first (audit QH-2)
 - [ ] The submit message states the real contract: a provider that has already
       accepted the job may still bill
 - [ ] Pressing Stop during the window before the provider acknowledges still

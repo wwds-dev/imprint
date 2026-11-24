@@ -105,6 +105,39 @@ listed under **Unreleased** until it ships.
   that ended in an intermittent crash. Nothing looks different, except that
   the Sources box now shows the same text caret as the other editors. A test
   fails if a new parentless widget appears.
+- **Booth authorizes the whole book when its text changed or its cache is gone**
+  (2026-11-24, audit QB-2, `docs/specs/audit-p0-money-fixes.md`). An interrupted
+  conversion remembers a fingerprint of the book's text. If the text changed,
+  Start asks "Book changed since the interrupted run" and confirms the full
+  estimate, because the narrator discards its cache and narrates everything
+  again; No starts nothing. If the cached chapters were deleted, the missing
+  ones are confirmed again instead of €0.
+- **Herald checks the image provider before making a clip** (2026-11-24, audit
+  QB-3). A clip whose scene images come from Gemini or Qwen needs that
+  provider's key and its box ticked in the API permissions row, the same check
+  the Video tab makes, and it runs before the brief is paid for. An image model
+  Imprint does not know is refused.
+- **A Gemini Omni clip is no longer thrown away by Stop, and quitting asks first** (2026-11-24,
+  audit QH-2). Omni renders in one call, so Reel shows **Cannot Stop** while it
+  runs and asks before quitting. A clip that arrives while Imprint closes is
+  saved, and the next launch adds it to the Library and records its cost once.
+  An Omni render cut off by a quit with no clip is recorded at its confirmed
+  cost, since Gemini may have charged; any Omni render stranded by the old Stop
+  is recorded on the next launch, at that day's date.
+- **Quill's Revise keeps the whole text even when a reply carries a section
+  marker** (2026-11-24, `quill-draft-safety` security review P1-1). A Revise
+  reply is used whole, less a [DRAFT] heading on its first line; it is never
+  split into sections and never writes the Outline, Characters or World tabs.
+  A marker in the manuscript no longer changes what a Revise keeps, and a
+  reply that still holds one says so. A Write stopped or failed mid-stream
+  keeps its text but drops its section markers.
+- **Quill keeps a Draft written with no Project** (2026-11-24, audit UX-01,
+  `docs/specs/quill-unfiled-and-clear.md`). It autosaves like a Project's and
+  is there after a quit and relaunch, and when you switch back from a Project.
+- **Quill's Clear asks first and can be undone** (2026-11-24, audit UX-02). It
+  names what it empties, Cancel is the default, Cmd-Z in a box brings its text
+  back (until you switch Project or Write again), it is disabled while a Write
+  runs, and Title and the Book Profile are no longer cleared.
 - **Vector no longer promises vector files or an invented track record**
   (audit QM-18). Its prompt dropped the "5-star reputation", leaves prices as
   `[PRICE]` unless you give them, and asks for a flat logo on a plain
