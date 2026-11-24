@@ -74,15 +74,36 @@ REVISE_TOO_LONG_LOCAL = (
     "cloud model, and press Write again.")
 
 # Section markers the system prompt asks for (agents/author/agent.py). A
-# Revise reply keeps only a [DRAFT] heading on its first line out of the
-# text; a prose stream cut by Stop or an error loses its marker lines, so a
-# later Revise never meets one inside the manuscript (security review
-# 2026-11-24, quill-draft-safety P1-1).
-_LEADING_DRAFT_MARKER = re.compile(r"\A\s*\**\s*\[DRAFT\]\s*\**[ \t]*\n?",
-                                   re.IGNORECASE)
-_SECTION_MARKER = re.compile(
-    r"\**[ \t]*\[(?:DRAFT|OUTLINE|CHARACTER|WORLD)\][ \t]*\**[ \t]*\n?",
+# marker in the manuscript no longer changes what a Revise keeps: its reply
+# is used whole, less a [DRAFT] heading on its first line. A prose stream
+# cut by Stop or an error also loses its markers (security review
+# 2026-11-24, quill-draft-safety P1-1). Asterisks count as part of a marker
+# only when they balance around it, so the text's own *italics* stay.
+_MARKER_NAMES = r"\[(?:DRAFT|OUTLINE|CHARACTER|WORLD)\]"
+_LEADING_DRAFT_MARKER = re.compile(
+    r"\A[ \t]*(\*{0,2})[ \t]*\[DRAFT\][ \t]*\1(?:[ \t]*\r?\n|[ \t]+|\Z)",
     re.IGNORECASE)
+_MARKER_LINE = re.compile(
+    r"^[ \t]*(\*{0,2})[ \t]*" + _MARKER_NAMES + r"[ \t]*\1[ \t]*(?:\r?\n|\Z)",
+    re.IGNORECASE | re.MULTILINE)
+_INLINE_MARKER = re.compile(
+    r"[ \t]*(\*{0,2})" + _MARKER_NAMES + r"\1[ \t]*", re.IGNORECASE)
+_ANY_MARKER = re.compile(_MARKER_NAMES, re.IGNORECASE)
+
+
+def strip_section_markers(text: str) -> str:
+    """Remove section markers and keep every other character: a marker on its
+    own line goes with its line; an inline one becomes one space between
+    words, or nothing at a line's edge."""
+    text = _MARKER_LINE.sub("", text)
+
+    def inline(match):
+        before = match.string[match.start() - 1] if match.start() else "\n"
+        after = (match.string[match.end()] if match.end() < len(match.string)
+                 else "\n")
+        return "" if before == "\n" or after in "\r\n" else " "
+
+    return _INLINE_MARKER.sub(inline, text)
 
 
 def revise_text(reply: str) -> str:
@@ -1293,7 +1314,7 @@ class AuthorPanel(QWidget):
         cursor.setPosition(min(start, box.document().characterCount() - 1))
         cursor.movePosition(QTextCursor.End, QTextCursor.KeepAnchor)
         streamed = cursor.selection().toPlainText()
-        cleaned = _SECTION_MARKER.sub("", streamed)
+        cleaned = strip_section_markers(streamed)
         if cleaned != streamed:
             cursor.beginEditBlock()
             cursor.insertText(cleaned)
@@ -1307,7 +1328,15 @@ class AuthorPanel(QWidget):
         self.author_draft_box.setReadOnly(False)
         return mode
 
+    def _from_old_worker(self) -> bool:
+        """A signal from a run that is no longer the current one (stopped and
+        replaced): it must not touch the new run's stream or token."""
+        sender = self.sender()
+        return sender is not None and sender is not self.host.author_worker
+
     def _on_token(self, token: str):
+        if self._from_old_worker():
+            return
         mode = self._stream_mode
         if mode is None:            # stopped or failed: late tokens go nowhere
             return
@@ -1334,6 +1363,8 @@ class AuthorPanel(QWidget):
         self.author_scene_count_label.setText(str(scene_count))
 
     def _on_finished(self, full_response: str):
+        if self._from_old_worker():
+            return
         token, self._write_token = self._write_token, None
         entry = self.host.record_request(token, full_response) if token else None
         mode = self._end_stream()
@@ -1368,6 +1399,9 @@ class AuthorPanel(QWidget):
                   or (f"[Done] Revised — {word_count:,} words. Ctrl+Z in the "
                       "Draft brings back the earlier text." if mode == "revise"
                       else f"[Done] {word_count:,} words"))
+        if mode == "revise" and _ANY_MARKER.search(revise_text(full_response)):
+            status += (" [Check] The reply contained a section marker; it is "
+                       "in the Draft as text.")
         # Count in the text that will actually be published: a clean
         # Continue must not hide chapter one's unverified claims — and a
         # sectioned response must not hide marks routed to other tabs.
@@ -1389,6 +1423,8 @@ class AuthorPanel(QWidget):
         self.author_stop_btn.setEnabled(False)
 
     def _on_error(self, error: str):
+        if self._from_old_worker():
+            return
         token, self._write_token = self._write_token, None
         if token:
             self.host.abandon_request(token, error=error)

@@ -497,8 +497,9 @@ def test_scenario_b_a_section_in_a_revise_reply_never_writes_a_tab(h):
     reply = "[DRAFT] " + "y" * 600 + " [WORLD] " + "y" * 400
     h.worker.finished_signal.emit(reply)
     assert h.panel.author_world_box.toPlainText() == "MY WORLD NOTES"
-    assert "y" * 600 in h.draft and "y" * 400 in h.draft
-    assert h.draft.startswith("Keep A. ") and h.draft.endswith(" Keep B.")
+    assert h.draft == ("Keep A. " + "y" * 600 + " [WORLD] " + "y" * 400
+                       + " Keep B.")
+    assert "[Check]" in h.panel.author_status_label.text()
 
 
 def test_a_leading_draft_heading_is_not_put_into_the_manuscript(h):
@@ -515,3 +516,38 @@ def test_revise_text_rules():
     assert revise_text("[draft] Body on the same line") == "Body on the same line"
     assert revise_text("Intro\n[DRAFT]\nBody") == "Intro\n[DRAFT]\nBody"
     assert revise_text("Plain reply") == "Plain reply"
+    # The text's own asterisks stay (review 2026-11-24 P2-1).
+    assert revise_text("[DRAFT]\n\n*Prologue*\n\nText") == "*Prologue*\n\nText"
+    assert revise_text("[DRAFT]\n\n**Chapter One**") == "**Chapter One**"
+    assert revise_text("[DRAFT]\n* first bullet") == "* first bullet"
+    assert revise_text("[DRAFT] *She ran.*") == "*She ran.*"
+    assert revise_text("**[DRAFT]** Body") == "Body"
+
+
+def test_strip_section_markers_keeps_every_other_character():
+    from agents.author.panel import strip_section_markers
+    assert strip_section_markers(
+        "[DRAFT]\nThe scene ends. [CHARACTER]\nMira is **brave** [WORLD] The city"
+    ) == "The scene ends.\nMira is **brave** The city"
+    assert strip_section_markers("**[DRAFT]**\nBody") == "Body"
+    assert strip_section_markers("a *[world]* b") == "a b"
+
+
+def test_a_late_signal_from_a_replaced_worker_is_ignored(h):
+    """Review P3-4 / security P3-1: run 1's late error used to reset run 2's
+    stream (its reply was then added twice) and abandon run 2's token."""
+    h.setup("Write Scene", draft="Old.")
+    h.panel.write()
+    first = h.worker
+    h.stream("First")
+    h.panel.stop()
+    first.running = False
+    h.panel.write()
+    second = h.worker
+    assert second is not first
+    h.stream("[DRAFT]\nSecond run text.")
+    abandoned = list(h.abandoned)
+    first.error_signal.emit("late error from run 1")
+    assert h.abandoned == abandoned
+    second.finished_signal.emit("[DRAFT]\nSecond run text.")
+    assert h.draft.count("Second run text.") == 1

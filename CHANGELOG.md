@@ -107,8 +107,9 @@ listed under **Unreleased** until it ships.
   marker** (2026-11-24, `quill-draft-safety` security review P1-1). A Revise
   reply is used whole, less a [DRAFT] heading on its first line; it is never
   split into sections and never writes the Outline, Characters or World tabs.
-  A Write stopped or failed mid-stream keeps its text but drops its section
-  markers, so a later Revise never meets one inside the manuscript.
+  A marker in the manuscript no longer changes what a Revise keeps, and a
+  reply that still holds one says so. A Write stopped or failed mid-stream
+  keeps its text but drops its section markers.
 - **Quill keeps a Draft written with no Project** (2026-11-24, audit UX-01,
   `docs/specs/quill-unfiled-and-clear.md`). It autosaves like a Project's and
   is there after a quit and relaunch, and when you switch back from a Project.
