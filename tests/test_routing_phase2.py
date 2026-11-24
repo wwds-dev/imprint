@@ -5,12 +5,11 @@ any provider selection; discovery never runs on the UI thread.
 """
 
 import os
-from types import SimpleNamespace
 
 import pytest
 
 from services import local_models as lm
-from services.local_models import LocalInventory, LocalModel, Snapshot
+from services.local_models import LocalInventory, Snapshot
 
 GB = 1e9
 # The suite's conftest stubs discovery for the whole session; the tests of
@@ -120,7 +119,8 @@ def test_empty_runtimes_say_what_to_do():
 def test_the_ui_reads_a_cache_and_never_fetches():
     lmstudio, ollama = FakeLM(True, ROWS), FakeOllama({})
     inv = LocalInventory()
-    inv.snapshot(); inv.stale()
+    inv.snapshot()
+    inv.stale()
     assert lmstudio.calls == 0 and ollama.calls == 0       # reading never fetches
     inv.store(REAL_DISCOVER(lmstudio, ollama, memory=lambda: (1, 2), lms_binary=lambda: None))
     assert lmstudio.calls and len(inv.snapshot().models) == 3

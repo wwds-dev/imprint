@@ -166,7 +166,7 @@ def test_fields_show_the_file_not_the_shell(window, monkeypatch, env_file):
     dialog = _open_settings(window, monkeypatch)
     assert _field(dialog, "OPENAI_API_KEY").text() == "from-file"
     assert _field(dialog, "DEEPSEEK_API_KEY").text() == ""
-    labels = [l.text() for l in dialog.findChildren(QLabel)]
+    labels = [label.text() for label in dialog.findChildren(QLabel)]
     assert any("set by the shell" in text for text in labels)
     dialog.reject()
 
@@ -221,7 +221,7 @@ def test_test_button_with_an_empty_box_says_not_set_without_a_worker(window, mon
     dialog = _open_settings(window, monkeypatch)
     _field(dialog, "GOOGLE_API_KEY").setText("")
     dialog.findChild(QPushButton, "TestKey:GOOGLE_API_KEY").click()
-    labels = [l.text() for l in dialog.findChildren(QLabel)]
+    labels = [label.text() for label in dialog.findChildren(QLabel)]
     assert "not set" in labels
     dialog.reject()
 
@@ -251,27 +251,25 @@ def test_test_button_probes_the_typed_key_and_leaves_the_process_alone(app, wind
     assert button.isEnabled()
     assert seen == ["typed-key"], "the probe must see the typed value"
     assert os.environ["ANTHROPIC_API_KEY"] == "saved-key", "and the process keeps its own"
-    labels = [l.text() for l in dialog.findChildren(QLabel)]
+    labels = [label.text() for label in dialog.findChildren(QLabel)]
     assert any(text.startswith("reachable — 1 model(s)") for text in labels)
     dialog.reject()
 
 
 def test_workspace_id_field_explains_itself_and_never_blocks_save(app, window, monkeypatch, env_file, quiet_reload):
-    from PySide6.QtTest import QTest
     _restore_env_after_save(monkeypatch)
     dialog = _open_settings(window, monkeypatch)
     field = _field(dialog, "DASHSCOPE_WORKSPACE_ID")
     status = _status_beside(field)
     field.setText("a.evil.com")
-    QTest.qWait(600)                                   # past the 400 ms pause
-    assert "letters, digits and hyphens only" in status.text()
+    # The row refreshes 400 ms after typing stops; a fixed 600 ms sleep was
+    # too short on a loaded CI runner (2026-11-22, status still '').
+    _wait_until(lambda: "letters, digits and hyphens only" in status.text())
     assert status.property("status") == "warning"
     field.setText("ws1")
-    QTest.qWait(600)
-    assert status.text() == "Chat will use ws1.ap-southeast-1.maas.aliyuncs.com"
+    _wait_until(lambda: status.text() == "Chat will use ws1.ap-southeast-1.maas.aliyuncs.com")
     _field(dialog, "DASHSCOPE_BASE_URL").setText("https://x.example/v1")
-    QTest.qWait(600)
-    assert "takes priority" in status.text()
+    _wait_until(lambda: "takes priority" in status.text())
     _save(dialog)
     assert "DASHSCOPE_WORKSPACE_ID=ws1" in env_file.read_text()
     dialog.reject()
@@ -282,7 +280,6 @@ def test_workspace_id_field_explains_itself_and_never_blocks_save(app, window, m
 
 def test_endpoint_rows_warn_about_http_and_foreign_hosts_but_still_save(
         app, window, monkeypatch, env_file, quiet_reload):
-    from PySide6.QtTest import QTest
     _restore_env_after_save(monkeypatch)
     dialog = _open_settings(window, monkeypatch)
     chat, video = _field(dialog, "DASHSCOPE_BASE_URL"), _field(dialog, "DASHSCOPE_VIDEO_BASE_URL")
@@ -290,7 +287,7 @@ def test_endpoint_rows_warn_about_http_and_foreign_hosts_but_still_save(
     assert chat_status.text() == "default"
     chat.setText("http://my.example/v1")
     video.setText("https://dashscope-intl.aliyuncs.com/api/v1")
-    QTest.qWait(600)                                   # past the 400 ms pause
+    _wait_until(lambda: "not https" in chat_status.text())     # 400 ms after typing stops
     assert "not https" in chat_status.text() and "not an Alibaba Cloud host" in chat_status.text()
     assert chat_status.property("status") == "warning"
     assert "my.example" not in chat_status.text()

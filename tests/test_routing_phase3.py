@@ -11,7 +11,6 @@ API or LM Studio.
 
 import os
 import threading
-from types import SimpleNamespace
 
 import pytest
 
@@ -207,6 +206,10 @@ def app(window, tmp_path, monkeypatch):
                         lr.LocalRatings(store, window.local_inventory,
                                         lambda: window.ratings))
     monkeypatch.setattr(window, "local_measure_worker", None)
+    # A FakeWorker never finishes, so a started run would leave its ceiling
+    # held for the next test (re-review RC-2).
+    monkeypatch.setattr(window, "_measure_reserved_eur", 0.0)
+    monkeypatch.setattr(window, "_measure_usage", {})
     monkeypatch.setattr(lr, "AUTOMATIC", True)
     monkeypatch.setattr(main, "LocalMeasureWorker", FakeWorker)
     FakeWorker.started = []
@@ -314,10 +317,11 @@ def test_starting_a_measurement_does_no_model_work_on_the_gui_thread(app, monkey
 def test_the_measure_worker_runs_the_engine_off_the_gui_thread(qapp, tmp_path):
     from ui.workers import LocalMeasureWorker
     seen = []
+    verdicts = iter(("B", "A") * 8)          # the reference wins in both orders
 
     def ask(provider, model, prompt):
         seen.append(threading.current_thread())
-        return "A" if provider == "gemini" else "answer"
+        return next(verdicts) if provider == "gemini" else "answer"
 
     prompts = lr.PromptSet(1, {k: (("x", "p"),) for k in lr.KINDS})
     worker = LocalMeasureWorker(DOLPHIN, PLAN, prompts, ask,
@@ -335,3 +339,150 @@ def test_closing_the_window_cancels_a_running_measurement():
     import inspect
     import main
     assert '"local_measure_worker"' in inspect.getsource(main.GodAI.closeEvent)
+
+
+# ── review L-1: the run is capped, billed on real usage and reserved ────────
+
+class _CappedClient:
+    """A cloud client that records the cap it was sent and reports usage."""
+
+    def __init__(self, reply, usage):
+        self.reply, self.usage, self.caps = reply, usage, []
+
+    def chat(self, messages, model, max_output_tokens):
+        self.caps.append(max_output_tokens)
+        return self.reply, dict(self.usage)
+
+
+def test_measurement_calls_carry_an_output_cap_and_keep_their_usage(app, monkeypatch):
+    import main
+    judge = _CappedClient("A", {"input_tokens": 900, "output_tokens": 300})
+    monkeypatch.setattr(app, "gemini", judge)
+    judge_prompt = lr.JUDGE_PROMPT.format(prompt="p", a="x", b="y")
+    assert app._measure_ask("gemini", "gemini-3.8-flash", judge_prompt) == "A"
+    assert app._measure_ask("gemini", "gemini-3.8-flash", "write a scene") == "A"
+    assert judge.caps == [main.MEASURE_VERDICT_TOKENS, main.MEASURE_ANSWER_TOKENS]
+    # Billed on the provider's counts, not characters / 4 of "A".
+    by_tokens, by_usage = app._measurement_cost(PLAN)
+    monkeypatch.setattr(app, "_measure_usage", {
+        ("gemini", "gemini-3.8-flash", judge_prompt, "A"):
+            {"input_tokens": 900, "output_tokens": 300}})
+    assert by_usage("gemini", "gemini-3.8-flash", judge_prompt, "A") == pytest.approx(
+        by_tokens("gemini", "gemini-3.8-flash", 900, 300))
+    logged = []
+    monkeypatch.setattr(app.usage_tracker, "log_request",
+                        lambda **kw: logged.append(kw) or {"estimated_cost": 0.002})
+    monkeypatch.setattr(app, "_measure_reserved_eur", 0.5)
+    app._on_measure_usage("gemini", "gemini-3.8-flash", judge_prompt, "A")
+    assert logged[0]["usage"] == {"input_tokens": 900, "output_tokens": 300}
+    assert app._measure_reserved_eur == pytest.approx(0.498)
+    # Kept until the run ends: the worker may count the call after the bill
+    # (re-review RC-3); the finish clears it.
+    assert app._measure_usage
+    app._on_measure_finished(DOLPHIN, lr.MeasureResult(lr.STATUS_FAILED, "stub"), False)
+    assert app._measure_usage == {} and app._measure_reserved_eur == 0.0
+
+
+def test_a_local_answer_is_cut_before_the_judge_sees_it(app, monkeypatch):
+    import main
+    monkeypatch.setattr(app, "run_backend", lambda *a, **k: "x" * 50_000)
+    assert len(app._measure_ask("lmstudio", DOLPHIN.id, "p")) == main.MEASURE_ANSWER_CHARS
+
+
+def test_the_ceiling_is_priced_on_the_caps_and_held_for_the_run(app, monkeypatch):
+    import main
+    _allow(app, monkeypatch)
+    def outputs_only(provider, model, tokens_in, tokens_out):
+        return tokens_out / 1_000_000
+    prompts = app.local_measure_prompts()
+    pairs = sum(len(rows) for rows in prompts.kinds.values())
+    expected = pairs * (main.MEASURE_ANSWER_TOKENS + 2 * main.MEASURE_VERDICT_TOKENS) / 1_000_000
+    assert app._measurement_ceiling(PLAN, prompts, outputs_only) == pytest.approx(
+        round(expected + 0.01, 2))
+    before = app._reserved_in_flight_eur()
+    assert app._measure_reserved_eur == 0.0
+    assert app.start_local_measure(DOLPHIN, automatic=False)
+    worker = FakeWorker.started[-1]
+    assert app._measure_reserved_eur == pytest.approx(worker.budget)
+    assert app._reserved_in_flight_eur() == pytest.approx(before + worker.budget)
+    worker._running = False
+    worker.finished_signal.emit(lr.MeasureResult(lr.STATUS_FAILED, "stub"))
+    assert app._reserved_in_flight_eur() == pytest.approx(before)
+
+
+def test_a_late_finish_does_not_release_the_next_runs_reserve(app, monkeypatch):
+    _allow(app, monkeypatch)
+    assert app.start_local_measure(DOLPHIN, automatic=False)
+    first = FakeWorker.started[-1]
+    first._running = False
+    assert app.start_local_measure(DOLPHIN, automatic=False)   # before first's finish is handled
+    held = app._measure_reserved_eur
+    first.finished_signal.emit(lr.MeasureResult(lr.STATUS_FAILED, "stub"))
+    assert app._measure_reserved_eur == pytest.approx(held) and held > 0
+
+
+def test_switching_to_local_only_stops_a_running_measurement(app, monkeypatch):
+    _allow(app, monkeypatch)
+    assert app.start_local_measure(DOLPHIN, automatic=False)
+    worker = FakeWorker.started[-1]
+    worker.cancelled = False
+    worker.cancel = lambda: setattr(worker, "cancelled", True)
+    box = app.execution_mode_box
+    before = box.currentText()
+    try:
+        box.setCurrentText("Local only")
+        assert worker.cancelled
+    finally:
+        box.setCurrentText(before)
+
+
+def test_a_model_on_another_machine_is_not_measured_without_asking(app, monkeypatch):
+    _allow(app, monkeypatch)
+    monkeypatch.setattr(app.lmstudio, "base_url", "http://203.0.113.9:1234/v1")
+    monkeypatch.setattr(app, "_remote_runtime_ok", set())
+    assert not app.start_local_measure(DOLPHIN, automatic=True)
+    assert "203.0.113.9" in app.local_rating_store.entry(DOLPHIN)["reason"]
+    assert FakeWorker.started == []
+
+
+def test_a_recommendation_never_sets_local_only(window):
+    rec = window.get_recommended_setup()
+    assert rec["mode"] != "Local only"
+
+
+def test_the_ceiling_includes_a_thinking_judges_reserve(app):
+    """Verify M1b: DeepSeek and Qwen carry a thinking reserve the cap may not
+    bound; a ceiling without it under-prices every verdict."""
+    from services.output_limits import thinking_reserve_tokens
+    import main
+    plan = lr.Plan(references=PLAN.references, judge=("deepseek", "deepseek-flash"))
+    def outputs_only(provider, model, tokens_in, tokens_out):
+        return tokens_out / 1_000_000
+    prompts = app.local_measure_prompts()
+    pairs = sum(len(rows) for rows in prompts.kinds.values())
+    reserve = thinking_reserve_tokens("deepseek", "deepseek-flash")
+    assert reserve > 0
+    expected = pairs * (main.MEASURE_ANSWER_TOKENS
+                        + 2 * (main.MEASURE_VERDICT_TOKENS + reserve)) / 1_000_000
+    assert app._measurement_ceiling(plan, prompts, outputs_only) == pytest.approx(
+        round(expected + 0.01, 2))
+
+
+def test_a_measurement_counts_what_other_requests_already_hold(app, monkeypatch):
+    """Verify M3b: a run is checked against the caps with every authorised
+    request still in flight counted, not as if nothing else were reserved."""
+    _allow(app, monkeypatch)
+    by_tokens, _ = app._measurement_cost(PLAN)
+    ceiling = app._measurement_ceiling(PLAN, app.local_measure_prompts(), by_tokens)
+    monkeypatch.setattr(app, "session_budget_eur", ceiling + 0.5)
+    monkeypatch.setattr(app, "daily_budget_eur", ceiling + 0.5)
+    monkeypatch.setattr(app, "session_cost_total", 0.0)
+    monkeypatch.setattr(app.usage_tracker, "get_today_total", lambda: 0.0)
+    monkeypatch.setattr(app.usage_tracker, "get_agent_today_total", lambda agent: 0.0)
+    monkeypatch.setattr(app, "_pending_requests", {})
+    assert app._authorize_measurement(DOLPHIN, PLAN, ceiling, interactive=False)[0]
+    monkeypatch.setattr(app, "_pending_requests",
+                        {"held": {"agent": "author", "estimated_cost": 1.0}})
+    allowed, reason = app._authorize_measurement(DOLPHIN, PLAN, ceiling,
+                                                 interactive=False)
+    assert not allowed and reason

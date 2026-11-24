@@ -194,9 +194,10 @@ def test_stale_shipped_rates_are_corrected_and_edits_are_not(tmp_path, monkeypat
     conn.execute("DELETE FROM settings WHERE key='pricing_correction_2026_10'")
     conn.commit()
     db._correct_pricing_2026_10(conn)
-    rate = lambda b, m: tuple(conn.execute(
-        "SELECT input_per_1m_usd, output_per_1m_usd FROM pricing "
-        "WHERE backend=? AND model=?", (b, m)).fetchone())
+    def rate(b, m):
+        return tuple(conn.execute(
+            "SELECT input_per_1m_usd, output_per_1m_usd FROM pricing "
+            "WHERE backend=? AND model=?", (b, m)).fetchone())
     assert rate("qwen", "qwen3.8-max") == (2.0, 6.0)
     assert rate("openai", "default") == (10.0, 50.0)
     assert rate("qwen", "default") == (7.0, 9.0)
@@ -206,9 +207,10 @@ def test_stale_shipped_rates_are_corrected_and_edits_are_not(tmp_path, monkeypat
 def test_scheduled_price_changes_apply_on_their_date_only(tmp_path, monkeypatch):
     db = _seeded_database(tmp_path, monkeypatch)
     conn = db.get_connection()
-    rate = lambda: tuple(conn.execute(
-        "SELECT input_per_1m_usd, output_per_1m_usd, cached_input_per_1m_usd "
-        "FROM pricing WHERE backend='gemini' AND model='gemini-3.8-flash'").fetchone())
+    def rate():
+        return tuple(conn.execute(
+            "SELECT input_per_1m_usd, output_per_1m_usd, cached_input_per_1m_usd "
+            "FROM pricing WHERE backend='gemini' AND model='gemini-3.8-flash'").fetchone())
     db._apply_scheduled_pricing(conn, today="2026-12-31")
     assert rate() == (0.75, 3.75, 0.075)
     db._apply_scheduled_pricing(conn, today="2027-01-01")
@@ -222,7 +224,7 @@ def test_the_model_guide_lists_what_the_app_offers_at_what_it_bills(tmp_path,
                                                                     monkeypatch):
     from html import unescape
     import re
-    db = _seeded_database(tmp_path, monkeypatch)
+    _seeded_database(tmp_path, monkeypatch)
     from ui.dialogs import model_guide_html
     text = " ".join(unescape(re.sub(r"<[^>]+>", " ", model_guide_html())).split())
     assert "claude-opus-5-5 — $4 in / $20 out" in text

@@ -18,8 +18,12 @@ import pytest
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from services import routing_advisor as ra
-from tests.test_routing_phase4 import (FakeChatWorker, LOCAL_ID, SONNET,  # noqa: F401
-                                       _worker, qapp, win)
+from tests import test_routing_phase4 as phase4
+from tests.test_routing_phase4 import FakeChatWorker, LOCAL_ID, SONNET, _worker
+
+# Phase 4's fixtures, bound here by name so pytest offers them to these tests.
+qapp = phase4.qapp
+win = phase4.win
 
 AGENT = "webdesign"
 
@@ -173,7 +177,7 @@ def test_advised_panels_pass_a_resume_and_the_rest_do_not():
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
                     and node.func.attr == "authorize_request"
                     and node.args and isinstance(node.args[0], ast.Constant)
-                    and node.args[0].value in {"author", "webdesign", "social", "fiverr"}):
+                    and node.args[0].value in advised):
                 has = any(k.arg == "resume" for k in node.keywords)
                 flat = any(k.arg == "flat_cost_eur" for k in node.keywords)
                 assert flat or has, (path.parent.name, node.lineno)

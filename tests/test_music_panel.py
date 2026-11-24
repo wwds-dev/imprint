@@ -5,6 +5,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication
 
 from agents.music import MusicAgent, MusicPanel
+from tests.qt_teardown import dispose
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +86,7 @@ def test_denied_music_request_keeps_panel_usable(app, tmp_path, monkeypatch):
         assert panel.music_analyse_btn.isEnabled()
         assert not panel.music_stop_btn.isVisible()
     finally:
-        panel.close()
+        dispose(panel)
 
 
 def test_music_response_is_saved_and_split_into_tabs(app, tmp_path, monkeypatch):
@@ -121,7 +122,7 @@ def test_music_response_is_saved_and_split_into_tabs(app, tmp_path, monkeypatch)
         assert panel.music_income_box.toPlainText() == ""
         assert not panel.music_save_btn.isEnabled()
     finally:
-        panel.close()
+        dispose(panel)
 
 
 def test_suno_handoff_uses_project_aware_host_worker(app, tmp_path, monkeypatch):
@@ -144,4 +145,4 @@ def test_suno_handoff_uses_project_aware_host_worker(app, tmp_path, monkeypatch)
         app.processEvents()
         assert host.recorded == [("music", "Song prompts")]
     finally:
-        panel.close()
+        dispose(panel)

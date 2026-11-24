@@ -275,7 +275,7 @@ class ManuscriptPanel(QWidget):
 
         # Kept for the HOST_CONTROLS contract and main.py's
         # manuscript_mark_todo_done(); the checkboxes replace it in the UI.
-        self.manuscript_done_todo_btn = QPushButton("Done")
+        self.manuscript_done_todo_btn = QPushButton("Done", self)
         self.manuscript_done_todo_btn.clicked.connect(self.mark_todo_done)
         self.manuscript_done_todo_btn.hide()
         sb.addStretch(1)

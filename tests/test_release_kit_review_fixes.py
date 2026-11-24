@@ -14,8 +14,13 @@ import pytest
 
 from services import database
 from services.release_kit import ledger
-from tests.test_release_kit_core import _job, db  # noqa: F401  (fixture)
-from tests.test_release_kit_e2e import app, kit  # noqa: F401  (fixtures)
+from tests import test_release_kit_core as core
+from tests import test_release_kit_e2e as e2e
+from tests.test_release_kit_core import _job
+
+# Fixtures of those modules, bound here by name so pytest offers them to these tests.
+db = core.db
+app, kit = e2e.app, e2e.kit
 
 
 # ── P3-1: CSV guard covers tab and carriage return ───────────────────────────
@@ -88,8 +93,7 @@ def test_quote_bound_leaves_room_when_the_prompt_grows(monkeypatch):
 
 def test_resume_that_fails_unexpectedly_leaves_a_readable_note(kit, monkeypatch, tmp_path):
     window, driver, dialogs, calls = kit
-    window_tmp = lambda: tmp_path
-    job = ledger.get_job(_job(window_tmp(), project_id="book-a"))
+    job = ledger.get_job(_job(tmp_path, project_id="book-a"))
     ledger.set_job_status(job["id"], "paused", reason="user_stop")
     win = window.show_release_kits(job_id=job["id"])
     win._reload(select=job["id"])

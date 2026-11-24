@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from services import local_endpoint, lmstudio_client, ollama_client
+from services import local_endpoint, ollama_client
 from services.release_kit import plan as kitplan
 
 ROOT = Path(__file__).resolve().parent.parent

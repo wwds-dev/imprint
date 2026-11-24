@@ -5,6 +5,7 @@ from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
 from agents.webdesign import WebdesignAgent, WebdesignPanel
+from tests.qt_teardown import dispose
 
 
 @pytest.fixture(scope="module")
@@ -86,7 +87,7 @@ def test_denied_site_request_leaves_generate_usable(app):
         assert panel.webdesign_generate_btn.isEnabled()
         assert not panel.webdesign_save_btn.isEnabled()
     finally:
-        panel.close()
+        dispose(panel)
 
 
 def test_generated_site_splits_tabs_and_saves_clean_html(app, tmp_path, monkeypatch):
@@ -129,4 +130,4 @@ def test_generated_site_splits_tabs_and_saves_clean_html(app, tmp_path, monkeypa
         assert panel.webdesign_html_box.toPlainText() == ""
         assert not panel.webdesign_save_btn.isEnabled()
     finally:
-        panel.close()
+        dispose(panel)

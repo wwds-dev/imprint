@@ -93,6 +93,13 @@ def window(app):
     QMessageBox.warning = staticmethod(lambda *a, **k: None)
     QMessageBox.question = staticmethod(lambda *a, **k: QMessageBox.Yes)
     QMessageBox.information = staticmethod(lambda *a, **k: None)
+    # This module's window starts from Booth's defaults: no run another
+    # module left behind for the startup scan, and no narrator it saved.
+    from agents.audiobook.panel import ROUTE_KEY, default_route
+    from services.database import save_setting
+    with get_connection() as conn:
+        conn.execute("DELETE FROM audiobook_conversions")
+    save_setting(ROUTE_KEY, default_route())
     try:
         yield main.GodAI()
     finally:

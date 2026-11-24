@@ -84,6 +84,27 @@ listed under **Unreleased** until it ships.
   checked against the app's strings.
 
 ### Fixed
+- **Local only keeps its promise, and a "local" model on another machine is
+  named before anything goes there** (2026-11-24, `docs/specs/local-model-routing.md`,
+  review L-3 and security P1-1). Under Local only no agent sends anything to a
+  cloud service, images, narration and renders included, and the Mode box's
+  Local only now beats an agent's own mode. Apply recommended setup no longer
+  switches the whole app to Local only. If Ollama or LM Studio is set to
+  another machine, Imprint refuses under Local only and otherwise asks once
+  per address, naming the host and whether the link is unencrypted.
+- **Measuring a local model costs what it said it would** (review L-1, L-2).
+  Each cloud call has an output cap, the run's ceiling is priced on those caps
+  and held against your budget while it runs, and each call is billed from the
+  provider's own token counts. A judge that answers nothing, refuses or always
+  picks the same slot no longer rates a local model level with the best cloud
+  model: such pairs count for nothing, and a kind of work needs three in four
+  usable pairs or stays unrated.
+- **Four leftover widgets now belong to the window** (2026-11-23). The agent
+  box, Quill's Sources box, Press's "Done" button and Nova's channel field
+  were built without a parent, so they outlived the window; in the test suite
+  that ended in an intermittent crash. Nothing looks different, except that
+  the Sources box now shows the same text caret as the other editors. A test
+  fails if a new parentless widget appears.
 - **Vector no longer promises vector files or an invented track record**
   (audit QM-18). Its prompt dropped the "5-star reputation", leaves prices as
   `[PRICE]` unless you give them, and asks for a flat logo on a plain
