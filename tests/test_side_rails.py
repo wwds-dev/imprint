@@ -12,6 +12,17 @@ from datetime import date, datetime
 import pytest
 
 
+def _dispose(widget):
+    """Delete a top-level test widget now rather than leaving it to the
+    collector: freed inside a later gc.collect(), its children are destroyed
+    while the app-wide dropdown and text-fit filters still see their events
+    (the suite's intermittent segfault; see tests/test_webdesign_panel.py)."""
+    from PySide6.QtCore import QCoreApplication, QEvent
+    widget.close()
+    widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+
 @pytest.fixture(scope="module")
 def app():
     from PySide6.QtWidgets import QApplication
@@ -36,7 +47,8 @@ def window(app):
             app.processEvents()
         yield w
         w.resource_timer.stop()
-        w.close()
+        app.removeEventFilter(w)
+        _dispose(w)
     finally:
         QMessageBox.warning, QMessageBox.question, QMessageBox.information = saved
 
@@ -213,7 +225,7 @@ def test_a_long_summary_never_sits_on_the_title(app):
     for _ in range(4):
         app.processEvents()
     assert pill.text() == "1 new · 1 warning" and header.toolTip() == ""
-    section.close()
+    _dispose(section)
 
 
 def test_a_click_on_a_day_heading_opens_nothing(app):
@@ -244,7 +256,7 @@ def test_a_click_on_a_day_heading_opens_nothing(app):
     assert clicked == [] and view.currentItem() is view.item(1)
     QTest.mouseClick(view.viewport(), Qt.LeftButton, pos=row)
     assert clicked == [view.item(0)]
-    view.close()
+    _dispose(view)
 
 
 def test_the_key_card_counts_configured_keys(app):
