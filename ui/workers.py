@@ -396,6 +396,14 @@ class VideoGenerationWorker(QThread):
         os.replace(partial, self.output_path)
 
     def run(self):
+        # Backstop for the panels' own check (spec ai-act-safeguards): a
+        # refused prompt is never submitted. Not retryable and not timed out,
+        # so the panel releases the reservation instead of keeping it open.
+        from services.content_policy import refusal
+        reason = refusal(self.prompt)
+        if reason:
+            self.error_signal.emit(f"Not sent: {reason}")
+            return
         try:
             self.status_signal.emit(f"Submitting to {self.provider}…")
             kwargs = ({"reference_images": self.reference_images}

@@ -2,7 +2,7 @@
 
 Needs: build, review, verify, secure, docs
 
-Status: Define drafted 2026-11-24, **awaiting the owner's Define gate** (user-visible). Priority: P1
+Status: Define approved by the owner 2026-11-24 ("Yes, as recommended": D1 always on, D2 a TODO). Priority: P1
 (Comply `docs/audit/release-2026-11-legal-compliance.md` R-P1-3 and R-P1-4; legal audit L-03,
 L-04). Type: safeguard. Owner session: `claude/happy-dubinsky-48c27c`. The owner chose
 "Start it" on 2026-11-24.

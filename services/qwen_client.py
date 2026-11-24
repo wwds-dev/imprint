@@ -490,7 +490,9 @@ class QwenClientWrapper:
                 "parameters": {
                     "resolution": "720P", "ratio": aspect_ratio,
                     "duration": int(seconds), "prompt_extend": True,
-                    "watermark": False,
+                    # Alibaba's AI mark stays on (spec ai-act-safeguards
+                    # D1: always, no setting).
+                    "watermark": True,
                 },
             },
             timeout=REQUEST_TIMEOUT_SECONDS,

@@ -605,6 +605,14 @@ class VideoPanel(QWidget):
                 self, "Topic Needed",
                 "Direct video models need a prompt in the Topic field.")
             return
+        # Every direct route (Gemini, Qwen Wan, Higgsfield), before anything
+        # is reserved or a job row written (spec ai-act-safeguards).
+        from services.content_policy import refusal
+        reason = refusal(topic)
+        if reason:
+            QMessageBox.warning(self, "Content policy", reason)
+            self.video_status_label.setText("Not sent: content policy.")
+            return
         seconds, provider_aspect = self._direct_parameters()
         self._external_context = {
             "slug": "", "path": "", "topic": topic,

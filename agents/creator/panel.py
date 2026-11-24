@@ -1232,8 +1232,16 @@ class CreatorPanel(QWidget):
         from services.recommendations.catalog import provider_configured
         from ui.workers import VideoGenerationWorker
 
+        from services.content_policy import refusal
+
         route = self._teaser_route()
         spec = TEASER_ROUTES[route]
+        # Before the key, permission and budget checks: a refused prompt
+        # reserves nothing and writes no job row (spec ai-act-safeguards).
+        reason = refusal(prompt)
+        if reason:
+            QMessageBox.warning(self, "Content policy", reason)
+            return
         if not provider_configured(route):
             QMessageBox.information(
                 self, f"{spec['provider']} Key Needed",

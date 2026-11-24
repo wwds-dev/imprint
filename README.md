@@ -2327,6 +2327,13 @@ those locally, before the spend, with a reason attached — and is negation-awar
 because a filter that rejects "no nudity" is one people route around rather than
 trust. Its role here is the safe-for-work promotional teaser.
 
+**The same check runs on every image and video route** (`services/content_policy.py`,
+2026-11-24): the Gemini Omni and Wan teasers, every direct video in the Video
+workspace, and every generated image (Fiverr concepts, video visuals). A refused
+prompt shows **Content policy** with the reason, reserves nothing and sends
+nothing. Generated Qwen images and Wan videos carry **Alibaba's visible AI
+watermark**; Imprint Studio no longer asks for it to be removed.
+
 The exact provider estimate is shown before approval and counted against the
 budget caps. Every remote state is retained in `creator_video_jobs`; completed
 files keep their job ID, and selecting a Calendar row before generation attaches
