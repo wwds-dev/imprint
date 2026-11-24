@@ -97,6 +97,11 @@ listed under **Unreleased** until it ships.
   checked against the app's strings.
 
 ### Fixed
+- **Muse's Gemini Omni teaser follows Reel's rule when a quit cuts it off** (2026-11-24, owner's choice; audit
+  review P2-2). Quitting while a teaser renders now asks "A Gemini Omni clip is rendering" (the same question as
+  Reel's). On the next launch a saved clip lands in the media library and bills once; a call with no clip is
+  recorded at its confirmed cost with a "may have charged" note, where it used to be released as free.
+  `tests/test_muse_omni_quit.py`.
 - **Local only keeps its promise, and a "local" model on another machine is
   named before anything goes there** (2026-11-24, `docs/specs/local-model-routing.md`,
   review L-3 and security P1-1). Under Local only no agent sends anything to a

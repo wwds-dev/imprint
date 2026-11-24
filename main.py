@@ -6641,7 +6641,10 @@ class GodAI(QWidget):
         # Asked first: a release kit is paused the moment its question is
         # answered, so a later Keep Running must not leave it paused.
         video_panel = getattr(self, "video_panel", None)
-        if video_panel is not None and video_panel.omni_rendering():
+        creator_panel = getattr(self, "creator_panel", None)
+        if ((video_panel is not None and video_panel.omni_rendering())
+                or (creator_panel is not None
+                    and creator_panel.omni_rendering())):
             # Omni renders in one call that cannot be resumed: quitting now
             # loses the clip, and Gemini may still charge for it (audit QH-2).
             box = QMessageBox(self)
