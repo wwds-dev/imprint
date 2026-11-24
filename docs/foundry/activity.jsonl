@@ -192,3 +192,11 @@
 {"ts": "2026-11-24T18:02:54", "phase": "secure", "state": "done", "spec": "ai-act-safeguards"}
 {"ts": "2026-11-24T18:02:54", "phase": "document", "state": "start", "spec": "ai-act-safeguards"}
 {"ts": "2026-11-24T18:02:54", "phase": "document", "state": "done", "spec": "ai-act-safeguards"}
+{"ts": "2026-11-24T18:27:35", "phase": "release", "state": "start", "spec": "audit-p1-billing"}
+{"ts": "2026-11-24T18:27:35", "phase": "release", "state": "start", "spec": "dashscope-workspace-id"}
+{"ts": "2026-11-24T18:27:35", "phase": "release", "state": "start", "spec": "deps-security-upgrade-2026-10"}
+{"ts": "2026-11-24T18:27:35", "phase": "release", "state": "start", "spec": "quill-draft-safety"}
+{"ts": "2026-11-24T18:27:35", "phase": "release", "state": "start", "spec": "docs-learning-centre-readiness"}
+{"ts": "2026-11-24T18:27:36", "phase": "release", "state": "start", "spec": "local-model-routing"}
+{"ts": "2026-11-24T18:27:36", "phase": "release", "state": "start", "spec": "rename-imprint-studio"}
+{"ts": "2026-11-24T18:27:36", "phase": "release", "state": "start", "spec": "ai-act-safeguards"}
