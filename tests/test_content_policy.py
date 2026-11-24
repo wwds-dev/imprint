@@ -13,6 +13,7 @@ if a panel skips its check; both DashScope payloads carry watermark=True.
 Run with:  pytest tests/test_content_policy.py -v
 """
 
+import base64
 import os
 import sys
 import types
@@ -248,5 +249,123 @@ def test_video_workspace_refuses_every_direct_route_before_reserving(
     panel.video_topic_input.setText(REFUSED)
     panel.render_direct(types.SimpleNamespace(provider=provider, model_id=model))
     assert asked == [] and persisted == []
+    expected = (content_policy.REASONS["explicit"] if provider != "Higgsfield"
+                else "Higgsfield prohibits sexually explicit material")
+    assert len(warned) == 1 and warned[0][0] == "Content policy"
+    assert warned[0][1].startswith(expected)
+    assert panel.video_status_label.text() == "Not sent: content policy."
+
+
+# ── review fixes (2026-11-24): word forms, normalising, negation reach ─────
+
+@pytest.mark.parametrize("prompt", [
+    "nudes of my neighbour", "my neighbour undressed", "deepfakes of her",
+    "face-swap my neighbour", "face  swap my neighbour", "porno",
+    "NUDE PHOTO OF MY NEIGHBOUR",
+    "ｎｕｄｅ photo",          # fullwidth letters
+    "nu​de photo", "un­dressed photo",  # zero-width space, soft hyphen
+    # A negation governs only what directly follows it (one filler at most).
+    "no watermark nude photo of my neighbour",
+    "zero blur naked photo", "free of blur nude photo",
+    "never seen before nude portrait",
+    # ... and only inside its own clause.
+    "no captions, nude model",
+    "captions? no, nude model",
+])
+def test_review_evasions_are_refused(prompt):
+    assert refusal(prompt) is not None
+
+
+def test_a_filler_word_after_the_negation_still_negates():
+    assert refusal("a promo with not any nudity") is None
+    assert refusal("not shy and naked") is not None
+
+
+def test_vidforge_openai_scene_is_checked_before_openai_is_called(monkeypatch, tmp_path):
+    from agents.video import video_studio
+    if not video_studio.available():
+        pytest.skip(video_studio.unavailable_reason())
+    from vidforge import visuals
+    sent = []
+
+    class Images:
+        def generate(self, **kwargs):
+            sent.append(kwargs["prompt"])
+            return types.SimpleNamespace(data=[types.SimpleNamespace(
+                b64_json=base64.b64encode(b"PNG").decode(), url=None)])
+
+    monkeypatch.setattr(visuals, "_openai",
+                        lambda: types.SimpleNamespace(images=Images()))
+    cfg = video_studio.load_config({"visuals.source": "ai",
+                                    "visuals.image_model": "gpt-image-2.5-flare"})
+    with pytest.raises(ContentPolicyError):
+        visuals._generate_ai(cfg, REFUSED, tmp_path / "scene.png")
+    assert sent == []
+    visuals._generate_ai(cfg, ALLOWED, tmp_path / "scene.png")
+    assert len(sent) == 1 and (tmp_path / "scene.png").read_bytes() == b"PNG"
+
+
+def test_video_pipeline_topic_is_refused_before_reserving(window, monkeypatch):
+    import agents.video.panel as video_panel
+    panel = window.video_panel
+    warned, asked = _record(monkeypatch, window, video_panel)
+    monkeypatch.setattr(panel, "_media_selection", lambda: None)
+    monkeypatch.setattr(panel, "_estimate", lambda: {"total": 0.5, "scenes": 4})
+    panel.video_topic_input.setText(REFUSED)
+    panel.render()
+    assert asked == []
     assert warned == [("Content policy", content_policy.REASONS["explicit"])]
     assert panel.video_status_label.text() == "Not sent: content policy."
+
+
+def test_video_workspace_higgsfield_keeps_higgsfield_wording(window, monkeypatch):
+    import agents.video.panel as video_panel
+    panel = window.video_panel
+    warned, asked = _record(monkeypatch, window, video_panel)
+    panel.video_topic_input.setText(REFUSED)
+    panel.render_direct(types.SimpleNamespace(provider="Higgsfield",
+                                              model_id="seedance-2.5"))
+    assert asked == []
+    assert warned and warned[0][1].startswith("Higgsfield prohibits")
+
+
+def test_creator_teaser_refusal_sets_the_status_line(window, monkeypatch):
+    import agents.creator.panel as creator_panel
+    panel = window.creator_panel
+    _record(monkeypatch, window, creator_panel)
+    monkeypatch.setattr(panel, "_teaser_route", lambda: "qwen")
+    panel.creator_video_status.setText("")
+    panel._generate_direct_teaser({"id": 1, "name": "Persona"}, REFUSED)
+    assert panel.creator_video_status.text() == "Not sent: content policy."
+
+
+def test_herald_clip_topic_is_refused_before_pricing(window, monkeypatch):
+    panel = window.social_panel
+    asked = []
+    monkeypatch.setattr(window, "authorize_request",
+                        lambda *a, **k: asked.append(a) or None)
+    monkeypatch.setattr(window, "record_request", lambda token, text: None)
+    from agents.video import video_studio
+    monkeypatch.setattr(video_studio, "pre_estimate", lambda cfg: (_ for _ in ()).throw(
+        AssertionError("a refused clip must not be priced")))
+    done = []
+    monkeypatch.setattr(panel, "_clip_done", lambda: done.append(True))
+    panel._brief_token = None
+    panel._pending_clip = ("tiktok", 15)
+    panel._on_clip_brief(REFUSED)
+    assert asked == [] and done == [True]
+    assert "content policy" in panel.social_status_label.text()
+
+
+def test_fiverr_image_prompt_is_refused_before_reserving_images(window, monkeypatch):
+    panel = window.fiverr_panel
+    asked = []
+    monkeypatch.setattr(window, "authorize_request",
+                        lambda *a, **k: asked.append(a) or None)
+    monkeypatch.setattr(window, "record_request", lambda token, text: None)
+    panel._prompt_token = None
+    panel._pending_count = 2
+    panel._pending_brief = {}
+    panel._on_prompt_ready(REFUSED)
+    assert asked == []
+    assert "content policy" in panel.fiverr_status_label.text()

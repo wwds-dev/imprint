@@ -62,6 +62,20 @@ image routes; no drift copy).
 - S3 Existing Higgsfield tests pass unchanged.
 - S4 New logic mutation-checked; full suite green.
 
+## Review fixes (2026-11-24, after Review, Verify and Secure of 9a1d8e5)
+All three reports found the same P1s; fixed without widening the word list:
+- vidforge's OpenAI scene images skipped the check: `_generate_ai` now checks every scene prompt
+  before either route; the narrated-video topic (`VideoPanel.render`), the Herald clip topic and
+  Vector's logo-image prompt are checked before anything is reserved (Scope 3 extended to them).
+- `tests/test_media_generation.py` expected `"watermark": False`: now `True` (follows D1).
+- README and CHANGELOG said more than the code did: reworded.
+- The existing words now match their own forms ("nudes", "undressed", "face-swap"); text is
+  NFKC-folded with invisible characters dropped; a negation counts only directly before the word
+  (one filler allowed). Higgsfield refusals in the Video workspace keep Higgsfield's wording; the
+  creator teaser refusal sets "Not sent: content policy."
+Left for later (TODO P3): refused LLM-written scene prompts still counted in spend; creator backstop
+row status; look-alike letters and other languages.
+
 ## Owner decisions (Define gate)
 - **D1 Watermark:** always on (recommended; a setting lets it be switched off again) or a
   default-on setting.

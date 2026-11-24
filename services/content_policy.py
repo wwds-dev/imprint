@@ -18,13 +18,18 @@ thread before a request and for a worker thread as a backstop.
 from __future__ import annotations
 
 import re
+import unicodedata
 
 # (key, pattern). The key picks the reason; a provider can word its own.
+# Each word also matches its own inflections and spacings ("nudes",
+# "undressed", "face-swap", "deep fakes"): the same words, not new ones
+# (security review P1-2, 2026-11-24).
 PATTERNS: tuple[tuple[str, str], ...] = (
     ("explicit",
-     r"\b(explicit|hardcore|pornographic|porn|nude|nudity|naked|sex scene|sexual)\b"),
+     r"\b(explicit|hardcore|porn\w*|nude\w*|nudity|naked\w*|"
+     r"sex[\s_-]*scenes?|sexual\w*)\b"),
     ("identity",
-     r"\b(deepfake|face swap|faceswap|undress|deep nude|deepnude)\b"),
+     r"\b(deep[\s_-]*fake\w*|face[\s_-]*swap\w*|undress\w*|deep[\s_-]*nude\w*)\b"),
     ("circumvent",
      r"\b(bypass|circumvent|jailbreak|evade)\b.{0,24}\b(filter|moderation|safety|nsfw)\b"),
 )
@@ -44,6 +49,9 @@ REASONS: dict[str, str] = {
 _NEGATIONS = ("no", "not", "non", "none", "nothing", "neither", "without",
               "avoid", "never", "excluding", "exclude", "omit", "zero")
 _NEGATION_PHRASES = ("free of", "devoid of", "clear of")
+# Words that may sit between a negation and the term it negates:
+# "not any nudity", "no such deepfake".
+_FILLERS = ("a", "an", "the", "any", "such", "all")
 
 
 class ContentPolicyError(ValueError):
@@ -51,23 +59,41 @@ class ContentPolicyError(ValueError):
 
 
 def _is_negated(text: str, start: int) -> bool:
-    """True when the match is preceded by a negation, e.g. 'no nudity'.
+    """True when the negation governs this match, e.g. 'no nudity'.
 
-    Only within the current clause: "explicit shots, no captions" negates the
-    captions, not the shots, so the window stops at the last punctuation.
+    Only directly before it, with at most one filler word between ("not any
+    nudity"): "no watermark nude photo" negates the watermark, not the
+    photo (code review P2-1). And only within the current clause: in "no
+    captions, nude model" the "no" belongs to the captions.
     """
-    window = text[max(0, start - 24):start]
-    tail = re.split(r"[.;,]", window)[-1]
+    window = text[max(0, start - 32):start]
+    tail = re.split(r"[.;,:!?]", window)[-1]
     words = re.findall(r"[a-z-]+", tail)
-    if any(word in _NEGATIONS for word in words[-3:]):
+    if words and words[-1] in _NEGATIONS:
+        return True
+    if len(words) >= 2 and words[-2] in _NEGATIONS and words[-1] in _FILLERS:
         return True
     # Multi-word forms ("free of nudity") that word-splitting would miss.
-    return any(phrase in tail for phrase in _NEGATION_PHRASES)
+    return tail.rstrip().endswith(_NEGATION_PHRASES)
+
+
+def _normalise(prompt: str | None) -> str:
+    """Lower case, compatibility forms folded, invisible characters dropped.
+
+    Fullwidth letters and ligatures fold to plain ones (NFKC), and zero-width
+    joiners, soft hyphens and other format characters are removed, so they
+    cannot split a word past the patterns (security review P2-2). Look-alike
+    letters from other scripts are not folded: a residual risk the spec
+    accepts by keeping this check narrow.
+    """
+    text = unicodedata.normalize("NFKC", prompt or "")
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cf")
+    return text.casefold()
 
 
 def refused_key(prompt: str | None) -> str | None:
     """The PATTERNS key the prompt breaks, or None if it may be sent."""
-    text = (prompt or "").lower()
+    text = _normalise(prompt)
     for key, pattern in PATTERNS:
         for match in re.finditer(pattern, text):
             if not _is_negated(text, match.start()):

@@ -2328,11 +2328,18 @@ because a filter that rejects "no nudity" is one people route around rather than
 trust. Its role here is the safe-for-work promotional teaser.
 
 **The same check runs on every image and video route** (`services/content_policy.py`,
-2026-11-24): the Gemini Omni and Wan teasers, every direct video in the Video
-workspace, and every generated image (Fiverr concepts, video visuals). A refused
-prompt shows **Content policy** with the reason, reserves nothing and sends
-nothing. Generated Qwen images and Wan videos carry **Alibaba's visible AI
-watermark**; Imprint Studio no longer asks for it to be removed.
+2026-11-24). Before anything is reserved, it checks the prompt of the Gemini Omni
+and Wan teasers and of every direct video in the Video workspace (a **Content
+policy** dialog with the reason), the topic of a narrated video or a Herald
+clip, and the image prompt Vector writes for logo concepts (a *[Refused]* status
+line). Each scene image of a narrated video, on any provider, is checked again
+just before it is sent; a refused scene becomes a plain gradient card. It matches
+word forms ("nudes", "face-swap"), folds fullwidth letters and drops invisible
+characters; a negation counts only directly before the word ("no nudity" passes,
+"no watermark nude photo" does not). Look-alike letters from other scripts and
+other languages are not caught. Generated Qwen images and Wan videos carry
+Alibaba's visible AI watermark; Imprint Studio no longer asks for it to be
+removed.
 
 The exact provider estimate is shown before approval and counted against the
 budget caps. Every remote state is retained in `creator_video_jobs`; completed

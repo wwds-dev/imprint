@@ -74,8 +74,9 @@ def generate_image(model_id: str, prompt: str, *, aspect: str = "1:1",
     """One image from `model_id`, as encoded bytes (PNG or JPEG).
 
     Raises ContentPolicyError, before any network call, for a prompt the
-    shared content policy refuses: every image route (Fiverr concepts, video
-    visuals, vidforge) comes through here, so none can skip it.
+    shared content policy refuses. Fiverr concepts and Gemini/Qwen scene
+    images come through here; vidforge's OpenAI scenes are checked in
+    vidforge/visuals.py `_generate_ai` before either route.
     """
     from services.content_policy import check_prompt
     check_prompt(prompt)

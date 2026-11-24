@@ -460,6 +460,16 @@ class FiverrPanel(QWidget):
             self._reset_buttons()
             return
         image_prompt = image_prompt.strip()
+        # The image prompt is written by a model from the brief: checked
+        # before the images are reserved (spec ai-act-safeguards).
+        from services.content_policy import refusal
+        reason = refusal(image_prompt)
+        if reason:
+            line = f"[Refused] Not sent: content policy. {reason}"
+            self.fiverr_status_label.setText(line)
+            self.fiverr_preview_status.setText(line)
+            self._reset_buttons()
+            return
         count = self._pending_count
         brief = self._pending_brief
         save_dir = (user_data_base() / "data" / "fiverr_output"

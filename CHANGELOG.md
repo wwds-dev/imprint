@@ -30,10 +30,12 @@ listed under **Unreleased** until it ships.
 
 ### Changed
 - **Every image and video route checks the prompt; Alibaba's watermark stays on** (2026-11-24,
-  spec `ai-act-safeguards`): Higgsfield's local prompt check now runs on the Gemini Omni and Wan
-  teasers, every direct video in the Video workspace and every generated image, before anything
-  is reserved. Qwen images and Wan videos no longer ask Alibaba to drop its AI watermark. Legal
-  audit L-03, L-04.
+  spec `ai-act-safeguards`): Higgsfield's local prompt check now runs, before anything is
+  reserved, on the Gemini Omni and Wan teasers, every direct video, the topic of narrated videos
+  and Herald clips, and Vector's logo-image prompt; every scene image is checked again before it is
+  sent, OpenAI included. The check now catches word forms and fullwidth or invisible characters,
+  and a negation counts only directly before the word. Qwen images and Wan videos no longer ask
+  Alibaba to drop its AI watermark. Legal audit L-03, L-04.
 - **Privacy note and third-party notices published** (2026-11-24): README gains *Privacy*
   (what stays on your Mac, which provider gets what, local runtimes on another machine,
   measurement prompts) and *Licence*; the access-and-privacy lesson gains a recipient table;

@@ -60,6 +60,16 @@ def _generate_ai(cfg: Config, prompt: str, dst: Path) -> None:
     model = cfg.get("visuals.image_model", "gpt-image-2.5-flare")
     size = cfg.get("visuals.image_size", "1536x1024")
 
+    # Inside Imprint, every scene prompt passes the shared content policy
+    # before any provider sees it, OpenAI included (spec ai-act-safeguards).
+    # A refusal raises; render_scenes then draws a gradient card instead.
+    try:
+        from services.content_policy import check_prompt
+    except ImportError:
+        check_prompt = None
+    if check_prompt is not None:
+        check_prompt(full)
+
     # A Gemini or Qwen scene is sent once, outside the retry loop below: a
     # retried paid image can bill twice, and a refused key or account will
     # refuse three times over. On failure the scene falls back to a gradient

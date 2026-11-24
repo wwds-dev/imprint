@@ -1241,6 +1241,7 @@ class CreatorPanel(QWidget):
         reason = refusal(prompt)
         if reason:
             QMessageBox.warning(self, "Content policy", reason)
+            self.creator_video_status.setText("Not sent: content policy.")
             return
         if not provider_configured(route):
             QMessageBox.information(

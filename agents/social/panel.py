@@ -603,6 +603,16 @@ class SocialPanel(QWidget):
             self._clip_done()
             return
 
+        # The topic seeds every scene prompt: refused before the render is
+        # priced or reserved (spec ai-act-safeguards).
+        from services.content_policy import refusal
+        reason = refusal(topic)
+        if reason:
+            self.social_status_label.setText(
+                f"Clip: [Refused] Not sent: content policy. {reason}")
+            self._clip_done()
+            return
+
         aspect = ("Square 1:1" if platform_key == "pinterest"
                   else "Vertical 9:16")
         overrides = {**video_studio.clip_overrides(aspect, seconds),
