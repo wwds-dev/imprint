@@ -48,6 +48,46 @@ is reference.
 Something not working? The Learning Centre's *Troubleshooting* lesson lists
 the status messages a first run meets, with the cause and the fix.
 
+### Privacy
+
+Imprint Studio runs on your Mac. Its author receives nothing from it: there is no
+account, no analytics and no crash reporting. Your projects, drafts, chats, keys and usage log
+stay on your Mac until you delete them: in `~/Library/Application Support/Imprint/` for the
+built app, or in the checkout's `data/` folder and `.env` when you run it from source.
+Audiobooks and exports go to the folders you choose.
+
+**What leaves your Mac, and to whom.** When you ask an agent to do something, Imprint Studio
+sends what that request needs (your text, a chapter or a whole book you narrate, a reference
+image or photo) to the provider you picked, with your own API key: OpenAI, Anthropic, Google
+(Gemini), DeepSeek, Moonshot (Kimi), Alibaba (Qwen and Wan, through its Singapore endpoint
+unless you change it), ElevenLabs or Higgsfield. A Higgsfield reference image is uploaded to a
+public link so the service can fetch it. These providers are outside the EU (DeepSeek stores
+data in China) and their own privacy terms apply; some use what you send to improve their
+models unless you pay or opt out (Google's unpaid Gemini tier; ElevenLabs unless you opt out).
+Video captions send the generated narration to OpenAI. Posting sends your post or video to
+YouTube, Reddit or Pinterest; the store connector sends book data to PublishDrive; video
+visuals send search words to Pexels. Imprint Studio also downloads public model ratings from
+Hugging Face, which sends nothing about you.
+
+**Local models.** A model in Ollama or LM Studio on this Mac gets your text and sends it
+nowhere, as far as Imprint Studio's code goes. If you set `OLLAMA_HOST` or `LMSTUDIO_URL` to
+another machine, your text goes to that machine (unencrypted over `http://`); Imprint Studio
+names the address and asks you once before sending, and refuses under **Local only**. Under
+Local only no agent sends anything to a cloud provider.
+
+**Measuring a new local model.** Unless you are in Local only, Imprint Studio rates a new local
+model once by sending 80 fixed practice prompts, which contain none of your work, to two of the
+cloud providers you have already allowed. It costs a little, within your caps.
+
+Do not send other people's personal data, clients' manuscripts or photos of real people to a
+provider unless you are allowed to.
+
+### Licence
+
+Imprint Studio's own code is MIT ([LICENSE](LICENSE)). It depends on
+third-party packages under their own licences, including **EbookLib (AGPL-3.0)**
+and **PySide6 / Qt (LGPL-3.0)**; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 **How this file is organised.** *Using the app* is sections 1 to 13, 20 and
 21: what each part of the window does and how each agent works. *Engineering
 reference* is sections 14 to 19: services, database, files and tests,

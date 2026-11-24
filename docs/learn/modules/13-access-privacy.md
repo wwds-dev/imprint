@@ -29,6 +29,30 @@ uses its seeded writable data area under `~/Library/Application Support/Imprint/
 Real operating-system environment variables can override file values. Diagnose
 which build is running before changing a file.
 
+## Where your data goes
+
+Its author receives nothing from Imprint Studio: no account, no analytics, no
+crash reporting. A request sends what it needs (text, a chapter or book you
+narrate, a reference image or photo) only to the provider you picked:
+
+| Recipient | What it gets |
+|---|---|
+| OpenAI, Anthropic, Google (Gemini), DeepSeek, Moonshot (Kimi), Alibaba (Qwen and Wan, Singapore endpoint by default) | The request you send to that provider, with your key |
+| ElevenLabs | Text you narrate with its voices |
+| Higgsfield | Your prompt and reference image, uploaded to a public link it fetches |
+| OpenAI (captions) | The generated narration of a video |
+| YouTube, Reddit, Pinterest | The post or video you publish |
+| PublishDrive | Book data from the store connector |
+| Pexels | Search words for video visuals |
+| Hugging Face | Nothing about you; the app downloads public model ratings |
+| A machine named in `OLLAMA_HOST` or `LMSTUDIO_URL` | Your text, after you agree once per address; refused under **Local only** |
+| Two cloud providers you already allowed | 80 fixed practice prompts when a new local model is measured; never under **Local only** |
+
+These providers are outside the EU and their own terms apply; some use what
+you send to improve their models unless you pay or opt out. Do not send
+other people's personal data, clients' manuscripts or photos of real people
+unless you are allowed to. The full note is the README's *Privacy* section.
+
 ## Add a key
 
 Imprint runs without any key on a local model. A cloud provider needs its key,

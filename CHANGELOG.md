@@ -29,6 +29,11 @@ listed under **Unreleased** until it ships.
 ## Unreleased
 
 ### Changed
+- **Privacy note and third-party notices published** (2026-11-24): README gains *Privacy*
+  (what stays on your Mac, which provider gets what, local runtimes on another machine,
+  measurement prompts) and *Licence*; the access-and-privacy lesson gains a recipient table;
+  new `THIRD_PARTY_NOTICES.md` names the AGPL (EbookLib) and LGPL (PySide6/Qt) dependencies.
+  Legal audit L-02 and L-05.
 - **Routing advisor re-synced with Sentinel** (2026-11-23): `services/routing_advisor.py` gains
   `HYBRID_MODE` (what "Hybrid allowed" restores from Local only or Cloud only) and a test that a saved
   mode is never overwritten. The default stays "Local, advise per job", the best-fit route; the owner
