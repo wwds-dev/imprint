@@ -448,3 +448,41 @@ def test_a_model_on_another_machine_is_not_measured_without_asking(app, monkeypa
 def test_a_recommendation_never_sets_local_only(window):
     rec = window.get_recommended_setup()
     assert rec["mode"] != "Local only"
+
+
+def test_the_ceiling_includes_a_thinking_judges_reserve(app):
+    """Verify M1b: DeepSeek and Qwen carry a thinking reserve the cap may not
+    bound; a ceiling without it under-prices every verdict."""
+    from services.output_limits import thinking_reserve_tokens
+    import main
+    plan = lr.Plan(references=PLAN.references, judge=("deepseek", "deepseek-flash"))
+    def outputs_only(provider, model, tokens_in, tokens_out):
+        return tokens_out / 1_000_000
+    prompts = app.local_measure_prompts()
+    pairs = sum(len(rows) for rows in prompts.kinds.values())
+    reserve = thinking_reserve_tokens("deepseek", "deepseek-flash")
+    assert reserve > 0
+    expected = pairs * (main.MEASURE_ANSWER_TOKENS
+                        + 2 * (main.MEASURE_VERDICT_TOKENS + reserve)) / 1_000_000
+    assert app._measurement_ceiling(plan, prompts, outputs_only) == pytest.approx(
+        round(expected + 0.01, 2))
+
+
+def test_a_measurement_counts_what_other_requests_already_hold(app, monkeypatch):
+    """Verify M3b: a run is checked against the caps with every authorised
+    request still in flight counted, not as if nothing else were reserved."""
+    _allow(app, monkeypatch)
+    by_tokens, _ = app._measurement_cost(PLAN)
+    ceiling = app._measurement_ceiling(PLAN, app.local_measure_prompts(), by_tokens)
+    monkeypatch.setattr(app, "session_budget_eur", ceiling + 0.5)
+    monkeypatch.setattr(app, "daily_budget_eur", ceiling + 0.5)
+    monkeypatch.setattr(app, "session_cost_total", 0.0)
+    monkeypatch.setattr(app.usage_tracker, "get_today_total", lambda: 0.0)
+    monkeypatch.setattr(app.usage_tracker, "get_agent_today_total", lambda agent: 0.0)
+    monkeypatch.setattr(app, "_pending_requests", {})
+    assert app._authorize_measurement(DOLPHIN, PLAN, ceiling, interactive=False)[0]
+    monkeypatch.setattr(app, "_pending_requests",
+                        {"held": {"agent": "author", "estimated_cost": 1.0}})
+    allowed, reason = app._authorize_measurement(DOLPHIN, PLAN, ceiling,
+                                                 interactive=False)
+    assert not allowed and reason

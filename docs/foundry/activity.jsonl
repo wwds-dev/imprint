@@ -157,3 +157,13 @@
 {"ts": "2026-11-24T02:20:27", "phase": "build", "state": "done", "spec": "local-model-routing"}
 {"ts": "2026-11-24T10:49:48", "phase": "document", "state": "done", "spec": "local-model-routing", "note": "retroactive spec, README §6.2.2, CHANGELOG"}
 {"ts": "2026-11-24T10:49:48", "phase": "define", "state": "done", "spec": "local-model-routing", "note": "retroactive record, not an owner-approved Define"}
+{"ts": "2026-11-24T10:50:05", "phase": "verify", "state": "start", "spec": "local-model-routing"}
+{"ts": "2026-11-24T10:50:05", "phase": "verify", "state": "start", "spec": "docs-learning-centre-readiness"}
+{"ts": "2026-11-24T10:50:05", "phase": "verify", "state": "start", "spec": "rename-imprint-studio"}
+{"ts": "2026-11-24T10:50:05", "phase": "verify", "state": "start", "spec": "model-updates-visibility"}
+{"ts": "2026-11-24T10:50:05", "phase": "secure", "state": "start", "spec": "rename-imprint-studio"}
+{"ts": "2026-11-24T11:16:52", "phase": "verify", "state": "done", "spec": "local-model-routing"}
+{"ts": "2026-11-24T11:16:52", "phase": "verify", "state": "done", "spec": "docs-learning-centre-readiness"}
+{"ts": "2026-11-24T11:16:52", "phase": "verify", "state": "done", "spec": "rename-imprint-studio"}
+{"ts": "2026-11-24T11:16:52", "phase": "verify", "state": "done", "spec": "model-updates-visibility"}
+{"ts": "2026-11-24T11:16:52", "phase": "secure", "state": "done", "spec": "rename-imprint-studio"}

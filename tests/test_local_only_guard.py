@@ -185,3 +185,16 @@ def test_kernel_asks_before_a_local_runtime_on_another_machine(guard, monkeypatc
     shown["answer"] = QMessageBox.Yes
     window._send_chat(route_override=("ollama", "gemma3:27b"), advised=True)
     assert reached == ["ollama"]
+
+
+def test_a_yes_to_another_machine_does_not_outlive_a_switch_to_local_only(guard, monkeypatch):
+    """Verify M8: the address agreed to under Hybrid is refused once Mode is
+    Local only."""
+    window, shown = guard
+    _mode(window, "Hybrid allowed")
+    monkeypatch.setattr(window.ollama, "base_url", "http://203.0.113.9:11434")
+    shown["answer"] = QMessageBox.Yes
+    assert window.authorize_request("author", "ollama", "gemma3:27b", "a prompt")
+    _mode(window, "Local only")
+    assert window.authorize_request("author", "ollama", "gemma3:27b", "a prompt") is False
+    assert "203.0.113.9" in shown["warning"][-1]
