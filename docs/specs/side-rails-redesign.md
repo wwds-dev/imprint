@@ -77,4 +77,11 @@ in tests); the re-entrancy guard is covered by code reading only.
   heading click, pill fit, system summary repeat, dropdown minimum width): all seven caught.
 - Native render (cocoa, not shown on screen) of both rails at 1500x950: no control past the rail
   edge, no cut-off dropdown or field text, icons centred.
-- Full suite: see the commit that follows this one in `git log` for the run on the final tree.
+- Full suite on `412c5d1`, shuffled with `--randomly-seed=424242`: 2946 passed, 17 skipped,
+  17 xfailed (35 min on a loaded machine).
+- One earlier shuffled run on `5e1daa5` (seed not printed) segfaulted at 60 %, inside
+  `tests/test_settings_keys.py:407` while it waited on a worker thread. Not reproduced: that
+  module with the rail tests passed twice, and the seeded full run above is green. Same class as
+  the open TODO rows on the intermittent full-suite segfault; the rail tests were changed to
+  delete their windows and top-level widgets in teardown (`412c5d1`) so they add nothing to it.
+  Whether they contributed to that one crash is not known.
