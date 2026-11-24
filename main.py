@@ -3,6 +3,7 @@ import os
 import uuid
 import re
 import sys
+import threading
 import time
 import types
 from dataclasses import replace
@@ -125,6 +126,17 @@ LOCAL_RATINGS_FILE = DATA_DIR / "local_ratings.json"
 # Measurement runs are guarded and billed as the Studio Assistant: the
 # registered general-text agent, so its permissions and daily cap apply.
 LOCAL_RATINGS_AGENT = "chat"
+# Output caps for a measurement run's cloud calls, which the run's ceiling is
+# priced on (local-model-routing review L-1: the calls went out with the
+# normal 8,192-token cap while the ceiling assumed 350 and 4). A verdict is
+# one word; its cap leaves room for a judge that thinks first, since OpenAI's
+# and Gemini's caps include thinking. The local model's answer is cut to the
+# same length before the judge sees it, so the judge's input is bounded too.
+MEASURE_ANSWER_TOKENS = 1024
+MEASURE_VERDICT_TOKENS = 512
+MEASURE_ANSWER_CHARS = 3 * MEASURE_ANSWER_TOKENS
+# The last line of the judge prompt: how a judge call is told from a reference call.
+_JUDGE_ASK = local_ratings.JUDGE_PROMPT.rstrip().rsplit("\n", 1)[-1]
 # Hybrid routing (services/routing_advisor.py): the rules made with "Always
 # for this kind of job", and what running local saved.
 ROUTING_RULES_FILE = DATA_DIR / "routing_rules.json"
@@ -172,10 +184,14 @@ def execution_mode_for(window, agent: str = "chat") -> str:
     its own (Settings → Models) answers for itself; otherwise the Mode box,
     which follows the app's routing mode."""
     settings = getattr(window, "settings", None) or {}
+    box = getattr(window, "execution_mode_box", None)
+    # The box's Local only is a hard limit, over any agent's own mode
+    # (README §6.3, ADR 0004; local-model-routing review L-3).
+    if box is not None and box.currentText() == "Local only":
+        return "Local only"
     overrides = settings.get(routing_advisor.OVERRIDES_KEY) if isinstance(settings, dict) else None
     if isinstance(overrides, dict) and overrides.get(agent) in routing_advisor.MODES:
         return routing_advisor.LEGACY_EXECUTION[overrides[agent]]
-    box = getattr(window, "execution_mode_box", None)
     if box is not None:
         return box.currentText()
     return routing_advisor.LEGACY_EXECUTION[routing_advisor.mode_for(settings, agent)]
@@ -294,6 +310,13 @@ class GodAI(QWidget):
         local_models.set_rating_lookup(self.local_ratings.text)
         model_ratings.set_local_lookup(self.local_ratings.rating)
         self.local_measure_worker = None
+        # A measurement run's ceiling, held against the caps while it runs,
+        # and each cloud call's usage until it is billed (review L-1).
+        self._measure_reserved_eur = 0.0
+        self._measure_usage: dict = {}
+        self._measure_usage_lock = threading.Lock()
+        # Local runtimes on another machine the user agreed to send to.
+        self._remote_runtime_ok: set = set()
         # Hybrid routing: one advice per new job, rules, savings (phase 4).
         self.routing_rules = routing_advisor.RoutingRules(ROUTING_RULES_FILE)
         self.savings_tally = routing_advisor.SavingsTally(ROUTING_SAVINGS_FILE)
@@ -1196,13 +1219,43 @@ class GodAI(QWidget):
             per_in, per_out = rates.get((provider, model), (0.0, 0.0))
             return (tokens_in * per_in + tokens_out * per_out) / 1_000_000
 
-        def by_text(provider, model, prompt, reply):
-            return by_tokens(provider, model, max(1, len(prompt) // 4),
-                             max(1, len(reply) // 4))
-        return by_tokens, by_text
+        def by_usage(provider, model, prompt, reply):
+            """What one call cost: the provider's own token counts, or a
+            characters / 4 guess only when it reported none."""
+            usage = self._measure_usage_for(provider, model, prompt, reply)
+            tokens_in, tokens_out, _ = self.usage_tracker.normalize_usage(
+                usage, prompt, reply)
+            return by_tokens(provider, model, tokens_in, tokens_out)
+        return by_tokens, by_usage
+
+    def _measurement_ceiling(self, plan, prompts, by_tokens) -> float:
+        """The most a run can cost: every call at its output cap, plus the
+        thinking the cap may not bound, priced like the guard prices a reply."""
+        from services.output_limits import thinking_reserve_tokens
+        answer_in = local_ratings.EST_PROMPT_TOKENS
+        judge_in = local_ratings.EST_PROMPT_TOKENS + 2 * MEASURE_ANSWER_TOKENS + 80
+        total = 0.0
+        for kind, rows in prompts.kinds.items():
+            ref = plan.references.get(kind)
+            if ref is None:
+                continue
+            ref_name = f"{ref[0]}/{ref[1]}"
+            for prompt_id, _ in rows:
+                if not self.local_rating_store.reference_answer(
+                        ref_name, prompt_id, prompts.version):
+                    total += by_tokens(ref[0], ref[1], answer_in,
+                                       MEASURE_ANSWER_TOKENS
+                                       + thinking_reserve_tokens(ref[0], ref[1]))
+                total += 2 * by_tokens(plan.judge[0], plan.judge[1], judge_in,
+                                       MEASURE_VERDICT_TOKENS
+                                       + thinking_reserve_tokens(*plan.judge))
+        return round(total + 0.01, 2)
 
     def _authorize_measurement(self, model, plan, ceiling_eur, interactive):
         """(allowed, reason). The request guard for one measurement run."""
+        if self._local_only(LOCAL_RATINGS_AGENT):
+            return False, ("Mode is Local only, and measuring asks a cloud model "
+                           "for reference answers and verdicts")
         permissions = self.current_api_permissions()
         cloud = plan.cloud_models()
         for provider, _ in cloud:
@@ -1260,9 +1313,8 @@ class GodAI(QWidget):
             self._local_ratings_changed()
             return False
         prompts = self.local_measure_prompts()
-        by_tokens, by_text = self._measurement_cost(plan)
-        ceiling = round(1.5 * local_ratings.estimate_cost(
-            plan, prompts, by_tokens, self.local_rating_store) + 0.01, 2)
+        by_tokens, by_usage = self._measurement_cost(plan)
+        ceiling = self._measurement_ceiling(plan, prompts, by_tokens)
         allowed, reason = self._authorize_measurement(
             model, plan, ceiling, interactive=not automatic)
         if not allowed:
@@ -1271,8 +1323,11 @@ class GodAI(QWidget):
                                                        automatic=automatic)
             self._local_ratings_changed()
             return False
+        # The ceiling counts against the caps for the length of the run, like
+        # any authorised request, and shrinks as its calls are billed.
+        self._measure_reserved_eur = ceiling
         worker = LocalMeasureWorker(model, plan, prompts, self._measure_ask,
-                                    self.local_rating_store, by_text, ceiling)
+                                    self.local_rating_store, by_usage, ceiling)
         worker.progress_signal.connect(
             lambda done, total, m=model: self._on_measure_progress(m, done, total))
         worker.usage_signal.connect(self._on_measure_usage)
@@ -1285,10 +1340,35 @@ class GodAI(QWidget):
         return True
 
     def _measure_ask(self, provider, model, prompt) -> str:
-        """One request for a measurement run. Runs on the measure worker."""
-        reply = self.run_backend(provider, model,
-                                 [{"role": "user", "content": prompt}], prompt)
-        return reply if isinstance(reply, str) else "".join(reply)
+        """One request for a measurement run. Runs on the measure worker.
+
+        A local answer is cut to MEASURE_ANSWER_CHARS, so what the judge is
+        sent stays within what the ceiling priced. A cloud call goes out with
+        its output cap, and its usage is kept for the bill and the run's
+        spend count (review L-1)."""
+        messages = [{"role": "user", "content": prompt}]
+        if provider_registry.is_local(provider):
+            reply = self.run_backend(provider, model, messages, prompt)
+            text = reply if isinstance(reply, str) else "".join(reply)
+            return text[:MEASURE_ANSWER_CHARS]
+        client = getattr(self, provider, None)
+        if client is None or not hasattr(client, "chat"):
+            raise RuntimeError(f"{provider} cannot be asked with an output cap here.")
+        judging = prompt.rstrip().endswith(_JUDGE_ASK)
+        text, usage = client.chat(
+            messages=messages, model=model,
+            max_output_tokens=(MEASURE_VERDICT_TOKENS if judging
+                               else MEASURE_ANSWER_TOKENS))
+        text = str(text or "")
+        with self._measure_usage_lock:
+            self._measure_usage[(provider, model, prompt, text)] = usage
+        return text
+
+    def _measure_usage_for(self, provider, model, prompt, reply, *, pop=False):
+        with self._measure_usage_lock:
+            key = (provider, model, prompt, reply)
+            return (self._measure_usage.pop(key, None) if pop
+                    else self._measure_usage.get(key))
 
     def _on_measure_progress(self, model, done, total) -> None:
         self.local_ratings.set_progress(model, done, total)
@@ -1299,14 +1379,22 @@ class GodAI(QWidget):
         try:
             entry = self.usage_tracker.log_request(
                 agent=LOCAL_RATINGS_AGENT, backend=provider, model=model,
-                prompt_text=prompt, response_text=reply)
-            self.session_cost_total += entry.get("estimated_cost", 0.0)
+                prompt_text=prompt, response_text=reply,
+                usage=self._measure_usage_for(provider, model, prompt, reply,
+                                              pop=True))
+            billed = float(entry.get("estimated_cost", 0.0) or 0.0)
+            self._measure_reserved_eur = max(
+                0.0, getattr(self, "_measure_reserved_eur", 0.0) - billed)
+            self.session_cost_total += billed
             self.session_request_count += 1
             self.update_usage_labels()
         except Exception as exc:  # noqa: BLE001
             self._note_failure("local ratings: bill", exc)
 
     def _on_measure_finished(self, model, result, automatic) -> None:
+        self._measure_reserved_eur = 0.0
+        with self._measure_usage_lock:
+            self._measure_usage.clear()
         self.local_ratings.clear_progress(model)
         self.local_rating_store.record_result(model, result, automatic=automatic)
         name = local_models.row_label(model)
@@ -3909,9 +3997,77 @@ class GodAI(QWidget):
         """The mode a job of `agent` runs under: its override, else the Mode
         box's Local only / Cloud only, else the mode in Settings → Models."""
         box = getattr(self, "execution_mode_box", None)
+        if box is not None and box.currentText() == "Local only":
+            return routing_advisor.LOCAL_ONLY       # over any override (review L-3)
         return routing_advisor.effective_mode(
             getattr(self, "settings", None), agent,
             box.currentText() if box is not None else None)
+
+    def _local_only(self, agent: str) -> bool:
+        return self.routing_mode(agent) == routing_advisor.LOCAL_ONLY
+
+    def _remote_runtime(self, provider: str):
+        """(sentence, address) when a local runtime is set to an address that
+        is not this Mac, else None. OLLAMA_HOST and LMSTUDIO_URL can point
+        anywhere (security review P1-1)."""
+        from services.local_endpoint import (
+            is_loopback_host, is_plain_endpoint, url_host)
+        address = (getattr(getattr(self, provider, None), "base_url", None)
+                   or provider_registry.base_url(provider))
+        runtime = {"ollama": "Ollama", "lmstudio": "LM Studio"}.get(provider, provider)
+        if not is_plain_endpoint(address):
+            return (f"{runtime}'s address ({address}) is not a plain address, so "
+                    "where it leads cannot be checked.", address)
+        host = url_host(address)
+        if is_loopback_host(host):
+            return None
+        return (f"{runtime} is set to {host or address}, which is not this Mac.",
+                address)
+
+    def _route_allowed(self, agent: str, provider: str) -> bool:
+        """Local only and where a "local" model really runs, checked for every
+        request before anything else (reviews L-3 and security P1-1).
+
+        Under Local only nothing goes to a cloud service, for every agent and
+        every kind of request, whether or not the advisor could look at it. A
+        local runtime set to another machine is refused under Local only and
+        otherwise asked about once per address while the app is open."""
+        provider = str(provider or "").casefold()
+        if not is_local_provider(provider):
+            if self._local_only(agent):
+                QMessageBox.warning(
+                    self, "Request Blocked",
+                    f"Mode is Local only, so nothing is sent to {provider}. Pick a "
+                    "model on this Mac, or change Mode to send this to a cloud "
+                    "service.")
+                return False
+            return True
+        remote = self._remote_runtime(provider)
+        if remote is None:
+            return True
+        sentence, address = remote
+        if self._local_only(agent):
+            QMessageBox.warning(
+                self, "Request Blocked",
+                f"{sentence} Mode is Local only, so nothing is sent off this Mac. "
+                "Point it back at this Mac (for example http://127.0.0.1) or "
+                "change Mode.")
+            return False
+        if (provider, address) in self._remote_runtime_ok:
+            return True
+        plain = str(address).lower().startswith("http://")
+        answer = QMessageBox.question(
+            self, "Model on another machine",
+            f"{sentence} What you send, manuscript text included, goes to that "
+            "machine" + (" unencrypted (plain http)" if plain else "") + ". The "
+            "app shows it as a local model and cannot tell what that machine "
+            "keeps.\n\nSend it? You are asked once per address while the app "
+            "is open.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return False
+        self._remote_runtime_ok.add((provider, address))
+        return True
 
     def _execution_mode(self, agent: str = "chat") -> str:
         return execution_mode_for(self, agent)
@@ -4234,6 +4390,8 @@ class GodAI(QWidget):
                 final_backend, final_model, accepted = answer
         else:
             context = getattr(self, "_advised_context", None)
+        if not self._route_allowed(selected_agent, final_backend):
+            return
         estimated_cost, approx_tokens = self.estimate_chat_cost(
             final_backend, final_model, billable_prompt, messages=messages)
 
@@ -4503,6 +4661,8 @@ class GodAI(QWidget):
         teaser. Every flow in this file keeps its token now; do not add a
         new by-name call site.
         """
+        if not self._route_allowed(agent, provider):
+            return False
         if (resume is not None and flat_cost_eur is None
                 and self.panel_routing.advise(agent, provider, model, prompt,
                                               tool=tool or label or "", resume=resume,
@@ -5410,8 +5570,9 @@ class GodAI(QWidget):
 
     def _reserved_in_flight_eur(self) -> float:
         """Estimates of every authorized-but-unresolved request."""
-        return sum(float(ctx.get("estimated_cost") or 0.0)
-                   for ctx in self._pending_requests.values())
+        return (sum(float(ctx.get("estimated_cost") or 0.0)
+                    for ctx in self._pending_requests.values())
+                + float(getattr(self, "_measure_reserved_eur", 0.0) or 0.0))
 
     def pending_request_snapshot(self, token) -> dict:
         """A copy of an open request's context, for durable job records."""
