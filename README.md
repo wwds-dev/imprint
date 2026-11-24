@@ -2329,14 +2329,17 @@ trust. Its role here is the safe-for-work promotional teaser.
 
 **The same check runs on every image and video route** (`services/content_policy.py`,
 2026-11-24). Before anything is reserved, it checks the prompt of the Gemini Omni
-and Wan teasers and of every direct video in the Video workspace (a **Content
-policy** dialog with the reason), the topic of a narrated video or a Herald
-clip, and the image prompt Vector writes for logo concepts (a *[Refused]* status
-line). Each scene image of a narrated video, on any provider, is checked again
+and Wan teasers, of every direct video in the Video workspace and the topic of a
+narrated video (a **Content policy** dialog with the reason). The topic of a Herald
+clip and the image prompt Vector writes for logo concepts are checked before the
+render or the images are reserved; the text call that wrote them is already
+paid (a *[Refused]* status line). An empty narrated-video topic lets vidforge pick
+one, which only the scene check below sees. Each scene image of a narrated video, on any provider, is checked again
 just before it is sent; a refused scene becomes a plain gradient card. It matches
 word forms ("nudes", "face-swap"), folds fullwidth letters and drops invisible
-characters; a negation counts only directly before the word ("no nudity" passes,
-"no watermark nude photo" does not). Look-alike letters from other scripts and
+characters; a negation counts directly before the word or at the head of a short
+list ("no nudity" and "no gore or nudity" pass, "no watermark nude photo" does
+not). Look-alike letters from other scripts and
 other languages are not caught. Generated Qwen images and Wan videos carry
 Alibaba's visible AI watermark; Imprint Studio no longer asks for it to be
 removed.

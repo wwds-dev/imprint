@@ -1121,6 +1121,7 @@ class CreatorPanel(QWidget):
             check_prompt(prompt)
         except ContentPolicyError as exc:
             QMessageBox.warning(self, "Higgsfield Content Policy", str(exc))
+            self.creator_video_status.setText("Not sent: content policy.")
             return
 
         # Reference media is uploaded during preparation because Higgsfield's

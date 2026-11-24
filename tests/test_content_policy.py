@@ -369,3 +369,51 @@ def test_fiverr_image_prompt_is_refused_before_reserving_images(window, monkeypa
     panel._on_prompt_ready(REFUSED)
     assert asked == []
     assert "content policy" in panel.fiverr_status_label.text()
+
+
+# ── re-review fixes: negation across a list, hyphens, narrower forms ───────
+
+@pytest.mark.parametrize("prompt", [
+    "beach mood, no gore or nudity", "without text or nudity",
+    "no nudity or explicit content", "nothing explicit or sexual",
+    "avoid nudity and explicit scenes", "no explicit/sexual content",
+    "free of any nudity", "non-explicit romance cover",
+    "a tasteful, non-sexual embrace", "no-nudity beach",
+    "a book about sexuality in Victorian novels",
+    "sexually transmitted infections awareness", "the nakedness of the moor",
+])
+def test_safe_for_work_wording_passes(prompt):
+    assert refusal(prompt) is None
+
+
+@pytest.mark.parametrize("prompt", [
+    "not shy and naked", "a calm beach and nude woman",
+    "no text and nude photo", "no gore or a b c d nude",
+])
+def test_a_list_does_not_carry_a_negation_too_far(prompt):
+    assert refusal(prompt) is not None
+
+
+def test_higgsfield_accepts_a_negated_list_again():
+    from services import higgsfield_client
+    higgsfield_client.check_prompt("cinematic teaser, no gore or nudity")
+
+
+def test_creator_higgsfield_refusal_sets_the_status_line(window, monkeypatch):
+    import agents.creator.panel as creator_panel
+    panel = window.creator_panel
+    warned, asked = _record(monkeypatch, window, creator_panel)
+    monkeypatch.setattr(panel, "current_account",
+                        lambda: {"id": 1, "name": "Persona"})
+    monkeypatch.setattr(window.agent_instances["creator"], "build_video_prompt",
+                        lambda account, brief: REFUSED)
+    monkeypatch.setattr(panel, "_teaser_route", lambda: "higgsfield")
+    monkeypatch.setattr(creator_panel, "HiggsfieldClient",
+                        lambda: types.SimpleNamespace(configured=True))
+    monkeypatch.setattr(window.allow_higgsfield_checkbox, "isChecked",
+                        lambda: True, raising=False)
+    panel.creator_video_status.setText("")
+    panel.generate_video()
+    assert asked == []
+    assert warned and warned[0][0] == "Higgsfield Content Policy"
+    assert panel.creator_video_status.text() == "Not sent: content policy."
