@@ -29,6 +29,10 @@ listed under **Unreleased** until it ships.
 ## Unreleased
 
 ### Changed
+- **Routing advisor re-synced with Sentinel** (2026-11-23): `services/routing_advisor.py` gains
+  `HYBRID_MODE` (what "Hybrid allowed" restores from Local only or Cloud only) and a test that a saved
+  mode is never overwritten. The default stays "Local, advise per job", the best-fit route; the owner
+  decided both apps keep it.
 - **The app is called Imprint Studio; three agents are renamed** (2026-11-22,
   `docs/specs/rename-imprint-studio.md`, with package 5 of the docs readiness
   spec). The window title, header wordmark, tray menu, version tooltip,
