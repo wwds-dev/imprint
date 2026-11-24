@@ -1122,6 +1122,7 @@ class CreatorPanel(QWidget):
             check_prompt(prompt)
         except ContentPolicyError as exc:
             QMessageBox.warning(self, "Higgsfield Content Policy", str(exc))
+            self.creator_video_status.setText("Not sent: content policy.")
             return
 
         # Reference media is uploaded during preparation because Higgsfield's
@@ -1233,8 +1234,17 @@ class CreatorPanel(QWidget):
         from services.recommendations.catalog import provider_configured
         from ui.workers import VideoGenerationWorker
 
+        from services.content_policy import refusal
+
         route = self._teaser_route()
         spec = TEASER_ROUTES[route]
+        # Before the key, permission and budget checks: a refused prompt
+        # reserves nothing and writes no job row (spec ai-act-safeguards).
+        reason = refusal(prompt)
+        if reason:
+            QMessageBox.warning(self, "Content policy", reason)
+            self.creator_video_status.setText("Not sent: content policy.")
+            return
         if not provider_configured(route):
             QMessageBox.information(
                 self, f"{spec['provider']} Key Needed",

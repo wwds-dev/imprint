@@ -523,6 +523,15 @@ class VideoPanel(QWidget):
             return
 
         topic = self.video_topic_input.text().strip()
+        # The topic seeds every scene prompt; refuse it before anything is
+        # reserved (spec ai-act-safeguards). Scene prompts are checked again
+        # in vidforge before each image request.
+        from services.content_policy import refusal
+        reason = refusal(topic)
+        if reason:
+            QMessageBox.warning(self, "Content policy", reason)
+            self.video_status_label.setText("Not sent: content policy.")
+            return
         if scene_provider_refused(self, self.host, selection):
             return
         eur_rate = eur_per_usd()
@@ -604,6 +613,23 @@ class VideoPanel(QWidget):
             QMessageBox.warning(
                 self, "Topic Needed",
                 "Direct video models need a prompt in the Topic field.")
+            return
+        # Every direct route (Gemini, Qwen Wan, Higgsfield), before anything
+        # is reserved or a job row written (spec ai-act-safeguards).
+        from services.content_policy import refusal
+        reason = refusal(topic)
+        if reason and selection.provider == "Higgsfield":
+            # Same patterns; Higgsfield's own Terms-of-Use wording, as on
+            # Muse's Higgsfield route (code review P3-2).
+            from services.higgsfield_client import (
+                ContentPolicyError, check_prompt)
+            try:
+                check_prompt(topic)
+            except ContentPolicyError as exc:
+                reason = str(exc)
+        if reason:
+            QMessageBox.warning(self, "Content policy", reason)
+            self.video_status_label.setText("Not sent: content policy.")
             return
         seconds, provider_aspect = self._direct_parameters()
         self._external_context = {

@@ -159,7 +159,8 @@ class FakeResponse:
         return self._data
 
 
-def test_wan_create_uses_async_task_endpoint_and_no_watermark():
+def test_wan_create_uses_async_task_endpoint_and_keeps_the_watermark():
+    """Alibaba's AI watermark stays on (spec ai-act-safeguards D1)."""
     calls = []
 
     class Session:
@@ -184,7 +185,7 @@ def test_wan_create_uses_async_task_endpoint_and_no_watermark():
     assert kwargs["headers"]["X-DashScope-Async"] == "enable"
     assert kwargs["json"]["parameters"] == {
         "resolution": "720P", "ratio": "1:1", "duration": 12,
-        "prompt_extend": True, "watermark": False}
+        "prompt_extend": True, "watermark": True}
 
 
 def test_generic_video_worker_preserves_completed_provider_output(tmp_path):

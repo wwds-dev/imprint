@@ -27,7 +27,6 @@ import math
 import uuid
 import mimetypes
 import random
-import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -36,6 +35,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from services.api_limits import REQUEST_TIMEOUT_SECONDS
+from services.content_policy import ContentPolicyError, refused_key
 
 BASE_URL = "https://api.higgsfield.ai"
 
@@ -68,25 +68,17 @@ SUPPORTED_UPLOAD_TYPES = frozenset({
     "image/jpeg", "image/png", "image/webp", "image/gif",
 })
 
-# Refused before a request is spent. Deliberately narrow — it catches the
-# unambiguous cases rather than trying to be a general content classifier,
-# because a broad keyword filter on a creative tool mostly produces false
-# positives and teaches people to work around it.
-_REFUSED_PATTERNS = [
-    (r"\b(explicit|hardcore|pornographic|porn|nude|nudity|naked|sex scene|sexual)\b",
-     "Higgsfield prohibits sexually explicit material and moderates prompts, "
-     "reference images and outputs. Generate promotional, safe-for-work video "
-     "only."),
-    (r"\b(deepfake|face swap|faceswap|undress|deep nude|deepnude)\b",
-     "Higgsfield prohibits identity manipulation and unauthorised images of "
-     "other people."),
-    (r"\b(bypass|circumvent|jailbreak|evade)\b.{0,24}\b(filter|moderation|safety|nsfw)\b",
-     "Circumventing moderation is itself a Terms of Use violation."),
-]
-
-
-class ContentPolicyError(ValueError):
-    """The request would breach Higgsfield's Terms of Use."""
+# Refused before a request is spent. The patterns are the shared ones in
+# services/content_policy.py (every image and video route runs them); only
+# the wording is Higgsfield's, because its Terms of Use are the reason here.
+_HIGGSFIELD_REASONS = {
+    "explicit": ("Higgsfield prohibits sexually explicit material and moderates "
+                 "prompts, reference images and outputs. Generate promotional, "
+                 "safe-for-work video only."),
+    "identity": ("Higgsfield prohibits identity manipulation and unauthorised "
+                 "images of other people."),
+    "circumvent": "Circumventing moderation is itself a Terms of Use violation.",
+}
 
 
 class HiggsfieldAPIError(RuntimeError):
@@ -126,40 +118,16 @@ class VideoEstimate:
     usd: float
 
 
-# Words that flip the meaning of what follows. "no explicit content" is a
-# perfectly good instruction to a video model, and a filter that refuses it is
-# a filter people learn to route around rather than one that protects anything.
-_NEGATIONS = ("no", "not", "non", "none", "nothing", "neither", "without",
-              "avoid", "never", "excluding", "exclude", "omit", "zero")
-_NEGATION_PHRASES = ("free of", "devoid of", "clear of")
-
-
-def _is_negated(text: str, start: int) -> bool:
-    """True when the match is preceded by a negation, e.g. 'no nudity'.
-
-    Only within the current clause: "explicit shots, no captions" negates the
-    captions, not the shots, so the window stops at the last punctuation.
-    """
-    window = text[max(0, start - 24):start]
-    tail = re.split(r"[.;,]", window)[-1]
-    words = re.findall(r"[a-z-]+", tail)
-    if any(word in _NEGATIONS for word in words[-3:]):
-        return True
-    # Multi-word forms ("free of nudity") that word-splitting would miss.
-    return any(phrase in tail for phrase in _NEGATION_PHRASES)
-
-
 def check_prompt(prompt: str, reference_image: str | None = None) -> None:
     """Raise ContentPolicyError if this request should not be sent.
 
     Checked locally so the user gets a clear reason instead of an opaque
-    moderation rejection after the request has been billed.
+    moderation rejection after the request has been billed. The patterns and
+    negation rules are services/content_policy.py's; the wording is ours.
     """
-    text = (prompt or "").lower()
-    for pattern, reason in _REFUSED_PATTERNS:
-        for match in re.finditer(pattern, text):
-            if not _is_negated(text, match.start()):
-                raise ContentPolicyError(reason)
+    key = refused_key(prompt)
+    if key:
+        raise ContentPolicyError(_HIGGSFIELD_REASONS[key])
     if reference_image and not os.path.exists(reference_image):
         raise ValueError(f"Reference image not found: {reference_image}")
 

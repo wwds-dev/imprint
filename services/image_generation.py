@@ -71,7 +71,15 @@ def aspect_for_size(size: str) -> str:
 
 def generate_image(model_id: str, prompt: str, *, aspect: str = "1:1",
                    openai_client=None, quality: str = "medium") -> bytes:
-    """One image from `model_id`, as encoded bytes (PNG or JPEG)."""
+    """One image from `model_id`, as encoded bytes (PNG or JPEG).
+
+    Raises ContentPolicyError, before any network call, for a prompt the
+    shared content policy refuses. Fiverr concepts and Gemini/Qwen scene
+    images come through here; vidforge's OpenAI scenes are checked in
+    vidforge/visuals.py `_generate_ai` before either route.
+    """
+    from services.content_policy import check_prompt
+    check_prompt(prompt)
     provider = provider_for(model_id)
     if aspect not in ASPECTS:
         aspect = "1:1"
@@ -147,7 +155,9 @@ def _qwen_image(model_id: str, prompt: str, aspect: str) -> bytes:
               "input": {"messages": [{"role": "user",
                                       "content": [{"text": prompt}]}]},
               "parameters": {"size": _QWEN_SIZES[aspect], "n": 1,
-                             "prompt_extend": True, "watermark": False}})
+                             # Alibaba's own AI mark stays on (spec
+                             # ai-act-safeguards D1: always, no setting).
+                             "prompt_extend": True, "watermark": True}})
     try:
         data = response.json()
     except ValueError:

@@ -29,6 +29,19 @@ listed under **Unreleased** until it ships.
 ## Unreleased
 
 ### Changed
+- **Every image and video route checks the prompt; Alibaba's watermark stays on** (2026-11-24,
+  spec `ai-act-safeguards`): Higgsfield's local prompt check now runs on the Gemini Omni and Wan
+  teasers, every direct video and the topic of narrated videos before anything is reserved, and on
+  Herald clip topics and Vector's logo-image prompt before the render or images are reserved;
+  every scene image is checked again before it is sent, OpenAI included. The check now catches
+  plurals and inflections, fullwidth and invisible characters, and "non-" forms; a negation counts
+  directly before the word or at the head of a short list ("no gore or nudity"). Qwen images and Wan videos no longer ask
+  Alibaba to drop its AI watermark. Legal audit L-03, L-04.
+- **Privacy note and third-party notices published** (2026-11-24): README gains *Privacy*
+  (what stays on your Mac, which provider gets what, local runtimes on another machine,
+  measurement prompts) and *Licence*; the access-and-privacy lesson gains a recipient table;
+  new `THIRD_PARTY_NOTICES.md` names the AGPL (EbookLib) and LGPL (PySide6/Qt) dependencies.
+  Legal audit L-02 and L-05.
 - **Routing advisor re-synced with Sentinel** (2026-11-23): `services/routing_advisor.py` gains
   `HYBRID_MODE` (what "Hybrid allowed" restores from Local only or Cloud only) and a test that a saved
   mode is never overwritten. The default stays "Local, advise per job", the best-fit route; the owner
