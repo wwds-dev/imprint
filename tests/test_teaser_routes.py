@@ -9,7 +9,8 @@ persona's reference image. Gemini Omni and Wan 3.0 take reference images too,
 so a teaser is now assessed across three routes. Pinned: the reference images
 reach each API in its documented form; the job row exists before the paid
 request; an interrupted Wan task resumes from its id; an interrupted Omni
-render (nothing to look up) is released and surfaced, never billed on a guess.
+render (nothing to look up) follows Reel's rule: a saved clip bills once, no clip
+is counted at its confirmed cost (tests/test_muse_omni_quit.py).
 
 Run with:  pytest tests/test_teaser_routes.py -v
 """
@@ -208,13 +209,15 @@ def _insert(request_id, endpoint, correlation=""):
         conn.commit()
 
 
-def test_an_interrupted_omni_teaser_is_released_and_surfaced(window):
+def test_an_interrupted_omni_teaser_is_counted_not_released_as_free(window):
+    """Reel's rule (owner, 2026-11-24): Gemini may have charged for the call."""
     _insert("gemini-lost-1", "gemini:gemini-omni-1.1-flash")
     before = len(window._pending_requests)
     window.creator_panel._spawn_teaser_resume(_row("gemini-lost-1"))
     row = _row("gemini-lost-1")
-    assert (row["spend_state"], row["status"]) == ("released", "lost")
-    assert len(window._pending_requests) == before       # nothing billed
+    assert (row["spend_state"], row["status"]) == ("billed", "completed")
+    assert "may have charged" in row["error"]
+    assert len(window._pending_requests) == before       # closed out
 
 
 def test_an_interrupted_wan_teaser_is_watched_again_from_its_task(window,

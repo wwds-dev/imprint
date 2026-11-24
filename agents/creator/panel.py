@@ -48,6 +48,7 @@ TEASER_ROUTES = {
     "qwen": {"label": "Qwen · Wan 3.0", "provider": "Qwen",
              "model": "wan3.0-video"},
 }
+OMNI_MODEL = TEASER_ROUTES["gemini"]["model"]
 TEASER_SECONDS = 5          # the length Higgsfield's teaser has always been
 TEASER_ASPECT = "9:16"      # vertical: teasers go to social feeds
 TEASER_ROUTE_KEY = "creator_teaser_route"
@@ -1316,6 +1317,17 @@ class CreatorPanel(QWidget):
             endpoint=context["endpoint"],
             correlation_id=getattr(job, "job_id", "") or ""))
 
+    def omni_rendering(self) -> bool:
+        """True while a Gemini Omni teaser is inside its one create call.
+
+        The quit question reads this (Reel's rule, review P2-2): Omni cannot
+        be resumed, so quitting now may lose a clip Gemini still charges for.
+        """
+        worker = self.host.creator_video_worker
+        context = self._video_context or {}
+        return (context.get("endpoint") == f"gemini:{OMNI_MODEL}"
+                and worker is not None and worker.isRunning())
+
     def cancel_video(self):
         """Cancel preparation, or ask Higgsfield to cancel a queued render."""
         if self._video_context:
@@ -1599,20 +1611,65 @@ class CreatorPanel(QWidget):
             self.creator_video_status.setText(
                 "Resuming a teaser render from the previous session…")
 
+    def _settle_omni_teaser(self, row: dict) -> None:
+        """Close a Gemini Omni teaser a previous process left reserved.
+
+        Reel's rule (audit QH-2, owner's choice 2026-11-24): Omni is one
+        synchronous call with nothing to look up. A clip that reached the
+        disk lands and bills once; no clip means Gemini may still have
+        charged, so the confirmed cost is counted with a note, never
+        released as free.
+        """
+        path = Path(row.get("output_path") or "")
+        saved = path.is_file() and path.stat().st_size > 0
+        token = self.host.restore_request(
+            "creator", "gemini", OMNI_MODEL, row.get("prompt", ""),
+            label="promo teaser (resumed)",
+            flat_cost_eur=row.get("flat_cost_eur") or 0.0,
+            project=row.get("project_id"), run_id=row.get("run_id", ""))
+        if saved:
+            self._resume_teaser_done(row, token, None, str(path))
+            return
+        error = ("Imprint closed while Gemini Omni was rendering this "
+                 "teaser and the clip never arrived. Gemini may have "
+                 "charged for it, so it is counted; check your Gemini usage.")
+        # Settle before billing, as everywhere: a crash between the two is
+        # an undercount, never a double bill.
+        self._settle_teaser_job(row["request_id"], "billed")
+        try:
+            self.host.record_request(
+                token, "teaser: Omni call interrupted; clip not saved")
+        except Exception as exc:
+            self.host._note_failure("creator: bill interrupted Omni", exc)
+        try:
+            with get_connection() as conn:
+                conn.execute(
+                    "UPDATE creator_video_jobs SET status = 'completed', "
+                    "error = ? WHERE request_id = ?",
+                    (error, row["request_id"]))
+                conn.commit()
+        except Exception as exc:
+            self.host._note_failure("creator: mark Omni teaser", exc)
+        self.host._note_failure("creator: resume teaser", RuntimeError(error))
+        if not self._video_context:
+            self.creator_video_status.setText(error)
+
     def _resume_direct_teaser(self, row: dict) -> None:
         """Reconcile a Gemini/Wan teaser a previous process left reserved.
 
         Wan is a task with an id: watch it again and save the result, as the
-        Video workspace does. Omni is one synchronous call with nothing to
-        look up afterwards, and a Wan submission that never got its id back
-        is in the same position: marked lost, released, and surfaced —
-        never billed on a guess.
+        Video workspace does. Omni follows Reel's rule (_settle_omni_teaser).
+        A Wan submission that never got its id back has nothing to look up:
+        marked lost, released, and surfaced — never billed on a guess.
         """
         from agents.video.workers import VideoResumeWorker
         from services.qwen_client import QwenClientWrapper
 
         route, _sep, model = (row.get("endpoint") or "").partition(":")
         task_id = row.get("correlation_id") or ""
+        if route == "gemini" and model == OMNI_MODEL:
+            self._settle_omni_teaser(row)
+            return
         if route != "qwen" or not task_id:
             self._settle_teaser_job(row["request_id"], "released")
             try:

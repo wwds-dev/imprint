@@ -95,11 +95,15 @@ An Omni or Wan teaser's job row is written in `creator_video_jobs` under a
 local id **before** the paid request, with the provider's job id stored beside
 it when it arrives. After a crash, an interrupted Wan task is watched again
 from its task id on the next launch and saved. An interrupted Omni render is
-one synchronous call with nothing to look up, so it — like a Wan submission
-whose id never came back — is marked lost, its reservation released and the
-loss surfaced, never billed on a guess. Omni is posted exactly once: the
-Gemini client's own retry is switched off. **Cancel Teaser** applies to
-Higgsfield; an Omni or Wan teaser runs to completion once submitted.
+one synchronous call with nothing to look up, so it follows Reel's rule: quitting
+while one renders asks first ("A Gemini Omni clip is rendering"); on the next
+launch a saved clip lands in the media library and bills once, and a call with no
+clip is recorded at its confirmed cost with a "may have charged" note, because
+Gemini may have charged. A Wan submission whose id never came back is marked lost,
+its reservation released and the loss surfaced, never billed on a guess. Omni is
+posted exactly once: the Gemini client's own retry is switched off. **Cancel
+Teaser** applies to Higgsfield; an Omni or Wan teaser runs to completion once
+submitted.
 
 Imprint uses Higgsfield's current request contract: a key ID + secret pair,
 model-specific endpoints, presigned reference-image uploads, and the returned
