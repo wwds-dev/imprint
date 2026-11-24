@@ -166,7 +166,7 @@ def test_fields_show_the_file_not_the_shell(window, monkeypatch, env_file):
     dialog = _open_settings(window, monkeypatch)
     assert _field(dialog, "OPENAI_API_KEY").text() == "from-file"
     assert _field(dialog, "DEEPSEEK_API_KEY").text() == ""
-    labels = [l.text() for l in dialog.findChildren(QLabel)]
+    labels = [label.text() for label in dialog.findChildren(QLabel)]
     assert any("set by the shell" in text for text in labels)
     dialog.reject()
 
@@ -221,7 +221,7 @@ def test_test_button_with_an_empty_box_says_not_set_without_a_worker(window, mon
     dialog = _open_settings(window, monkeypatch)
     _field(dialog, "GOOGLE_API_KEY").setText("")
     dialog.findChild(QPushButton, "TestKey:GOOGLE_API_KEY").click()
-    labels = [l.text() for l in dialog.findChildren(QLabel)]
+    labels = [label.text() for label in dialog.findChildren(QLabel)]
     assert "not set" in labels
     dialog.reject()
 
@@ -251,7 +251,7 @@ def test_test_button_probes_the_typed_key_and_leaves_the_process_alone(app, wind
     assert button.isEnabled()
     assert seen == ["typed-key"], "the probe must see the typed value"
     assert os.environ["ANTHROPIC_API_KEY"] == "saved-key", "and the process keeps its own"
-    labels = [l.text() for l in dialog.findChildren(QLabel)]
+    labels = [label.text() for label in dialog.findChildren(QLabel)]
     assert any(text.startswith("reachable — 1 model(s)") for text in labels)
     dialog.reject()
 

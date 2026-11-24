@@ -11,7 +11,6 @@ API or LM Studio.
 
 import os
 import threading
-from types import SimpleNamespace
 
 import pytest
 

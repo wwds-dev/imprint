@@ -145,10 +145,12 @@ def test_run_backend_dispatches_lmstudio_to_its_client_and_fit_checks_it():
 
     class LM:
         def stream_chat(self, messages, model):
-            calls.append(model); yield "tok"
+            calls.append(model)
+            yield "tok"
 
     def assess(model, provider="ollama", **kw):
-        asked.append((model, provider)); return None
+        asked.append((model, provider))
+        return None
 
     stub = SimpleNamespace(lmstudio=LM(), assess_local_model=assess)
     out = main.GodAI.run_backend(stub, "lmstudio", "m", [], "x")
@@ -263,7 +265,6 @@ def test_the_closed_picker_paints_a_tag_for_an_abliterated_model_only(host):
 
 
 def test_the_popup_row_of_an_uncensored_model_is_wider_and_has_a_note(host):
-    from PySide6.QtCore import QModelIndex
     from PySide6.QtWidgets import QComboBox, QStyleOptionViewItem
     from ui import widgets
     combo = QComboBox(host)

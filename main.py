@@ -2,7 +2,6 @@ import json
 import os
 import uuid
 import re
-import subprocess
 import sys
 import time
 import types
@@ -23,7 +22,6 @@ if "--narrator-worker" in sys.argv:
 
 from services import providers as provider_registry
 from services.providers import is_local as is_local_provider
-from services.lmstudio_client import LMStudioClient
 from services.local_endpoint import LocalLMStudioClient
 from services import local_models
 from services import local_ratings
@@ -44,22 +42,19 @@ from dotenv import load_dotenv
 # API keys: user-data .env when frozen, project .env in dev. Real env vars still win.
 load_dotenv(user_data_base() / ".env")
 
-import markdown
 
-from PySide6.QtCore import Qt, QTimer, QProcess, QUrl, QThread, Signal, QEvent, QRect, QPoint, QSize
-from PySide6.QtGui import QTextCursor, QDesktopServices, QColor, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QTimer, QProcess, QEvent
+from PySide6.QtGui import QTextCursor, QColor, QKeySequence, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
-    QApplication, QSizePolicy, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QGroupBox,
+    QApplication, QSizePolicy, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QTextEdit, QPushButton, QComboBox, QListWidget, QListWidgetItem,
-    QMessageBox, QCheckBox, QTextBrowser, QSplitter, QLineEdit, QFileDialog,
-    QProgressBar, QDialog, QTabWidget, QTabBar, QFrame, QScrollArea, QStackedWidget, QLayout,
-    QInputDialog, QMenu, QTableWidget, QTableWidgetItem, QHeaderView, QToolButton,
+    QMessageBox, QTextBrowser, QLineEdit, QProgressBar, QDialog, QTabWidget,
+    QTabBar, QFrame, QInputDialog, QMenu, QToolButton,
 )
 
 from ui.style import (
-    global_stylesheet, ACCENT, ACCENT_LINE, ACCENT_WASH, INFO, WARNING,
-    TEXT, TEXT_DIM, TEXT_MUTE,
+    global_stylesheet, ACCENT,
 )
 from ui import app_identity, appkit_guard, theme, tray, vibe
 from services.ollama_client import OllamaClient, MUSE_GLIMMER_VARIANTS, muse_glimmer_default
@@ -217,16 +212,14 @@ SCAN_NOTE_LABELS = {
 }
 
 
-from ui.panels.base import AgentPanel
 from ui.workers import (
     ChatWorker, ModelPullWorker, ModelScanWorker, FiverrImageWorker,
     RatingsWorker, LocalDiscoveryWorker, StartLMStudioWorker, LocalMeasureWorker,
 )
 from ui.forms import (
-    CONTENT_MAX_WIDTH, CONTROL_HEIGHT, HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH,
-    RAIL_RIGHT_WIDTH, SM, XS, FieldGridLayout, Meter, StatBlock, combo, field,
-    field_note, form_grid, icon_button, line_edit, link_button, micro, nav_tab,
-    primary, quiet, rail, rule, section, stat, toggle_chip,
+    HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH, RAIL_RIGHT_WIDTH, SM, XS,
+    FieldGridLayout, Meter, StatBlock, field, field_note, icon_button,
+    line_edit, link_button, micro, quiet, rail, rule, section, toggle_chip,
 )
 from ui.text_fit import install_text_fit
 from ui.widgets import (
