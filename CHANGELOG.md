@@ -96,7 +96,7 @@ listed under **Unreleased** until it ships.
   provider's key and its box ticked in the API permissions row, the same check
   the Video tab makes, and it runs before the brief is paid for. An image model
   Imprint does not know is refused.
-- **A Gemini Omni clip is no longer thrown away by Stop or a quit** (2026-11-24,
+- **A Gemini Omni clip is no longer thrown away by Stop, and quitting asks first** (2026-11-24,
   audit QH-2). Omni renders in one call, so Reel shows **Cannot Stop** while it
   runs and asks before quitting. A clip that arrives while Imprint closes is
   saved, and the next launch adds it to the Library and records its cost once.
@@ -108,7 +108,8 @@ listed under **Unreleased** until it ships.
   is there after a quit and relaunch, and when you switch back from a Project.
 - **Quill's Clear asks first and can be undone** (2026-11-24, audit UX-02). It
   names what it empties, Cancel is the default, Cmd-Z in a box brings its text
-  back, and Title and the Book Profile are no longer cleared.
+  back (until you switch Project or Write again), it is disabled while a Write
+  runs, and Title and the Book Profile are no longer cleared.
 - **Vector no longer promises vector files or an invented track record**
   (audit QM-18). Its prompt dropped the "5-star reputation", leaves prices as
   `[PRICE]` unless you give them, and asks for a flat logo on a plain

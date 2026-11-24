@@ -671,7 +671,8 @@ class SocialPanel(QWidget):
         """Refuse a clip whose scene-image provider is not keyed or not
         permitted (the Video tab's check), or whose image model is not in the
         catalog, so its provider cannot be checked at all. True: send nothing."""
-        if str(cfg.get("visuals.source", "")).strip().lower() != "ai":
+        # vidforge reads a missing source as "ai" (vidforge/visuals.py).
+        if str(cfg.get("visuals.source") or "ai").strip().lower() != "ai":
             return False
         from services.media_catalog import MODELS
         model_id = str(cfg.get("visuals.image_model", "gpt-image-2"))

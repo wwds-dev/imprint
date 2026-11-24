@@ -1121,6 +1121,9 @@ class AuthorPanel(QWidget):
         self.author_status_label.setText("[Working…]")
         self.author_write_btn.setEnabled(False)
         self.author_continue_btn.setEnabled(False)
+        # Clear mid-run would cut the stream's anchor or the revise
+        # selection out from under the reply (review 2026-11-24 P2-1).
+        self.author_clear_btn.setEnabled(False)
         self.author_stop_btn.setEnabled(True)
         # Keep the token: "author" is shared by the write, publish and
         # market flows, and resolving by name pops whichever is oldest.
@@ -1132,6 +1135,7 @@ class AuthorPanel(QWidget):
             self._revise_cursor = None
             self.author_write_btn.setEnabled(True)
             self.author_continue_btn.setEnabled(True)
+            self.author_clear_btn.setEnabled(True)
             self.author_stop_btn.setEnabled(False)
             self.author_status_label.setText("")
             return
@@ -1343,6 +1347,7 @@ class AuthorPanel(QWidget):
     def _finish_buttons(self):
         self.author_write_btn.setEnabled(True)
         self.author_continue_btn.setEnabled(True)
+        self.author_clear_btn.setEnabled(True)
         self.author_stop_btn.setEnabled(False)
 
     def _on_error(self, error: str):
@@ -1449,6 +1454,10 @@ class AuthorPanel(QWidget):
         and clearing it renamed the Project. Each box is emptied as one
         undoable edit, so Cmd-Z in it brings the text back.
         """
+        if self._stream_mode is not None:
+            self.author_status_label.setText(
+                "[Busy] Stop or finish the current Write before clearing.")
+            return
         has_text = (any(box.toPlainText() for box in self._writing_boxes())
                     or self.author_direction_input.text())
         if has_text:
@@ -1464,7 +1473,8 @@ class AuthorPanel(QWidget):
                 "Sources and Direction"
                 + (f" for \u201c{title}\u201d" if title else "")
                 + ". Title and the Book Profile stay.\n\nCmd-Z in a box "
-                "brings its text back while Imprint is open.")
+                "brings its text back, until you switch Project or Write "
+                "again.")
             clear_btn = box.addButton("Clear", QMessageBox.DestructiveRole)
             cancel_btn = box.addButton(QMessageBox.Cancel)
             box.setDefaultButton(cancel_btn)
@@ -1472,14 +1482,14 @@ class AuthorPanel(QWidget):
             box.exec()
             if box.clickedButton() is not clear_btn:
                 return
-        self._clear_displays(undoable=True)
+        self._clear_displays()
         self.author_direction_input.clear()
         self.author_status_label.setText("")
         self._last_response = ""
 
-    def _clear_displays(self, undoable: bool = False):
+    def _clear_displays(self):
         for box in self._writing_boxes():
-            if undoable and box.toPlainText():
+            if box.toPlainText():
                 # One edit block, not QTextEdit.clear(): clear() drops the
                 # undo history, so the text could never come back.
                 cursor = box.textCursor()
@@ -1487,8 +1497,6 @@ class AuthorPanel(QWidget):
                 cursor.select(QTextCursor.Document)
                 cursor.removeSelectedText()
                 cursor.endEditBlock()
-            else:
-                box.clear()
         self.author_word_count_label.setText("0")
         self.author_scene_count_label.setText("0")
         self.author_save_btn.setEnabled(False)

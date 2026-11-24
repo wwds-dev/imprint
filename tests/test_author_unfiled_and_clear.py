@@ -199,3 +199,51 @@ def test_clear_on_an_empty_workspace_asks_nothing(quill, dialog):
     shown, _state = dialog
     quill.clear()
     assert shown == []
+
+
+def test_clear_is_unavailable_while_a_write_runs(quill, dialog):
+    """Review 2026-11-24 P2-1: Clear mid-run cut the stream's anchor (the
+    reply came back duplicated) or the revise selection (the incomplete-
+    revision guard was skipped)."""
+    shown, state = dialog
+    _fill(quill)
+    state["choice"] = "Clear"
+    quill._begin_stream("append")
+    try:
+        quill.clear()
+        assert shown == []
+        assert quill.author_draft_box.toPlainText().startswith(
+            "The whole manuscript.")
+        assert "[Busy]" in quill.author_status_label.text()
+    finally:
+        quill._stream_mode = None
+        quill._stream_anchor = None
+        quill._finish_buttons()
+    assert quill.author_clear_btn.isEnabled()
+
+
+def test_the_clear_button_is_disabled_once_a_write_is_authorized(
+        window, quill, monkeypatch):
+    class Worker:
+        def __init__(self):
+            from types import SimpleNamespace
+            sig = SimpleNamespace(connect=lambda *a: None)
+            self.token_signal = self.finished_signal = sig
+            self.error_signal = self.usage_signal = sig
+
+        def start(self):
+            pass
+
+        def isRunning(self):
+            return False
+
+    monkeypatch.setattr(window, "authorize_request", lambda *a, **k: "tok")
+    monkeypatch.setattr(window, "_new_chat_worker", lambda *a, **k: Worker())
+    quill._start_worker("openai", "gpt-4o-mini", "go")
+    try:
+        assert not quill.author_clear_btn.isEnabled()
+    finally:
+        quill._write_token = None
+        quill._stream_mode = None
+        quill._finish_buttons()
+        window.author_worker = None

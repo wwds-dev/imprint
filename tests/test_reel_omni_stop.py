@@ -351,3 +351,24 @@ def test_an_acknowledged_omni_row_that_never_completed_is_released(
     assert window.usage_tracker.get_agent_today_total("video") == \
         pytest.approx(before)
     assert not window._pending_requests
+
+
+def test_quitting_during_an_omni_render_asks_and_keep_running_stays(
+        window, monkeypatch):
+    from PySide6.QtGui import QCloseEvent
+    from PySide6.QtWidgets import QMessageBox
+    asked = []
+
+    def exec_(box):
+        asked.append(box.text())
+        for button in box.buttons():
+            if button.text() == "Keep Running":
+                button.click()
+        return 0
+
+    monkeypatch.setattr(QMessageBox, "exec", exec_)
+    monkeypatch.setattr(window.video_panel, "omni_rendering", lambda: True)
+    event = QCloseEvent()
+    window.closeEvent(event)
+    assert asked == ["A Gemini Omni clip is rendering"]
+    assert not event.isAccepted()

@@ -6459,25 +6459,8 @@ class GodAI(QWidget):
             self, RESOURCE_DIR, start_page="overview", start_anchor=anchor)
 
     def closeEvent(self, event):
-        driver = self.release_kit_driver
-        if driver is not None and driver.is_running():
-            box = QMessageBox(self)
-            # macOS ignores a message box's window title: the title is the
-            # main text and the detail is the informative text.
-            box.setWindowTitle("A release kit is running")
-            box.setText("A release kit is running")
-            box.setInformativeText(
-                "Quitting pauses it. Finished work is kept, and you can resume "
-                "next time you open Imprint.")
-            keep = box.addButton("Keep Running", QMessageBox.RejectRole)
-            box.addButton("Quit and Pause", QMessageBox.AcceptRole)
-            box.setDefaultButton(keep)
-            box.setEscapeButton(keep)
-            box.exec()
-            if box.clickedButton() is keep:
-                event.ignore()
-                return
-            driver.stop_now("quit")
+        # Asked first: a release kit is paused the moment its question is
+        # answered, so a later Keep Running must not leave it paused.
         video_panel = getattr(self, "video_panel", None)
         if video_panel is not None and video_panel.omni_rendering():
             # Omni renders in one call that cannot be resumed: quitting now
@@ -6497,6 +6480,25 @@ class GodAI(QWidget):
             if box.clickedButton() is keep:
                 event.ignore()
                 return
+        driver = self.release_kit_driver
+        if driver is not None and driver.is_running():
+            box = QMessageBox(self)
+            # macOS ignores a message box's window title: the title is the
+            # main text and the detail is the informative text.
+            box.setWindowTitle("A release kit is running")
+            box.setText("A release kit is running")
+            box.setInformativeText(
+                "Quitting pauses it. Finished work is kept, and you can resume "
+                "next time you open Imprint.")
+            keep = box.addButton("Keep Running", QMessageBox.RejectRole)
+            box.addButton("Quit and Pause", QMessageBox.AcceptRole)
+            box.setDefaultButton(keep)
+            box.setEscapeButton(keep)
+            box.exec()
+            if box.clickedButton() is keep:
+                event.ignore()
+                return
+            driver.stop_now("quit")
         try:
             self.author_panel._project_save_timer.stop()
             self.author_panel._persist_project_state()
