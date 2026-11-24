@@ -394,3 +394,11 @@ The feature already has documentation; the new spec (`docs/specs/model-updates.m
 these in place: `README.md:435-630` ("### Model updates" under section 5), `docs/agents/overview.md:99-111`,
 `docs/learn/modules/12-best-fit.md:97` ("## New models"), `10-navigate.md:36-40`, and the help-map
 entry `"model_updates_card": "best-fit#new-models"`. No finding; the reservation is in the spec.
+
+## Closing: owner deferrals (2026-11-24)
+| Finding | State | Record |
+|---|---|---|
+| DL-9 / DL-18: 16 lesson and sheet titles do not start with their catalog label | **Deferred: owner**, past the release | Owner, 2026-11-24: "D2: A, own accounts need no record, include it in the next release. Titles deferred: yes. Walk: a later session. ADR 0002, 0003 and the Define: approved as built." `docs/foundry/approvals.jsonl`, gate decision, spec docs-learning-centre-readiness; `TODO.md` P2 `docs` row |
+| Fresh-reader walk (success measure 4) | Open: **a later session** does it in a launched app with an empty `~/Library/Application Support/Imprint/` | Same owner words and record |
+
+The other `DL-` findings' closing rows (finding, commit) are not written here yet; see `TODO.md`.

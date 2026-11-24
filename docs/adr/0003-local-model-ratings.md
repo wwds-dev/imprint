@@ -1,6 +1,6 @@
 # ADR 0003: Local models are rated from evidence — inherited or measured
 
-Status: proposed (2026-10-19, architect, for the owner's gate). Plan: `docs/local_model_routing_plan.html` in the lab root, section 3 "Rating local models", mockup D, phase 3.
+Status: accepted as built (owner, 2026-11-24: "D2: A, own accounts need no record, include it in the next release. Titles deferred: yes. Walk: a later session. ADR 0002, 0003 and the Define: approved as built."; `docs/foundry/approvals.jsonl`, gate architect, spec local-model-routing). Proposed 2026-10-19 by the architect. Plan: `docs/local_model_routing_plan.html` in the lab root, section 3 "Rating local models", mockup D, phase 3.
 
 ## Context
 The router's rule is that the cheapest model rated within 20 LMArena points of the best wins, and an unrated model never beats a rated one. LMArena does not rate quantised community builds, so every local model was unrated and could only win in Privacy first or Local only. The owner decided (2026-10-19) that a new local model is measured automatically, once, through the spend guard; a refused or keyless measurement leaves it unrated with a Measure button; re-measure is manual.

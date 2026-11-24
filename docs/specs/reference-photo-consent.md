@@ -2,8 +2,7 @@
 
 Needs: define (owner gate), then architect (small), build, review, verify, secure, docs
 
-Status: **Define, awaiting the owner's decision (prepared 2026-11-24 by the leftovers session; nothing is
-built).** Deferred as D2 of `docs/specs/ai-act-safeguards.md`; TODO.md P2 `security` `@me`. Not started by any
+Status: **Define approved 2026-11-24 (option A); Build on `claude/silly-raman-4ddd34`.** Owner's words: "D2: A, own accounts need no record, include it in the next release. Titles deferred: yes. Walk: a later session. ADR 0002, 0003 and the Define: approved as built." (`docs/foundry/approvals.jsonl`). Deferred as D2 of `docs/specs/ai-act-safeguards.md`; TODO.md P2 `security` `@me`. Not started by any
 other session (`session_start.py --inflight`, 2026-11-24).
 
 ## Problem
