@@ -91,6 +91,14 @@ def booth(app, window, tmp_path, monkeypatch):
     panel._switch_route("openai")
     for token in list(window._pending_requests):
         window.abandon_request(token)
+    # A started run leaves a 'running' row. Left in the shared test database,
+    # the next window's startup scan takes it for a run the app died in,
+    # switches to its narrator and saves that route, so every later window
+    # opens on it (CI 2026-11-22: test_audiobook_conversions found 'Kore').
+    conn = get_connection()
+    conn.execute("DELETE FROM audiobook_conversions")
+    conn.commit()
+    conn.close()
 
 
 def _answers(monkeypatch, *answers):
