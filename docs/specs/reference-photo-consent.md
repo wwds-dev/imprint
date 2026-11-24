@@ -45,7 +45,26 @@ the cost of a dialog on every teaser, and the user can click through.
 **C. Keep it a TODO.** No change; T5 goes to the lawyer with "the consent fields exist but nothing reads them".
 Honest, cheapest, and the exposure is latent today (above). It leaves the safeguard story at "prompt words only".
 
-## Success measures (for A)
+## Owner's choice: A′ (2026-11-24)
+While building A, the build session found that on 30 Sep 2026 the owner moved the account-type and consent model
+out of Nova into Backstage (`README.md` "What moved to Backstage", `agents/creator/agent.py:24`), and that
+Backstage shares no data with Imprint. Asked, the owner chose **A′** ("Build A′", `approvals.jsonl`, decision):
+- No account-type model in the profile form. On Voice → **Reference photos** (shown for every account, since
+  every teaser route sends the photos) the user lists the photos and says **who is in them**: Me, A made-up
+  character, or Someone else. Someone else shows **Who agreed**, **Date they agreed** (year-month-day,
+  validated) and an optional **Note**.
+- Stored in the existing columns, no schema change: `account_type` `own` / `persona` / `managed`,
+  `consent_holder`, `consent_date`, `consent_note`; the photos in `creator_persona.reference_images`. Choosing
+  Me or a character clears the record. A value no build writes counts as Someone else (fails closed).
+- The character bible shows for A made-up character (as before for `persona`); hidden is not deleted.
+- The check (`agents/creator/profile.py` `photo_consent_refusal`, called by `CreatorPanel._photo_consent_ok`)
+  runs in `generate_video` before any key, permission, estimate or budget step (Higgsfield uploads the photo
+  while it prepares its estimate), and again in `_generate_direct_teaser`. A refusal shows "Consent record
+  missing", sets "Not sent: consent record missing.", authorises nothing, writes no job row and starts no worker.
+  Resumes of an interrupted render send no photos and are not gated. No architect phase: no new state, thread
+  or boundary.
+
+## Success measures (for A, kept for A′)
 1. A managed account with a missing consent field cannot send a photo: tested, no provider call, no reservation.
 2. Own and persona accounts are unchanged (existing teaser tests green).
 3. The README's Nova section and the Learning Centre say what the record is for; it claims no more than the

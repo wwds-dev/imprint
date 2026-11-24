@@ -248,8 +248,11 @@ CREATE TABLE IF NOT EXISTS creator_accounts (
     -- Recorded because the three carry different obligations, and a tool that
     -- cannot tell them apart cannot enforce the difference.
     account_type  TEXT NOT NULL DEFAULT 'own',
-    -- 'managed' only: who authorised it and when. The panel refuses to draft
-    -- for a managed account until this is filled in.
+    -- Since 2026-11-24 this column answers "who is in the reference photos"
+    -- (Voice → Reference photos): 'own' me, 'persona' a made-up character,
+    -- 'managed' someone else (spec reference-photo-consent).
+    -- 'managed' only: who agreed and when. A teaser refuses to send someone
+    -- else's photos until holder and date are filled in.
     consent_holder TEXT NOT NULL DEFAULT '',
     consent_date   TEXT NOT NULL DEFAULT '',
     consent_note   TEXT NOT NULL DEFAULT '',

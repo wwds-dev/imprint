@@ -154,3 +154,43 @@ def persona_seed(account_id: int) -> int | None:
 def reference_images(account_id: int) -> list[str]:
     raw = (load_persona(account_id) or {}).get("reference_images") or ""
     return [line.strip() for line in raw.splitlines() if line.strip()]
+
+
+# ── Whose photos ─────────────────────────────────────────────────────────────
+# Beside the reference photos the user says whose they are (spec
+# reference-photo-consent, owner's option A′ of 2026-11-24). The answer is kept
+# in the account's existing `account_type` column: "own" (me), "persona" (a
+# made-up character) or "managed" (someone else), with that person's name and
+# the date they agreed in `consent_holder` / `consent_date`. This records what
+# the user says; it checks nothing about the photos themselves.
+PHOTO_SUBJECTS = (
+    ("own", "Me"),
+    ("persona", "A made-up character"),
+    ("managed", "Someone else"),
+)
+NO_RECORD_NEEDED = ("own", "persona", "", None)
+
+
+def photo_consent_refusal(account: dict, references: list) -> str:
+    """Why the photos may not be sent, or "" when they may.
+
+    Only someone else's photos need a record: their name and the date they
+    agreed. A value no build writes counts as someone else, so a hand edit or
+    a typo fails closed. No photos, nothing to refuse.
+    """
+    if not references:
+        return ""
+    if (account or {}).get("account_type") in NO_RECORD_NEEDED:
+        return ""
+    missing = []
+    if not str(account.get("consent_holder") or "").strip():
+        missing.append("their name")
+    if not str(account.get("consent_date") or "").strip():
+        missing.append("the date they agreed")
+    if not missing:
+        return ""
+    return (
+        f"Not sent: consent record missing ({' and '.join(missing)}).\n\n"
+        "These reference photos are marked as showing someone else. Fill in "
+        "who agreed and when under Voice → Reference photos before a teaser "
+        "sends them. Nothing was sent or charged.")
