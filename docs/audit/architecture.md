@@ -220,7 +220,7 @@ inherit it. Smallest fix: anchor those two on `user_data_base()` and delete the 
   imported nowhere); `PublishDriveClient.get_catalog`, `get_distribution_status`,
   `update_metadata` (`agents/manuscript/publishdrive_client.py:36-44`; the last one writes to a
   live account if ever wired); `ToolRunner.run_audiobook` (`services/tool_runner.py:14`).
-  `services/narrator/converter.py:30` still hard-codes `/Users/as/...`.
+  `services/narrator/converter.py:30` still hard-codes a home-directory path.
 - **Dependency direction.** `services` imports `agents` in ten places:
   `services/database.py:5` (`agents.catalog`), `services/release_kit/plan.py:17-18`,
   `services/release_kit/stages.py:16, 59, 131, 139, 149, 161`,
