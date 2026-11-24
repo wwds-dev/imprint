@@ -71,6 +71,9 @@ datas += [
     ("assets/dropdown-chevron.svg", "assets"),
     ("assets/check.svg", "assets"),       # checked checkbox / toggle chip
     ("assets/refresh.svg", "assets"),     # forms.icon_button("refresh", …)
+    ("assets/more.svg", "assets"),        # left rail: project actions
+    ("assets/filter.svg", "assets"),      # left rail: agent filter
+    ("assets/chevron-right.svg", "assets"),  # right rail: Activity rows
     # The menu bar glyph, and the Retina file Qt resolves beside it by name —
     # ship only the base one and the item is a blurry 18px upscale on every
     # Mac made this decade. scripts/make_tray_icon.py regenerates both.

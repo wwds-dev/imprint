@@ -256,7 +256,7 @@ def test_the_d2_example_is_refused_with_95_cents_spent(win):
     assert reason == (
         "Not sent: this request can cost up to €0.44 and your session cap has "
         "€0.05 left (of €1.00). Pick a cheaper or local model, or raise "
-        "Session € under Limits and press Save Limits.")
+        "the Session limit under Spend and press Enter.")
 
 
 def test_the_d2_example_is_allowed_at_55_cents_and_says_up_to(win):
@@ -465,12 +465,12 @@ def _refusal(registry=None, **overrides):
 @pytest.mark.parametrize("case, scope, text", [
     (dict(session_cost=0.95, session_budget=1.0), "session_cap",
      "Not sent: this request can cost up to €0.44 and your session cap has "
-     "€0.05 left (of €1.00). Pick a cheaper or local model, or raise Session € "
-     "under Limits and press Save Limits."),
+     "€0.05 left (of €1.00). Pick a cheaper or local model, or raise the Session "
+     "limit under Spend and press Enter."),
     (dict(daily_cost=4.80, daily_budget=5.0), "daily_cap",
      "Not sent: this request can cost up to €0.44 and today's cap has €0.20 "
-     "left (of €5.00). Pick a cheaper or local model, raise Daily € under "
-     "Limits, or wait until tomorrow."),
+     "left (of €5.00). Pick a cheaper or local model, raise the Today limit "
+     "under Spend, or wait until tomorrow."),
     (dict(project_name="X", project_cost=0.40, project_budget=0.50),
      "project_cap",
      "Not sent: this request can cost up to €0.44 and Project 'X' has €0.10 "
@@ -670,7 +670,7 @@ def test_settings_saves_a_valid_rate_and_zero_budgets(settings_dialog):
     assert (host.session_budget_eur, host.daily_budget_eur) == (0.0, 6.0)
 
 
-# Code review loop 1 P3-1, pre-existing: the right rail's Save Limits, where
+# Code review loop 1 P3-1, pre-existing: the right rail's limit fields, where
 # every session refusal sends the user, took float() as it came: "inf"
 # removed the cap and "nan" made authorize_request raise. It now uses the
 # Settings check (services/validator.valid_budget_eur).

@@ -180,3 +180,5 @@
 {"ts": "2026-11-24T11:16:52", "phase": "secure", "state": "done", "spec": "rename-imprint-studio"}
 {"ts": "2026-11-24T11:24:53", "phase": "verify", "state": "done", "spec": "audit-p0-money-fixes"}
 {"ts": "2026-11-24T11:24:53", "phase": "verify", "state": "done", "spec": "quill-unfiled-and-clear"}
+{"ts": "2026-11-24T17:22:30", "phase": "define", "state": "done", "spec": "side-rails-redesign"}
+{"ts": "2026-11-24T17:22:30", "phase": "build", "state": "start", "spec": "side-rails-redesign"}

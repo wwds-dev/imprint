@@ -10,7 +10,8 @@ from PySide6.QtCore import QEvent, QObject, Qt, QRect, QPoint, QPointF, QSize
 from PySide6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPen
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QComboBox, QLayout, QProxyStyle,
-    QPushButton, QScrollArea, QStyle, QStyledItemDelegate, QToolTip, QVBoxLayout, QWidget,
+    QHBoxLayout, QLabel, QPushButton, QScrollArea, QStyle, QStyledItemDelegate,
+    QToolTip, QVBoxLayout, QWidget,
 )
 
 from services.providers import uncensored_tag
@@ -577,9 +578,33 @@ class CollapsibleSection(QWidget):
             color: #e8ecf1;
             background-color: rgba(255, 255, 255, 0.035);
         }
+        QLabel#CollapsibleSummary {
+            color: #9aa5b4;
+            background-color: rgba(255, 255, 255, 0.07);
+            border-radius: 6px;
+            padding: 2px 7px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        QLabel#CollapsibleSummary[tone="accent"] {
+            color: #34d399;
+            background-color: rgba(52, 211, 153, 0.12);
+        }
+        QLabel#CollapsibleSummary[tone="warning"] {
+            color: #fbbf24;
+            background-color: rgba(251, 191, 36, 0.12);
+        }
+        QLabel#CollapsibleSummary[tone="danger"] {
+            color: #f87171;
+            background-color: rgba(248, 113, 113, 0.12);
+        }
     """
 
-    def __init__(self, title: str, expanded: bool = True):
+    def __init__(self, title: str, expanded: bool = True, *,
+                 summary_from_title: bool = False):
+        """`summary_from_title`: a title like "Model updates · 2 new" is drawn
+        as the name with "2 new" in the summary pill. The title itself, and
+        the accessible name, stay whole."""
         super().__init__()
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -587,6 +612,10 @@ class CollapsibleSection(QWidget):
 
         self._expanded = expanded
         self._title = title
+        self._summary_from_title = summary_from_title
+        self._summary = ""
+        self._summary_tone = ""
+        self._shown_summary = ""
 
         self.header_btn = QPushButton()
         self.header_btn.setObjectName("CollapsibleHeader")
@@ -598,6 +627,17 @@ class CollapsibleSection(QWidget):
             f"Show or hide the {title} section")
         self.header_btn.clicked.connect(self._toggle)
         layout.addWidget(self.header_btn)
+        # What the section holds, readable while it is closed. A child of the
+        # button so the whole row stays one click target.
+        self.summary_label = QLabel(self.header_btn)
+        self.summary_label.setObjectName("CollapsibleSummary")
+        self.summary_label.setTextFormat(Qt.TextFormat.PlainText)
+        self.summary_label.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        header_row = QHBoxLayout(self.header_btn)
+        header_row.setContentsMargins(0, 0, 8, 0)
+        header_row.addStretch()
+        header_row.addWidget(self.summary_label, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self.content = QWidget()
         self.content_layout = QVBoxLayout(self.content)
@@ -617,6 +657,53 @@ class CollapsibleSection(QWidget):
         self.header_btn.setAccessibleName(title)
         self._update_header()
 
+    def set_summary(self, text: str, tone: str = "") -> None:
+        """A word or two beside the title: "OK", "4 of 6". `tone` is "",
+        "accent", "warning" or "danger"."""
+        self._summary = text
+        self._summary_tone = tone
+        self._update_header()
+
+    def resizeEvent(self, event):  # noqa: N802 - Qt API
+        super().resizeEvent(event)
+        self._fit_summary()
+
+    def _fit_summary(self) -> None:
+        """Keep the pill clear of the title: shorten it, then cut it.
+
+        The pill is laid over the header button, which knows nothing of it,
+        so a long summary in a narrow rail ("1 new · 1 warning" beside
+        "Model updates") would otherwise sit on top of the title's last
+        letters. The whole summary stays on hover.
+        """
+        summary = getattr(self, "_shown_summary", "")
+        if not summary:
+            self.summary_label.setText("")
+            self.header_btn.setToolTip("")
+            return
+        metrics = self.header_btn.fontMetrics()
+        # Left of the pill: the header's padding (10) and its title, with a
+        # little slack for the demi-bold face. Right of it: a gap (6), the
+        # pill's own padding (14) and the row's right margin (8).
+        title_end = 10 + metrics.horizontalAdvance(self.header_btn.text()) * 1.05
+        room = int(self.header_btn.width() - title_end - 6 - 14 - 8)
+        pill = self.summary_label.fontMetrics()
+        parts = summary.split(" · ")
+        candidates = [summary]
+        if len(parts) > 1:
+            # "1 new · 1 warning" in a 204px rail: the first count, and how
+            # many more there are.
+            candidates.append(f"{parts[0]} +{len(parts) - 1}")
+        shown = next((text for text in candidates
+                      if pill.horizontalAdvance(text) <= room), None)
+        if shown is None:
+            shown = pill.elidedText(candidates[-1], Qt.TextElideMode.ElideRight,
+                                    max(room, 0))
+        self.summary_label.setText(shown)
+        self.header_btn.setToolTip(
+            f"{self._title.partition(' · ')[0]}: {summary}"
+            if shown != summary else "")
+
     def _toggle(self):
         self._expanded = not self._expanded
         self.content.setVisible(self._expanded)
@@ -627,9 +714,21 @@ class CollapsibleSection(QWidget):
         # QPushButton reads "&" as a mnemonic marker, which silently turned
         # "Finance & Business" into "FINANCE _BUSINESS". Double it to render a
         # literal ampersand.
-        title = self._title.replace("&", "&&")
-        self.header_btn.setText(f"{arrow}   {title}")
+        title, summary, tone = self._title, self._summary, self._summary_tone
+        if self._summary_from_title and not summary:
+            title, _sep, summary = title.partition(" · ")
+            # A retirement is not good news: it does not wear the accent.
+            tone = ("warning" if "warning" in summary
+                    else "accent" if summary else "")
+        self.header_btn.setText(f"{arrow}   {title.replace('&', '&&')}")
         self.header_btn.setChecked(self._expanded)
+        self._shown_summary = summary
+        self._fit_summary()
+        self.summary_label.setVisible(bool(summary))
+        if self.summary_label.property("tone") != tone:
+            self.summary_label.setProperty("tone", tone)
+            self.summary_label.style().unpolish(self.summary_label)
+            self.summary_label.style().polish(self.summary_label)
 
 
 class ScrollContent(QWidget):

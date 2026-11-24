@@ -167,7 +167,6 @@ LMArena
 Label
 Learning Centre
 Library
-Limits
 Listen
 Load File
 Load File…
@@ -284,7 +283,6 @@ Save Campaign
 Save Current Setup
 Save Draft
 Save Full Plan
-Save Limits
 Save Profile
 Save as File
 Save converted audio

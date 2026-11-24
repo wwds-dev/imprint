@@ -984,10 +984,40 @@ _STYLESHEET_TEMPLATE = """
            bar is allowed to change colour. */
         QProgressBar#BudgetBar[over="true"]::chunk {{ background-color: {DANGER}; }}
 
+        /* Rail rows (ui/rail.py): a name and its number on one line. */
+        QLabel#RailRowName {{ color: {TEXT_DIM}; font-size: 12px; }}
+        QLabel#RailRowNote {{ color: {TEXT_MUTE}; font-size: 11px; }}
+        QLabel#RailRowValue {{ color: {TEXT}; font-size: 12px; font-weight: 600; }}
+        /* A budget's limit sits inside a line of text, so it is the one field
+           allowed under the shared control height. */
+        QLineEdit#RailLimit {{
+            min-height: 16px;
+            padding: 3px 6px;
+            font-size: 12px;
+        }}
+        /* An icon button whose filter is on. */
+        QPushButton#IconAction[active="true"] {{
+            background-color: {ACCENT_WASH};
+            border: 1px solid {ACCENT_LINE};
+        }}
+        /* Opens a window: a full-width row with a chevron at its end. */
+        QPushButton#RailNav {{
+            background: transparent;
+            border: none;
+            border-top: 1px solid {BORDER};
+            border-radius: 0;
+            color: {TEXT_DIM};
+            font-weight: 500;
+            padding: 0 2px;
+            text-align: left;
+        }}
+        QPushButton#RailNav:hover {{ color: {TEXT}; background-color: {ELEVATED}; }}
+
         /* The project rail: a list, not a boxed widget inside a boxed panel. */
         QFrame#RailLeft QListWidget {{
             background: transparent;
             border: none;
+            padding: 0;
             font-size: 13px;
             color: {TEXT_DIM};
         }}

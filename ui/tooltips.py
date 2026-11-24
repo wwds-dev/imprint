@@ -65,8 +65,7 @@ def seed_tooltips(app):
                 btn.setToolTip(tip)
     app._set_tooltips({
         "history_search":   "Filter saved chats by typing here.",
-        "history_list":     "Click a saved chat to re-open it.",
-        "delete_chat_btn":  "Delete the currently selected saved chat.",
+        "history_list":     "Click a saved chat to re-open it. Right-click to rename, assign or remove it.",
         "new_chat_btn":     "Start a fresh conversation (clears the current context).",
     })
 
@@ -78,14 +77,11 @@ def seed_tooltips(app):
         "recommendation_label":     "Recommendation for the current tool / agent — provider + model + reason.",
         "live_estimate_label":      "Estimated cost of the current prompt at the selected provider + model.",
         "last_request_stat":        "Cost of the most recently completed request, and which tool ran it.",
-        "session_cost_stat":        "Total spend since this app session started.",
-        "today_cost_stat":          "Total spend today (resets at midnight local time).",
         "request_count_stat":       "Number of requests sent today and during this session.",
         "session_meter":            "Spend this session against the session cap. Turns red once the cap is reached.",
         "daily_meter":              "Spend today against the daily cap. Turns red once the cap is reached.",
-        "session_budget_input":     "Maximum spend allowed for this session in euros.",
-        "daily_budget_input":       "Maximum spend allowed per day in euros.",
-        "save_budget_btn":          "Persist the budget limits to settings.",
+        "session_budget_input":     "Maximum spend allowed for this session in euros. Press Enter to save; 0 means no limit.",
+        "daily_budget_input":       "Maximum spend allowed per day in euros. Press Enter to save; 0 means no limit.",
         "reset_session_budget_btn": "Reset the session spend counter back to zero.",
         "cost_history_btn":         "Open the Cost History dialog (charts and tables of past spending).",
         "run_log_btn":              "Open the Run Log dialog (every request with status, duration, cost).",

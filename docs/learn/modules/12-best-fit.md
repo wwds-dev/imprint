@@ -173,7 +173,7 @@ under **Remembered choices** with **Remove**; when one applies, the panel
 switches its boxes and says so in its status line. If a run fails, the
 banner offers **Send to <provider>** or **Try <smaller local model>**;
 nothing is resent by itself, and **Local only** never reaches the cloud.
-The Spend rail's **saved local** shows what running locally saved today.
+The Spend rail's **Saved by local** line shows what running locally saved today.
 
 ## Confidence does and does not mean
 

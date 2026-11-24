@@ -176,9 +176,9 @@ fixed width and cannot be dragged.
 | Region | Width | Purpose |
 |--------|-------|---------|
 | **Header bar** | full width, 56 px | Wordmark, workspace tabs, agent status, theme dots, Docs / Tooltips / Settings |
-| **Left rail** | 216 px (`RAIL_LEFT_WIDTH`, `ui/forms.py`) | Project context, saved-chat filters, and New Project / New Chat |
+| **Left rail** | 216 px (`RAIL_LEFT_WIDTH`, `ui/forms.py`) | Project selector and its actions menu, chat search and agent filter, saved chats by day, New Chat |
 | **Centre** | fills the remainder | The current agent's panel |
-| **Right rail** | 244 px (`RAIL_RIGHT_WIDTH`) | Spend, budget limits, utilities, and collapsed reference panels |
+| **Right rail** | 244 px (`RAIL_RIGHT_WIDTH`) | Spend against editable limits, utilities, and status panels that say their state while collapsed |
 
 Everything starts from one left edge: the wordmark, the mode tabs and the page
 title are all on the same axis. Before the September 2026 GUI pass they were on
@@ -382,23 +382,29 @@ links, not external files. Its summary also carries a release-kit line
 made 19 Nov") and a **Release Kits…** button that opens the Release Kits
 window (see "Make Release Kit" in §7.7). The Overview itself stays read-only.
 
-**Agent filter** — narrows the list to one agent. Populated from the chats that
-exist, so it only ever offers agents you have actually used.
-
 **Search** — filters the list in real time, case-insensitively, against the
 chat title (agent name + first user message).
 
-**Saved-chat list** — chats from `data/chats/`, newest first. Click to
-reopen a full conversation and type a follow-up; double-click to rename a chat;
-right-click to assign it to a project.
-Project, agent, and title-search filters intersect. It takes the rail's spare height rather than
-being capped, so the buttons below it sit under the list rather than at the
-bottom of the window.
+**Agent filter** — the button beside Search. Its menu narrows the list to one
+agent; it is populated from the chats that exist, so it only ever offers
+agents you have actually used. The button is highlighted while a filter is on.
 
-**New Project** — creates a named context bundle and opens a clean chat. It
-does not delete previous chats. **Save Current Setup** records the current
-agent/provider/model as that project's defaults. **New Chat** clears the
-working conversation while keeping the selected project active.
+**Saved-chat list** — chats from `data/chats/`, newest first, grouped under
+Today, Yesterday and Earlier. Each row shows the chat's title with its agent
+beside it; a long title is cut to fit and shown whole on hover, with the date.
+Click to reopen a full conversation and type a follow-up; double-click to
+rename a chat; right-click to rename it, assign it to a project or remove it.
+Project, agent, and title-search filters intersect. The list takes the rail's
+spare height.
+
+**Project actions** — the button beside the project selector opens a menu.
+**New Project** creates a named context bundle and opens a clean chat. It
+does not delete previous chats. **Project Overview** and **Save Current
+Setup** are available once a project is selected; Save Current Setup records
+the current agent/provider/model as that project's defaults.
+
+**New Chat** — under the list. Clears the working conversation while keeping
+the selected project active.
 
 **Settings → Projects** — edit reusable instructions and a daily project
 budget, work identity, and creative brief; change defaults, archive, restore,
@@ -407,37 +413,41 @@ it from the selector without deleting chats. Deleting it unfiles the chats but
 keeps their files; project-specific working drafts are removed. Long
 instructions add billable tokens to every request.
 
-**Remove Chat** — deletes the selected saved chat after a confirmation prompt.
+**Remove Chat** — in a chat's right-click menu (or the Delete key with a chat
+selected). Deletes that saved chat after a confirmation prompt.
 
 ---
 
 ## 5. Right Rail — Spend, Budget and Utilities
 
-**Spend** — four numbers, each over its own caption: this session, today,
-requests, last request. Hovering a stat gives the detail (session vs. today
-counts, which tool ran last).
+**Spend** — two budget rows, **Session** and **Today**: what has been spent,
+"of €" and the limit, over a bar that turns red at 100%. The limit is a field:
+type a number of 0 or more and press Enter (or click elsewhere) to save it; 0
+means no limit. Anything else is refused with a message and the limits in
+force are put back. A **Project budget** bar appears only when the active
+project has a daily limit. **Reset session spend**, in the heading row, zeroes
+the session counter only.
 
-**Session budget / Daily budget / Project budget** — spend against the cap as a bar. The project bar appears only when the active project has a daily limit. The bar
-turns red at 100%. This replaced two lines of prose that gave the cap and the
-remainder and left you to subtract.
+**Requests · Last request · Saved by local · Advice spent** — one line each
+under the budgets. Hovering one gives the detail (session vs. today counts,
+which tool ran last, the routing totals).
 
 **Next request** — the most the request currently configured can cost
 ("up to €X", rounded up), whether it is a paid API, the provider, model, and
 the tokens it sends plus the output reserve ("+ up to 8,192").
 
-**Limits** — the session and daily caps in euros, and **Save Limits**, which
-takes numbers of 0 or more only and otherwise keeps the old limits.
-**Reset session spend** zeroes the session counter only.
-
 **Cost History · Run Log · Learning Centre** — utilities that open a window and
-change nothing, so they read as links rather than buttons.
+change nothing: plain rows with a chevron rather than buttons.
 
 **System · Routing · API keys · Model updates** — the first three are collapsed
 by default; **Model updates is open by default** (since 2026-11-22), because
 collapsed it was easy to miss. Each is a compact status card with separate
 values and state badges instead of a paragraph of diagnostic text. Model
-updates also puts its counts in its own title
-(*Model updates · 2 new · 1 warning*), so news stays visible if you close it.
+updates also shows its counts beside its title (*2 new · 1 warning*), so
+news stays visible if you close it. The other three say their state in a word
+while collapsed: System is OK, Busy or Stressed (the worst of memory,
+processor and swap), Routing names the provider of the last Chat request, and
+API keys counts the configured keys ("4 of 6").
 It covers chat models and, in a section of its own, video and image models.
 
 ### Resource Monitor
@@ -904,7 +914,7 @@ Local is a property of a provider's spec (`services/providers.py`, a byte-identi
 
 When a Studio Assistant job is sent, the advisor compares the selected model with the engine's BEST FIT for that request and names each limit: a **quality gap** (rated more than 20 points below the best for this kind of work), **context** (longer than the local model's loaded context), **not runnable** (LM Studio server off, Ollama down, too big for free memory), or **unmeasured** (no rating yet — it suggests but does not urge). When local is good enough the job runs and the status line says *✓ Ran on … (local) · general 1281, within 37 of best · saved ≈ €0.03 · today €0.41 saved*. When it is not, the job is **held** on a banner above the message box with the recommended model, its cost and time, and three answers — **Switch for this job**, **Always for <kind> jobs**, **Keep local** (absent when local cannot run it). **Nothing changes the agent's selection** (the never-auto-switch rule): a switch is for that one job, and a paid one still goes through the budget check and the paid-request dialog. *Always* becomes a rule per agent and kind of work (`data/routing_rules.json`) that the next such job follows without the banner — the paid-request dialog still asks — and Settings → Models lists the rules with **Remove**. *Suggest local* offers a good-enough local model when a cloud one is selected, with what it would save; *Local first* runs a good-enough rated local model at €0 instead of the cloud selection.
 
-**When a run fails** (server down, out of memory, timeout) the banner offers the engine's next candidates: **Send to <provider>** (through the paid-request dialog) or **Try** a smaller local model. Nothing is resent by itself, a stopped run offers nothing, and **Local only never reaches the cloud**: no cloud suggestion, no cloud fallback, no cloud rule. The Spend rail's **saved local** and **advice spent** blocks show what running local saved today (the estimate for the cloud model the value rule would have picked) and what accepted suggestions spent (`data/routing_savings.json`); hover for the totals. The advisor reads caches only (the engine's candidates, ratings, prices, the local inventory, this session's model lists) and runs on the UI thread without fetching. Only the Studio Assistant is advised so far; the other agents keep their own provider and model.
+**When a run fails** (server down, out of memory, timeout) the banner offers the engine's next candidates: **Send to <provider>** (through the paid-request dialog) or **Try** a smaller local model. Nothing is resent by itself, a stopped run offers nothing, and **Local only never reaches the cloud**: no cloud suggestion, no cloud fallback, no cloud rule. The Spend rail's **Saved by local** and **Advice spent** lines show what running local saved today (the estimate for the cloud model the value rule would have picked) and what accepted suggestions spent (`data/routing_savings.json`); hover for the totals. The advisor reads caches only (the engine's candidates, ratings, prices, the local inventory, this session's model lists) and runs on the UI thread without fetching. Only the Studio Assistant is advised so far; the other agents keep their own provider and model.
 
 **The other text agents are advised too (2026-10-21).** Quill (author), Herald (social), Sitebuilder (webdesign) and Vector (fiverr) pass `resume=` to `authorize_request`, which asks the advisor first (`ui/panel_routing.py`). A held job shows the same banner at the top of that agent's panel. *Switch for this job*, *Always for this kind* and *Keep local* put the chosen model in the panel's own provider and model boxes and run its action again, so the paid-request dialog and the budget caps decide as before; *Always* is stored per agent and kind in `data/routing_rules.json`, a failed run offers the next candidate on the panel, and a finished one counts in the same savings tally. **Left out on purpose:** Nova (creator) and Press (manuscript) offer no local provider, so there is nothing local to prefer and they are never advised (`NEVER_ADVISED`); Booth, video and every image or per-unit request (`flat_cost_eur`) are media and never advised. Imprint's never-auto-switch rule stands: the panel's saved selection is only changed by an answer you gave on the banner (or a rule you made).
 
@@ -2593,7 +2603,7 @@ project caps, and the Run Log shows `error` or `cancelled` with "recorded €X o
 After a successful response, `UsageTracker.log_request()` calculates the real cost:
 
 1. Token counts are sourced from the API's usage response if available (field names vary by provider: `input_tokens`, `prompt_tokens`, `prompt_token_count`, etc.). If exact data is unavailable, character-count estimation is used.
-2. The EUR/USD exchange rate and per-model pricing are read from the `pricing` and `settings` tables in the database. Token and per-unit costs share one rate reader (`services/per_unit_pricing.eur_per_usd`): a rate that is not a finite number above zero falls back to `config/pricing.json`'s, then 0.92, and Settings refuses to save one. Settings and **Save Limits** share one budget check (`services/validator.valid_budget_eur`) and refuse a NaN, infinite or negative Session or Daily budget, keeping the old limits.
+2. The EUR/USD exchange rate and per-model pricing are read from the `pricing` and `settings` tables in the database. Token and per-unit costs share one rate reader (`services/per_unit_pricing.eur_per_usd`): a rate that is not a finite number above zero falls back to `config/pricing.json`'s, then 0.92, and Settings refuses to save one. Settings and the right rail's limit fields share one budget check (`services/validator.valid_budget_eur`) and refuse a NaN, infinite or negative Session or Daily budget, keeping the old limits.
 3. A row is inserted into the `usage` table with timestamp, agent, provider, model, token counts, cost, and cost type (`exact`, `estimated`, or `mixed`).
 
 ### Budget Controls
@@ -2602,9 +2612,7 @@ After a successful response, `UsageTracker.log_request()` calculates the real co
 
 **Daily budget** — Total cloud spend allowed today (per calendar day). Aggregated from the `usage` table.
 
-Budget limits are checked by the validator before each request. A refusal says what the request can cost and what the cap has left, e.g. "Not sent: this request can cost up to €0.44 and your session cap has €0.05 left (of €1.00)", and how to proceed. They are editable in the right panel's input fields or in the Settings dialog.
-
-**Save Limits** — Saves the current input field values to the database (settings table) and to the in-memory state. Applied immediately.
+Budget limits are checked by the validator before each request. A refusal says what the request can cost and what the cap has left, e.g. "Not sent: this request can cost up to €0.44 and your session cap has €0.05 left (of €1.00)", and how to proceed. They are editable in the right rail's Session and Today rows (press Enter to save; applied immediately and written to the settings table) or in the Settings dialog.
 
 **Reset session spend** — Resets only the in-memory session accumulator to zero. Does not delete usage log entries.
 
