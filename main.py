@@ -879,7 +879,10 @@ class GodAI(QWidget):
             }
         winner = provider_result.candidate
         return {
-            "mode": "Local only" if is_local_provider(winner.provider) else "Hybrid allowed",
+            # Never Local only: that is a hard limit on every agent, and a
+            # recommendation is about one model (re-review RC-4). Hybrid runs a
+            # local winner locally all the same.
+            "mode": "Hybrid allowed",
             "provider": winner.provider,
             "model": winner.model_id,
             "reason": provider_result.reason,
@@ -1256,6 +1259,14 @@ class GodAI(QWidget):
         if self._local_only(LOCAL_RATINGS_AGENT):
             return False, ("Mode is Local only, and measuring asks a cloud model "
                            "for reference answers and verdicts")
+        remote = (self._remote_runtime(model.provider)
+                  if getattr(model, "provider", None) else None)
+        if remote is not None:
+            if not interactive:
+                return False, (f"{remote[0]} Press Measure to be asked before "
+                               "its prompts are sent there")
+            if not self._route_allowed(LOCAL_RATINGS_AGENT, model.provider):
+                return False, "cancelled"
         permissions = self.current_api_permissions()
         cloud = plan.cloud_models()
         for provider, _ in cloud:
@@ -1332,7 +1343,8 @@ class GodAI(QWidget):
             lambda done, total, m=model: self._on_measure_progress(m, done, total))
         worker.usage_signal.connect(self._on_measure_usage)
         worker.finished_signal.connect(
-            lambda result, m=model, a=automatic: self._on_measure_finished(m, result, a))
+            lambda result, m=model, a=automatic, w=worker:
+            self._on_measure_finished(m, result, a, worker=w))
         self.local_measure_worker = worker
         self.local_ratings.set_progress(model, 0, prompts.total)
         self._local_ratings_changed()
@@ -1364,11 +1376,9 @@ class GodAI(QWidget):
             self._measure_usage[(provider, model, prompt, text)] = usage
         return text
 
-    def _measure_usage_for(self, provider, model, prompt, reply, *, pop=False):
+    def _measure_usage_for(self, provider, model, prompt, reply):
         with self._measure_usage_lock:
-            key = (provider, model, prompt, reply)
-            return (self._measure_usage.pop(key, None) if pop
-                    else self._measure_usage.get(key))
+            return self._measure_usage.get((provider, model, prompt, reply))
 
     def _on_measure_progress(self, model, done, total) -> None:
         self.local_ratings.set_progress(model, done, total)
@@ -1380,8 +1390,9 @@ class GodAI(QWidget):
             entry = self.usage_tracker.log_request(
                 agent=LOCAL_RATINGS_AGENT, backend=provider, model=model,
                 prompt_text=prompt, response_text=reply,
-                usage=self._measure_usage_for(provider, model, prompt, reply,
-                                              pop=True))
+                # Read, not taken: the worker may not have counted this call
+                # yet; the run's end clears the table (re-review RC-3).
+                usage=self._measure_usage_for(provider, model, prompt, reply))
             billed = float(entry.get("estimated_cost", 0.0) or 0.0)
             self._measure_reserved_eur = max(
                 0.0, getattr(self, "_measure_reserved_eur", 0.0) - billed)
@@ -1391,10 +1402,13 @@ class GodAI(QWidget):
         except Exception as exc:  # noqa: BLE001
             self._note_failure("local ratings: bill", exc)
 
-    def _on_measure_finished(self, model, result, automatic) -> None:
-        self._measure_reserved_eur = 0.0
-        with self._measure_usage_lock:
-            self._measure_usage.clear()
+    def _on_measure_finished(self, model, result, automatic, worker=None) -> None:
+        # A finish that arrives after the next run started must not release
+        # that run's reserve or its usage (re-review RC-12).
+        if worker is None or worker is self.local_measure_worker:
+            self._measure_reserved_eur = 0.0
+            with self._measure_usage_lock:
+                self._measure_usage.clear()
         self.local_ratings.clear_progress(model)
         self.local_rating_store.record_result(model, result, automatic=automatic)
         name = local_models.row_label(model)
@@ -4087,6 +4101,7 @@ class GodAI(QWidget):
         """The user moved the Mode box: keep the saved routing mode in step.
         Applying a recommended setup moves the box too, and must not rewrite
         the user's setting."""
+        self._stop_measuring_if_local_only()
         if getattr(self, "_applying_recommendation", False):
             return
         mode = routing_advisor.mode_for(self.settings)
@@ -4106,7 +4121,16 @@ class GodAI(QWidget):
         """Settings → Models changed the mode or an override (in self.settings)."""
         self._save_routing_settings()
         self._sync_execution_mode()
+        self._stop_measuring_if_local_only()
         self.update_live_cost_estimate()
+
+    def _stop_measuring_if_local_only(self, *_args) -> None:
+        """A measurement asks cloud models; under Local only a running one
+        stops before its next prompt (re-review RC-5)."""
+        worker = getattr(self, "local_measure_worker", None)
+        if (worker is not None and worker.isRunning()
+                and self._local_only(LOCAL_RATINGS_AGENT)):
+            worker.cancel()
 
     def _save_routing_settings(self) -> None:
         try:

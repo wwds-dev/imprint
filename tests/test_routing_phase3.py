@@ -206,6 +206,10 @@ def app(window, tmp_path, monkeypatch):
                         lr.LocalRatings(store, window.local_inventory,
                                         lambda: window.ratings))
     monkeypatch.setattr(window, "local_measure_worker", None)
+    # A FakeWorker never finishes, so a started run would leave its ceiling
+    # held for the next test (re-review RC-2).
+    monkeypatch.setattr(window, "_measure_reserved_eur", 0.0)
+    monkeypatch.setattr(window, "_measure_usage", {})
     monkeypatch.setattr(lr, "AUTOMATIC", True)
     monkeypatch.setattr(main, "LocalMeasureWorker", FakeWorker)
     FakeWorker.started = []
@@ -372,7 +376,11 @@ def test_measurement_calls_carry_an_output_cap_and_keep_their_usage(app, monkeyp
     app._on_measure_usage("gemini", "gemini-3.8-flash", judge_prompt, "A")
     assert logged[0]["usage"] == {"input_tokens": 900, "output_tokens": 300}
     assert app._measure_reserved_eur == pytest.approx(0.498)
-    assert app._measure_usage == {}                              # popped once billed
+    # Kept until the run ends: the worker may count the call after the bill
+    # (re-review RC-3); the finish clears it.
+    assert app._measure_usage
+    app._on_measure_finished(DOLPHIN, lr.MeasureResult(lr.STATUS_FAILED, "stub"), False)
+    assert app._measure_usage == {} and app._measure_reserved_eur == 0.0
 
 
 def test_a_local_answer_is_cut_before_the_judge_sees_it(app, monkeypatch):
@@ -392,9 +400,51 @@ def test_the_ceiling_is_priced_on_the_caps_and_held_for_the_run(app, monkeypatch
     assert app._measurement_ceiling(PLAN, prompts, outputs_only) == pytest.approx(
         round(expected + 0.01, 2))
     before = app._reserved_in_flight_eur()
+    assert app._measure_reserved_eur == 0.0
     assert app.start_local_measure(DOLPHIN, automatic=False)
     worker = FakeWorker.started[-1]
+    assert app._measure_reserved_eur == pytest.approx(worker.budget)
     assert app._reserved_in_flight_eur() == pytest.approx(before + worker.budget)
     worker._running = False
     worker.finished_signal.emit(lr.MeasureResult(lr.STATUS_FAILED, "stub"))
     assert app._reserved_in_flight_eur() == pytest.approx(before)
+
+
+def test_a_late_finish_does_not_release_the_next_runs_reserve(app, monkeypatch):
+    _allow(app, monkeypatch)
+    assert app.start_local_measure(DOLPHIN, automatic=False)
+    first = FakeWorker.started[-1]
+    first._running = False
+    assert app.start_local_measure(DOLPHIN, automatic=False)   # before first's finish is handled
+    held = app._measure_reserved_eur
+    first.finished_signal.emit(lr.MeasureResult(lr.STATUS_FAILED, "stub"))
+    assert app._measure_reserved_eur == pytest.approx(held) and held > 0
+
+
+def test_switching_to_local_only_stops_a_running_measurement(app, monkeypatch):
+    _allow(app, monkeypatch)
+    assert app.start_local_measure(DOLPHIN, automatic=False)
+    worker = FakeWorker.started[-1]
+    worker.cancelled = False
+    worker.cancel = lambda: setattr(worker, "cancelled", True)
+    box = app.execution_mode_box
+    before = box.currentText()
+    try:
+        box.setCurrentText("Local only")
+        assert worker.cancelled
+    finally:
+        box.setCurrentText(before)
+
+
+def test_a_model_on_another_machine_is_not_measured_without_asking(app, monkeypatch):
+    _allow(app, monkeypatch)
+    monkeypatch.setattr(app.lmstudio, "base_url", "http://203.0.113.9:1234/v1")
+    monkeypatch.setattr(app, "_remote_runtime_ok", set())
+    assert not app.start_local_measure(DOLPHIN, automatic=True)
+    assert "203.0.113.9" in app.local_rating_store.entry(DOLPHIN)["reason"]
+    assert FakeWorker.started == []
+
+
+def test_a_recommendation_never_sets_local_only(window):
+    rec = window.get_recommended_setup()
+    assert rec["mode"] != "Local only"

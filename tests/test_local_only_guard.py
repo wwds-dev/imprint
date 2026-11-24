@@ -149,3 +149,39 @@ def test_measuring_asks_no_cloud_model_under_local_only(guard):
     _mode(window, "Local only")
     allowed, reason = window._authorize_measurement(None, None, 0.5, interactive=True)
     assert not allowed and "Local only" in reason
+
+
+# ── Kernel's own send path (re-review RC-7) ─────────────────────────────────
+
+def _kernel(window, monkeypatch):
+    """Kernel with text typed; the validator, which runs after the route check,
+    records that the request got that far and stops it there."""
+    from services.validator import ValidationResult
+    reached = []
+    monkeypatch.setattr(window.validator, "validate",
+                        lambda **kw: reached.append(kw["provider"])
+                        or ValidationResult(False, "stopped by the test"))
+    window.agent_box.setCurrentText("chat")
+    window.input_box.setPlainText("Summarise chapter one")
+    return reached
+
+
+def test_kernel_refuses_a_cloud_route_under_local_only(guard, monkeypatch):
+    window, shown = guard
+    reached = _kernel(window, monkeypatch)
+    _mode(window, "Local only")
+    window._send_chat(route_override=("anthropic", "claude-sonnet-5-5"), advised=True)
+    assert reached == [] and "Local only" in shown["warning"][-1]
+
+
+def test_kernel_asks_before_a_local_runtime_on_another_machine(guard, monkeypatch):
+    window, shown = guard
+    reached = _kernel(window, monkeypatch)
+    _mode(window, "Hybrid allowed")
+    monkeypatch.setattr(window.ollama, "base_url", "http://203.0.113.9:11434")
+    shown["answer"] = QMessageBox.No
+    window._send_chat(route_override=("ollama", "gemma3:27b"), advised=True)
+    assert reached == [] and "203.0.113.9" in shown["question"][-1]
+    shown["answer"] = QMessageBox.Yes
+    window._send_chat(route_override=("ollama", "gemma3:27b"), advised=True)
+    assert reached == ["ollama"]
