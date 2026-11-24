@@ -219,3 +219,4 @@
 {"ts": "2026-11-24T22:26:21", "phase": "verify", "state": "done", "spec": "side-rails-redesign"}
 {"ts": "2026-11-24T23:39:14", "phase": "build", "state": "done", "spec": "ai-act-safeguards-leftovers"}
 {"ts": "2026-11-24T23:39:14", "phase": "verify", "state": "done", "spec": "ai-act-safeguards-leftovers"}
+{"ts": "2026-11-24T23:57:35", "phase": "define", "state": "done", "spec": "rails-rebalance"}
