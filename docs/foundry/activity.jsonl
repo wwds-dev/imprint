@@ -155,3 +155,5 @@
 {"ts": "2026-11-24T02:20:27", "phase": "review", "state": "done", "spec": "local-model-routing"}
 {"ts": "2026-11-24T02:20:27", "phase": "build", "state": "start", "spec": "local-model-routing"}
 {"ts": "2026-11-24T02:20:27", "phase": "build", "state": "done", "spec": "local-model-routing"}
+{"ts": "2026-11-24T10:49:48", "phase": "document", "state": "done", "spec": "local-model-routing", "note": "retroactive spec, README §6.2.2, CHANGELOG"}
+{"ts": "2026-11-24T10:49:48", "phase": "define", "state": "done", "spec": "local-model-routing", "note": "retroactive record, not an owner-approved Define"}
