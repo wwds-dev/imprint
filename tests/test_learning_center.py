@@ -541,6 +541,10 @@ def test_show_me_reopens_a_popover_that_a_window_change_closed(app, window):
     marker = spotlight(window.session_budget_input, "Step 1 — Set a cap")
     try:
         _settle(app)
+        # The retry window runs from the spotlight's start; a slow runner can
+        # spend it settling. Start it again here, so the test measures the
+        # reopen and not the runner's speed.
+        marker._revealing.restart()
         window.spend_popover.hide()            # as Qt does on a window change
         clock = QElapsedTimer()
         clock.start()
