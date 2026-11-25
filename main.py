@@ -2617,7 +2617,7 @@ class GodAI(QWidget):
         return header
 
     def build_left_panel(self) -> QWidget:
-        """The project rail. Projects only — navigation lives in the header."""
+        """The project rail. Projects, chats and the window links (Cost History, Run Log, Learning Centre); workspace navigation lives in the header."""
         left_widget = rail("RailLeft", RAIL_LEFT_WIDTH)
         left_outer = QVBoxLayout(left_widget)
         left_outer.setContentsMargins(0, 0, 0, 0)

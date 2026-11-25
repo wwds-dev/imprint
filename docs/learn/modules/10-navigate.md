@@ -16,9 +16,9 @@
 | Header workspace tabs | Select the business stage: Author, Audio + Music, Video + Ads, Social, Web, Brand Design, Brand Content, Assistant | A model family or autonomous business process |
 | Header right side | Status pill, the three theme dots, **Docs**, **Tooltips**, **Settings** | A theme is colour only: red, amber and blue status colours mean the same in every theme |
 | Tool switcher | Selects related agents inside a workspace, such as Quill/Press under Author or Booth/Label under Audio + Music | A project; switching tools does not create one |
-| Project rail | Creates, searches, opens, renames, and removes saved contexts | A file browser or undo history |
+| Project rail | Creates, searches, opens, renames, and removes saved contexts; opens Cost History, Run Log and the Learning Centre | A file browser or undo history |
 | Centre canvas | The current agent's brief, actions, status, and output | A universal form; each agent has different contracts |
-| Right rail | System health, routing, key readiness, model updates, limits, Cost History, Run Log, Learning Centre | Proof that an external provider or platform accepted a job |
+| Right rail | System health, routing, key readiness, model updates, spend and limits | Proof that an external provider or platform accepted a job |
 
 ## Walkthrough
 

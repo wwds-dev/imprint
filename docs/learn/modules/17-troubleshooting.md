@@ -103,7 +103,7 @@ select it and use **Revise / Improve**. See
 the live launcher writes its reason to `/tmp/imprint_launch.log`.
 
 **A status you cannot find here** Keep its exact wording, note the time, and
-open **Run Log** in the right rail: every request's lifecycle is recorded
+open **Run Log** in the left rail: every request's lifecycle is recorded
 there. For a bug report, give that wording, the time, the agent, provider and
 model, and what you clicked last; never a key or a screenshot of Settings.
 

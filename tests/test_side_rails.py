@@ -510,3 +510,29 @@ def test_each_item_sits_on_the_rail_the_rebalance_spec_gives_it(window):
     for name in ("session_meter", "daily_meter", "model_updates_section"):
         assert right.isAncestorOf(getattr(window, name)), f"{name} belongs on the right"
     assert not window.model_updates_section.header_btn.isChecked()
+
+
+def test_the_moved_rows_keep_the_order_the_spec_gives_them(window):
+    from PySide6.QtCore import QPoint
+    def y(widget):
+        return widget.mapTo(window, QPoint(0, 0)).y()
+    window.project_meter.show()
+    for _ in range(4):
+        __import__("PySide6.QtWidgets").QtWidgets.QApplication.processEvents()
+    try:
+        assert y(window.history_project_filter) < y(window.project_meter) < y(window.history_search)
+        assert y(window.new_chat_btn) < y(window.cost_history_btn) \
+            < y(window.run_log_btn) < y(window.learn_btn)
+    finally:
+        window.project_meter.hide()
+
+
+def test_a_collapsed_model_updates_section_still_shows_its_count(window):
+    section = window.model_updates_section
+    assert not section.header_btn.isChecked()
+    section.set_title("Model updates \u00b7 2 new")
+    try:
+        assert "2 new" in section.summary_label.text()
+        assert section.content.isHidden()
+    finally:
+        section.set_title("Model updates")

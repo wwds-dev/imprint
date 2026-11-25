@@ -38,7 +38,7 @@ is reference.
    permission box ticked before a request is sent
    ([§6.3](#63-control-bar--row-3-execution-mode--api-permissions)); the boxes
    start unticked at every launch.
-4. **First result.** Press **F1** (or **Learning Centre** in the right rail)
+4. **First result.** Press **F1** (or **Learning Centre** in the left rail)
    and follow *First verified result*: one small, bounded request whose cost
    you approve before anything is sent.
 5. **Find your files.** Run from this checkout, the database, chats, logs and
@@ -2821,7 +2821,7 @@ from `docs/agents/` (the reference overview when the agent has none), with
 grouped contents from `docs/agents/manifest.json`, local search, an outline and
 links into the matching Learning Centre lesson. It makes no provider call. The
 operating lessons are in the Learning Centre ([section 20](#20-learning-centre)), opened
-from the right rail or with **F1**.
+from the left rail or with **F1**.
 
 ---
 
@@ -3605,7 +3605,7 @@ The Audiobook agent reads its paths and defaults from `services/tool_runner.py`,
 
 ## 20. Learning Centre
 
-**Learning Centre** in the right rail (or **F1** anywhere) opens a 28-lesson operating academy
+**Learning Centre** in the left rail (or **F1** anywhere) opens a 28-lesson operating academy
 rendered from `docs/learn/manifest.json` and `docs/learn/modules/`:
 
 | Section | Covers |
