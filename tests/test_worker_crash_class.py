@@ -356,6 +356,14 @@ def _nova_video(window, monkeypatch):
     return panel.generate_video, panel.creator_video_status
 
 
+def _suno_draft(window, monkeypatch):
+    suno = window.music_panel.music_suno_panel
+    suno.brief.setPlainText("Three ambient songs")
+    monkeypatch.setattr(suno, "save", lambda: True)
+    _model_box(monkeypatch, window.music_panel.music_model_box)
+    return suno.draft, suno.status
+
+
 def _reel_render(window, monkeypatch):
     panel = window.video_panel
     monkeypatch.setattr(panel, "_media_selection", _reach_pricing)
@@ -395,6 +403,9 @@ SITES = [
     ("nova teaser while rendering", _nova_video, "creator_video_worker",
      "creator_video_worker"),
     ("reel render after stop", _reel_render, "video_worker", "video_worker"),
+    # Suno and Label share music_worker: the one cross-panel case (QA G1).
+    ("suno draft while label plans", _suno_draft, "music_worker",
+     "music_worker"),
 ]
 
 
@@ -791,3 +802,150 @@ def test_a_result_whose_record_is_gone_still_reaches_the_user(window,
     assert warned == ["Posted, but not recorded",
                       "Result unknown — check the platform"]
     assert len(noted) == 2
+
+
+# Chained starts whose slot was checked by the start that began the chain
+# (the first step's own busy check covers the second step's slot).
+CHAINED = {
+    ("agents/fiverr/panel.py", "_on_prompt_ready"):
+        "image slot checked by generate_logos before the prompt is priced",
+    ("agents/creator/panel.py", "_video_estimated"):
+        "render slot checked by generate_video before the estimate",
+    ("agents/creator/panel.py", "_generate_direct_teaser"):
+        "called only from generate_video, after its check of both slots",
+    ("agents/video/panel.py", "render_direct"):
+        "called only from render(), after its check of video_worker",
+    ("agents/video/panel.py", "_higgsfield_estimated"):
+        "clears video_worker before pricing (listed in case it moves)",
+}
+
+
+def test_chained_helpers_are_only_called_from_their_checked_entry():
+    """The exemptions above hold only while each helper has that one caller."""
+    callers = {"_generate_direct_teaser": "generate_video",
+               "render_direct": "render"}
+    for rel in ("agents/creator/panel.py", "agents/video/panel.py"):
+        tree = ast.parse((ROOT / rel).read_text(encoding="utf-8"))
+        for function in ast.walk(tree):
+            if not isinstance(function, ast.FunctionDef):
+                continue
+            for helper, entry in callers.items():
+                if list(_calls(function, helper)):
+                    assert function.name == entry, (rel, function.name, helper)
+
+
+def _calls(function, name):
+    for node in ast.walk(function):
+        if isinstance(node, ast.Call):
+            func = node.func
+            called = (func.id if isinstance(func, ast.Name) else
+                      func.attr if isinstance(func, ast.Attribute) else "")
+            if called == name:
+                yield node
+
+
+def _slot_names(call):
+    return {a.value for a in call.args
+            if isinstance(a, ast.Constant) and isinstance(a.value, str)}
+
+
+def test_every_priced_start_checks_its_slot_before_pricing():
+    """QA G2: a site that calls start_in_slot after authorize_request must
+    check that slot (refuse_if_busy / slot_busy), or clear it to None,
+    before the first authorize_request; otherwise money is reserved and
+    then start_in_slot raises WorkerSlotBusy."""
+    problems, checked = [], 0
+    files = sorted((ROOT / "agents").rglob("*.py")) + [ROOT / "main.py"]
+    for path in files:
+        rel = str(path.relative_to(ROOT))
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for function in ast.walk(tree):
+            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            starts = list(_calls(function, "start_in_slot"))
+            guards = list(_calls(function, "authorize_request"))
+            if not starts or not guards:
+                continue
+            checked += 1
+            if (rel, function.name) in CHAINED:
+                continue
+            first_price = min(g.lineno for g in guards)
+            covered = set()
+            for name in ("refuse_if_busy", "slot_busy"):
+                for call in _calls(function, name):
+                    if call.lineno < first_price:
+                        covered |= _slot_names(call)
+            for node in ast.walk(function):
+                if (isinstance(node, ast.Assign) and node.lineno < first_price
+                        and isinstance(node.value, ast.Constant)
+                        and node.value.value is None):
+                    covered |= {t.attr for t in node.targets
+                                if isinstance(t, ast.Attribute)}
+            for start in starts:
+                slot = _slot_names(start)
+                if not slot & covered:
+                    problems.append(f"{rel}:{start.lineno} {function.name} "
+                                    f"starts {sorted(slot)} unchecked")
+    assert checked >= 20, checked
+    assert not problems, problems
+
+
+def test_herald_clip_render_refuses_while_a_clip_renders(window, monkeypatch):
+    """QA G3: the render after a paid brief checks its own slot first."""
+    from agents.video import video_studio
+    panel = window.social_panel
+    monkeypatch.setattr(panel, "_pending_clip", ("youtube", 30), raising=False)
+    monkeypatch.setattr(panel, "_brief_token", None, raising=False)
+    monkeypatch.setattr(video_studio, "load_config", lambda *a, **k: {})
+    monkeypatch.setattr(panel, "_clip_provider_refused", lambda cfg: False)
+    monkeypatch.setattr(video_studio, "pre_estimate",
+                        lambda cfg: {"total": 0.1, "scenes": 3})
+    monkeypatch.setattr(window, "authorize_request", _reach_pricing)
+    monkeypatch.setattr(window, "_social_clip_worker", _Busy(), raising=False)
+    panel._on_clip_brief("A topic for the clip")
+    assert "still rendering" in panel.social_status_label.text()
+    monkeypatch.setattr(window, "_social_clip_worker", None)
+    with pytest.raises(_Reached):
+        panel._on_clip_brief("A topic for the clip")
+
+
+def test_a_raising_cancel_does_not_stop_the_quit_sweep(app):
+    """QA G4: one worker's cancel() raising must not leave the rest."""
+    from ui.worker_registry import stop_all
+    Blocking = _blocking_thread_class()
+
+    class Raising(Blocking):
+        def cancel(self):
+            raise RuntimeError("broken cancel")
+
+    bad, good = Raising(cancellable=False), Blocking()
+    bad.start()
+    good.start()
+    try:
+        still = stop_all(budget_ms=1000)
+        assert good.cancel_calls == 1 and good.isFinished()
+        assert "Raising" in still
+    finally:
+        bad.release.set()
+        good.release.set()
+        bad.wait(5000)
+        good.wait(5000)
+
+
+def test_a_model_download_stopped_by_quit_shows_no_failure_dialog(
+        window, monkeypatch):
+    """QA G4 / review P3-2: the cancel arrives as error_signal; at quit it
+    is not a failure and must not raise a modal."""
+    from types import SimpleNamespace
+    from PySide6.QtWidgets import QMessageBox
+    warned = []
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(
+        lambda *a, **k: warned.append(a)))
+    monkeypatch.setattr(window, "muse_pull_worker",
+                        SimpleNamespace(cancelled=True))
+    window._on_muse_pull_error("Download of muse stopped.")
+    assert warned == []
+    monkeypatch.setattr(window, "muse_pull_worker",
+                        SimpleNamespace(cancelled=False))
+    window._on_muse_pull_error("connection refused")
+    assert len(warned) == 1
