@@ -237,3 +237,6 @@
 {"ts": "2026-11-25T01:01:19", "phase": "verify", "state": "done", "spec": "reference-photo-consent"}
 {"ts": "2026-11-24T23:44:47", "phase": "release", "state": "start", "spec": "side-rails-redesign"}
 {"ts": "2026-11-25T02:03:08", "phase": "release", "state": "done", "spec": "side-rails-redesign"}
+{"ts": "2026-11-25T04:39:07", "phase": "define", "state": "start", "spec": "worker-crash-class"}
+{"ts": "2026-11-25T04:42:47", "phase": "define", "state": "done", "spec": "worker-crash-class"}
+{"ts": "2026-11-25T04:42:47", "phase": "architect", "state": "start", "spec": "worker-crash-class"}
