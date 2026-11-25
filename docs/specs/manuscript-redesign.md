@@ -3,8 +3,9 @@
 Needs: design, architect, build, review, verify, docs
 
 Status: **Define approved by the owner 2026-11-25 ("do as recommended"): D1 to D12 are decided
-as recommended, alternatives not taken.** No Design, Architect or Build has started; they start
-only when the owner asks, after testing. Priority: P3 (TODO.md: testing comes first; no redesign row
+as recommended, alternatives not taken.** Design for slice 1 was written 2026-11-25 at the owner's
+request, before testing ("no testing"; section "Design (slice 1)"); it awaits the owner's review.
+No Architect or Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
 starts until the owner asks, after testing). Type: user-visible redesign of the whole window,
 new UI capability (stepper, next-step card, word goal, cover, focus mode, light theme), no new
 paid path, no change to what agents do. Owner session: `claude/spec-manuscript-redesign-9236ea`
@@ -244,6 +245,382 @@ inventory in Comply). *Alternative:* system fonts only (no bundling, no Comply s
 **D12. Rails specs.** *Recommended:* release `rails-rebalance` as built (verify is done), so the
 app tested in the testing phase is the current one; slice 1 then replaces both rails and keeps
 that spec's measure 4 (moved controls keep their names, handlers, tooltips and help entries).
+
+## Design (slice 1)
+Phase 2, `ux-designer`, 2026-11-25. The owner started it before testing ("no testing").
+It covers slice 1, the **Shell**, only. Agent panels' insides, the composer and all behaviour stay
+as they are. Source: today's code (`main.py` `build_header_bar` 2499, `build_workspace_description`
+2479, `build_left_panel` 2619, `build_center_panel` 2754, `build_right_panel` 3502) and the B
+mockups (`B-Press`, `B-Booth`, `B-Kernel`; read 2026-11-25). Where this section and the mockup
+differ, this section wins and says why.
+
+### S1. Window structure
+```
+┌──────┬──────────────────────────────────────────────────────────────┐
+│ mark │ TOP BAR (56 px): [switch or name] [project ▾][…] [⧖] ··· [spend chip] [status chip] │
+│ ──── ├──────────────────────────────────────────────────────────────┤
+│ ws×8 │                                                              │
+│      │   centre panel as today (agent title, subtitle, the agent's  │
+│      │   own panel), now the full width beside the rail             │
+│ ──── │                                                              │
+│  ?   │                                                              │
+│  ⚙   │                                                              │
+└──────┴──────────────────────────────────────────────────────────────┘
+  72 px
+```
+- The **rail** runs the full window height. The top bar sits over the content column only, as in
+  the mockups. No other chrome: `RailLeft`, `RailRight`, `AppHeader` (as a row) and
+  `WorkspaceDescriptionStrip` are gone.
+- The **top bar is 56 px tall**, the same as today's `HEADER_HEIGHT` (the mockup's 68 px would take
+  12 px from every panel at the 600 px minimum height). The 20 px description strip is gone, so
+  panels gain 20 px of height at every size. Controls in the bar are 32 px tall (chips) or 36 px
+  (selector, switch), all over the 24 × 24 px minimum target.
+- In slice 1 the centre panel keeps its margins, `agent_title_label` and `agent_subtitle_label`.
+  Only `workspace_tool_row` leaves it (S3). Panels fill the width; the mockups' 1160 px content
+  cap starts with slice 2.
+
+### S2. Icon rail
+| Part | Spec |
+|---|---|
+| Width, surface | 72 px, `SURFACE`, 1 px `BORDER` on the right. Padding 16 px top and bottom. |
+| App mark | 36 × 36 px, radius 10, `TEXT` fill with the letter "i" in `SURFACE` (the mockup's mark). Tooltip and accessible description: `app_version.tooltip()` (the version, D2). Not a button, but it takes focus so VoiceOver reads the version. 10 px below it. |
+| Stale build dot | When `app_version.staleness()["current"]` is false: an 8 px dot in `WARNING_DOT` at the mark's top-right corner, with a 2 px `SURFACE` ring so it reads on both the mark and the rail. Tooltip and accessible name gain "This build is older than the code: rebuild to update". Replaces today's amber `VersionBadge` state. |
+| Workspace buttons | One per workspace in `WORKSPACES` order (Author, Audio + Music, Video + Ads, Social, Web, Brand Design, Brand Content, Assistant). 44 × 44 px, radius 12, 4 px gap, 20 px stroke icon (1.8 px stroke, from the mockup's paths, saved as SVG in `assets/` and drawn through the same `QIcon` path as `icon_button`; no icon font, so D11's Comply step is not triggered). |
+| States | Default: icon `TEXT_DIM`, no fill. Hover: `ELEVATED` fill. Selected: `ELEVATED` fill, icon `TEXT`, plus a 3 × 20 px `ACCENT` bar against the rail's left edge, level with the button. The bar is what meets 3:1 (WCAG 1.4.11); the fill alone is 1.12:1 and only decorates. Focus: 2 px `ACCENT` ring, 2 px out. Pressed: `ACCENT_WASH` fill. |
+| Names | Tooltip: the workspace name, a line break, then the text the description strip shows today (`workspace_description_label`'s source for that workspace). Accessible name: the workspace name. Accessible description: the description text. So the codename explanation the strip existed for (`main.py:2482`) is one hover away. |
+| Bottom group | Pinned to the bottom, 8 px gap: **"?"** (help), then the **Settings gear**. Same 44 px buttons and states, no selected state. |
+| "?" menu | A `QMenu` (follows `appkit_guard`): "`<Agent>` docs" (today's `agent_docs_btn` → `show_agent_docs`, label naming the open agent, for example "Press docs"), "Learning Centre   F1" (`learn_btn` → `show_learning_center`), separator, "Keyboard shortcuts" (S9 list, read-only). |
+| Settings gear | `settings_btn` → `show_settings`. Tooltip "Settings (⌘,)". |
+| Fit | 16 + 46 (mark) + 8 × 48 + 8 + 2 × 48 + 16 = 566 px, under the 600 px minimum height. No overflow menu exists or is needed. A test asserts every rail button is fully visible at 1000 × 600. |
+
+`workspace_tabs` stays the handle for the workspace selection with today's contract: the same
+names, order, `count()`, `currentIndex()`, `setCurrentIndex()` and `currentChanged`, which
+`_workspace_changed` and `help_map.json` use. Architect chooses how (a hidden `QTabBar` that drives
+the buttons, or a rail class with that API). `header_fitter` and `workspace_more_btn` retire: their
+tests (`test_panel_layout.py:848-896`) are replaced by the rail fit test, with the change named in
+the Build PR, not deleted silently.
+
+### S3. Top bar
+Left to right, with a 12 px gap and horizontal padding of 24 px (16 px below 1200 px window width).
+
+| # | Element | Spec | Today's control |
+|---|---|---|---|
+| 1 | **Agent switch** (two-agent workspaces) | Segmented control, 36 px: Quill / Press, Booth / Label. Selected segment: `TEXT` fill, `SURFACE` text, weight 600 (mockup B-Booth). Other segment: no fill, `TEXT_DIM`. Left and Right arrows move between segments when it has focus. | `workspace_tool_row` and `workspace_tool_buttons[key]` (keep both names: the row is the switch, the dict holds its two buttons, each still calling `select_agent(name)`) |
+| 1′ | **Agent name** (one-agent workspaces) | The agent's codename in the title style (14 px, 600), for example "Reel", "Kernel" (mockup B-Kernel). Not interactive. | new label `topbar_agent_label` |
+| 2 | **Project selector** | `history_project_filter` itself (the existing combo, its items, its `_switch_project` handler and the dropdown component of `docs/gui_redesign.md`), restyled as a 36 px bordered field with the project name in 13 px weight 600. Width 140 to 260 px, eliding. Tooltip: "Working in `<project>`" or "No project selected". | `history_project_filter`; also takes over the job of `project_context_pill` (S4) |
+| 3 | **Project actions** | `project_menu_btn` (the `more` icon button) right beside the selector, opening `project_menu` (S5). | `project_menu_btn`, `project_menu` |
+| 4 | **History** | 32 px icon button (clock icon), tooltip "Chat history (⌘Y)", opens the History drawer (S7). Checked style while the drawer is open. | new `history_btn` |
+| 5 | *Stretch* | Slice 2 puts the stepper here, centred. Slice 1 leaves it empty. | |
+| 6 | **Spend chip** | S6. | new `spend_chip` |
+| 7 | **Status chip** | S6. | `agent_status_pill` (the chip keeps this name; `status_chip` may be an alias) |
+
+**Widths.** Natural widths at 13 px system font: switch ~140 px, selector 140 to 260 px, actions 32
+px, history 32 px, spend chip full ~175 px ("€12.34 of €50 today"), status chip full ~165 px
+("Key check failed · 3"). Room for the bar is the window width minus 72 px for the rail, minus
+padding.
+
+| Window width | Bar content width | Fits in full form? | Room left for the stretch (slice 2 stepper) |
+|---|---|---|---|
+| 1000 px (minimum) | 928 − 32 = 896 px | yes: ~140 + 260 + 32 + 32 + 175 + 165 + 6 × 12 = 876 px | ~20 px, so slice 2 needs the collapse steps below |
+| 1440 px | 1368 − 48 = 1320 px | yes | ~444 px |
+| 1500 px | 1428 − 48 = 1380 px | yes | ~504 px |
+
+**Collapse rule** (applied in this order as room runs out, and undone in reverse as it returns;
+each step is one width threshold, computed from measured hints and not hard-coded pixels, so
+cocoa and offscreen fonts both work):
+1. *(Slice 2)* Stepper stages show their number only, except the current stage, which keeps its
+   label. Full names stay in each stage's tooltip and accessible name.
+2. Spend chip drops " today": "€12.34 of €50".
+3. Project selector shrinks to its 140 px minimum and elides.
+4. Status chip goes compact: the dot and the count badge only. Its text moves to the tooltip and
+   stays in the accessible name.
+5. Spend chip goes compact: the amount only, "€12.34". The unknown form keeps its word:
+   "€12.34 + unknown". The limit moves to the tooltip.
+6. Agent switch segments drop their side padding from 14 to 8 px.
+
+**Nothing goes into an overflow menu, and nothing is hidden.** Both chips, the selector and History
+are visible at every width from 1000 px; the money figure never disappears. After step 6 the bar
+fits 1000 px with a full five-stage stepper in numbers-only form (~5 × 40 px). Measure 4's fit
+test runs at 1000, 1440 and 1500 px with long values: the project name "A Very Long Project Name
+For Testing", "€1234.56 of €5000 today", the unknown form and the status "Key check failed · 12".
+
+Inherited by slice 3, so Quill's three columns fit: the content column (928 px at minimum, less
+2 × 24 px padding = 880 px) keeps the page at least 560 px wide. Side columns give way first. The
+chapter list becomes a "Chapters" button that opens the same left drawer as History (S7) below
+1180 px window width, and the Ask card keeps 280 px. Slice 3's Design confirms this against its
+own mockup.
+
+### S4. Where every control in today's header and both rails goes
+Every attribute keeps its name, handler, tooltip and `help_map.json` entry (D12, and
+`rails-rebalance` measure 4). "Popover" means S6's popovers; "drawer" means S7.
+
+**Header (`build_header_bar`, `build_workspace_description`)**
+
+| Today | Goes to |
+|---|---|
+| `WordmarkDot`, `Wordmark` ("IMPRINT") | Retired; the app mark (S2) replaces them. The window title still says "Imprint". |
+| `version_badge` (text, tooltip, `state=stale`) | Retired as a visible label; its text and tooltip go to the app mark's tooltip, and its stale state becomes the stale dot (S2). Settings > General gets an "About" line with the version string. `test_version.py:164-167` moves to the mark's tooltip and the About line. |
+| `HeaderDivider` | Retired (no row to divide). |
+| `workspace_tabs` | Icon rail (S2), handle kept. |
+| `workspace_more_btn`, `header_fitter` | Retired; the rail never overflows (S2). |
+| `project_context_pill` | Retired: the project selector now shows the project name in the bar at all times. Its tooltip text moves to the selector. It is a label, not a control, so measure 2 is not affected. |
+| `agent_status_pill` | Status chip (S6), name kept. |
+| `theme_dots` (`ThemeDots`) | Settings > General, under "Look" (S8). Same widget and keys, so `test_theme.py:276-312` keeps working once it opens Settings. |
+| `agent_docs_btn` | "?" menu, first item (S2). Kept as a `QAction` named `agent_docs_btn`. |
+| `tooltips_toggle_btn` | Settings > General, "Show tooltips" (S8). The window keeps the checkable control (or a checkable `QAction`) under this name, so `_toggle_tooltips` and `main.py:484` still read `isChecked()`. |
+| `settings_btn` | Rail gear (S2). |
+| `workspace_description_label` (strip) | Retired; its text goes to each rail button's tooltip and accessible description (S2). `main.py:3825` writes to the rail instead. |
+
+**Left rail (`build_left_panel`)**
+
+| Today | Goes to |
+|---|---|
+| `history_project_filter` | Top-bar project selector (S3 #2). |
+| `project_menu_btn`, `project_menu`, `new_project_btn`, `project_overview_btn`, `project_defaults_btn` | Top bar beside the selector (S3 #3); the menu and its three actions unchanged (S5). |
+| `active_project_label` | Header of `project_menu` (S5). |
+| `project_meter` | Header of `project_menu` (S5, D2). |
+| `history_search`, `history_agent_filter`, `history_list`, `new_chat_btn` | History drawer (S7). The context menu, Delete and Backspace shortcuts, double-click to rename and day groups come with `history_list` unchanged. |
+| `cost_history_btn`, `run_log_btn` | Spend popover footer (S6). |
+| `learn_btn` | "?" menu (S2). Kept as a `QAction` named `learn_btn`; F1 still opens it. |
+| `agent_buttons` (empty dict) | Kept as is. |
+
+**Right rail (`build_right_panel`)**
+
+| Today | Goes to |
+|---|---|
+| Spend heading, `reset_session_budget_btn` | Spend popover header. |
+| `session_meter`, `daily_meter` with `session_budget_input`, `daily_budget_input` | Spend popover. They still save on Enter or on leaving the field (`_commit_budget_limits`). |
+| `request_count_stat`, `last_request_stat`, `local_savings_stat`, `local_spent_stat` | Spend popover, same order and hover detail. |
+| `live_estimate_label` | Slice 1: one caption line under the composer's model row in `normal_panel`. This is the only change to the composer in slice 1. Slice 2 moves it beside the model chip (D3). See open point O1. |
+| Status heading | Status popover heading. |
+| System card: `resource_status_card` (`resource_label`), `realtime_monitor_btn` | Status popover, "System" section. |
+| Chat routing: `routing_status_card`, `route_result_label`, `recommendation_label` | Status popover, "Chat routing" section. |
+| API keys: `api_keys_status_card`, the six `*_key_label` aliases | Status popover, "API keys" section. |
+| `model_updates_section`, `model_updates_card` (check, dismiss, update, startup checkbox, media notices) | Status popover, "Model updates" section; its count also shows on the chip (S6). |
+
+Before Build, Build takes measure 2's snapshot (every action button, field and menu action reachable
+today, by attribute name). The removals above (wordmark, divider, `version_badge` label,
+`project_context_pill`, `workspace_more_btn`, the strip) are labels or overflow chrome, not
+actions. The owner approving this Design is the owner line measure 2 asks for.
+
+### S5. Project menu
+`project_menu` (`QMenu`, `appkit_guard` rules) opens under `project_menu_btn`. Its header is a
+`QWidgetAction`, shown only while a project is active: `active_project_label` ("Working in …",
+`TEXT_DIM`, 12 px) above `project_meter` (the project budget bar). Then a separator and today's
+three actions in today's order: New Project, Project Overview, Save Current Setup, with their
+enabled rules and tooltips. With no project active the header is absent and the menu starts with
+New Project.
+
+### S6. Spend chip and status chip
+Both chips are 32 px tall, radius 16, 1 px `BORDER_STRONG`, `SURFACE` fill, 13 px text, 12 px side
+padding. They are buttons: hover `ELEVATED`, focus ring as in S2, Space or Return opens the popover.
+
+**Spend chip text** (today's daily figures; the session figures are in the popover):
+
+| State | Full form | Tone |
+|---|---|---|
+| Normal (under 80 % of the daily limit) | "€1.20 of €5 today" | `TEXT_DIM` text |
+| Nothing spent yet, nothing unpriced | "€0.00 of €5 today": true, because nothing was spent | `TEXT_DIM` |
+| No daily limit (`daily_budget_eur` is 0, which `BudgetRow.set` already reads as no limit) | "€1.20 today · no limit" | `TEXT_DIM` |
+| 80 % to under 100 % | "€4.10 of €5 today" | `WARNING` text and border |
+| At or over the limit | "€5.10 of €5 today" | `DANGER` text and border. Tooltip: "Daily limit reached." The request guard's behaviour is unchanged |
+| Some of today's requests had no price | "€1.20 + unknown of €5 today" | `TEXT` text; tooltip: "N requests today had no price, so the real total is more than €1.20." |
+| Every one of today's requests had no price | "Unknown of €5 today" (never "€0.00") | as above |
+
+Limits are formatted like the fields (`format_limit`: "€5", "€1.5"), and amounts with two decimals.
+The accessible name is the full sentence, for example "Spent today: 1.20 euros of a 5 euro limit,
+plus an unknown amount". **Data dependency for Architect:** the chip needs today's count of
+requests whose price was unknown. If the usage tally does not record that now, Architect adds it;
+the figure is never inferred from a zero.
+
+**Spend popover** (`Qt.Popup` frame, not a `QMenu`, because it holds text fields; 320 px wide;
+opens below the chip, right edges aligned; 16 px padding; `SURFACE` with `BORDER` and the card
+shadow):
+1. Heading "Spend" and `reset_session_budget_btn` (link) on one row.
+2. `session_meter`, `daily_meter` (bars and limit fields, unchanged).
+3. Project row while a project is active: a read-only `KeyValueRow` "Project" with "€x of €y" (new
+   `project_spend_stat`, fed from the same numbers as `project_meter`; the bar itself stays in the
+   project menu per D2).
+4. `request_count_stat`, `last_request_stat`, `local_savings_stat`, `local_spent_stat`.
+5. A line in `TEXT_DIM` when anything today was unpriced: "N requests had no price; totals
+   exclude them."
+6. Footer, separated by a `BORDER` line: `cost_history_btn` and `run_log_btn` as two link buttons on
+   one row.
+Escape or a click outside closes it. Focus goes to the first limit field when it opens from the
+keyboard, and returns to the chip when it closes. An edit in progress is committed on close
+through `editingFinished`, as on the rail today.
+
+**Status chip:** an 8 px dot, the state word, and a count badge when model updates are waiting.
+
+| Worst state wins (top first) | Word | Dot |
+|---|---|---|
+| System summary red | "Machine stressed" | `DANGER` |
+| Any API key "Check failed" (`ApiKeysStatusCard` tone `warning`; "Not configured" is normal, not a problem) | "Key check failed" | `WARNING_DOT` |
+| System summary yellow | "Machine busy" | `WARNING_DOT` |
+| A request is running | "Working" | `INFO` |
+| Otherwise | "Ready" | `ACCENT` |
+
+The count badge is a pill after the word, for example "Ready · 3", with `ACCENT_WASH` fill and
+`TEXT` digits. It shows the number of waiting model updates from the same source as
+`model_updates_section`'s title ("Model updates · 3 new"). Zero means no badge. That keeps
+`model-updates-visibility`'s promise: updates are visible without opening anything. Accessible
+name: "Status: Ready. 3 model updates waiting." The dot is never the only signal, because the
+word always says the state in full form and the tooltip and accessible name say it in compact
+form.
+
+**Status popover** (`Qt.Popup` frame, 340 px, under the chip, right-aligned, scrolls past 70 % of
+the window height): heading "Status", then the four `CollapsibleSection`s in today's order:
+System, Chat routing, API keys, Model updates. Each still shows its one-word summary while
+closed. A section whose state is the chip's state opens expanded, so the reason is the first thing
+seen; the rest open collapsed. "Model updates" opens expanded whenever the badge shows.
+
+### S7. History drawer
+- Opened by `history_btn` or ⌘Y; closed by ⌘Y, Escape, the drawer's close button, a click on the
+  dimmed content, or opening a chat.
+- A 320 px panel over the left of the content column (it does not cover the icon rail), full height
+  below the top bar, `SURFACE` with `BORDER` on its right and a 12 % `TEXT` scrim over the rest of
+  the content. It overlays and does not reflow the panel, so nothing being typed moves (D5).
+- Contents top to bottom: a heading row "Chats" with `new_chat_btn` ("New chat", quiet style) and a
+  close button (×, accessible name "Close history"); `history_search` and `history_agent_filter` on
+  one row; `history_list`, taking the rest of the height. Day groups, the context menu, Delete,
+  Backspace and double-click to rename are unchanged.
+- Focus goes to `history_search` on open and returns to `history_btn` on close. Tab order: New
+  chat, close, search, filter, list. The drawer keeps focus inside itself while open.
+- Kernel uses the same drawer in slice 1; its inline list (mockup B-Kernel) is slice 4.
+- Help lessons that point at `history_list` or `new_chat_btn` open the drawer first; the same goes
+  for popover targets (`session_budget_input`, `daily_budget_input`) and "?" menu targets
+  (`learn_btn`). Architect picks the mechanism (a "reveal" hook per target in `help_map.json`);
+  each lesson is checked in Build.
+
+### S8. Light palette (fourth theme) and Settings
+**Tokens.** These are the light values of every token the dark palettes theme today, plus the tokens
+the dark themes keep fixed and that fail on white (borders and semantic colours). The values come
+from the mockups where they pass, and were changed where they do not. Contrast was computed with
+the WCAG 2.x relative-luminance formula on 2026-11-25; "worst" is the lowest result against `BG`,
+`SURFACE`, `ELEVATED` and `SUNKEN`.
+
+| Token | Light value | Use | Worst contrast | Note |
+|---|---|---|---|---|
+| `BG` | `#f4f5f7` | window, content background | | mockup |
+| `SURFACE` | `#ffffff` | rail, top bar, cards, popovers, drawer | | mockup |
+| `ELEVATED` | `#eef0f3` | hover, selected rail button | | mockup |
+| `SUNKEN` | `#ffffff` | text fields (the field is marked by its border, not a darker well) | | mockup |
+| `SUNKEN_LIT` | per accent: green `#e8f3ee`, rose `#fbe9ed`, teal `#e6f3f6` | focused field | `TEXT` 15.7:1 | |
+| `TEXT` | `#14181f` | primary text | 15.59:1 | mockup |
+| `TEXT_DIM` | `#5b6472` | labels, secondary text, chips | 5.24:1 | mockup |
+| `TEXT_MUTE` | `#636b78` | placeholders, section headers | 4.71:1 | mockup's `#6b7482` fails (4.14:1 on `ELEVATED`, 4.33:1 on `BG`) |
+| `BORDER` | `#e1e4ea` | card and bar hairlines (decorative only) | 1.12:1 | mockup; never the only edge of a control |
+| `BORDER_STRONG` | `#7a8290` | control borders: fields, chips, selector, ghost buttons | 3.39:1 | mockup's `#d5d9e0` and `#e1e4ea` fail 1.4.11 (3:1 for control edges), so fields read slightly firmer than drawn |
+| `ACCENT` green, rose, teal | `#0b7a55`, `#be123c`, `#0e7490` | primary buttons, selected marks, focus rings, links | 4.68:1, 5.51:1, 4.69:1 | mockup's three accents; all pass as text too |
+| `ACCENT_DIM` | `#086446`, `#9f1239`, `#155e75` | pressed primary, accent text on `ACCENT_WASH` | 6.30:1, 7.02:1, 6.36:1 | |
+| `ACCENT_TEXT` | `#ffffff` | text on an accent fill | 5.34:1, 6.29:1, 5.36:1 on the fill | dark themes use near-black here; light uses white (mockup) |
+| `ACCENT_WASH` | accent at 0.10 alpha | selected rows, count badge | `TEXT` on the wash ≥ 15:1 | |
+| `ACCENT_LINE` | accent at 0.45 alpha | accent outlines that are decoration only | | not a focus ring (the ring is solid `ACCENT`) |
+| `PHOSPHOR` | = `ACCENT_DIM` per accent | typed glyphs and the underscore caret | ≥ 6.30:1 | dark's `#00ff41` is 1.4:1 on white. On light the "you wrote this" colour is the deep accent, which is calmer and readable |
+| `PHOSPHOR_LINE` | `ACCENT_DIM` at 0.45 alpha | | | |
+| `DANGER` | `#b91c1c` | destructive, over-limit | 5.67:1 | dark's `#f87171` is about 2.7:1 on white |
+| `WARNING` | `#92400e` | warning text | 6.21:1 | dark's `#fbbf24` is about 1.7:1 on white |
+| `WARNING_DOT` (new) | `#b45309` | stale dot, warning dots (non-text) | 4.40:1 (3.54:1 on the `TEXT` app mark) | |
+| `INFO` | `#1d4ed8` | neutral emphasis, "Working" dot | 5.87:1 | |
+| `*_WASH`, `*_LINE` for `DANGER`, `WARNING`, `INFO` | the colour at 0.10 and 0.40 alpha | | text on a wash uses `TEXT` or the colour itself (≥ 5:1) | |
+
+The dark palettes keep their values. `WARNING_DOT` in dark is today's `WARNING`. **For Architect:**
+`ui/theme.py` themes only the accent, the phosphor and the greys, by swapping the green palette's
+literals (`_SWAP`), and its docstring says semantic colour "does not change". Light breaks that,
+because `BORDER`, `BORDER_STRONG` and the semantic colours need light values. The mechanism (extra
+palette keys and the literals they swap, or a second semantic table) and that docstring change go
+in the slice-1 ADR. The contrast test (measure 6) checks every text and indicator token above
+against every background it is used on, in all six combinations (light × 3 accents, dark × 3),
+following the `git_autosync/tests/test_header_fit.py` pattern (playbook).
+
+**Fonts in the shell:** the system font (D11) at the `docs/gui_redesign.md` type scale: chips and
+selector 13 px, the agent name 14 px weight 600, the drawer heading 14 px weight 600. No bundled
+font in slice 1.
+
+**Settings > General** (`ui/dialogs.py`, today's `ThemePick` combo at 425-450):
+- **Look**: a two-segment control, Light | Dark. Light is the default (D4).
+- **Accent**: `theme_dots`, the existing widget, showing three dots (green, rose, teal). It is
+  painted in the accents of the selected Look. Arrow keys and click work as today; the preview
+  applies live and reverts on Cancel, as `preview_theme` and `restore_theme` already do.
+- Labels: "Light" and "Dark"; accents "Green", "Rose", "Teal". Dark's teal is today's
+  "Blue (Cyberpunk)" (`#22d3ee`) and dark's rose is today's "Red" (`#f43f5e`); dark's values do not
+  change. `THEMES` grows from 3 to 6 combinations, or becomes Look × Accent. Architect decides how,
+  and `dialogs.py:51-60`'s count sentence follows `THEMES` as it does now.
+- **Show tooltips**: a toggle bound to `tooltips_toggle_btn`'s state.
+- **About**: "Imprint `<version string>`", with a stale note when stale.
+- Switching the look while Booth plays must not hit the 2026-10-05 `QComboBox.setStyle` deadlock
+  (spec Risks). This is Architect's to solve; Design only asks that the switch be instant, with no
+  transition.
+
+### S9. Keyboard access
+| Keys | Action |
+|---|---|
+| ⌘1 to ⌘8 | Workspace 1 to 8 in rail order (Assistant is ⌘8) |
+| ⌘[ and ⌘] | The other agent in a two-agent workspace (Quill ↔ Press, Booth ↔ Label) |
+| ⌘Y | History drawer open and close |
+| ⌘, | Settings (macOS standard) |
+| F1 | Learning Centre (unchanged, `main.py:433`) |
+| ⌘? (⌘⇧/) | "?" menu |
+| Escape | Close the open popover, menu or drawer; with none open it does nothing new |
+
+- Today no shortcut except F1 exists in the window (`main.py:433`), so none of these collides.
+  Architect checks each agent panel's own shortcuts.
+- Tab order: rail (mark, eight workspaces, ?, gear), then top bar left to right, then the panel.
+  Inside the rail, Up and Down move between buttons, and Return or Space activates.
+- Every icon-only control has an accessible name: the rail buttons, ?, gear, `history_btn`,
+  `project_menu_btn` and the drawer's close button. Both chips have the full-sentence names given
+  in S6. The selected workspace sets the accessible state "selected".
+- A focus ring is never hidden under the drawer or a popover (2.4.11): the scrim takes no focus,
+  and focus stays inside the drawer or popover while it is open.
+- Before the owner sees the slice, Verify does a five-minute VoiceOver pass over the rail, the top
+  bar, both popovers and the drawer (playbook).
+
+### S10. Motion (D5) and Reduce Motion
+In slice 1 only two things can move, and both answer the user's own click:
+
+| What | Motion | Reduce Motion on |
+|---|---|---|
+| History drawer open and close | 160 ms slide and scrim fade, ease-out, no loop | appears and disappears at once |
+| Popovers and menus | none (they appear at once, like macOS menus) | none |
+| Theme switch | none (instant) | none |
+| Rail selection, chip state changes | none (instant) | none |
+
+Nothing animates while a text field in the content has focus: the drawer opens over the panel
+and takes focus itself, and it does not move any field. "Reduce motion" is honoured when either
+macOS's setting is on (Architect picks how to read it; the radar found no Qt API) or the new
+Settings > General toggle "Reduce motion" is on. That toggle is off by default, and on whenever
+macOS's setting is on. Measure 7's test covers the drawer timer.
+
+### S11. States to check in Build and Verify
+- No project: the selector says "All projects", the project menu has no header, and the spend
+  popover has no Project row.
+- No chats: the drawer's list shows "No saved chats yet." in `TEXT_DIM`, and New chat is still
+  there.
+- No limit, over the limit, unknown price: S6 table, each one tested.
+- Model updates 0, 1 and 12: the badge is absent, then shows "1" and "12", and the compact chip
+  still shows the badge.
+- Stale build: the dot is on the mark, and both the tooltip and the About line say it.
+- 1000 × 600, 1440 × 900, 1500 × 950 in light green and dark green: no clipped text
+  (`clipped_text` empty) and every rail button visible. Native (cocoa) renders go beside
+  `B-Press` and `B-Booth` for the owner (measure 8).
+
+### Open points for the owner (Design)
+- **O1. Where the live estimate sits in slice 1.** *Recommended:* one caption under the composer's
+  model row, the one small touch to the composer, until slice 2's ask bar takes it (D3). The
+  number then stays visible while typing, not behind a popover. *Alternative:* in the spend
+  popover only until slice 2; this touches nothing in the composer, but the estimate is one click
+  away for one slice.
+- **O2. Existing installs that saved a dark theme.** *Recommended:* the first launch of slice 1
+  switches them once to Light with the same accent (green stays green, Red becomes rose, Blue
+  becomes teal) and shows "Imprint has a new light look. Dark is in Settings > General." once. A
+  later choice is never overridden. *Alternative:* keep their saved dark theme, so only new
+  installs start light.
+- **O3. Project budget in two places.** D2 puts `project_meter` in the project menu and D3 puts a
+  project row in the spend popover. *Recommended:* both. The bar stays in the menu (D2), and the
+  popover shows one read-only line (S6 item 3), so all money is also in one place.
+- **Mockups:** none made for this phase. The B mockups already show the rail, bar and chips. A
+  mockup of the popovers, drawer and the 1000 px collapse can go on the canvas if the owner wants
+  one (only with the owner's OK).
 
 ## Relation to other specs
 - `side-rails-redesign` (released) and `rails-rebalance` (verify done 2026-11-25, not released)

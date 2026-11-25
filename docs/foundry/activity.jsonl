@@ -239,3 +239,5 @@
 {"ts": "2026-11-25T02:03:08", "phase": "release", "state": "done", "spec": "side-rails-redesign"}
 {"ts": "2026-11-25T04:51:23", "phase": "define", "state": "start", "spec": "manuscript-redesign"}
 {"ts": "2026-11-25T04:54:21", "phase": "define", "state": "done", "spec": "manuscript-redesign"}
+{"ts": "2026-11-25T05:45:39", "phase": "design", "state": "start", "spec": "manuscript-redesign"}
+{"ts": "2026-11-25T05:50:41", "phase": "design", "state": "done", "spec": "manuscript-redesign"}
