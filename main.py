@@ -49,7 +49,7 @@ from PySide6.QtGui import QTextCursor, QColor, QKeySequence, QShortcut
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
     QApplication, QSizePolicy, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QTextEdit, QPushButton, QComboBox, QListWidget, QListWidgetItem,
+    QLabel, QTextEdit, QPushButton, QComboBox, QListWidgetItem,
     QMessageBox, QTextBrowser, QLineEdit, QProgressBar, QDialog, QTabWidget,
     QTabBar, QFrame, QInputDialog, QMenu, QToolButton,
 )
@@ -235,7 +235,7 @@ from ui.workers import (
 from ui.forms import (
     HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH, RAIL_RIGHT_WIDTH, SM, XS,
     FieldGridLayout, Meter, field, field_note, icon_button,
-    line_edit, link_button, micro, quiet, rail, rule, section, toggle_chip,
+    link_button, micro, quiet, rail, rule, section, toggle_chip,
 )
 from ui.rail import (
     AGENT_ROLE, DAY_ROLE, TITLE_ROLE, BudgetRow, ChatList, KeyValueRow,

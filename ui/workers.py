@@ -6,7 +6,6 @@ arguments and touch no application state, which is why they move first.
 """
 import os
 import re
-import subprocess
 import time
 from pathlib import Path
 
