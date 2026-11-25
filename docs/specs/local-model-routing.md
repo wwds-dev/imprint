@@ -108,8 +108,8 @@ the Mode box maps to *Local, advise per job*. Brought into this branch by the me
    `docs/local_model_routing_plan.html`)"): "The agent's provider/model selection is never changed by the
    advisor, a rule or Local first".
 
-No owner gate is recorded for ADR 0002 or 0003 (both "proposed"), and `docs/foundry/approvals.jsonl` has no row
-for this change.
+7. Define (retroactive), ADR 0002 and ADR 0003: approved as built by the owner on 2026-11-24, "D2: A, own accounts need no record, include it in the next release. Titles deferred: yes. Walk: a later session. ADR 0002, 0003 and the Define: approved as built." Recorded in
+   `docs/foundry/approvals.jsonl` (gates define and architect, spec local-model-routing); both ADRs now say accepted.
 
 ## Success measures
 Each is a statement a test checks today. "No test" means none was found.

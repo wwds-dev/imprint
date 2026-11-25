@@ -111,6 +111,14 @@ listed under **Unreleased** until it ships.
   every lesson, ignores docstrings, and Troubleshooting's quoted messages are
   checked against the app's strings.
 
+- **Nova: whose reference photos a teaser sends** (2026-11-24, spec `reference-photo-consent`, owner's option
+  A′). The Voice tab's **Reference photos** group lists the photos and asks **Who is in these photos** (Me, A
+  made-up character, Someone else). Someone else's photos are not sent until **Who agreed** and **Date they
+  agreed** are filled in: the teaser refuses with *Consent record missing* before any key, estimate or budget
+  step, and reserves nothing. A teaser also refuses unsaved photo edits and any line that is not a real PNG, JPEG
+  or WebP file. The record is what the user states; Imprint does not check the photos. The character bible now
+  shows for every account.
+
 ### Fixed
 - **Muse's Gemini Omni teaser follows Reel's rule when a quit cuts it off** (2026-11-24, owner's choice; audit
   review P2-2). Quitting while a teaser renders now asks "A Gemini Omni clip is rendering" (the same question as
