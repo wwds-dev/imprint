@@ -248,3 +248,4 @@
 {"ts": "2026-11-25T05:13:50", "phase": "verify", "state": "start", "spec": "worker-crash-class"}
 {"ts": "2026-11-25T05:59:41", "phase": "secure", "state": "start", "spec": "worker-crash-class"}
 {"ts": "2026-11-25T05:59:41", "phase": "secure", "state": "done", "spec": "worker-crash-class"}
+{"ts": "2026-11-25T06:34:57", "phase": "verify", "state": "done", "spec": "worker-crash-class"}
