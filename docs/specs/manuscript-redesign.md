@@ -5,7 +5,7 @@ Needs: design, architect, build, review, verify, docs
 Status: **Define approved by the owner 2026-11-25 ("do as recommended"): D1 to D12 are decided
 as recommended, alternatives not taken.** Design for slice 1 was written 2026-11-25 at the owner's
 request, before testing ("no testing"; section "Design (slice 1)"), and approved the same day,
-owner: "Approve as recommended" (O1 to O3 as recommended). Architect for slice 1 was written 2026-11-25 (section "Architecture (slice 1)", ADR 0006, proposed) and waits for the owner at the Architect gate with three open points (AO1 to AO3). No Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
+owner: "Approve as recommended" (O1 to O3 as recommended). Architect for slice 1 was written 2026-11-25 (section "Architecture (slice 1)", ADR 0006) and approved the same day, owner: "Approve as recommended" (AO1 to AO3 as recommended). No Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
 starts until the owner asks, after testing). Type: user-visible redesign of the whole window,
 new UI capability (stepper, next-step card, word goal, cover, focus mode, light theme), no new
 paid path, no change to what agents do. Owner session: `claude/spec-manuscript-redesign-9236ea`
@@ -628,7 +628,7 @@ Decided 2026-11-25, owner: "Approve as recommended". Each point below is decided
 ## Architecture (slice 1)
 Phase 3, `architect`, 2026-11-25. Input: "Design (slice 1)" as approved (S1–S11, O1–O3); nothing
 in it is redesigned here. The decisions, their evidence and the alternatives are in
-`docs/adr/0006-manuscript-shell.md` (Proposed). Radar note:
+`docs/adr/0006-manuscript-shell.md` (Accepted 2026-11-25). Radar note:
 `docs/foundry/radar-notes/2026-11-25-stack-manuscript-shell.md`. Legal consult skipped: slice 1
 adds no data flow, processor, dependency or bundled asset (S2's icons are drawn in-repo as SVG).
 
@@ -725,6 +725,9 @@ nothing new fetches on the UI thread and no `QThread` is added.
     at 1000 × 600 and 1440 × 900 for the owner (measure 8).
 
 ### Open points for the owner (Architect)
+Decided 2026-11-25, owner: "Approve as recommended". Each point below is decided as its
+*Recommended* text says.
+
 - **AO1. Unknown-price tally (A5).** A new `cost_type` value in the usage table is a state change.
   *Recommended:* approve as described (no schema change, totals unchanged). *Alternative:* the chip
   shows no unknown form until a later spec, which breaks S6 and measure 5.

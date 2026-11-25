@@ -1,7 +1,7 @@
 # ADR 0006: The Manuscript shell (icon rail, top bar, popovers, light look)
 
-Status: **Proposed** by architect, 2026-11-25. Awaiting the owner at the Architect gate (state,
-module boundaries). Spec: `docs/specs/manuscript-redesign.md`, sections "Design (slice 1)" (S1–S11,
+Status: **Accepted** by the owner at the Architect gate, 2026-11-25 ("Approve as recommended",
+including AO1 to AO3 as recommended); proposed by architect the same day. Spec: `docs/specs/manuscript-redesign.md`, sections "Design (slice 1)" (S1–S11,
 approved 2026-11-25) and "Architecture (slice 1)" (A1–A10, this ADR's summary and test plan).
 
 ## Context
