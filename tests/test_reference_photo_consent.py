@@ -53,7 +53,7 @@ def test_a_complete_record_sends():
          "consent_date": "2026-11-20"}, ["/photos/a.png"]) == ""
 
 
-@pytest.mark.parametrize("subject", ["own", "persona", "", None])
+@pytest.mark.parametrize("subject", ["own", "persona", None])
 def test_me_and_a_made_up_character_need_no_record(subject):
     from agents.creator.profile import photo_consent_refusal
     assert photo_consent_refusal(
@@ -62,12 +62,49 @@ def test_me_and_a_made_up_character_need_no_record(subject):
     assert photo_consent_refusal({}, ["/photos/a.png"]) == ""
 
 
-def test_an_unknown_subject_is_treated_as_someone_else():
-    """A value no build writes (a hand edit, a typo) fails closed."""
+@pytest.mark.parametrize("subject", ["agency", ""])
+def test_an_unknown_subject_is_treated_as_someone_else(subject):
+    """A value no build writes (a hand edit, a typo, a blank) fails closed."""
     from agents.creator.profile import photo_consent_refusal
     assert photo_consent_refusal(
-        {"account_type": "agency", "consent_holder": "", "consent_date": ""},
+        {"account_type": subject, "consent_holder": "", "consent_date": ""},
         ["/photos/a.png"])
+
+
+@pytest.mark.parametrize("date_", ["last Tuesday", "2999-01-01", "20/11/2026"])
+def test_a_stored_date_that_is_not_a_past_date_counts_as_missing(date_):
+    """The gate parses the date itself: a hand-edited row is not trusted."""
+    from agents.creator.profile import photo_consent_refusal
+    reason = photo_consent_refusal(
+        {"account_type": "managed", "consent_holder": "Sam Example",
+         "consent_date": date_}, ["/photos/a.png"])
+    assert "the date they agreed" in reason
+
+
+def _png(path):
+    path.write_bytes(b"\x89PNG\r\n\x1a\n photo")
+    return path
+
+
+def test_only_an_absolute_regular_image_file_is_a_photo(tmp_path):
+    from agents.creator.profile import photo_path_problem
+    good = _png(tmp_path / "face.png")
+    assert photo_path_problem(str(good)) == ""
+    jpeg = tmp_path / "face.jpg"
+    jpeg.write_bytes(b"\xff\xd8\xff\xe0 jpeg")
+    assert photo_path_problem(str(jpeg)) == ""
+    secret = tmp_path / ".env"
+    secret.write_text("KEY=value")
+    assert photo_path_problem(str(secret))
+    disguised = tmp_path / "secret.png"
+    disguised.write_text("KEY=value")
+    assert photo_path_problem(str(disguised)) == "not an image"
+    link = tmp_path / "link.png"
+    link.symlink_to(good)
+    assert photo_path_problem(str(link)) == "a link, not the photo itself"
+    assert photo_path_problem("face.png") == "not a full path"
+    assert photo_path_problem(str(tmp_path / "gone.png")) == "no such file"
+    assert photo_path_problem(str(tmp_path)) == "no such file"
 
 
 def test_no_photos_means_nothing_to_refuse():
@@ -143,8 +180,7 @@ def armed(window, account, monkeypatch, tmp_path):
     each dialog, each authorisation and each worker start instead of sending."""
     import agents.creator.panel as creator_panel
     from PySide6.QtWidgets import QMessageBox
-    photo = tmp_path / "them.png"
-    photo.write_bytes(b"\x89PNG them")
+    photo = _png(tmp_path / "them.png")
     for name in ("GEMINI_API_KEY", "DASHSCOPE_API_KEY", "HF_API_KEY_ID",
                  "HF_API_KEY_SECRET"):
         monkeypatch.setenv(name, "test-not-a-real-key")
@@ -167,6 +203,7 @@ def armed(window, account, monkeypatch, tmp_path):
                         lambda worker: seen["started"].append(worker))
     panel = window.creator_panel
     monkeypatch.setattr(panel, "current_account", lambda: _account(account))
+    seen["photo"] = photo
     try:
         yield panel, account, seen
     finally:
@@ -209,6 +246,8 @@ def test_the_direct_route_checks_the_record_itself(armed, route):
     _set_record(account, "managed")
     panel._switch_teaser_route(route)
     panel._generate_direct_teaser(_account(account), "a teaser")
+    assert seen["dialogs"][-1][0] == "Consent record missing"
+    assert panel.creator_video_status.text() == "Not sent: consent record missing."
     assert seen["authorised"] == [] and seen["started"] == []
     assert _job_rows(account) == 0
 
@@ -229,6 +268,41 @@ def test_a_teaser_with_a_record_or_no_need_for_one_goes_ahead(
     assert len(seen["started"]) == 1
     assert len(seen["started"][0].reference_images) == 1  # sent as before
     assert _job_rows(account) == 1
+
+
+def test_a_line_that_is_not_a_photo_is_not_sent(armed, monkeypatch, tmp_path):
+    """A record does not make a stray file a photo: a `.env` listed by
+    mistake is refused before anything is uploaded."""
+    import agents.creator.panel as creator_panel
+    panel, account, seen = armed
+    secret = tmp_path / ".env"
+    secret.write_text("KEY=value")
+    monkeypatch.setattr(creator_panel, "reference_images",
+                        lambda account_id: [str(secret)])
+    _set_record(account, "own")
+    for route in ("higgsfield", "gemini"):
+        panel._switch_teaser_route(route)
+        panel.generate_video()
+        assert seen["dialogs"][-1][0] == "Not a photo"
+    assert seen["authorised"] == [] and seen["started"] == []
+    assert _job_rows(account) == 0
+
+
+def test_unsaved_photo_edits_stop_the_teaser(armed):
+    """Saved as Me, switched to Someone else on screen, not saved: the
+    teaser must not send what the form no longer says."""
+    panel, account, seen = armed
+    _set_record(account, "own")
+    panel.load_voice_tab()
+    box = panel.creator_photo_subject
+    box.setCurrentIndex(box.findData("managed"))
+    panel._switch_teaser_route("gemini")
+    panel.generate_video()
+    assert seen["dialogs"][-1][0] == "Reference photos not saved"
+    assert seen["authorised"] == [] and seen["started"] == []
+    box.setCurrentIndex(box.findData("own"))
+    panel.generate_video()
+    assert len(seen["started"]) == 1
 
 
 def test_the_higgsfield_estimate_waits_for_the_record(armed):
@@ -257,7 +331,7 @@ def test_the_form_saves_and_reloads_photos_subject_and_record(
     from agents.creator.profile import reference_images
     panel = window.creator_panel
     _select(panel, account)
-    photos = [str(tmp_path / "a.png"), str(tmp_path / "b.jpg")]
+    photos = [str(_png(tmp_path / "a.png")), str(_png(tmp_path / "b.png"))]
     panel.creator_reference_photos.setPlainText("\n".join(photos))
     panel.creator_photo_subject.setCurrentIndex(
         panel.creator_photo_subject.findData("managed"))
@@ -290,10 +364,56 @@ def test_the_record_fields_show_only_for_someone_else(window, account):
     for subject, shown in (("own", False), ("persona", False), ("managed", True)):
         box.setCurrentIndex(box.findData(subject))
         assert panel.creator_consent_fields.isHidden() is (not shown)
-    box.setCurrentIndex(box.findData("persona"))
-    assert not panel.creator_persona_group.isHidden()
+        # A recorded appearance reaches every teaser prompt, so the bible
+        # is never hidden behind the choice (review P2-2).
+        assert not panel.creator_persona_group.isHidden()
+
+
+def test_switching_to_me_clears_the_record(window, account, tmp_path):
+    panel = window.creator_panel
+    _select(panel, account)
+    panel.creator_reference_photos.setPlainText(str(_png(tmp_path / "a.png")))
+    box = panel.creator_photo_subject
+    box.setCurrentIndex(box.findData("managed"))
+    panel.creator_consent_holder.setText("Sam Example")
+    panel.creator_consent_date.setText("2026-11-20")
+    panel.creator_consent_note.setText("email")
+    panel.save_voice()
     box.setCurrentIndex(box.findData("own"))
-    assert panel.creator_persona_group.isHidden()
+    panel.save_voice()
+    stored = _account(account)
+    assert (stored["account_type"], stored["consent_holder"],
+            stored["consent_date"], stored["consent_note"]) == ("own", "", "", "")
+
+
+def test_saving_an_incomplete_record_says_so(window, account, tmp_path):
+    panel = window.creator_panel
+    _select(panel, account)
+    panel.creator_reference_photos.setPlainText(str(_png(tmp_path / "a.png")))
+    box = panel.creator_photo_subject
+    box.setCurrentIndex(box.findData("managed"))
+    panel.creator_consent_holder.clear()
+    panel.creator_consent_date.clear()
+    panel.save_voice()
+    assert "consent record is incomplete" in panel.creator_status_label.text()
+    assert _account(account)["account_type"] == "managed"
+
+
+def test_a_stray_line_is_not_saved_as_a_photo(window, account, monkeypatch,
+                                              tmp_path):
+    from PySide6.QtWidgets import QMessageBox
+    from agents.creator.profile import reference_images
+    panel = window.creator_panel
+    _select(panel, account)
+    warned = []
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(
+        lambda _p, title, text, *a, **k: warned.append(text)))
+    secret = tmp_path / ".env"
+    secret.write_text("KEY=value")
+    panel.creator_reference_photos.setPlainText(str(secret))
+    panel.save_voice()
+    assert warned and str(secret) in warned[-1]
+    assert reference_images(account) == []
 
 
 def test_a_date_that_is_not_a_date_is_not_saved(window, account, monkeypatch):
@@ -308,7 +428,9 @@ def test_a_date_that_is_not_a_date_is_not_saved(window, account, monkeypatch):
     panel.creator_consent_holder.setText("Sam Example")
     panel.creator_consent_date.setText("last Tuesday")
     panel.save_voice()
-    assert warned
+    panel.creator_consent_date.setText("2999-01-01")
+    panel.save_voice()
+    assert len(warned) == 2
     assert _account(account)["consent_date"] == ""
     assert _account(account)["account_type"] == "own"
 
@@ -320,10 +442,11 @@ def test_saving_the_voice_keeps_the_persona_bible_of_a_character(
     _select(panel, account)
     box = panel.creator_photo_subject
     box.setCurrentIndex(box.findData("persona"))
+    panel.creator_reference_photos.clear()
     panel.creator_persona_appearance.setText("silver hair, green coat")
     panel.save_voice()
     assert load_persona(account)["appearance"] == "silver hair, green coat"
     box.setCurrentIndex(box.findData("own"))
     panel.save_voice()
-    # Hidden is not deleted: switching back shows the same character.
+    # Changing whose photos they are never deletes the character.
     assert load_persona(account)["appearance"] == "silver hair, green coat"

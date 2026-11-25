@@ -168,24 +168,74 @@ PHOTO_SUBJECTS = (
     ("persona", "A made-up character"),
     ("managed", "Someone else"),
 )
-NO_RECORD_NEEDED = ("own", "persona", "", None)
+# None is an account dict without the column (the table's default is 'own');
+# any other value, the empty string included, needs a record.
+NO_RECORD_NEEDED = ("own", "persona", None)
+PHOTO_SUFFIXES = (".png", ".jpg", ".jpeg", ".webp")
+
+
+def photo_path_problem(path: str) -> str:
+    """Why this line is not a photo that may be sent, or "".
+
+    Every teaser route reads the listed file and sends its bytes, so a stray
+    line (a pasted `.env`, a key file, a symlink named like a photo) would go
+    to the provider. Only an absolute path to a regular, non-symlinked file
+    with an image suffix and image bytes passes.
+    """
+    from pathlib import Path
+    p = Path(path)
+    if not p.is_absolute():
+        return "not a full path"
+    if p.is_symlink():
+        return "a link, not the photo itself"
+    if not p.is_file():
+        return "no such file"
+    if p.suffix.lower() not in PHOTO_SUFFIXES:
+        return "not a PNG, JPEG or WebP file"
+    try:
+        with p.open("rb") as handle:
+            head = handle.read(12)
+    except OSError:
+        return "cannot be read"
+    if not (head.startswith(b"\x89PNG") or head.startswith(b"\xff\xd8\xff")
+            or (head[:4] == b"RIFF" and head[8:12] == b"WEBP")):
+        return "not an image"
+    return ""
+
+
+def consent_date_problem(text: str) -> str:
+    """Why the date they agreed is not usable, or ""."""
+    from datetime import date
+    text = (text or "").strip()
+    if not text:
+        return "missing"
+    try:
+        agreed = date.fromisoformat(text)
+    except ValueError:
+        return "not a year-month-day date"
+    if agreed > date.today():
+        return "in the future"
+    return ""
 
 
 def photo_consent_refusal(account: dict, references: list) -> str:
     """Why the photos may not be sent, or "" when they may.
 
     Only someone else's photos need a record: their name and the date they
-    agreed. A value no build writes counts as someone else, so a hand edit or
-    a typo fails closed. No photos, nothing to refuse.
+    agreed, as a past or present year-month-day date. A value no build writes
+    counts as someone else, so a hand edit or a typo fails closed. No photos,
+    nothing to refuse.
     """
     if not references:
         return ""
-    if (account or {}).get("account_type") in NO_RECORD_NEEDED:
+    account = account or {}
+    if account.get("account_type") in NO_RECORD_NEEDED:
         return ""
     missing = []
     if not str(account.get("consent_holder") or "").strip():
         missing.append("their name")
-    if not str(account.get("consent_date") or "").strip():
+    # Parsed here too: a hand-edited or old row is not trusted to be a date.
+    if consent_date_problem(str(account.get("consent_date") or "")):
         missing.append("the date they agreed")
     if not missing:
         return ""

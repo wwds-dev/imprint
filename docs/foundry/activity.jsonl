@@ -221,3 +221,5 @@
 {"ts": "2026-11-24T23:39:14", "phase": "verify", "state": "done", "spec": "ai-act-safeguards-leftovers"}
 {"ts": "2026-11-24T23:46:19", "phase": "define", "state": "done", "spec": "reference-photo-consent"}
 {"ts": "2026-11-24T23:46:54", "phase": "build", "state": "start", "spec": "reference-photo-consent"}
+{"ts": "2026-11-24T23:52:34", "phase": "build", "state": "done", "spec": "reference-photo-consent"}
+{"ts": "2026-11-24T23:52:34", "phase": "review", "state": "start", "spec": "reference-photo-consent"}

@@ -2,7 +2,7 @@
 
 Needs: define (owner gate), then architect (small), build, review, verify, secure, docs
 
-Status: **Define approved 2026-11-24 (option A); Build on `claude/silly-raman-4ddd34`.** Owner's words: "D2: A, own accounts need no record, include it in the next release. Titles deferred: yes. Walk: a later session. ADR 0002, 0003 and the Define: approved as built." (`docs/foundry/approvals.jsonl`). Deferred as D2 of `docs/specs/ai-act-safeguards.md`; TODO.md P2 `security` `@me`. Not started by any
+Status: **Define approved 2026-11-24 (option A, then A′); built, reviewed, verified and secured on `claude/silly-raman-4ddd34`; not released.** Owner's words: "D2: A, own accounts need no record, include it in the next release. Titles deferred: yes. Walk: a later session. ADR 0002, 0003 and the Define: approved as built." (`docs/foundry/approvals.jsonl`). Deferred as D2 of `docs/specs/ai-act-safeguards.md`; TODO.md P2 `security` `@me`. Not started by any
 other session (`session_start.py --inflight`, 2026-11-24).
 
 ## Problem
@@ -56,7 +56,11 @@ Backstage shares no data with Imprint. Asked, the owner chose **A′** ("Build A
 - Stored in the existing columns, no schema change: `account_type` `own` / `persona` / `managed`,
   `consent_holder`, `consent_date`, `consent_note`; the photos in `creator_persona.reference_images`. Choosing
   Me or a character clears the record. A value no build writes counts as Someone else (fails closed).
-- The character bible shows for A made-up character (as before for `persona`); hidden is not deleted.
+- The character bible shows for every account (review P2-2: a recorded appearance reaches every teaser prompt,
+  and `test_character_reaches_any_account_that_has_one` keeps it ungated by type).
+- After review: a teaser refuses unsaved photo edits; photo lines must be absolute paths to regular, non-symlinked
+  PNG/JPEG/WebP files with image bytes (on save and before sending); the date must be a past or present
+  year-month-day, re-parsed by the gate; a blank type fails closed.
 - The check (`agents/creator/profile.py` `photo_consent_refusal`, called by `CreatorPanel._photo_consent_ok`)
   runs in `generate_video` before any key, permission, estimate or budget step (Higgsfield uploads the photo
   while it prepares its estimate), and again in `_generate_direct_teaser`. A refusal shows "Consent record

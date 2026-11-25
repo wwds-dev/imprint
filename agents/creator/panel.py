@@ -28,8 +28,9 @@ from PySide6.QtWidgets import (
 from agents.creator import PROMO_CHANNELS
 from agents.creator import calendar as content_calendar
 from agents.creator.profile import (
-    PHOTO_SUBJECTS, load_persona, load_voice, photo_consent_refusal,
-    reference_images, save_persona, save_voice,
+    PHOTO_SUBJECTS, consent_date_problem, load_persona, load_voice,
+    photo_consent_refusal, photo_path_problem, reference_images, save_persona,
+    save_voice,
 )
 from services.database import get_connection
 from services.higgsfield_client import (
@@ -99,6 +100,8 @@ class CreatorPanel(QWidget):
         self._calendar_week_start: date = (
             date.today() - timedelta(days=date.today().weekday()))
         self._video_context: dict = {}
+        # Which account the Voice tab's Reference photos form shows.
+        self._photo_form_account_id = None
         self.setObjectName("CreatorPanel")
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -470,8 +473,8 @@ class CreatorPanel(QWidget):
         photos = QVBoxLayout(photos_group)
         photos.setSpacing(6)
         photos.addWidget(QLabel(
-            "Sent to the video service with every teaser, so renders keep the "
-            "same face. One file per line."))
+            "Sent with every teaser to Higgsfield, Gemini Omni or Wan, so "
+            "renders keep the same face. One PNG, JPEG or WebP file per line."))
         self.creator_reference_photos = QTextEdit()
         self.creator_reference_photos.setAcceptRichText(False)
         self.creator_reference_photos.setPlaceholderText(
@@ -507,8 +510,9 @@ class CreatorPanel(QWidget):
         photos.addWidget(consent_hint)
         layout.addWidget(photos_group)
 
-        # Persona bible — shown when the photos are of a made-up character.
-        self.creator_persona_group = QGroupBox("Character bible (made-up characters)")
+        # Character bible — shown for every account: a recorded appearance
+        # reaches every draft and teaser prompt, so it is never hidden.
+        self.creator_persona_group = QGroupBox("Character bible (written characters)")
         pg = FieldGridLayout(columns=3)
         self.creator_persona_group.setLayout(pg)
         self.creator_persona_appearance = QLineEdit()
@@ -1222,11 +1226,53 @@ class CreatorPanel(QWidget):
         """False, with a dialog, when the teaser would send someone else's
         photos with no record of who agreed and when. Reserves nothing and
         writes no job row (spec reference-photo-consent)."""
-        reason = photo_consent_refusal(account, reference_images(account["id"]))
-        if not reason:
+        references = reference_images(account["id"])
+        if references and self._photo_form_unsaved(account, references):
+            QMessageBox.warning(
+                self, "Reference photos not saved",
+                "Not sent: the Reference photos on the Voice tab have changes "
+                "that are not saved. Click Save Voice & Character first, so "
+                "the teaser sends what the form shows.")
+            self.creator_video_status.setText("Not sent: reference photos not saved.")
+            return False
+        reason = photo_consent_refusal(account, references)
+        if reason:
+            QMessageBox.warning(self, "Consent record missing", reason)
+            self.creator_video_status.setText("Not sent: consent record missing.")
+            return False
+        bad = [(path, photo_path_problem(path)) for path in references]
+        bad = [(path, why) for path, why in bad if why]
+        if bad:
+            QMessageBox.warning(
+                self, "Not a photo",
+                "Not sent: these reference photo lines cannot be sent:\n\n"
+                + "\n".join(f"{path}: {why}" for path, why in bad))
+            self.creator_video_status.setText("Not sent: reference photo not usable.")
+            return False
+        return True
+
+    def _photo_form_unsaved(self, account: dict, references: list) -> bool:
+        """True when the Voice tab shows this account's photo record with
+        edits that are not saved. The send reads the saved record; this stops
+        it sending something other than what the form shows."""
+        if self._photo_form_account_id != account.get("id"):
+            return False
+        shown = [line.strip() for line in
+                 self.creator_reference_photos.toPlainText().splitlines()
+                 if line.strip()]
+        saved_subject = account.get("account_type") or "own"
+        if self.creator_photo_subject.findData(saved_subject) < 0:
+            saved_subject = "managed"
+        if shown != list(references):
             return True
-        QMessageBox.warning(self, "Consent record missing", reason)
-        self.creator_video_status.setText("Not sent: consent record missing.")
+        if self.creator_photo_subject.currentData() != saved_subject:
+            return True
+        if saved_subject == "managed" and (
+                self.creator_consent_holder.text().strip()
+                != (account.get("consent_holder") or "").strip()
+                or self.creator_consent_date.text().strip()
+                != (account.get("consent_date") or "").strip()):
+            return True
         return False
 
     def _video_estimated(self, client, request, estimate):
@@ -1896,14 +1942,26 @@ class CreatorPanel(QWidget):
         agreed = self.creator_consent_date.text().strip()
         note = self.creator_consent_note.text().strip()
         if subject == "managed" and agreed:
-            try:
-                agreed = date.fromisoformat(agreed).isoformat()
-            except ValueError:
+            problem = consent_date_problem(agreed)
+            if problem:
                 QMessageBox.warning(
                     self, "Date they agreed",
-                    "Write the date they agreed as year-month-day, for "
-                    "example 2026-11-24. Nothing was saved.")
+                    f"The date they agreed is {problem}. Write it as "
+                    "year-month-day, for example 2026-11-24. Nothing was saved.")
                 return
+            agreed = date.fromisoformat(agreed).isoformat()
+        photo_lines = [line.strip() for line in
+                       self.creator_reference_photos.toPlainText().splitlines()
+                       if line.strip()]
+        bad = [(path, photo_path_problem(path)) for path in photo_lines]
+        bad = [(path, why) for path, why in bad if why]
+        if bad:
+            QMessageBox.warning(
+                self, "Reference photos",
+                "These lines are not photos Imprint can send:\n\n"
+                + "\n".join(f"{path}: {why}" for path, why in bad)
+                + "\n\nRemove or fix them. Nothing was saved.")
+            return
         try:
             with get_connection() as conn:
                 conn.execute(
@@ -1919,19 +1977,16 @@ class CreatorPanel(QWidget):
             self.host._note_failure("creator: save photo record", exc,
                                     self.creator_status_label)
             return
-        photos = "\n".join(
-            line.strip() for line in
-            self.creator_reference_photos.toPlainText().splitlines()
-            if line.strip())
-        save_voice(
-            account["id"],
-            samples=self.creator_voice_samples.toPlainText(),
-            tone=self.creator_voice_tone.text(),
-            emoji_style=self.creator_voice_emoji.text(),
-            banned_words=self.creator_voice_banned.text(),
-            typical_length=self.creator_voice_length.text(),
-        )
-        if subject == "persona":
+        try:
+            photos = "\n".join(photo_lines)
+            save_voice(
+                account["id"],
+                samples=self.creator_voice_samples.toPlainText(),
+                tone=self.creator_voice_tone.text(),
+                emoji_style=self.creator_voice_emoji.text(),
+                banned_words=self.creator_voice_banned.text(),
+                typical_length=self.creator_voice_length.text(),
+            )
             try:
                 seed = int(self.creator_persona_seed.text().strip() or 0) or None
             except ValueError:
@@ -1945,10 +2000,21 @@ class CreatorPanel(QWidget):
                 seed=seed,
                 reference_images=photos,
             )
+        except Exception as exc:
+            # The photo record above is saved; say so rather than "Saved".
+            self.host._note_failure("creator: save voice and photos", exc,
+                                    self.creator_status_label)
+            return
+        self._photo_form_account_id = account["id"]
+        if photo_lines and photo_consent_refusal(
+                {"account_type": subject, "consent_holder": holder,
+                 "consent_date": agreed}, photo_lines):
+            self.creator_status_label.setText(
+                "Voice saved. The consent record is incomplete: a teaser will "
+                "not send these photos until Who agreed and Date they agreed "
+                "are filled in.")
         else:
-            # Only the photo list: a hidden character bible is kept as is.
-            save_persona(account["id"], reference_images=photos)
-        self.creator_status_label.setText("Voice saved — drafts will use it.")
+            self.creator_status_label.setText("Voice saved — drafts will use it.")
 
     def load_voice_tab(self):
         account = self.current_account()
@@ -1973,6 +2039,7 @@ class CreatorPanel(QWidget):
         self.creator_consent_date.setText(account.get("consent_date") or "")
         self.creator_consent_note.setText(account.get("consent_note") or "")
         self._photo_subject_changed()
+        self._photo_form_account_id = account["id"]
         # Always set, so one account's character never shows under another.
         self.creator_persona_appearance.setText(persona.get("appearance") or "")
         self.creator_persona_backstory.setText(persona.get("backstory") or "")
@@ -1984,7 +2051,6 @@ class CreatorPanel(QWidget):
     def _photo_subject_changed(self, *_args) -> None:
         subject = self.creator_photo_subject.currentData()
         self.creator_consent_fields.setVisible(subject == "managed")
-        self.creator_persona_group.setVisible(subject == "persona")
 
     def add_reference_photos(self) -> None:
         paths, _ = QFileDialog.getOpenFileNames(
