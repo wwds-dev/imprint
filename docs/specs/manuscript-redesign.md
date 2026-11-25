@@ -2,8 +2,9 @@
 
 Needs: design, architect, build, review, verify, docs
 
-Status: **Define written 2026-11-25; waiting for the owner at the Define gate.** No Design,
-Architect or Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
+Status: **Define approved by the owner 2026-11-25 ("do as recommended"): D1 to D12 are decided
+as recommended, alternatives not taken.** No Design, Architect or Build has started; they start
+only when the owner asks, after testing. Priority: P3 (TODO.md: testing comes first; no redesign row
 starts until the owner asks, after testing). Type: user-visible redesign of the whole window,
 new UI capability (stepper, next-step card, word goal, cover, focus mode, light theme), no new
 paid path, no change to what agents do. Owner session: `claude/spec-manuscript-redesign-9236ea`
@@ -141,8 +142,9 @@ single ask bar with a model chip; empty-state drop targets; Booth's animated bar
 reshaping preview; Sitebuilder's palette preview; side buttons for non-stage tabs. Nothing here
 exists in code; each is built, reviewed and verified like a feature.
 
-## Decisions for the owner (Define gate)
-Each has a recommendation; the owner may answer "as recommended" for all or pick per item.
+## Decisions (Define gate)
+Decided 2026-11-25, owner: "do as recommended". Each item below is decided as its *Recommended*
+text says; the alternatives were not taken.
 
 **D1. Tabs that are not steps.** Label's six tabs are planning areas, not a sequence; Herald's
 Accounts, Vector's Orders and Nova's Voice are setup or records; Quill's Outline, Characters, World
@@ -292,5 +294,5 @@ that spec's measure 4 (moved controls keep their names, handlers, tooltips and h
 - **Scope size:** five slices across ten agents; the estimate is set at Plan, not here.
 
 ## Open questions for the owner
-D1 to D12 above. The gate needs at least D2, D3, D4, D5 and D10 answered before Design starts;
-the rest can be answered per slice.
+None at Define (D1 to D12 decided 2026-11-25). Design will raise the layout questions the
+mockups leave open, such as the collapse rule at the 1000 px minimum.
