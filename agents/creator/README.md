@@ -4,10 +4,13 @@ Owns shared content production for Imprint Studio ventures: voice profiles, conc
 captions, campaigns, promotional assets and the plan calendar.  Its public API
 is `agents.creator` (see `__init__.py` for the exact re-exports).
 
-Nova is platform-neutral.  Account consent records, platform-policy review,
+Nova is platform-neutral.  Account authorisation records, platform-policy review,
 statement import, per-asset revenue and the agency view were removed on
 2026-09-30 — **Backstage** (`active/backstage`) owns that work, shares no code
-or data with this app, and a test enforces the boundary.  User guidance:
+or data with this app, and a test enforces the boundary.  One record is Nova's
+own since 2026-11-24: whose reference photos a teaser sends, and for someone
+else's, who agreed and when (`profile.photo_consent_refusal`; spec
+`docs/specs/reference-photo-consent.md`).  User guidance:
 `docs/agents/creator.md`.  Run focused coverage with
 `pytest tests/test_creator_agent.py tests/test_creator_v2.py`.
 

@@ -10,10 +10,11 @@
 - One bounded campaign idea, with an audience and an intended action.
 - Rights to any likeness, voice or media you reference.
 
-> Earnings, statement imports, account consent records, platform-policy review
-> and the agency view moved to **Backstage** on 30 September 2026. Nova is the
-> production surface; Backstage is where the money and the account
-> authorisation records live. Nothing here reports revenue any more.
+> Earnings, statement imports, account authorisation records, platform-policy
+> review and the agency view moved to **Backstage** on 30 September 2026. Nova
+> is the production surface; Backstage is where the money and the account
+> authorisation records live. Nothing here reports revenue any more. One
+> record stays here: whose reference photos a teaser sends (Step 2).
 
 ## Profile and compose controls
 
@@ -125,8 +126,8 @@ Backstage, and nothing in this recipe predicts what the post will earn.
 Fill in the profile fields at the top of Nova and click **Save Profile**. The
 handle and platform travel with every draft, so the copy fits the same
 account each time. The profile exists only inside Imprint — saving or
-removing it touches nothing on the platform, and account consent records
-live in Backstage, not here.
+removing it touches nothing on the platform, and account authorisation
+records live in Backstage, not here.
 
 ```
 Handle / project:    @lanternpress
@@ -140,9 +141,16 @@ Platform / venture:  Writing / Publishing
 Open the **Voice** tab and paste five or six of this account's own posts —
 the model imitates these, and it is what stops drafts reading like generic
 AI copy. Fill the four small fields, then click **Save Voice & Character**.
-On a persona account the Character bible appears below: appearance,
-backstory, personality, boundaries and a locked seed keep every draft and
-render the same character.
+
+Under **Reference photos**, list the photos a teaser should keep the face
+from (**Add photos…**) and say **Who is in these photos**. For *Someone
+else*, fill in **Who agreed** and **Date they agreed**: until both are there,
+a teaser refuses with *Consent record missing* and sends nothing. Save before
+you generate: a teaser refuses unsaved photo changes. The record is what you
+state; Imprint does not check the photos.
+
+The Character bible below (appearance, backstory, personality, boundaries
+and a locked seed) keeps every draft and render the same character.
 
 ```
 Tone:       dry, warm, a bit deadpan

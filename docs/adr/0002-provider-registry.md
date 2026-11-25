@@ -1,6 +1,6 @@
 # ADR 0001: One provider registry; "local" is a property of the spec
 
-Status: proposed (2026-10-19, architect, for the owner's gate). Plan: `docs/local_model_routing_plan.html` in the lab root, section 3, phase 1.
+Status: accepted as built (owner, 2026-11-24: "D2: A, own accounts need no record, include it in the next release. Titles deferred: yes. Walk: a later session. ADR 0002, 0003 and the Define: approved as built."; `docs/foundry/approvals.jsonl`, gate architect, spec local-model-routing). Proposed 2026-10-19 by the architect. Plan: `docs/local_model_routing_plan.html` in the lab root, section 3, phase 1.
 
 ## Context
 Imprint asked "is this Ollama?" by comparing the provider name to the string "ollama" in about 20 places: pricing, privacy score, the paid-request dialog, usage tracking, budget gates. A second local runtime (LM Studio, where the owner's DeepSeek R1 distills and Dolphin models live) would have been priced as unknown, scored as a cloud call and put behind the paid-request dialog. Ollama's address was also hardcoded.

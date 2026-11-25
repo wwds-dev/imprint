@@ -2285,6 +2285,10 @@ Nova. **Backstage** — a separate app in the same workspace, sharing no code an
 no data — already owned all of it. Nova keeps drafting, the plan calendar,
 voice, media, teasers and the written-character record.
 
+One piece came back on 2026-11-24, for the teaser only (spec
+`reference-photo-consent`): whose reference photos a teaser sends. See
+*Reference photos and consent* below.
+
 The `creator_*` tables stay in the database untouched, and `creator_content`
 keeps its `price_usd` and `revenue_usd` columns; nothing writes or reads them
 now. The pre-cut files are archived under
@@ -2302,6 +2306,29 @@ An account may additionally carry a **character bible** (appearance,
 backstory, personality, boundaries) and a locked generation seed, so a
 written character stays one character rather than becoming a new one each
 session.
+
+#### Reference photos and consent
+
+Every teaser route sends the account's reference photos to its provider. The
+**Voice** tab's **Reference photos** group lists them (one file per line, or
+**Add photos…**) and asks **Who is in these photos**: *Me*, *A made-up
+character* or *Someone else*. For someone else it asks **Who agreed** and
+**Date they agreed** (year-month-day, not in the future), with an optional
+note. Until both are filled in, **Generate Teaser** refuses with *Consent
+record missing* before any key, estimate or budget step: nothing is uploaded,
+reserved or written to the job table. *Me* and *A made-up character* send as
+before. A teaser also refuses while the group has unsaved changes, and any
+line that is not an absolute path to a real PNG, JPEG or WebP file (not a
+link) is refused on save and again before sending. The character bible shows
+for every account, since a recorded appearance goes into every teaser
+prompt.
+
+The record is what you state; Imprint does not check the photos, the face in
+them or the person's agreement. It is stored on the account
+(`creator_accounts.account_type` `own` / `persona` / `managed`,
+`consent_holder`, `consent_date`, `consent_note`), never sent to a provider
+or put in a prompt, and deleted with the account. A value no build writes
+counts as someone else.
 
 #### Calendar
 
