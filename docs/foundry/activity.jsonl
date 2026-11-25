@@ -229,3 +229,4 @@
 {"ts": "2026-11-25T00:09:45", "phase": "secure", "state": "done", "spec": "reference-photo-consent"}
 {"ts": "2026-11-25T00:09:45", "phase": "document", "state": "start", "spec": "reference-photo-consent"}
 {"ts": "2026-11-25T00:09:57", "phase": "document", "state": "done", "spec": "reference-photo-consent"}
+{"ts": "2026-11-25T01:01:19", "phase": "verify", "state": "done", "spec": "reference-photo-consent"}

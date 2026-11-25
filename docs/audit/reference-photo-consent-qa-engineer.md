@@ -17,7 +17,7 @@ always shown, symlinks allowed, no image-bytes check, no unsaved-form check, no 
 check on save. A first round found one survivor (stale record kept); the test was added.
 
 ## Suite
-Focused files green under seeds 11, 22, 33 (340 passed, 17 xfailed). Full suite: see the commit that closes Verify.
+Focused files green under seeds 11, 22, 33 (340 passed, 17 xfailed). Full suite on `b4f0eef`, seed 424242, `SIBLING_REPO_DIR` set: **3077 passed, 6 skipped, 17 xfailed, 0 failed** (50 min).
 
 ## Not verified
 On screen in the launched app (layout of the new group, the file picker). Not run against a provider.
