@@ -403,3 +403,150 @@ def test_show_me_for_a_missing_control_says_so_instead_of_closing(app, window):
     dialog = LearningCentreDialog(window, main.RESOURCE_DIR, "site-builder")
     assert not dialog.show_me("webdesign_no_such_control")
     assert "moved" in dialog.lesson_meta.text()
+
+
+# ── Lessons after the Manuscript shell (ADR 0006, decision 6) ─────────────
+#
+# Controls moved into the History drawer, the spend and status popovers and
+# the "?" and project menus. A lesson must still reach every one: reveal()
+# opens the container first, and an action in a menu rings the button that
+# opens that menu.
+
+def _close_shell(window, app):
+    window.spend_popover.hide()
+    window.status_popover.hide()
+    window.history_drawer.close_drawer()
+    _settle(app, 4)
+
+
+def _lesson_targets():
+    mapping = json.loads((LEARN_DIR / "help_map.json").read_text(encoding="utf-8"))
+    pages = {page.id: page for page in _pages()}
+    targets = {name: pages[value.partition("#")[0]].agent
+               for name, value in mapping.items()}
+    for page in SHOW_ME_PAGES:
+        text = (LEARN_DIR / page.filename).read_text(encoding="utf-8")
+        from ui.learning_center_v2 import SHOW_ME_LINK
+        for _label, path in SHOW_ME_LINK.findall(text):
+            targets.setdefault(path, page.agent)
+    return sorted(targets.items())
+
+
+def _in_shell(window, widget) -> bool:
+    """Whether the shell holds `widget`: rail, top bar, drawer or popovers."""
+    return any(container is widget or container.isAncestorOf(widget)
+               for container in (window.workspace_tabs, window.top_bar,
+                                 window.history_drawer, window.spend_popover,
+                                 window.status_popover))
+
+
+def test_every_lesson_target_resolves_and_the_shells_ring_after_reveal(app, window):
+    """Measure 'lessons' of the slice-1 test plan. Every help_map key and
+    every Show me link resolves. Every one the shell holds — in the rail, the
+    top bar, the drawer, a popover, or a menu — is a visible widget after
+    reveal() (a menu action through its menu's button). Agent panels'
+    insides are not slice 1: some of their targets are hidden by the panel's
+    own state (an idle Stop button), which reveal() does not change."""
+    from PySide6.QtGui import QAction
+    from ui.learning_center_v2 import resolve_control
+    from ui.spotlight import anchor_for, reveal
+
+    unreachable, checked = [], []
+    try:
+        for path, agent in _lesson_targets():
+            if agent:
+                window.select_agent(agent)
+            target = resolve_control(window, path)
+            if target is None:
+                unreachable.append(f"{path}: not found")
+                continue
+            if isinstance(target, QAction):
+                target = anchor_for(target)
+                if target is None:
+                    unreachable.append(f"{path}: menu action without lessonAnchor")
+                    continue
+            elif not _in_shell(window, target):
+                continue
+            checked.append(path)
+            # Qt closes a popup when the active window changes; earlier
+            # tests may have left another window active.
+            window.activateWindow()
+            _settle(app, 2)
+            reveal(target)
+            _settle(app, 3)
+            if not target.isVisible():
+                unreachable.append(f"{path}: hidden after reveal")
+            _close_shell(window, app)
+    finally:
+        _close_shell(window, app)
+    assert not unreachable, unreachable
+    # The shell's own lesson targets today (help_map and Show me links).
+    assert {"history_list", "new_chat_btn", "history_search", "learn_btn",
+            "session_budget_input", "daily_budget_input", "model_updates_card",
+            "workspace_tabs", "new_project_btn"} <= set(checked)
+
+
+def test_show_me_on_a_menu_action_rings_its_button(app, window, monkeypatch):
+    """Before ADR 0006 spotlight() called window() on the QAction behind
+    new_project_btn and raised AttributeError (TODO.md)."""
+    from ui.spotlight import spotlight
+
+    marker = spotlight(window.new_project_btn, "Step 1 — Make a project")
+    _settle(app)
+    try:
+        assert marker.target is window.project_menu_btn
+        assert marker.detail_label.text().startswith("In this menu: New Project")
+        assert marker.ring.isVisible()
+    finally:
+        marker.dismiss()
+    marker = spotlight(window.learn_btn, "The Learning Centre")
+    _settle(app)
+    try:
+        assert marker.target is window.help_btn
+        assert "Learning Centre" in marker.detail_label.text()
+    finally:
+        marker.dismiss()
+
+
+def test_show_me_opens_the_drawer_and_the_spend_popover(app, window):
+    from ui.spotlight import spotlight
+
+    try:
+        marker = spotlight(window.history_list, "Step 2 — Find a chat")
+        _settle(app)
+        assert window.history_drawer.is_open()
+        assert window.history_list.isVisible()
+        assert marker.ring.isVisible()
+        marker.dismiss()
+        _close_shell(window, app)
+
+        marker = spotlight(window.daily_budget_input, "Step 3 — Set today's cap")
+        _settle(app)
+        assert window.spend_popover.isVisible()
+        assert window.daily_budget_input.isVisible()
+        # The ring is drawn in the popover's own window, over the field.
+        assert marker.ring.parentWidget() is window.spend_popover
+        marker.dismiss()
+    finally:
+        _close_shell(window, app)
+
+
+def test_show_me_reopens_a_popover_that_a_window_change_closed(app, window):
+    """The Learning Centre closes right after it asks for the ring, and Qt
+    closes a popup when the active window changes. The spotlight reopens it
+    for a short while (REVEAL_RETRY_MS)."""
+    from PySide6.QtCore import QElapsedTimer
+    from ui.spotlight import spotlight
+
+    marker = spotlight(window.session_budget_input, "Step 1 — Set a cap")
+    try:
+        _settle(app)
+        window.spend_popover.hide()            # as Qt does on a window change
+        clock = QElapsedTimer()
+        clock.start()
+        while not window.spend_popover.isVisible() and clock.elapsed() < 600:
+            app.processEvents()
+        assert window.spend_popover.isVisible()
+    finally:
+        marker.dismiss()
+        _close_shell(window, app)

@@ -711,6 +711,10 @@ class CollapsibleSection(QWidget):
         self.content.setVisible(self._expanded)
         self._update_header()
 
+    def reveal_for_lesson(self) -> None:
+        """Help lessons: open, so a control inside can be ringed."""
+        self.set_expanded(True)
+
     def set_expanded(self, expanded: bool) -> None:
         """Open or close the section without a click (the status popover
         opens the one that explains the chip)."""

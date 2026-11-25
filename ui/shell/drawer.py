@@ -69,6 +69,7 @@ class HistoryDrawer(QFrame):
         self.progress = 0.0
         self._open = False
         self.list_widget: QListWidget | None = None
+        self._slide = None
 
         self.scrim = Scrim(host)
         self.scrim.clicked.connect(self.close_drawer)
@@ -151,10 +152,21 @@ class HistoryDrawer(QFrame):
         else:
             self.open_drawer()
 
+    def _stop_slide(self) -> None:
+        """A slide still running (closing, say) must not finish later and
+        undo the opposite move that replaced it."""
+        slide, self._slide = self._slide, None
+        if slide is not None:
+            try:
+                slide.stop()
+            except RuntimeError:
+                pass        # already finished and deleted
+
     def open_drawer(self, *, animate: bool = True,
                     take_focus: bool = True) -> None:
         if self._open:
             return
+        self._stop_slide()
         self._open = True
         self._apply(0.0 if animate else 1.0)
         self.scrim.show()
@@ -168,7 +180,8 @@ class HistoryDrawer(QFrame):
                 else None
             (search or self).setFocus(Qt.FocusReason.OtherFocusReason)
         if animate:
-            motion.animate(self, self.progress, 1.0, SLIDE_MS, self._apply)
+            self._slide = motion.animate(self, self.progress, 1.0, SLIDE_MS,
+                                         self._apply)
         else:
             self._apply(1.0)
         self.opened.emit()
@@ -176,14 +189,16 @@ class HistoryDrawer(QFrame):
     def close_drawer(self) -> None:
         if not self._open:
             return
+        self._stop_slide()
         self._open = False
 
         def _hide():
+            self._slide = None
             self.hide()
             self.scrim.hide()
 
-        motion.animate(self, self.progress, 0.0, SLIDE_MS, self._apply,
-                       on_finished=_hide)
+        self._slide = motion.animate(self, self.progress, 0.0, SLIDE_MS,
+                                     self._apply, on_finished=_hide)
         if self.opener is not None and self.opener.isVisible():
             self.opener.setFocus(Qt.FocusReason.OtherFocusReason)
         self.closed.emit()

@@ -148,6 +148,32 @@ def _credential_names_stay_blanked():
                     pytrace=False)
 
 
+@pytest.fixture(autouse=True)
+def _no_popup_outlives_its_test():
+    """Close any Qt.Popup a test left open (ADR 0006, decision 4).
+
+    A popup takes all mouse and key input while it is open, so a spend or
+    status popover left showing would capture the next test's input, and Qt
+    keeps popups in a stack that a later one joins. Also stops the shell's
+    animations, so a slide cannot finish inside the next test.
+    """
+    yield
+    import sys
+    if "PySide6.QtWidgets" not in sys.modules:
+        return
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        return
+    for _ in range(10):
+        popup = app.activePopupWidget()
+        if popup is None:
+            break
+        popup.close()
+    if "ui.motion" in sys.modules:
+        sys.modules["ui.motion"].stop_all()
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _collect_the_last_modules_windows():
     """Free the previous module's widgets now, before this module builds any.
