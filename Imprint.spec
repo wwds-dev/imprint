@@ -74,6 +74,7 @@ datas += [
     ("assets/more.svg", "assets"),        # left rail: project actions
     ("assets/filter.svg", "assets"),      # left rail: agent filter
     ("assets/chevron-right.svg", "assets"),  # right rail: Activity rows
+    ("assets/shell", "assets/shell"),     # icon rail and top bar (ADR 0006)
     # The menu bar glyph, and the Retina file Qt resolves beside it by name —
     # ship only the base one and the item is a blurry 18px upscale on every
     # Mac made this decade. scripts/make_tray_icon.py regenerates both.

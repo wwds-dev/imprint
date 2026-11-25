@@ -531,3 +531,14 @@ def test_switching_all_six_themes_while_booth_plays(qapp, window, audio_file,
         _settle(qapp, 4)
         theme.set_current(theme.DEFAULT)
         window.apply_global_style()
+
+
+def test_the_packaged_app_ships_the_shell_icons():
+    """The frozen app reads assets/shell/*.svg; Imprint.spec must bundle them."""
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    spec = (root / "Imprint.spec").read_text(encoding="utf-8")
+    assert '("assets/shell", "assets/shell")' in spec
+    import main
+    icons = {p.stem for p in (root / "assets" / "shell").glob("*.svg")}
+    assert set(main.WORKSPACE_ICONS.values()) | {"help", "settings", "history"} <= icons
