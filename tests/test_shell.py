@@ -107,7 +107,7 @@ def test_the_shell_fits_at_every_size(qapp, window, size, name, agent):
         for widget in children:
             assert bar.rect().contains(widget.geometry()), type(widget).__name__
         ordered = sorted(children, key=lambda w: w.geometry().left())
-        for left, right in zip(ordered, ordered[1:]):
+        for left, right in zip(ordered, ordered[1:], strict=False):
             assert left.geometry().right() < right.geometry().left(), (
                 f"{type(left).__name__} overlaps {type(right).__name__}")
 
