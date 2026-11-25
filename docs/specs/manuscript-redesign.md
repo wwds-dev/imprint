@@ -5,7 +5,7 @@ Needs: design, architect, build, review, verify, docs
 Status: **Define approved by the owner 2026-11-25 ("do as recommended"): D1 to D12 are decided
 as recommended, alternatives not taken.** Design for slice 1 was written 2026-11-25 at the owner's
 request, before testing ("no testing"; section "Design (slice 1)"), and approved the same day,
-owner: "Approve as recommended" (O1 to O3 as recommended). No Architect or Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
+owner: "Approve as recommended" (O1 to O3 as recommended). Architect for slice 1 was written 2026-11-25 (section "Architecture (slice 1)", ADR 0006, proposed) and waits for the owner at the Architect gate with three open points (AO1 to AO3). No Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
 starts until the owner asks, after testing). Type: user-visible redesign of the whole window,
 new UI capability (stepper, next-step card, word goal, cover, focus mode, light theme), no new
 paid path, no change to what agents do. Owner session: `claude/spec-manuscript-redesign-9236ea`
@@ -624,6 +624,118 @@ Decided 2026-11-25, owner: "Approve as recommended". Each point below is decided
 - **Mockups:** none made for this phase. The B mockups already show the rail, bar and chips. A
   mockup of the popovers, drawer and the 1000 px collapse can go on the canvas if the owner wants
   one (only with the owner's OK).
+
+## Architecture (slice 1)
+Phase 3, `architect`, 2026-11-25. Input: "Design (slice 1)" as approved (S1–S11, O1–O3); nothing
+in it is redesigned here. The decisions, their evidence and the alternatives are in
+`docs/adr/0006-manuscript-shell.md` (Proposed). Radar note:
+`docs/foundry/radar-notes/2026-11-25-stack-manuscript-shell.md`. Legal consult skipped: slice 1
+adds no data flow, processor, dependency or bundled asset (S2's icons are drawn in-repo as SVG).
+
+**A1. Light palette.** Every palette gains the border and semantic tokens (`BORDER`,
+`BORDER_STRONG`, `DANGER`/`WARNING`/`INFO` with their washes and lines) and the new `WARNING_DOT`.
+Dark palettes keep today's values; light palettes take S8's. `global_stylesheet()` and
+`recolour()` work unchanged. `WARNING_DOT` is painter-only (`theme.token(...)`), because its dark
+value equals `WARNING` and a literal swap cannot tell them apart; `_SWAP` raises on any such
+ambiguity. The 48 colour literals outside the tokens (ADR context) are replaced by tokens in this
+slice, guarded by a test, because light becomes the default for every panel. The docstring and
+`appearance_intro()` change from "semantic colour never changes" to "semantic meaning never
+changes; light needs darker values".
+
+**A2. Theme model.** Look × Accent with one stored key, `ui_theme`: six keys `light-green`,
+`light-rose`, `light-teal`, `green`, `red`, `blue` (dark keys unchanged, so no saved value breaks).
+Helpers `look`, `accent_of`, `compose`, `themes_for`; labels "Light · Green" … "Dark · Teal".
+Default `light-green`. O2: `theme.adopt_light_once()` moves a saved dark key to light with the same
+accent once, writes `ui_light_adopted`, and returns whether to show the one-time note (a
+dismissible line at the top of the content column). The count sentence is built from `LOOKS` and
+`ACCENTS`.
+
+**A3. `workspace_tabs`.** `WorkspaceRail` (`ui/shell/icon_rail.py`) is the handle, implementing
+the `QTabBar` subset in use (`count`, `tabText`, `currentIndex`, `setCurrentIndex`,
+`currentChanged`, `elideMode`, `isTabVisible`, tab tooltips). `header_fit.py`, `header_fitter` and
+`workspace_more_btn` are deleted; `TopBarFitter` applies S3's collapse steps from measured hints.
+
+**A4. Popovers and menus.** Spend and status: `Popover`, a `Qt.Popup` frame parented to the
+window. Project and "?": `QMenu` with `exec()`, under the process-wide `appkit_guard`; the project
+menu's header is a `QWidgetAction`. Limit fields commit on close through a deferred
+`_commit_budget_limits`; popovers also close on app deactivation. Known macOS limit: no right-click
+menu in the limit fields (QTBUG-133560); keyboard copy and paste work.
+
+**A5. Unknown-price count (state change).** Today an unpriced cloud request is stored as
+`cost_eur = 0.0` with nothing marking it (`services/usage_tracker.py:133-134`). Smallest additive
+change: `cost_type = "unpriced"` for those rows (and for callers passing the new
+`price_known=False`), `cost_eur` still `0.0`, so every total and guard path is unchanged;
+`get_unpriced_requests_today()` feeds the chip. No schema change. Agent callers that turn an
+unknown per-unit price into `0.0` (`agents/creator/panel.py:1734,1769,1846`) are a separate
+follow-up, not slice 1.
+
+**A6. Reveal hooks.** `spotlight.reveal()` asks any ancestor with `reveal_for_lesson()` (the drawer,
+the popovers) to show itself first. A `QAction` target (`learn_btn`, `agent_docs_btn`,
+`new_project_btn`) rings the button that opens its menu, named by the action's `lessonAnchor`
+property; menus are not opened by a lesson. This also fixes today's crash on "Show me" for
+`new_project_btn` (`spotlight()` calls `window()` on a `QAction`). `help_map.json` keeps every key.
+
+**A7. Reduce Motion.** `ui/motion.py`: `system_reduce_motion()` reads
+`NSWorkspace.accessibilityDisplayShouldReduceMotion` through `ctypes` (no PyObjC), False off macOS
+or offscreen, re-read when the app becomes active; `reduced()` adds the in-app setting
+`reduce_motion`. `motion.animate()` is the only animation entry point: at most 300 ms, no loops,
+none at all when reduced, stopped on hide and in `shutdown()`, tracked in `motion.running()`.
+
+**A8. Theme switch while Booth plays.** No new `setStyle` call; the switch stays
+`set_current()` + `apply_global_style()`. A regression test switches all six themes with a live
+player under a 30 s timeout. Fallback if it ever hangs: release the player (saves the playhead),
+restyle, reload.
+
+**A9. Window-owned controls.** `tooltips_toggle_btn`: a checkable `QAction` on the window, bound to
+Settings' "Show tooltips". `agent_docs_btn`, `learn_btn`: `QAction`s in the "?" menu; F1 unchanged.
+`settings_btn`: the rail gear. `agent_status_pill`: the `StatusChip`. `live_estimate_label`: a
+caption under `normal_panel`'s model row, its updater untouched (O1).
+
+**A10. Boundaries.** New `ui/shell/` (`icon_rail`, `top_bar`, `chips`, `popover`, `drawer`) and
+`ui/motion.py` import Qt, `ui.style`, `ui.theme` and `ui.motion` only. `main.py` still builds every
+existing control with its handler and places it in these containers. Chip text and status state
+are pure functions (`spend_chip_text`, `status_state`), fed from values the window already holds;
+nothing new fetches on the UI thread and no `QThread` is added.
+
+### Test plan (measures 2, 4, 6, 7 at this slice)
+| Measure | Test (new unless marked) | Passes when |
+|---|---|---|
+| 2 Nothing lost | `test_shell_inventory.py`: Build's first commit writes `tests/data/shell_controls_before.json`, every action button, field, checkable and menu action reachable from `build_header_bar`, `build_left_panel`, `build_right_panel` before any change, by attribute name. The test resolves each through `_find_control` after the change and checks it is visible, or one click away (inside a `Popover`, the drawer or a `QMenu` whose opener is visible), with the same handler connected and the same tooltip. | every name passes, except the S4 removals listed in the test with this spec as the owner line |
+| 4 Fit | Rewrite of `test_panel_layout.py:843-888`: at 1000 × 600, 1440 × 900, 1500 × 950, in `light-green` and `green`, every rail button is inside the rail and visible; the top bar's children are inside the bar with S3's long values (project name, "€1234.56 of €5000 today", the unknown form, "Key check failed · 12"); `clipped_text` is empty for the bar, the open spend and status popovers and the open drawer; S3's collapse steps happen in order as width falls. | no overlap, no clipping, money figure always visible |
+| 6 Readable | `test_contrast.py`: every text and indicator token in S8 against `BG`, `SURFACE`, `ELEVATED`, `SUNKEN` (washes composited over `SURFACE`), WCAG 2.x formula, 4.5:1 text and 3:1 indicators and control borders, in all six themes. | all pass in the three light themes; dark `TEXT_MUTE` see owner point AO2 |
+| 7 Motion | `test_motion.py`: opening the drawer starts exactly one animation (≤ 300 ms, loop count 1) and none when `reduced()`; `motion.running()` is empty after it finishes, when the drawer is hidden mid-slide, and while a text field in the content has focus; `system_reduce_motion()` is False offscreen and never raises. | as stated |
+| guard | `test_usage_unpriced.py`: an unpriced cloud request stores `unpriced` and `0.0`; totals unchanged; the count is right; `spend_chip_text` never says "€0.00" when the count is over 0 (every S6 row). Existing request-guard tests pass unchanged. | as stated |
+| theme | `test_theme.py` restated per look; `adopt_light_once` cases (saved dark, fresh install, second launch, later dark choice kept); the Booth switch test (A8). | as stated |
+| lessons | every `help_map.json` key and every `show:` link resolves and rings a visible widget after `reveal()` (extends the existing lesson tests). | no "That control has moved" |
+
+### Build task order
+1. Snapshot for measure 2 (before any chrome change), committed alone.
+2. `usage_tracker`: `unpriced` cost type, `price_row_found`, count query, tests (A5).
+3. `ui/theme.py`: new palette keys, six themes, helpers, `token`, `_SWAP` ambiguity check,
+   `adopt_light_once`, docstring; `ui/style.py` unchanged values; contrast test (A1, A2).
+4. Literal sweep plus its guard test (A1).
+5. `ui/motion.py` and its tests (A7).
+6. `ui/shell/`: rail, top bar with fitter and agent switch, chips with their pure functions,
+   popover, drawer (A3, A4, A10).
+7. `main.py`: build the shell, re-home every control per S4, delete the header, strip and rails,
+   retire `header_fit.py`; move and rewrite the named tests (A3, A9).
+8. Reveal hooks and the `QAction` anchor fix; lesson tests (A6).
+9. Settings > General: Look, Accent, Show tooltips, Reduce motion, About; O2 note (A2, A9).
+10. Shortcuts (S9), accessibility names, Booth switch test (A8); full suite shuffled; native renders
+    at 1000 × 600 and 1440 × 900 for the owner (measure 8).
+
+### Open points for the owner (Architect)
+- **AO1. Unknown-price tally (A5).** A new `cost_type` value in the usage table is a state change.
+  *Recommended:* approve as described (no schema change, totals unchanged). *Alternative:* the chip
+  shows no unknown form until a later spec, which breaks S6 and measure 5.
+- **AO2. Dark `TEXT_MUTE` fails AA today.** Measured 3.44:1 (red) to 3.77:1 (blue) against the
+  dark surfaces; S8 says dark values do not change, and S8's test covers all six themes.
+  *Recommended:* in slice 1 the test asserts dark `TEXT_MUTE` with `xfail(strict=True)` and a TODO
+  row, and a later small change lightens it per accent. *Alternative:* lighten dark `TEXT_MUTE` in
+  slice 1 (a visible change to the dark looks).
+- **AO3. "Show tooltips" across launches.** Today the toggle resets to On at every launch
+  (`main.py:428`). In Settings that reads as broken. *Recommended:* remember it (setting
+  `show_tooltips`, additive). *Alternative:* keep today's behaviour exactly.
 
 ## Relation to other specs
 - `side-rails-redesign` (released) and `rails-rebalance` (verify done 2026-11-25, not released)
