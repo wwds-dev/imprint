@@ -95,6 +95,9 @@ RADIUS    = "8px"
 RADIUS_SM = "6px"
 RADIUS_LG = "12px"
 
+# The bundled assets folder (not a str, so it never reaches the sheet's tokens).
+ASSETS_DIR = resource_base() / "assets"
+
 CHEVRON_DOWN = (resource_base() / "assets" / "dropdown-chevron.svg").as_posix()
 # Near-black, so it reads on the accent fill and the warning fill alike.
 CHECK_MARK = (resource_base() / "assets" / "check.svg").as_posix()
@@ -1021,6 +1024,157 @@ _STYLESHEET_TEMPLATE = """
             text-align: left;
         }}
         QPushButton#RailNav:hover {{ color: {TEXT}; background-color: {ELEVATED}; }}
+
+        /* ── The Manuscript shell (spec manuscript-redesign, slice 1) ── */
+        QFrame#IconRail {{
+            background-color: {SURFACE};
+            border: none;
+            border-right: 1px solid {BORDER};
+        }}
+        QToolButton#RailButton {{
+            background-color: transparent;
+            border: 2px solid transparent;
+            border-radius: 12px;
+            padding: 0;
+        }}
+        QToolButton#RailButton:hover {{ background-color: {ELEVATED}; }}
+        QToolButton#RailButton:checked {{ background-color: {ELEVATED}; }}
+        QToolButton#RailButton:pressed {{ background-color: {ACCENT_WASH}; }}
+        QToolButton#RailButton:focus {{ border-color: {ACCENT}; }}
+        QFrame#TopBar {{
+            background-color: {SURFACE};
+            border: none;
+            border-bottom: 1px solid {BORDER};
+        }}
+        QLabel#TopBarAgent {{
+            background: transparent;
+            color: {TEXT};
+            font-size: 14px;
+            font-weight: 600;
+        }}
+        QFrame#AgentSwitch {{
+            background-color: {ELEVATED};
+            border: none;
+            border-radius: 10px;
+        }}
+        QPushButton#AgentSegment {{
+            background-color: transparent;
+            border: none;
+            border-radius: 8px;
+            color: {TEXT_DIM};
+            font-size: 13px;
+            font-weight: 500;
+            padding: 0 14px;
+            min-height: 32px;
+        }}
+        QPushButton#AgentSegment[tight="true"] {{ padding: 0 8px; }}
+        QPushButton#AgentSegment:hover {{ color: {TEXT}; }}
+        QPushButton#AgentSegment:checked {{
+            background-color: {TEXT};
+            color: {SURFACE};
+            font-weight: 600;
+        }}
+        QPushButton#AgentSegment:focus {{ border: 2px solid {ACCENT}; }}
+        QComboBox#ProjectSelector {{
+            background-color: {SURFACE};
+            border: 1px solid {BORDER_STRONG};
+            border-radius: 8px;
+            color: {TEXT};
+            font-size: 13px;
+            font-weight: 600;
+            padding: 0 28px 0 10px;
+            min-height: 34px;
+        }}
+        QComboBox#ProjectSelector:focus {{ border: 2px solid {ACCENT}; }}
+        QToolButton#SpendChip {{
+            background-color: {SURFACE};
+            border: 1px solid {BORDER_STRONG};
+            border-radius: 16px;
+            color: {TEXT_DIM};
+            font-size: 13px;
+            padding: 0 12px;
+        }}
+        QToolButton#SpendChip:hover {{ background-color: {ELEVATED}; }}
+        QToolButton#SpendChip:focus {{ border: 2px solid {ACCENT}; }}
+        QToolButton#SpendChip[tone="warning"] {{
+            color: {WARNING}; border-color: {WARNING};
+        }}
+        QToolButton#SpendChip[tone="danger"] {{
+            color: {DANGER}; border-color: {DANGER};
+        }}
+        QToolButton#SpendChip[tone="unknown"] {{ color: {TEXT}; }}
+        QToolButton#TopBarIcon {{
+            background-color: transparent;
+            border: 1px solid transparent;
+            border-radius: 8px;
+        }}
+        QToolButton#TopBarIcon:hover {{ background-color: {ELEVATED}; }}
+        QToolButton#TopBarIcon:checked {{
+            background-color: {ACCENT_WASH};
+            border-color: {ACCENT_LINE};
+        }}
+        QToolButton#TopBarIcon:focus {{ border: 2px solid {ACCENT}; }}
+        QFrame#Popover {{
+            background-color: {SURFACE};
+            border: 1px solid {BORDER_STRONG};
+            border-radius: 12px;
+        }}
+        QWidget#PopoverBody, QScrollArea#PopoverScroll {{
+            background-color: transparent;
+        }}
+        QLabel#PopoverHeading, QLabel#DrawerHeading {{
+            background: transparent;
+            color: {TEXT};
+            font-size: 14px;
+            font-weight: 600;
+        }}
+        QLabel#PopoverNote, QLabel#DrawerEmpty {{
+            background: transparent;
+            color: {TEXT_DIM};
+            font-size: 12px;
+        }}
+        QFrame#PopoverRule {{ background-color: {BORDER}; border: none; }}
+        QFrame#HistoryDrawer {{
+            background-color: {SURFACE};
+            border: none;
+            border-right: 1px solid {BORDER_STRONG};
+        }}
+        QFrame#HistoryDrawer QListWidget {{
+            background: transparent;
+            border: none;
+            padding: 0;
+            font-size: 13px;
+            color: {TEXT_DIM};
+        }}
+        QFrame#HistoryDrawer QListWidget::item {{
+            padding: 7px 8px;
+            border-radius: {RADIUS_SM};
+        }}
+        QFrame#HistoryDrawer QListWidget::item:hover {{ background-color: {ELEVATED}; }}
+        QFrame#HistoryDrawer QListWidget::item:selected {{
+            background-color: {ACCENT_WASH};
+            color: {ACCENT_DIM};
+        }}
+        QToolButton#DrawerClose {{
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: {TEXT_DIM};
+            font-size: 18px;
+        }}
+        QToolButton#DrawerClose:hover {{ background-color: {ELEVATED}; color: {TEXT}; }}
+        QToolButton#DrawerClose:focus {{ border: 2px solid {ACCENT}; }}
+        QFrame#LightNote {{
+            background-color: {ACCENT_WASH};
+            border: 1px solid {ACCENT_LINE};
+            border-radius: 8px;
+        }}
+        QLabel#LightNoteText {{ background: transparent; color: {TEXT}; }}
+        QLabel#EstimateCaption {{
+            background: transparent;
+            color: {TEXT_DIM};
+            font-size: 12px;
+        }}
 
         /* The project rail: a list, not a boxed widget inside a boxed panel. */
         QFrame#RailLeft QListWidget {{
