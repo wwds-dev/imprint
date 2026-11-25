@@ -2,7 +2,7 @@
 
 Needs: architect (GATE: concurrency and shutdown state), build, review, verify, secure, docs
 
-Status: **Owner approved the architecture 2026-11-25 ("Approve as written (Recommended)"); Build in progress.** Priority: P1. Type: bug
+Status: **Owner approved the architecture 2026-11-25 ("Approve as written (Recommended)"); built, reviewed (no P0/P1), secured (no P0/P1), verified (pass with gaps, closed). Not merged.** Priority: P1. Type: bug
 fix, no new capability, no change to what is stored. Source: audit 2026-11-23
 (`docs/audit/SUMMARY.md`, step 4), `docs/audit/code-review.md` P1-1 and P1-2,
 `docs/audit/architecture.md` A-1 (code-review P2-1 is the same finding). `TODO.md` rows "Replacing a
