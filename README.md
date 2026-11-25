@@ -3138,11 +3138,13 @@ imprint/
 
 This is the one place the suite's size and run time are recorded; other
 documents point here. Count it yourself with
-`.venv/bin/python -m pytest --collect-only -q`. Last measurement, 2026-11-22 at
-`be9f616`: 2,625 collected; a full run in random order gave 2,578 passed,
-17 skipped and 30 expected failures (the docs checks that wait for the rename)
-in 28 min 57 s. A full run takes **about 15 to 30 minutes** on the owner's Mac,
-not seconds; plan for that before starting one. Install the suite's own
+`.venv/bin/python -m pytest --collect-only -q`. Last measurement, 2026-11-25 at
+`aa4b49f`: 3,158 collected; a full run in random order
+(`--randomly-seed=2516470648`) gave 3,123 passed, 1 failed (a timing margin,
+not reproduced; `TODO.md`), 17 skipped and 17 expected failures in 58 min 13 s
+on a loaded machine; the same code before the merge passed in full in 34 min
+46 s. A full run takes **about 35 to 60 minutes** on the owner's Mac, not
+seconds; plan for that before starting one. Install the suite's own
 dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
 covers pytest, `pytest-timeout` and `pytest-randomly`:
 
