@@ -26,3 +26,4 @@
 {"ts": "2026-11-24T23:44:47", "gate": "release", "by": "owner", "words": "release may start", "recorded_by": "agent", "spec": "side-rails-redesign"}
 {"ts": "2026-11-25T05:09:42", "gate": "define", "by": "owner", "words": "do as recommended", "recorded_by": "agent", "spec": "manuscript-redesign", "note": "answers D1-D12 with each recommendation; Design and Build start only when the owner asks, after testing"}
 {"ts": "2026-11-25T05:58:25", "gate": "design", "by": "owner", "words": "Approve as recommended", "recorded_by": "agent", "spec": "manuscript-redesign", "note": "Design slice 1 (shell), O1-O3 as recommended"}
+{"ts": "2026-11-25T04:43:06", "gate": "architect", "by": "owner", "words": "Approve as written (Recommended)", "recorded_by": "agent", "spec": "worker-crash-class"}

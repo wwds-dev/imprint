@@ -38,6 +38,7 @@ from services.higgsfield_client import (
 )
 from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
+from ui.worker_registry import refuse_if_busy, start_in_slot
 
 # Teaser routes. Each takes the persona's reference images: Higgsfield
 # Seedance as image-to-video, Gemini Omni and Wan 3.0 as reference-to-video.
@@ -719,6 +720,11 @@ class CreatorPanel(QWidget):
         if not model:
             QMessageBox.warning(self, "No Model", "Select a model first.")
             return
+        # A Stop only asks the old draft to cancel; replacing a running
+        # worker would destroy a live QThread (audit P1-1).
+        if refuse_if_busy(self.host, self.creator_status_label,
+                          "creator_worker"):
+            return
         # Keep the token: "creator" is shared with the Higgsfield teaser
         # flow, and resolving by name can bill the teaser's flat cost
         # against this text response (and leave the render unbilled).
@@ -739,7 +745,6 @@ class CreatorPanel(QWidget):
         self.creator_output.clear()
 
         worker = self.host._new_chat_worker(provider, model, messages, "")
-        self.host.creator_worker = worker
         worker.finished_signal.connect(self._on_finished)
         # Real token counts and the stop reason; without this every draft
         # was billed on the chars/4 estimate (audit B-F8) and a cut-off
@@ -747,7 +752,7 @@ class CreatorPanel(QWidget):
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_error)
-        worker.start()
+        start_in_slot(self.host, "creator_worker", worker)
 
     def _on_finished(self, response: str):
         self.creator_output.setPlainText(response)
@@ -1152,6 +1157,11 @@ class CreatorPanel(QWidget):
         if not account:
             QMessageBox.warning(self, "No Account", "Add an account first.")
             return
+        # A cancelled estimate or render can still be in its provider call.
+        if refuse_if_busy(self.host, self.creator_video_status,
+                          "creator_video_estimate_worker",
+                          "creator_video_worker"):
+            return
         agent = self.host.agent_instances["creator"]
         prompt = agent.build_video_prompt(
             account, self.creator_brief_input.toPlainText().strip())
@@ -1214,13 +1224,13 @@ class CreatorPanel(QWidget):
 
         estimate_worker = HiggsfieldEstimateWorker(
             client, prompt, reference_image=references[0] if references else None)
-        self.host.creator_video_estimate_worker = estimate_worker
         estimate_worker.status_signal.connect(self.creator_video_status.setText)
         estimate_worker.done_signal.connect(
             lambda request, estimate, c=client:
             self._video_estimated(c, request, estimate))
         estimate_worker.error_signal.connect(self._video_error)
-        estimate_worker.start()
+        start_in_slot(self.host, "creator_video_estimate_worker",
+                      estimate_worker)
 
     def _photo_consent_ok(self, account: dict) -> bool:
         """False, with a dialog, when the teaser would send someone else's
@@ -1277,6 +1287,10 @@ class CreatorPanel(QWidget):
 
     def _video_estimated(self, client, request, estimate):
         """Show the provider's exact price before authorising generation."""
+        # The estimate has answered; release its slot (the registry holds the
+        # thread until it finishes) so generate_video() after Apply is not
+        # refused as busy.
+        self.host.creator_video_estimate_worker = None
         from services.per_unit_pricing import eur_per_usd
         from ui.workers import HiggsfieldWorker
 
@@ -1318,14 +1332,13 @@ class CreatorPanel(QWidget):
         render_worker = HiggsfieldWorker(
             client, context["prompt"], context["output_path"],
             prepared_request=request)
-        self.host.creator_video_worker = render_worker
         render_worker.status_signal.connect(self.creator_video_status.setText)
         render_worker.job_signal.connect(self._video_job_update)
         render_worker.done_signal.connect(
             lambda path, aid=context["account_id"]:
             self._video_done(aid, path))
         render_worker.error_signal.connect(self._video_error)
-        render_worker.start()
+        start_in_slot(self.host, "creator_video_worker", render_worker)
 
     def _generate_direct_teaser(self, account: dict, prompt: str) -> None:
         """A teaser from Gemini Omni or Wan 3.0, with the reference images.
@@ -1421,13 +1434,12 @@ class CreatorPanel(QWidget):
             client, prompt, output_path, provider=spec["provider"],
             model=spec["model"], seconds=TEASER_SECONDS,
             aspect_ratio=TEASER_ASPECT, reference_images=references)
-        self.host.creator_video_worker = worker
         worker.status_signal.connect(self.creator_video_status.setText)
         worker.job_signal.connect(self._direct_teaser_update)
         worker.done_signal.connect(
             lambda path, aid=account["id"]: self._video_done(aid, path))
         worker.error_signal.connect(self._video_error)
-        worker.start()
+        start_in_slot(self.host, "creator_video_worker", worker)
 
     def _direct_teaser_update(self, job) -> None:
         """A Gemini/Wan job update, filed under the local id; the provider's

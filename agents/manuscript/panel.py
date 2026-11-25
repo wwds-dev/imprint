@@ -40,6 +40,7 @@ from ui.panels.base import AgentPanel
 from ui import theme
 from ui.style import ACCENT
 from ui.widgets import CollapsibleSection, FlowLayout, ScrollContent, scrollable
+from ui.worker_registry import refuse_if_busy, start_in_slot
 
 
 class _TodoList(QListWidget):
@@ -423,7 +424,6 @@ class ManuscriptPanel(QWidget):
         layout.addWidget(self.quote_finder_list, 1)
 
         self._quote_finder_short_buttons: list = []
-        self._quote_finder_busy = False
         self.quote_finder_load_voices()
 
     def _build_graphics_tab(self):
@@ -830,6 +830,9 @@ class ManuscriptPanel(QWidget):
             return
         agent = self.host.agent_instances["manuscript"]
         messages = agent.build_messages(query, context_json=self._last_data)
+        if refuse_if_busy(self.host, self.manuscript_status_label,
+                          "manuscript_worker"):
+            return
         self.manuscript_status_label.setText("[Thinking…]")
         self.manuscript_ask_btn.setEnabled(False)
         # Keep the token: "manuscript" is shared with the quote-finder and
@@ -843,13 +846,12 @@ class ManuscriptPanel(QWidget):
             return
         self._ask_token = token
         worker = self.host._new_chat_worker(provider, model, messages, query)
-        self.host.manuscript_worker = worker
         worker.token_signal.connect(self._on_ask_token)
         worker.finished_signal.connect(self._on_ask_finished)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_ask_error)
-        worker.start()
+        start_in_slot(self.host, "manuscript_worker", worker)
 
     def _on_ask_token(self, token: str):
         cursor = self.manuscript_metrics_box.textCursor()
@@ -1071,10 +1073,28 @@ class ManuscriptPanel(QWidget):
         else:
             self.host.abandon_request(token)
 
+    def _shorts_busy(self) -> bool:
+        """The one busy rule for Press's three Shorts entry points.
+
+        All three render into host.shorts_worker. The old flag was set by two
+        of them only, so Generate a Short followed by a Quote Finder or
+        calendar Short replaced a running QThread (a Qt abort) and orphaned
+        the first narration's reservation (audit P1-1, QM-12).
+        """
+        if not refuse_if_busy(self.host, self.manuscript_status_label,
+                              "shorts_worker"):
+            return False
+        QMessageBox.information(
+            self, "Busy",
+            "A short is already generating — please wait for it to finish.")
+        return True
+
     def generate_short(self):
         quote = self.shorts_quote_text.toPlainText().strip()
         if not quote:
             QMessageBox.warning(self, "Missing Quote", "Please enter a quote.")
+            return
+        if self._shorts_busy():
             return
         from agents.manuscript.quote_graphics import render_quote_graphic
         from agents.manuscript.shorts_generator import SHORTS_DIR
@@ -1109,11 +1129,10 @@ class ManuscriptPanel(QWidget):
 
         worker = ShortsWorker(quote, image_path, output_path,
                               use_elevenlabs, voice_id)
-        self.host.shorts_worker = worker
         worker.status_signal.connect(self.manuscript_status_label.setText)
         worker.done_signal.connect(self._on_short_done)
         worker.error_signal.connect(self._on_short_error)
-        worker.start()
+        start_in_slot(self.host, "shorts_worker", worker)
 
     def _on_short_done(self, output_path: str):
         self._shorts_resolve_request(True, f"saved {Path(output_path).name}")
@@ -1403,6 +1422,9 @@ class ManuscriptPanel(QWidget):
 
         agent = self.host.agent_instances["manuscript"]
         messages = agent.build_quote_suggestions_messages(truncated, count=count)
+        if refuse_if_busy(self.host, self.manuscript_status_label,
+                          "quote_finder_worker"):
+            return
         self.manuscript_status_label.setText("[Finding quotes…]")
         self.quote_finder_suggest_btn.setEnabled(False)
         token = self.host.authorize_request(
@@ -1413,12 +1435,11 @@ class ManuscriptPanel(QWidget):
             return
         self._quote_finder_token = token
         worker = self.host._new_chat_worker(provider, model, messages, truncated)
-        self.host.quote_finder_worker = worker
         worker.finished_signal.connect(self._on_quotes_found)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_quotes_error)
-        worker.start()
+        start_in_slot(self.host, "quote_finder_worker", worker)
 
     def _on_quotes_found(self, full_response: str):
         token, self._quote_finder_token = self._quote_finder_token, None
@@ -1495,10 +1516,7 @@ class ManuscriptPanel(QWidget):
             self.manuscript_status_label.setText(f"[Error] {e}")
 
     def quote_finder_generate_short(self, quote: str, button: QPushButton):
-        if self._quote_finder_busy:
-            QMessageBox.information(
-                self, "Busy",
-                "A short is already generating — please wait for it to finish.")
+        if self._shorts_busy():
             return
         from agents.manuscript.quote_graphics import render_quote_graphic
         from agents.manuscript.shorts_generator import SHORTS_DIR
@@ -1522,7 +1540,6 @@ class ManuscriptPanel(QWidget):
         if not self._authorize_short_narration(quote, use_elevenlabs):
             return
 
-        self._quote_finder_busy = True
         for b in self._quote_finder_short_buttons:
             b.setEnabled(False)
         button.setText("…")
@@ -1530,13 +1547,12 @@ class ManuscriptPanel(QWidget):
 
         worker = ShortsWorker(quote, image_path, output_path,
                               use_elevenlabs, voice_id)
-        self.host.shorts_worker = worker
         worker.status_signal.connect(self.manuscript_status_label.setText)
         worker.done_signal.connect(
             lambda path, b=button: self._quote_finder_short_done(path, b))
         worker.error_signal.connect(
             lambda err, b=button: self._quote_finder_short_error(err, b))
-        worker.start()
+        start_in_slot(self.host, "shorts_worker", worker)
 
     def _quote_finder_short_done(self, output_path: str, button: QPushButton):
         self._shorts_resolve_request(True, f"saved {Path(output_path).name}")
@@ -1544,7 +1560,6 @@ class ManuscriptPanel(QWidget):
         self.manuscript_status_label.setText(
             f"[Done] Saved {Path(output_path).name}")
         button.setText("Short")
-        self._quote_finder_busy = False
         for b in self._quote_finder_short_buttons:
             b.setEnabled(True)
 
@@ -1552,7 +1567,6 @@ class ManuscriptPanel(QWidget):
         self._shorts_resolve_request(False)
         self.manuscript_status_label.setText(f"[Error] {error}")
         button.setText("⚠")
-        self._quote_finder_busy = False
         for b in self._quote_finder_short_buttons:
             b.setEnabled(True)
 
@@ -1613,6 +1627,9 @@ class ManuscriptPanel(QWidget):
         items_json = caption_items(slots)
         agent = self.host.agent_instances["manuscript"]
         messages = agent.build_calendar_caption_messages(items_json)
+        if refuse_if_busy(self.host, self.manuscript_status_label,
+                          "calendar_worker"):
+            return
         self.manuscript_status_label.setText("[Writing captions…]")
         self.calendar_generate_btn.setEnabled(False)
         token = self.host.authorize_request(
@@ -1623,12 +1640,11 @@ class ManuscriptPanel(QWidget):
             return
         self._calendar_captions_token = token
         worker = self.host._new_chat_worker(provider, model, messages, items_json)
-        self.host.calendar_worker = worker
         worker.finished_signal.connect(self._on_captions_done)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_captions_error)
-        worker.start()
+        start_in_slot(self.host, "calendar_worker", worker)
 
     def _on_captions_done(self, full_response: str):
         token = self._calendar_captions_token
@@ -1692,10 +1708,7 @@ class ManuscriptPanel(QWidget):
                 self.manuscript_status_label.setText(f"[Error] {e}")
             return
 
-        if self._quote_finder_busy:
-            QMessageBox.information(
-                self, "Busy",
-                "A short is already generating — please wait for it to finish.")
+        if self._shorts_busy():
             return
         from agents.manuscript.shorts_generator import SHORTS_DIR
         from agents.manuscript.workers import ShortsWorker
@@ -1714,18 +1727,16 @@ class ManuscriptPanel(QWidget):
         if not self._authorize_short_narration(slot.quote, use_elevenlabs):
             return
 
-        self._quote_finder_busy = True
         button.setEnabled(False)
         self.manuscript_status_label.setText("[Narrating…]")
         worker = ShortsWorker(slot.quote, image_path, output_path,
                               use_elevenlabs, voice_id)
-        self.host.shorts_worker = worker
         worker.status_signal.connect(self.manuscript_status_label.setText)
         worker.done_signal.connect(
             lambda path, b=button: self._calendar_short_done(path, b))
         worker.error_signal.connect(
             lambda err, b=button: self._calendar_short_error(err, b))
-        worker.start()
+        start_in_slot(self.host, "shorts_worker", worker)
 
     def _calendar_short_done(self, output_path: str, button: QPushButton):
         self._shorts_resolve_request(True, f"saved {Path(output_path).name}")
@@ -1733,13 +1744,11 @@ class ManuscriptPanel(QWidget):
         self.manuscript_status_label.setText(
             f"[Done] Saved {Path(output_path).name}")
         button.setEnabled(True)
-        self._quote_finder_busy = False
 
     def _calendar_short_error(self, error: str, button: QPushButton):
         self._shorts_resolve_request(False)
         self.manuscript_status_label.setText(f"[Error] {error}")
         button.setEnabled(True)
-        self._quote_finder_busy = False
 
     def export_calendar_csv(self):
         if not self._calendar_slots:

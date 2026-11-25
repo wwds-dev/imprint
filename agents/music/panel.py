@@ -22,6 +22,7 @@ from ui.forms import LG, MD, SM, combo, field, line_edit, primary, section
 from ui.panels.base import AgentPanel
 from ui.widgets import scrollable
 from .suno_panel import SunoPanel
+from ui.worker_registry import refuse_if_busy, start_in_slot
 
 
 class MusicPanel(QWidget):
@@ -204,6 +205,10 @@ class MusicPanel(QWidget):
         prompt_parts.append(f"\nMusic Description:\n{description}")
         prompt = "\n".join(prompt_parts)
 
+        # A stopped request can sit in its backend call for minutes;
+        # replacing it would destroy a running QThread (audit P1-1).
+        if refuse_if_busy(self.host, self.music_status_label, "music_worker"):
+            return
         # Built first: the guard prices the messages the worker will send.
         messages = self.host.agent_instances["music"].build_messages(prompt)
         # A denied paid request must leave the panel usable. Previously this
@@ -221,13 +226,12 @@ class MusicPanel(QWidget):
 
         try:
             worker = self.host._new_chat_worker(provider, model, messages, prompt)
-            self.host.music_worker = worker
             worker.token_signal.connect(self._on_token)
             worker.finished_signal.connect(self._on_finished)
             worker.usage_signal.connect(
                 lambda usage: self.host.note_request_usage("music", usage))
             worker.error_signal.connect(self._on_error)
-            worker.start()
+            start_in_slot(self.host, "music_worker", worker)
         except Exception as error:
             self._on_error(str(error))
 

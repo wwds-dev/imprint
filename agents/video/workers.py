@@ -6,10 +6,12 @@ resume side: finishing a provider job that outlived the process.
 
 from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Signal
+
+from ui.worker_registry import TrackedThread
 
 
-class VideoResumeWorker(QThread):
+class VideoResumeWorker(TrackedThread):
     """Re-polls a persisted provider job and saves the paid result.
 
     The create POST happened in a previous run — this worker only ever

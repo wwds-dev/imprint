@@ -30,6 +30,7 @@ from services.runtime_paths import user_data_base
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
 from ui.panels.base import AgentPanel
 from ui.widgets import scrollable
+from ui.worker_registry import refuse_if_busy, start_in_slot
 
 
 class FiverrPanel(QWidget):
@@ -389,6 +390,11 @@ class FiverrPanel(QWidget):
                 "private .env file. Pick another image model, or add the key.")
             return
 
+        # A Stop only asks the old request to cancel; replacing a running
+        # worker would destroy a live QThread (audit P1-1).
+        if refuse_if_busy(self.host, self.fiverr_status_label, "fiverr_text_worker",
+                          "fiverr_image_worker"):
+            return
         count = self.fiverr_count_spin.value()
         provider = self.fiverr_provider_box.currentText()
         model = self.fiverr_model_box.currentText()
@@ -416,12 +422,11 @@ class FiverrPanel(QWidget):
         self._pending_count = count
         self._pending_brief = brief
         worker = self.host._new_chat_worker(provider, model, messages, "")
-        self.host.fiverr_text_worker = worker
         worker.finished_signal.connect(self._on_prompt_ready)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_text_error)
-        worker.start()
+        start_in_slot(self.host, "fiverr_text_worker", worker)
 
     def _image_assessment(self, selected: str, count: int, image_prompt: str):
         """Price these logos on every image model Vector can run, and rank them."""
@@ -528,7 +533,6 @@ class FiverrPanel(QWidget):
         worker = FiverrImageWorker(
             self.host.openai, image_prompt, count, save_dir,
             image_model=image_model)
-        self.host.fiverr_image_worker = worker
         # Bound to this run's token, so a late signal from an earlier run
         # can never count toward (or close) this one.
         worker.image_ready_signal.connect(
@@ -538,7 +542,7 @@ class FiverrPanel(QWidget):
         worker.error_signal.connect(
             lambda error, t=image_token: self._on_image_error(error, t))
         worker.status_signal.connect(self.fiverr_status_label.setText)
-        worker.start()
+        start_in_slot(self.host, "fiverr_image_worker", worker)
 
         from agents.fiverr import orders
         try:
@@ -637,6 +641,10 @@ class FiverrPanel(QWidget):
         agent = self.host.agent_instances["fiverr"]
         messages = agent.build_messages(
             "Write a professional delivery message for this logo order.", brief)
+        # A Stop only asks the old request to cancel; replacing a running
+        # worker would destroy a live QThread (audit P1-1).
+        if refuse_if_busy(self.host, self.fiverr_status_label, "fiverr_text_worker"):
+            return
         self.fiverr_delivery_box.clear()
         self._set_busy("Writing delivery message...")
         self.fiverr_tabs.setCurrentIndex(1)
@@ -649,13 +657,12 @@ class FiverrPanel(QWidget):
             return
         self._prompt_token = token
         worker = self.host._new_chat_worker(provider, model, messages, "")
-        self.host.fiverr_text_worker = worker
         worker.token_signal.connect(self._on_delivery_token)
         worker.finished_signal.connect(self._on_delivery_done)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_text_error)
-        worker.start()
+        start_in_slot(self.host, "fiverr_text_worker", worker)
 
     def _on_delivery_token(self, token: str) -> None:
         self.fiverr_delivery_box.moveCursor(QTextCursor.End)
@@ -682,6 +689,10 @@ class FiverrPanel(QWidget):
         messages = agent.build_messages(
             "Write a complete Fiverr gig description for logo design services.",
             brief)
+        # A Stop only asks the old request to cancel; replacing a running
+        # worker would destroy a live QThread (audit P1-1).
+        if refuse_if_busy(self.host, self.fiverr_status_label, "fiverr_text_worker"):
+            return
         self.fiverr_gig_box.clear()
         self._set_busy("Writing gig description...")
         self.fiverr_tabs.setCurrentIndex(2)
@@ -694,13 +705,12 @@ class FiverrPanel(QWidget):
             return
         self._prompt_token = token
         worker = self.host._new_chat_worker(provider, model, messages, "")
-        self.host.fiverr_text_worker = worker
         worker.token_signal.connect(self._on_gig_token)
         worker.finished_signal.connect(self._on_gig_done)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_text_error)
-        worker.start()
+        start_in_slot(self.host, "fiverr_text_worker", worker)
 
     def _on_gig_token(self, token: str) -> None:
         self.fiverr_gig_box.moveCursor(QTextCursor.End)

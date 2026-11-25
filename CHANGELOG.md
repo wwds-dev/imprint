@@ -120,6 +120,21 @@ listed under **Unreleased** until it ships.
   shows for every account.
 
 ### Fixed
+- **Starting a job while the last one is still finishing no longer aborts the app** (2026-11-25, spec
+  `worker-crash-class`, ADR 0006; audit code-review P1-1). Herald's Make a Clip while Write Posts was writing,
+  or a second start after Stop in Kernel chat, Label, Sitebuilder, Vector, Nova and Herald, replaced a running
+  background thread, and Qt ended the process. Every start now checks first and says "[Busy] The previous request
+  is still finishing — one moment." before anything is priced or reserved. Press's three Shorts buttons
+  (Generate a Short, Quote Finder, calendar) share one busy rule, so a second Short can no longer orphan the
+  first one's ElevenLabs reservation.
+- **Herald's Post Now no longer freezes the window** (2026-11-25; audit code-review P1-2). The upload runs in the
+  background; for YouTube, Google's consent page is waited for at most 5 minutes, and closing it reports "safe to
+  retry" (nothing was uploaded) instead of hanging until force-quit. One post at a time.
+- **Quitting stops every background job and never aborts** (2026-11-25; audit architecture A-1). Quit used to
+  skip Label's and Sitebuilder's workers and wait 2 s per worker before closing anyway. It now cancels every
+  running job, waits for them on one 3 s budget (a running release kit first gets its own pause of up to 2 s),
+  and if one is still inside a provider call the app exits cleanly instead of crashing. A model download and a
+  Short that has not started narrating can now be cancelled at quit.
 - **Muse's Gemini Omni teaser follows Reel's rule when a quit cuts it off** (2026-11-24, owner's choice; audit
   review P2-2). Quitting while a teaser renders now asks "A Gemini Omni clip is rendering" (the same question as
   Reel's). On the next launch a saved clip lands in the media library and bills once; a call with no clip is

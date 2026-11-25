@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
 from services.higgsfield_client import HiggsfieldClient
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
 from ui.widgets import scrollable
+from ui.worker_registry import refuse_if_busy, start_in_slot
 
 # Renders in one synchronous call: no job to stop watching or to resume.
 OMNI_MODEL = "gemini-omni-1.1-flash"
@@ -275,7 +276,6 @@ class VideoPanel(QWidget):
         # published contract of what this panel owns.
         host.video_panel = self
         host.video_worker = None
-        host.video_estimate_worker = None
         host.video_resume_workers = []
         self._visual_provider_changed(
             self.video_visual_provider_box.currentText())
@@ -510,7 +510,7 @@ class VideoPanel(QWidget):
         from services.per_unit_pricing import eur_per_usd
         from ui.workers import VideoWorker
 
-        if self.host.video_worker is not None and self.host.video_worker.isRunning():
+        if refuse_if_busy(self.host, self.video_status_label, "video_worker"):
             return
         selection = self._media_selection()
         if selection is not None and selection.kind == "direct_video":
@@ -560,7 +560,6 @@ class VideoPanel(QWidget):
         self._begin("pipeline", can_cancel=True)
 
         worker = VideoWorker(topic=topic, overrides=self._overrides())
-        self.host.video_worker = worker
         worker.stage_signal.connect(
             lambda _key, label: self.video_status_label.setText(f"{label}…"))
         worker.progress_signal.connect(self._on_progress)
@@ -568,7 +567,7 @@ class VideoPanel(QWidget):
         worker.trace_signal.connect(self._on_trace)
         worker.done_signal.connect(self._on_done)
         worker.error_signal.connect(self._on_error)
-        worker.start()
+        start_in_slot(self.host, "video_worker", worker)
 
     def _begin(self, kind: str, *, can_cancel: bool) -> None:
         self._active_kind = kind
@@ -709,13 +708,12 @@ class VideoPanel(QWidget):
                 client, topic, output_path, provider=selection.provider,
                 model=selection.model_id, seconds=seconds,
                 aspect_ratio=provider_aspect)
-            self.host.video_worker = worker
             worker.status_signal.connect(self.video_status_label.setText)
             worker.progress_signal.connect(self._on_progress)
             worker.job_signal.connect(self._external_job)
             worker.done_signal.connect(self._external_done)
             worker.error_signal.connect(self._on_error)
-            worker.start()
+            start_in_slot(self.host, "video_worker", worker)
             return
 
         if selection.provider == "Higgsfield":
@@ -737,21 +735,25 @@ class VideoPanel(QWidget):
                 client, topic, duration=seconds,
                 aspect_ratio=provider_aspect, resolution="720p",
                 model=selection.model_id)
-            self.host.video_estimate_worker = estimate_worker
-            self.host.video_worker = estimate_worker
             estimate_worker.status_signal.connect(
                 self.video_status_label.setText)
             estimate_worker.done_signal.connect(
                 lambda request, estimate, c=client:
                 self._higgsfield_estimated(c, request, estimate))
             estimate_worker.error_signal.connect(self._on_error)
-            estimate_worker.start()
+            # In video_worker, so Stop and the busy rule see it.
+            start_in_slot(self.host, "video_worker", estimate_worker)
 
     def _higgsfield_estimated(self, client, request, estimate) -> None:
         from agents.video import video_studio
         from services.per_unit_pricing import eur_per_usd
         from ui.workers import HiggsfieldWorker
 
+        # The estimate has answered; its thread may still be returning from
+        # run(). Release the slot (the live-worker registry holds the thread
+        # until it finishes) so the render below, or render() after Apply,
+        # is not refused as busy.
+        self.host.video_worker = None
         context = self._external_context
         if context.get("cancel_requested"):
             self._reset("Estimate cancelled.")
@@ -788,12 +790,11 @@ class VideoPanel(QWidget):
         worker = HiggsfieldWorker(
             client, context["topic"], context["path"],
             prepared_request=request)
-        self.host.video_worker = worker
         worker.status_signal.connect(self.video_status_label.setText)
         worker.job_signal.connect(self._external_job)
         worker.done_signal.connect(self._external_done)
         worker.error_signal.connect(self._on_error)
-        worker.start()
+        start_in_slot(self.host, "video_worker", worker)
 
     # ── external-provider completion ────────────────────────────────────
     def _persist_submission(self, token, provider: str, model: str,
