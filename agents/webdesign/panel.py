@@ -16,6 +16,7 @@ from services.runtime_paths import user_data_base
 from ui.forms import LG, MD, SM, StatBlock, combo, field, line_edit, primary, section
 from ui.panels.base import AgentPanel
 from ui.widgets import scrollable
+from ui.worker_registry import refuse_if_busy, start_in_slot
 
 
 class WebdesignPanel(QWidget):
@@ -186,6 +187,11 @@ class WebdesignPanel(QWidget):
         prompt_parts.append(f"\nBrief:\n{brief}")
         prompt = "\n".join(prompt_parts)
 
+        # A stopped request can sit in its backend call for minutes;
+        # replacing it would destroy a running QThread (audit P1-1).
+        if refuse_if_busy(self.host, self.webdesign_status_label,
+                          "webdesign_worker"):
+            return
         # Built first: the guard prices the messages the worker will send.
         messages = self.host.agent_instances["webdesign"].build_messages(prompt)
         # A denied or cancelled paid request must not strand Generate disabled.
@@ -202,13 +208,12 @@ class WebdesignPanel(QWidget):
 
         try:
             worker = self.host._new_chat_worker(provider, model, messages, prompt)
-            self.host.webdesign_worker = worker
             worker.token_signal.connect(self._on_token)
             worker.finished_signal.connect(self._on_finished)
             worker.usage_signal.connect(
                 lambda usage: self.host.note_request_usage("webdesign", usage))
             worker.error_signal.connect(self._on_error)
-            worker.start()
+            start_in_slot(self.host, "webdesign_worker", worker)
         except Exception as error:
             self._on_error(str(error))
 

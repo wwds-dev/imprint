@@ -2,7 +2,7 @@
 
 Needs: architect (GATE: concurrency and shutdown state), build, review, verify, secure, docs
 
-Status: **Draft 2026-11-25, waiting for the owner at the Architect gate.** Priority: P1. Type: bug
+Status: **Owner approved the architecture 2026-11-25 ("Approve as written (Recommended)"); Build in progress.** Priority: P1. Type: bug
 fix, no new capability, no change to what is stored. Source: audit 2026-11-23
 (`docs/audit/SUMMARY.md`, step 4), `docs/audit/code-review.md` P1-1 and P1-2,
 `docs/audit/architecture.md` A-1 (code-review P2-1 is the same finding). `TODO.md` rows "Replacing a
@@ -145,3 +145,25 @@ resumes the pull next time).
 relies on `atexit` for persistence (Build verifies with a grep). The 3 s budget is a UX choice
 (quit must not hang); a worker that ignores cancel is cut off rather than waited for, which is what
 happens today except that today it aborts.
+
+## Build notes (2026-11-25)
+Where Build differs from the approved text, and why. None changes what the owner approved: a busy
+slot is refused, every QThread is tracked, Post Now runs off the UI thread with a 5-minute consent
+limit, quit never aborts.
+- **A5, where the hard exit lives.** The spec put `os._exit(0)` in `closeEvent` behind a
+  `self._hard_exit` attribute for tests. Build moved it to `leave_if_workers_alive()`, called in
+  `main.py` right after `app.exec()` returns. Reason: the registry is process-wide, so a test that
+  closes a window while another test's worker runs would have ended the test process; after the
+  event loop is the exact moment the interpreter would otherwise destroy a running `QThread`.
+  `closeEvent` now cancels and waits (`stop_all`, one 3 s budget) and logs any survivor.
+- **Reel's `video_estimate_worker`** was written and never read (Stop and the busy rule use
+  `video_worker`); the alias is gone. The estimate handlers of Reel and Muse clear their estimate
+  slot first, so the render after it, or a re-run after Apply, is not refused as busy while the
+  estimate thread returns from `run()`.
+- **Quill publish and market** checked the busy slot after clearing the output and disabling
+  Generate, so a refused start stranded the panel. The check now runs first.
+- **Herald** declares `_social_clip_worker` and `social_publish_worker` on the host with
+  `social_worker`.
+- **Known limit.** A worker emits its final signal from inside `run()`, so for a moment after it
+  the thread still reports running. A click in that moment gets the busy notice and works on the
+  next click; nothing is replaced. Chained starts (estimate to render) release their slot first.

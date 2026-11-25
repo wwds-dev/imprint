@@ -298,7 +298,11 @@ class YouTubePublisher(Publisher):
                 {"title": title or "Untitled", "description": body},
                 privacy=privacy)
         except Exception as exc:
-            raise PublishError(f"{type(exc).__name__}: {exc}")
+            # Consent never completed: no token, so no upload was started.
+            consent = getattr(youtube, "YouTubeConsentError", None)
+            safe = consent is not None and isinstance(exc, consent)
+            raise PublishError(f"{type(exc).__name__}: {exc}",
+                               safe_to_retry=safe)
         return PublishResult(permalink=f"https://youtu.be/{result['video_id']}")
 
 
@@ -357,6 +361,15 @@ PUBLISHERS: dict[str, Publisher] = {
     "youtube": YouTubePublisher(),
     "pinterest": PinterestPublisher(),
 }
+
+
+def youtube_consent_minutes() -> int:
+    """How long a first YouTube upload waits for Google's consent page."""
+    try:
+        from vidforge.youtube import CONSENT_TIMEOUT_S  # type: ignore
+    except Exception:
+        return 5
+    return max(1, CONSENT_TIMEOUT_S // 60)
 
 
 def publisher_for(platform_key: str) -> Publisher | None:

@@ -22,10 +22,18 @@ from .config import SECRETS_DIR, Config, load_env, optional_key
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 VALID_PRIVACY = ("private", "unlisted", "public")
+# How long the first upload waits for Google's consent page in the browser.
+# Without a limit, closing that tab left the caller blocked forever (Imprint's
+# audit 2026-11-23, code-review P1-2).
+CONSENT_TIMEOUT_S = 300
 
 
 class YouTubeError(RuntimeError):
     pass
+
+
+class YouTubeConsentError(YouTubeError):
+    """No token was obtained, so nothing was uploaded: safe to try again."""
 
 
 def _client_secret_path() -> Path:
@@ -70,7 +78,19 @@ def _service():
             flow = InstalledAppFlow.from_client_secrets_file(
                 str(_client_secret_path()), SCOPES
             )
-            creds = flow.run_local_server(port=0)
+            try:
+                creds = flow.run_local_server(
+                    port=0, timeout_seconds=CONSENT_TIMEOUT_S)
+            except Exception as exc:  # noqa: BLE001
+                # WSGITimeoutError when the tab was closed or left open; an
+                # OAuth error when consent was refused. Either way no token
+                # exists and no upload has started.
+                raise YouTubeConsentError(
+                    "Google consent was not completed within "
+                    f"{CONSENT_TIMEOUT_S // 60} minutes, or it was refused. "
+                    "Nothing was uploaded; try again and finish the consent "
+                    "page in your browser."
+                ) from exc
         token_path.write_text(creds.to_json(), encoding="utf-8")
         token_path.chmod(0o600)
 

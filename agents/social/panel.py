@@ -31,6 +31,7 @@ from agents.social.agent import (
 )
 from ui.forms import LG, MD, SM, combo, field, line_edit, primary, quiet, section
 from ui.panels.base import AgentPanel
+from ui.worker_registry import refuse_if_busy, slot_busy, start_in_slot
 from ui import theme
 from ui.style import ACCENT, TEXT_DIM, TEXT_MUTE
 from ui.widgets import FlowLayout, scrollable
@@ -319,6 +320,8 @@ class SocialPanel(QWidget):
         # published contract of what this panel owns.
         host.social_panel = self
         host.social_worker = None
+        host._social_clip_worker = None
+        host.social_publish_worker = None
         self.social_panel_base.load_models()
         from agents.social import queue
         interrupted = queue.recover_interrupted()
@@ -453,6 +456,12 @@ class SocialPanel(QWidget):
             QMessageBox.warning(self, "No Model", "Pick a model first.")
             return
 
+        # A Stop only asks the old request to cancel; a non-streaming call can
+        # sit in its backend call for minutes. Replacing it would destroy a
+        # running QThread (a Qt abort), so refuse before anything is priced.
+        if refuse_if_busy(self.host, self.social_status_label,
+                          "social_worker"):
+            return
         variants = int(self.social_variants_box.currentText() or 1)
         messages = build_post_messages(
             campaign, platform, self.social_angle_box.currentText(),
@@ -474,12 +483,11 @@ class SocialPanel(QWidget):
         self.social_status_label.setText(f"Writing for {platform.name}…")
 
         worker = self.host._new_chat_worker(provider, model, messages, "")
-        self.host.social_worker = worker
         worker.finished_signal.connect(self._on_written)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_write_error)
-        worker.start()
+        start_in_slot(self.host, "social_worker", worker)
 
     def _on_written(self, response: str):
         token, self._write_token = self._write_token, None
@@ -546,6 +554,12 @@ class SocialPanel(QWidget):
             QMessageBox.warning(self, "No Model", "Pick a model first.")
             return
 
+        # Write Posts and the clip brief share social_worker; a clip may
+        # still be rendering in _social_clip_worker. Either one running means
+        # this start would replace a live QThread (audit P1-1).
+        if refuse_if_busy(self.host, self.social_status_label,
+                          "social_worker", "_social_clip_worker"):
+            return
         seconds = 30
         # Checked before the brief too, so a clip that cannot render does not
         # pay for a brief first (the check repeats after Apply).
@@ -575,12 +589,11 @@ class SocialPanel(QWidget):
         self._pending_clip = (platform.key, seconds)
 
         worker = self.host._new_chat_worker(provider, model, messages, "")
-        self.host.social_worker = worker
         worker.finished_signal.connect(self._on_clip_brief)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_clip_error)
-        worker.start()
+        start_in_slot(self.host, "social_worker", worker)
 
     def _on_clip_brief(self, brief: str):
         from agents.video import video_studio
@@ -641,6 +654,12 @@ class SocialPanel(QWidget):
             self._clip_done()
             return
 
+        if slot_busy(self.host, "_social_clip_worker"):
+            self.social_status_label.setText(
+                "Clip: [Busy] The previous clip is still rendering; nothing "
+                "new was rendered.")
+            self._clip_done()
+            return
         # A "video"-keyed request from Social: keeping the token is what
         # stops a concurrent Video-tab failure from popping this render's
         # pending context (and vice versa).
@@ -666,16 +685,17 @@ class SocialPanel(QWidget):
         self._clip_trace = None
 
         self.social_status_label.setText("Rendering clip — see the Video tab")
+        # The brief's worker may still be returning from run(); the
+        # live-worker registry holds it until it has finished.
         self.host.social_worker = None
         clip_worker = VideoWorker(topic=topic, overrides=overrides)
-        self.host._social_clip_worker = clip_worker
         clip_worker.progress_signal.connect(
             lambda pct, detail: self.social_status_label.setText(
                 f"Rendering clip… {pct}%"))
         clip_worker.trace_signal.connect(self._on_clip_trace)
         clip_worker.done_signal.connect(self._on_clip_rendered)
         clip_worker.error_signal.connect(self._on_clip_render_error)
-        clip_worker.start()
+        start_in_slot(self.host, "_social_clip_worker", clip_worker)
 
     def _clip_provider_refused(self, cfg) -> bool:
         """Refuse a clip whose scene-image provider is not keyed or not
@@ -1044,11 +1064,20 @@ class SocialPanel(QWidget):
         self.refresh_schedule()
 
     def post_selected(self):
-        """Publish one post. Never more than one, never unattended."""
+        """Publish one post. Never more than one, never unattended.
+
+        Every question and the queue claim run here; the delivery itself
+        (an upload, and for YouTube possibly Google's consent wait) runs in
+        a PublishWorker so the window never blocks on the network (audit
+        P1-2). The result lands in _on_published / _on_publish_failed.
+        """
         from agents.social import platforms, publishing, queue
 
         post = self._selected_post()
         if not post:
+            return
+        if refuse_if_busy(self.host, self.social_status_label,
+                          "social_publish_worker"):
             return
         if post.get("status") == "posted":
             QMessageBox.information(
@@ -1128,31 +1157,46 @@ class SocialPanel(QWidget):
             self.refresh_schedule()
             return
 
-        self.social_status_label.setText("Posting…")
-        delivery_args = queue.request_args(job)
-        try:
-            result = publisher.publish(
-                post["body"], post.get("media_path", ""),
-                idempotency_key=job["idempotency_key"], **delivery_args)
-        except Exception as exc:
-            if isinstance(exc, publishing.PublishError) and exc.safe_to_retry:
-                queue.mark_retryable(job["id"], str(exc))
-                title = "Post rejected — safe to retry"
-                message = str(exc)
-            else:
-                queue.mark_uncertain(job["id"], str(exc))
-                title = "Result unknown — check the platform"
-                message = (f"{exc}\n\nImprint will not retry automatically. "
-                           "Check the platform first to avoid a duplicate.")
-            self.refresh_schedule()
-            QMessageBox.warning(self, title, message)
+        if post["platform"] == "youtube":
             self.social_status_label.setText(
-                "Retry available" if isinstance(exc, publishing.PublishError)
-                and exc.safe_to_retry else "Verification required")
-            return
-        queue.mark_posted(job["id"], result.permalink)
+                "Posting… If Google's consent page opened in your browser, "
+                "finish it there; Imprint waits up to "
+                f"{publishing.youtube_consent_minutes()} minutes.")
+        else:
+            self.social_status_label.setText("Posting…")
+        self.social_post_btn.setEnabled(False)
+        delivery_args = queue.request_args(job)
+        from agents.social.workers import PublishWorker
+        worker = PublishWorker(
+            publisher, job["id"], post["body"], post.get("media_path", ""),
+            idempotency_key=job["idempotency_key"], **delivery_args)
+        # Bound methods of this widget: delivered on the GUI thread.
+        worker.posted.connect(self._on_published)
+        worker.failed.connect(self._on_publish_failed)
+        start_in_slot(self.host, "social_publish_worker", worker)
+
+    def _on_published(self, job_id, result):
+        from agents.social import queue
+        queue.mark_posted(job_id, result.permalink)
         self.refresh_schedule()
         self.social_status_label.setText(f"Posted — {result.permalink or 'done'}")
+
+    def _on_publish_failed(self, job_id, exc):
+        from agents.social import publishing, queue
+        safe = isinstance(exc, publishing.PublishError) and exc.safe_to_retry
+        if safe:
+            queue.mark_retryable(job_id, str(exc))
+            title = "Post rejected — safe to retry"
+            message = str(exc)
+        else:
+            queue.mark_uncertain(job_id, str(exc))
+            title = "Result unknown — check the platform"
+            message = (f"{exc}\n\nImprint will not retry automatically. "
+                       "Check the platform first to avoid a duplicate.")
+        self.refresh_schedule()
+        QMessageBox.warning(self, title, message)
+        self.social_status_label.setText(
+            "Retry available" if safe else "Verification required")
 
     def refresh_accounts(self):
         """What can post today, and what stands in the way of the rest."""

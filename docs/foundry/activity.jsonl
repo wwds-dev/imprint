@@ -240,3 +240,5 @@
 {"ts": "2026-11-25T04:39:07", "phase": "define", "state": "start", "spec": "worker-crash-class"}
 {"ts": "2026-11-25T04:42:47", "phase": "define", "state": "done", "spec": "worker-crash-class"}
 {"ts": "2026-11-25T04:42:47", "phase": "architect", "state": "start", "spec": "worker-crash-class"}
+{"ts": "2026-11-25T04:43:06", "phase": "architect", "state": "done", "spec": "worker-crash-class"}
+{"ts": "2026-11-25T04:43:06", "phase": "build", "state": "start", "spec": "worker-crash-class"}

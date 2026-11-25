@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
 
 from services.output_limits import result_notice
 from services.runtime_paths import user_data_base
+from ui.worker_registry import refuse_if_busy, start_in_slot
 
 
 class SunoPanel(QWidget):
@@ -188,8 +189,8 @@ class SunoPanel(QWidget):
             return
         host = self.host
         panel = host.music_panel
-        if host.music_worker and host.music_worker.isRunning():
-            self.status.setText("Wait for the current music plan to finish.")
+        # Label's plan and this draft share host.music_worker (ADR 0006).
+        if refuse_if_busy(host, self.status, "music_worker"):
             return
         provider = panel.music_provider_box.currentText()
         model = panel.music_model_box.currentText()
@@ -213,12 +214,11 @@ class SunoPanel(QWidget):
         self.setEnabled(False)
         panel.music_analyse_btn.setEnabled(False)
         self.worker = host._new_chat_worker(provider, model, messages, prompt)
-        host.music_worker = self.worker
         self.worker.usage_signal.connect(lambda usage: host.note_request_usage("music", usage))
         self.worker.finished_signal.connect(self.complete)
         self.worker.error_signal.connect(self.failed)
         self.status.setText("Drafting lyrics and prompts…")
-        self.worker.start()
+        start_in_slot(host, "music_worker", self.worker)
 
     def complete(self, text):
         self.setEnabled(True)
