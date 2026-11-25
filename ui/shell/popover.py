@@ -29,7 +29,6 @@ class Popover(QFrame):
         self.setObjectName("Popover")
         self.setAccessibleName(title)
         self.setFixedWidth(width)
-        self._window = window
         self._anchor: QWidget | None = None
         self._max_height_ratio = max_height_ratio
         outer = QVBoxLayout(self)
@@ -79,7 +78,10 @@ class Popover(QFrame):
     def _fit_height(self) -> None:
         if not self._max_height_ratio:
             return
-        limit = int(self._window.height() * self._max_height_ratio)
+        # The parent, not a stored reference: this object is connected to the
+        # application's state signal, which outlives every window.
+        window = self.parentWidget() or self
+        limit = int(window.height() * self._max_height_ratio)
         # Sections may have just opened or closed: measure the layout as it
         # is now, not as it was last painted.
         self.layout_.invalidate()
