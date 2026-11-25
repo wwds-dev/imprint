@@ -4,8 +4,8 @@ Needs: design, architect, build, review, verify, docs
 
 Status: **Define approved by the owner 2026-11-25 ("do as recommended"): D1 to D12 are decided
 as recommended, alternatives not taken.** Design for slice 1 was written 2026-11-25 at the owner's
-request, before testing ("no testing"; section "Design (slice 1)"); it awaits the owner's review.
-No Architect or Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
+request, before testing ("no testing"; section "Design (slice 1)"), and approved the same day,
+owner: "Approve as recommended" (O1 to O3 as recommended). No Architect or Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
 starts until the owner asks, after testing). Type: user-visible redesign of the whole window,
 new UI capability (stepper, next-step card, word goal, cover, focus mode, light theme), no new
 paid path, no change to what agents do. Owner session: `claude/spec-manuscript-redesign-9236ea`
@@ -605,6 +605,9 @@ macOS's setting is on. Measure 7's test covers the drawer timer.
   `B-Press` and `B-Booth` for the owner (measure 8).
 
 ### Open points for the owner (Design)
+Decided 2026-11-25, owner: "Approve as recommended". Each point below is decided as its
+*Recommended* text says.
+
 - **O1. Where the live estimate sits in slice 1.** *Recommended:* one caption under the composer's
   model row, the one small touch to the composer, until slice 2's ask bar takes it (D3). The
   number then stays visible while typing, not behind a popover. *Alternative:* in the spend

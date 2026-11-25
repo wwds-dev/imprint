@@ -25,3 +25,4 @@
 {"ts": "2026-11-24T23:49:24", "gate": "decision", "by": "owner", "words": "Build A′", "recorded_by": "agent", "spec": "reference-photo-consent", "note": "A′ chosen over A: no account-type model in Nova; whose photos is set beside the reference photos; refused only for 'someone else' without name and date"}
 {"ts": "2026-11-24T23:44:47", "gate": "release", "by": "owner", "words": "release may start", "recorded_by": "agent", "spec": "side-rails-redesign"}
 {"ts": "2026-11-25T05:09:42", "gate": "define", "by": "owner", "words": "do as recommended", "recorded_by": "agent", "spec": "manuscript-redesign", "note": "answers D1-D12 with each recommendation; Design and Build start only when the owner asks, after testing"}
+{"ts": "2026-11-25T05:58:25", "gate": "design", "by": "owner", "words": "Approve as recommended", "recorded_by": "agent", "spec": "manuscript-redesign", "note": "Design slice 1 (shell), O1-O3 as recommended"}
