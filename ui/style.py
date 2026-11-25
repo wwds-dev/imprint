@@ -76,6 +76,7 @@ INFO_LINE   = "rgba(96, 165, 250, 0.32)"
 # Sheen — a faint lift for a row or a pressed chip on a card. White on the
 # dark looks; the light look darkens instead (ui/theme.py).
 SHEEN        = "rgba(255, 255, 255, 0.025)"
+SHEEN_MID    = "rgba(255, 255, 255, 0.035)"
 SHEEN_STRONG = "rgba(255, 255, 255, 0.07)"
 
 # Phosphor — the text you type, and nothing else. A terminal face in CRT

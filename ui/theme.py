@@ -109,6 +109,7 @@ _DARK_SEMANTIC: Final[dict[str, str]] = {
     "INFO_LINE":     "rgba(96, 165, 250, 0.32)",
     # The white overlays that lift a row or a pressed chip off a dark card.
     "SHEEN":         "rgba(255, 255, 255, 0.025)",
+    "SHEEN_MID":     "rgba(255, 255, 255, 0.035)",
     "SHEEN_STRONG":  "rgba(255, 255, 255, 0.07)",
     "WARNING_DOT":   "#fbbf24",
 }
@@ -128,6 +129,7 @@ _LIGHT_SEMANTIC: Final[dict[str, str]] = {
     "INFO_WASH":     "rgba(29, 78, 216, 0.10)",
     "INFO_LINE":     "rgba(29, 78, 216, 0.40)",
     "SHEEN":         "rgba(20, 24, 31, 0.025)",
+    "SHEEN_MID":     "rgba(20, 24, 31, 0.04)",
     "SHEEN_STRONG":  "rgba(20, 24, 31, 0.06)",
     "WARNING_DOT":   "#b45309",
 }

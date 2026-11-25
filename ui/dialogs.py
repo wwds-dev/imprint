@@ -274,10 +274,13 @@ def show_run_log(app):
         rows = ""
         for e in reversed(filtered[-300:]):
             status_val = e.get("status", "")
-            color = {"success": "#3cff88", "error": "#ff5555", "cancelled": "#ffaa00"}.get(status_val, "#ffffff")
+            color = {"success": theme.token("ACCENT"),
+                     "error": theme.token("DANGER"),
+                     "cancelled": theme.token("WARNING")}.get(
+                         status_val, theme.token("TEXT"))
             # Every field is escaped: an error carries provider text, and a
             # partial-billing close appends "recorded €X of €Y" to it.
-            error_cell = f'<span style="color:#ff5555">{_cell(e.get("error", ""))}</span>' if e.get("error") else ""
+            error_cell = f'<span style="color:{theme.token("DANGER")}">{_cell(e.get("error", ""))}</span>' if e.get("error") else ""
             rows += f"""
             <tr>
                 <td>{_cell(e.get("timestamp", ""))}</td>

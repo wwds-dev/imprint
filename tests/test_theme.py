@@ -36,7 +36,7 @@ ACCENT_FAMILY = ("ACCENT", "ACCENT_DIM", "ACCENT_WASH", "ACCENT_LINE",
 #: Semantic colour and borders: one value per look.
 SEMANTIC_KEYS = ("BORDER", "BORDER_STRONG", "DANGER", "DANGER_WASH",
                  "DANGER_LINE", "WARNING", "WARNING_WASH", "WARNING_LINE",
-                 "INFO", "INFO_WASH", "INFO_LINE", "SHEEN", "SHEEN_STRONG",
+                 "INFO", "INFO_WASH", "INFO_LINE", "SHEEN", "SHEEN_MID", "SHEEN_STRONG",
                  "WARNING_DOT")
 ACCENT_RED, PHOSPHOR_RED = OTHERS[theme.RED]
 

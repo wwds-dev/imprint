@@ -55,7 +55,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.style import (
-    global_stylesheet, ACCENT,
+    global_stylesheet,
 )
 from ui import app_identity, appkit_guard, theme, tray, vibe
 from services.ollama_client import OllamaClient, MUSE_GLIMMER_VARIANTS, muse_glimmer_default
@@ -1028,7 +1028,7 @@ class GodAI(QWidget):
             if verdict is None:
                 continue
             if verdict["level"] == "too_big":
-                combo.setItemData(i, QColor("#666666"), Qt.ForegroundRole)
+                combo.setItemData(i, QColor(theme.token("TEXT_MUTE")), Qt.ForegroundRole)
                 combo.setItemData(i, f"⚠ {verdict['message']}", Qt.ToolTipRole)
             elif verdict["level"] == "tight":
                 combo.setItemData(i, f"⚠ {verdict['message']}", Qt.ToolTipRole)
@@ -6562,6 +6562,10 @@ class GodAI(QWidget):
                 f"Expected either `{doc_path}` or `{project_doc_path}`"
             )
 
+        # The viewer reads in either look, so every colour is a token of the
+        # current theme (ADR 0006, the literal sweep).
+        t = theme.palette()
+
         # Convert markdown to basic HTML (handles headings, bold, tables, code, lists)
         def md_to_html(text: str) -> str:
             import re
@@ -6575,7 +6579,7 @@ class GodAI(QWidget):
                 # Code block
                 if line.startswith("```"):
                     if not in_code:
-                        html_lines.append('<pre style="background:#1e1e1e;color:#d4d4d4;padding:10px;border-radius:6px;font-size:12px;overflow:auto;">')
+                        html_lines.append(f'<pre style="background:{t["ELEVATED"]};color:{t["TEXT"]};padding:10px;border-radius:6px;font-size:12px;overflow:auto;">')
                         in_code = True
                     else:
                         html_lines.append("</pre>")
@@ -6600,7 +6604,7 @@ class GodAI(QWidget):
                                 i + 1 < len(lines) and re.match(r"^\|[-| :]+\|$", lines[i+1]) if i+1 < len(lines) else False
                     tag = "th" if is_header else "td"
                     row_html = "".join(
-                        f'<{tag} style="border:1px solid #333;padding:6px 10px;text-align:left;">{c}</{tag}>'
+                        f'<{tag} style="border:1px solid {t["BORDER_STRONG"]};padding:6px 10px;text-align:left;">{c}</{tag}>'
                         for c in cells
                     )
                     html_lines.append(f"<tr>{row_html}</tr>")
@@ -6612,22 +6616,22 @@ class GodAI(QWidget):
                         in_table = False
                 # Headings
                 if line.startswith("#### "):
-                    html_lines.append(f'<h4 style="color:#e8e8e8;margin:10px 0 4px;">{line[5:]}</h4>')
+                    html_lines.append(f'<h4 style="color:{t["TEXT"]};margin:10px 0 4px;">{line[5:]}</h4>')
                 elif line.startswith("### "):
-                    html_lines.append(f'<h3 style="color:{ACCENT};margin:14px 0 6px;">{line[4:]}</h3>')
+                    html_lines.append(f'<h3 style="color:{t["ACCENT"]};margin:14px 0 6px;">{line[4:]}</h3>')
                 elif line.startswith("## "):
-                    html_lines.append(f'<h2 style="color:#ffffff;border-bottom:1px solid #333;padding-bottom:4px;margin:18px 0 8px;">{line[3:]}</h2>')
+                    html_lines.append(f'<h2 style="color:{t["TEXT"]};border-bottom:1px solid {t["BORDER_STRONG"]};padding-bottom:4px;margin:18px 0 8px;">{line[3:]}</h2>')
                 elif line.startswith("# "):
-                    html_lines.append(f'<h1 style="color:{ACCENT};font-size:20px;margin:0 0 4px;">{line[2:]}</h1>')
+                    html_lines.append(f'<h1 style="color:{t["ACCENT"]};font-size:20px;margin:0 0 4px;">{line[2:]}</h1>')
                 # Blockquote / warning
                 elif line.startswith("> "):
-                    html_lines.append(f'<blockquote style="border-left:3px solid #f0a000;padding:6px 12px;margin:6px 0;background:#1e1a00;color:#f0c050;">{line[2:]}</blockquote>')
+                    html_lines.append(f'<blockquote style="border-left:3px solid {t["WARNING"]};padding:6px 12px;margin:6px 0;background:{t["ELEVATED"]};color:{t["WARNING"]};">{line[2:]}</blockquote>')
                 # Unordered list
                 elif line.startswith("- ") or line.startswith("* "):
                     html_lines.append(f'<li style="margin:2px 0;">{line[2:]}</li>')
                 # Horizontal rule
                 elif line.startswith("---"):
-                    html_lines.append('<hr style="border:none;border-top:1px solid #333;margin:12px 0;">')
+                    html_lines.append(f'<hr style="border:none;border-top:1px solid {t["BORDER_STRONG"]};margin:12px 0;">')
                 # Blank line
                 elif line.strip() == "":
                     html_lines.append("<br>")
@@ -6642,13 +6646,13 @@ class GodAI(QWidget):
             html = "\n".join(html_lines)
             # Inline: **bold**, `code`, *italic*
             html = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html)
-            html = re.sub(r"`([^`]+)`", r'<code style="background:#2a2a2a;padding:1px 5px;border-radius:3px;font-size:12px;">\1</code>', html)
+            html = re.sub(r"`([^`]+)`", rf'<code style="background:{t["ELEVATED"]};padding:1px 5px;border-radius:3px;font-size:12px;">\1</code>', html)
             html = re.sub(r"\*(.+?)\*", r"<i>\1</i>", html)
             return html
 
         html_content = md_to_html(raw_md)
         full_html = f"""
-        <html><body style="background:#111111;color:#cccccc;font-family:sans-serif;font-size:13px;padding:4px 8px;">
+        <html><body style="background:{t['SURFACE']};color:{t['TEXT_DIM']};font-family:sans-serif;font-size:13px;padding:4px 8px;">
         {html_content}
         </body></html>
         """
@@ -6663,7 +6667,7 @@ class GodAI(QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Docs — {title}")
         dialog.resize(760, 620)
-        dialog.setStyleSheet("background-color: #111111;")
+        dialog.setStyleSheet(f"background-color: {t['SURFACE']};")
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -6672,9 +6676,9 @@ class GodAI(QWidget):
         browser = QTextBrowser()
         browser.setHtml(full_html)
         browser.setStyleSheet(
-            "QTextBrowser { background: #111111; color: #cccccc; border: none; }"
-            "QScrollBar:vertical { background: #1a1a1a; width: 10px; }"
-            "QScrollBar::handle:vertical { background: #333333; border-radius: 5px; }"
+            f"QTextBrowser {{ background: {t['SURFACE']}; color: {t['TEXT_DIM']}; border: none; }}"
+            f"QScrollBar:vertical {{ background: {t['ELEVATED']}; width: 10px; }}"
+            f"QScrollBar::handle:vertical {{ background: {t['BORDER_STRONG']}; border-radius: 5px; }}"
         )
         browser.setOpenExternalLinks(True)
         layout.addWidget(browser)

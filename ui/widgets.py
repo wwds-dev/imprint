@@ -15,7 +15,9 @@ from PySide6.QtWidgets import (
 )
 
 from services.providers import uncensored_tag
-from ui.style import ACCENT, ELEVATED, TEXT, TEXT_DIM, TEXT_MUTE
+from ui.style import (ACCENT, ACCENT_WASH, BORDER, DANGER, DANGER_WASH,
+                      ELEVATED, SHEEN_MID, SHEEN_STRONG, TEXT, TEXT_DIM,
+                      TEXT_MUTE, WARNING, WARNING_WASH)
 from ui import theme
 
 
@@ -53,8 +55,8 @@ LABEL_ROLE = int(Qt.ItemDataRole.UserRole) + 109
 # tagged wherever one is named (owner's decision, 2026-10-19). The tag comes
 # from the model's name (services/providers.py), so a new download is tagged
 # with nobody remembering to. It is warning-amber, never the accent: BEST FIT is
-# advice, this is a fact about the model.
-TAG_TONE = "#d9a441"
+# advice, this is a fact about the model. The theme's WARNING, so it stays
+# readable on the light look (ADR 0006); it was a fixed #d9a441 before.
 TAG_NOTES = {
     "abliterated": "Abliterated: this model's refusal behaviour was removed. "
                    "It will answer requests a standard model declines.",
@@ -70,7 +72,7 @@ def paint_tag(painter: QPainter, font: QFont, text: str, right: int,
     from PySide6.QtGui import QFontMetrics
     width = width or QFontMetrics(font).horizontalAdvance(text) + 16
     pill = QRect(right - width, centre_y - 9, width, 18)
-    tone = QColor(TAG_TONE)
+    tone = QColor(theme.token("WARNING"))
     fill, edge = QColor(tone), QColor(tone)
     fill.setAlpha(30)
     edge.setAlpha(140)
@@ -558,46 +560,46 @@ class CollapsibleSection(QWidget):
     case, a full-width target, and an explicit open/closed state.
     """
 
-    HEADER_STYLE = """
-        QPushButton#CollapsibleHeader {
+    HEADER_STYLE = f"""
+        QPushButton#CollapsibleHeader {{
             text-align: left;
             padding: 9px 10px;
             background-color: transparent;
             border: 1px solid transparent;
             border-radius: 7px;
-            color: #9aa5b4;
+            color: {TEXT_DIM};
             font-weight: 600;
             font-size: 12px;
-        }
-        QPushButton#CollapsibleHeader:hover {
-            color: #e8ecf1;
-            background-color: #1a1f29;
-            border-color: rgba(255, 255, 255, 0.09);
-        }
-        QPushButton#CollapsibleHeader:checked {
-            color: #e8ecf1;
-            background-color: rgba(255, 255, 255, 0.035);
-        }
-        QLabel#CollapsibleSummary {
-            color: #9aa5b4;
-            background-color: rgba(255, 255, 255, 0.07);
+        }}
+        QPushButton#CollapsibleHeader:hover {{
+            color: {TEXT};
+            background-color: {ELEVATED};
+            border-color: {BORDER};
+        }}
+        QPushButton#CollapsibleHeader:checked {{
+            color: {TEXT};
+            background-color: {SHEEN_MID};
+        }}
+        QLabel#CollapsibleSummary {{
+            color: {TEXT_DIM};
+            background-color: {SHEEN_STRONG};
             border-radius: 6px;
             padding: 2px 7px;
             font-size: 10px;
             font-weight: 600;
-        }
-        QLabel#CollapsibleSummary[tone="accent"] {
-            color: #34d399;
-            background-color: rgba(52, 211, 153, 0.12);
-        }
-        QLabel#CollapsibleSummary[tone="warning"] {
-            color: #fbbf24;
-            background-color: rgba(251, 191, 36, 0.12);
-        }
-        QLabel#CollapsibleSummary[tone="danger"] {
-            color: #f87171;
-            background-color: rgba(248, 113, 113, 0.12);
-        }
+        }}
+        QLabel#CollapsibleSummary[tone="accent"] {{
+            color: {ACCENT};
+            background-color: {ACCENT_WASH};
+        }}
+        QLabel#CollapsibleSummary[tone="warning"] {{
+            color: {WARNING};
+            background-color: {WARNING_WASH};
+        }}
+        QLabel#CollapsibleSummary[tone="danger"] {{
+            color: {DANGER};
+            background-color: {DANGER_WASH};
+        }}
     """
 
     def __init__(self, title: str, expanded: bool = True, *,

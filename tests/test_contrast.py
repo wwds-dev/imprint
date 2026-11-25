@@ -51,7 +51,7 @@ def _rgb(colour: str, over: tuple[int, int, int] | None = None):
                       float(match[4]))
     assert over is not None, f"{colour} needs a surface to sit on"
     return tuple(round(alpha * fg + (1 - alpha) * bg)
-                 for fg, bg in zip((r, g, b), over))
+                 for fg, bg in zip((r, g, b), over, strict=True))
 
 
 def _luminance(rgb) -> float:
