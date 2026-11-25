@@ -80,6 +80,10 @@ class Popover(QFrame):
         if not self._max_height_ratio:
             return
         limit = int(self._window.height() * self._max_height_ratio)
+        # Sections may have just opened or closed: measure the layout as it
+        # is now, not as it was last painted.
+        self.layout_.invalidate()
+        self.layout_.activate()
         hint = self.body.sizeHint().height() + 2
         self.setFixedHeight(min(hint, max(160, limit)))
 

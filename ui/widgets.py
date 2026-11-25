@@ -711,6 +711,13 @@ class CollapsibleSection(QWidget):
         self.content.setVisible(self._expanded)
         self._update_header()
 
+    def set_expanded(self, expanded: bool) -> None:
+        """Open or close the section without a click (the status popover
+        opens the one that explains the chip)."""
+        if bool(expanded) != self._expanded:
+            self._toggle()
+        self.header_btn.setChecked(self._expanded)
+
     def _update_header(self):
         arrow = "⌄" if self._expanded else "›"
         # QPushButton reads "&" as a mnemonic marker, which silently turned

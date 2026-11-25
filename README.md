@@ -104,7 +104,7 @@ Centre; prices and model details are in the Model Guide and the agent sheets
 1. [Overview](#1-overview)
 2. [Application Layout](#2-application-layout)
    - [The menu bar item](#the-menu-bar-item)
-3. [Header Bar — Modes and Chrome](#3-header-bar--modes-and-chrome)
+3. [The shell — rail, top bar and chrome](#3-the-shell--rail-top-bar-and-chrome)
    - [Themes](#themes)
 4. [Left Rail — Projects](#4-left-rail--projects)
 5. [Right Rail — Spend, Budget and Utilities](#5-right-rail--spend-budget-and-utilities)
@@ -298,48 +298,63 @@ than a behaviour.
 
 ---
 
-## 3. Header Bar — Modes and Chrome
+## 3. The shell — rail, top bar and chrome
 
-**Mode tabs** — `Author` · `Audio + Music` · `Video + Ads` · `Social` · `Web` · `Brand Design` · `Brand Content` · `Assistant`. Each opens the
-last tool used in that workspace. Where a workspace holds two related tools
-(Author → Quill / Press, Audio + Music → Booth / Label) a second tab row appears
-above the page title.
+Since the Manuscript redesign (slice 1, `docs/specs/manuscript-redesign.md`,
+ADR 0006) the window has no header row and no side rails. Three pieces of
+chrome remain:
 
-They are underline tabs, not filled pills: they are navigation, and a pill here
-competed with the one button on each page that actually spends money.
+**Icon rail** (left, full height) — the app mark (its tooltip is the version;
+an amber dot means this build is older than the code), one icon per workspace
+— `Author` · `Audio + Music` · `Video + Ads` · `Social` · `Web` ·
+`Brand Design` · `Brand Content` · `Assistant` — and at the bottom **Help**
+("?": this agent's **Docs**, the **Learning Centre** (F1) and **Keyboard
+shortcuts**) and **Settings**. Hovering a workspace says what it is for. Each
+opens the last tool used in that workspace; ⌘1–⌘8 do the same.
 
-**Status** — `● Ready` while idle; changes colour while a request runs or after
-one fails.
+**Top bar** (over the content) — where a workspace holds two related tools
+(Author → Quill / Press, Audio + Music → Booth / Label) a switch between them
+(⌘[ and ⌘]); otherwise the agent's name. Then the project selector and its
+**Project actions** menu (New Project, Project Overview, Save Current Setup,
+with the project budget bar at the top while a project is active), **Chat
+history** (⌘Y: a drawer with search, the agent filter, the saved chats and
+**New Chat**), and two chips:
 
-**Theme dots** — three small dots between the status pill and **Docs**, each
-painted in its own theme's accent; the current one carries a ring. Click one to
-switch, or focus the row and use ←/→ to step through them — the window repaints
-immediately, with nothing to confirm. Hover names the theme. The same choice is
-in **Settings → General → Appearance** (see [§13.3](#133-settings)).
-**Docs** — opens the documentation sheet for the current agent.
-**Tooltips: On/Off** — toggles hover help across the whole app.
-**Settings** — opens the settings dialog.
+- the **spend chip** — "€1.20 of €5 today". When a request had no price it says
+  "+ unknown" (or "Unknown"), never €0.00. It opens the spend popover: Session
+  and Today with their limit fields, the project line, Requests, Last request,
+  Saved by local, Advice spent, **Reset session spend**, **Cost History** and
+  **Run Log**;
+- the **status chip** — the worst of: machine stressed, a key check failed,
+  machine busy, working, ready, with a count when model updates are waiting.
+  It opens the status popover: System, Chat routing, API keys and Model updates.
+
+Escape closes a popover, a menu or the drawer. Hover tooltips, the look and the
+accent are set once, in **Settings → General → Appearance** (see
+[§13.3](#133-settings)).
 
 ### Themes
 
-Imprint ships three colour themes. The choice is saved in the `settings` table
-under `ui_theme` and survives a restart; Green is the default and the fallback
-for any unreadable value.
+Imprint has two looks, **Light** (the default) and **Dark**, each in three
+accents: green, rose and teal. The choice is saved in the `settings` table under
+`ui_theme` and survives a restart; Light · Green is the fallback for any
+unreadable value. The dark looks are the three themes Imprint had before
+(saved as `green`, `red`, `blue`), unchanged; an install that had saved one is
+moved once to Light with the same accent and told so, and a later choice of
+Dark is kept.
 
-| Theme | Accent | Phosphor (typed text) | Greys |
+| Look | Accent | Phosphor (typed text) | Greys |
 |---|---|---|---|
-| **Green (Matrix)** — default | emerald `#34d399` | `#00ff41` | tinted slightly blue |
-| **Red** | rose `#f43f5e` | `#ff0033` | the same values, tint rotated toward red |
-| **Blue (Cyberpunk)** | cyan `#22d3ee` | electric aqua `#00ffdd` | the same values, tint rotated toward cyan |
+| Light | green `#0b7a55`, rose `#be123c`, teal `#0e7490` | the deep accent | off-white page, white cards |
+| Dark | emerald `#34d399`, rose `#f43f5e`, cyan `#22d3ee` | `#00ff41`, `#ff0033`, `#00ffdd` | tinted toward the accent |
 
-Only the accent, the phosphor and the tint of the greys change; lightness does
-not. **Status colour is the same in every theme** — `DANGER` (coral) stops
-work, `WARNING` (amber) flags a paid or irreversible step, `INFO` (blue) is
-neutral emphasis. That is why Red's accent is rose rather than red, and Blue's
-is cyan at 188° rather than azure: an accent too close to `DANGER` or `INFO`
-would read as the same claim. Anything the docs call "green" in the status
-cards — a **Configured** key, a Resource Monitor row under threshold — is the
-accent, so it is rose or cyan under the other two themes.
+**Status colour keeps its meaning in every theme** — `DANGER` stops work,
+`WARNING` flags a paid or irreversible step, `INFO` is neutral emphasis. The
+light look uses darker shades of them so each stays readable on white
+(`tests/test_contrast.py` checks every text and indicator token against WCAG
+AA). Anything the docs call "green" in the status cards — a **Configured** key,
+a Resource Monitor row under threshold — is the accent, so it is rose or teal
+under the other accents.
 
 **The caret.** Every editable multi-line field (`QTextEdit`) draws a blinking
 underscore in the phosphor colour instead of Qt's bar: one cadence (on for
@@ -2756,12 +2771,15 @@ Each is described below.
 | Default session budget (€) | Starting value for the session budget input on startup |
 | Default daily budget (€) | Starting value for the daily budget input on startup |
 
-**Appearance** (also on the General tab) — a **Theme** picker: Green (Matrix),
-Red, Blue (Cyberpunk). Choosing one repaints the window immediately and saves
-it, so the choice is made by looking; **Cancel** puts back the theme the dialog
-opened with. The header's theme dots do the same thing — see [Themes](#themes).
-The sentence above the picker (`ui/dialogs.appearance_intro()`) counts and
-names the themes from `ui/theme.THEMES` rather than hard-coding a number; it
+**Appearance** (also on the General tab) — **Look** (Light | Dark) and
+**Accent** (three dots, painted in the chosen look's accents; ←/→ step through
+them). Choosing either repaints the window immediately and saves it, so the
+choice is made by looking; **Cancel** puts back the theme the dialog opened
+with. See [Themes](#themes). Below them: **Show tooltips** (remembered across
+launches), **Reduce motion** (on, and fixed, while macOS Reduce Motion is on)
+and the **About** line with the running version. The sentence above
+(`ui/dialogs.appearance_intro()`) counts and names the looks and accents from
+`ui/theme.LOOKS` and `ui/theme.ACCENTS` rather than hard-coding a number; it
 said "two themes" for a week after Blue shipped.
 
 #### API keys Tab
@@ -3197,8 +3215,8 @@ UI coverage is **behavioural, not visual** — no screenshot comparisons.
 sibling widgets in a panel may occupy the same pixels, across every agent panel
 at the window's minimum size, and that no row of a panel is given less height
 than its minimum unless it can scroll — a clipped child is not a sibling of what
-clips it, so the overlap check alone never saw Quill crushed; it also covers the header's shedding order and
-the **More ▾** overflow. `test_agent_panel.py` and `test_status_cards.py` cover
+clips it, so the overlap check alone never saw Quill crushed; it also covers the icon rail and the top bar's
+collapse order (`tests/test_shell.py`). `test_agent_panel.py` and `test_status_cards.py` cover
 control state and the rail cards. What none of them can judge is whether a
 result is any good — that is what `tests/manual_test_cases.md` is for. To check
 by hand that a panel still constructs, build the window offscreen:

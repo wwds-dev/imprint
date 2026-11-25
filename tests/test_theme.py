@@ -387,14 +387,28 @@ def test_repaint_drops_widgets_that_have_gone():
     assert len(theme._registered) == before
 
 
-def test_settings_picker_previews_live_and_cancel_puts_it_back(window, monkeypatch):
-    """Choosing a theme repaints at once; Cancel is a real undo.
+@pytest.fixture
+def settings(window, monkeypatch):
+    """Settings > General, opened without blocking. The dots and the Look
+    segments live there since the Manuscript shell (Design S8)."""
+    from PySide6.QtWidgets import QDialog
+    from ui import dialogs
+
+    opened = []
+    monkeypatch.setattr(QDialog, "exec", lambda self: opened.append(self) or 0)
+    dialogs.show_settings(window)
+    yield opened[0]
+    opened[0].reject()
+
+
+def test_settings_look_previews_live_and_cancel_puts_it_back(window, monkeypatch):
+    """Choosing a look repaints at once; Cancel is a real undo.
 
     The preview writes the setting straight away so the window can repaint, so
     the restore on `rejected` is the only thing between a glance at the other
-    theme and being stuck in it.
+    look and being stuck in it. (Rewritten from the ThemePick combo test.)
     """
-    from PySide6.QtWidgets import QComboBox, QDialog
+    from PySide6.QtWidgets import QDialog, QPushButton
     from ui import dialogs
 
     opened = []
@@ -405,17 +419,42 @@ def test_settings_picker_previews_live_and_cancel_puts_it_back(window, monkeypat
     dialogs.show_settings(window)
     dialog = opened[0]
 
-    picker = dialog.findChild(QComboBox, "ThemePick")
-    assert picker is not None, "the theme picker is not in the Settings dialog"
-    assert picker.currentData() == theme.GREEN
+    segments = {b.text(): b for b in dialog.findChildren(QPushButton, "LookSegment")}
+    assert set(segments) == {"Light", "Dark"}, "the Look control is not in Settings"
+    assert segments["Dark"].isChecked()
 
-    picker.setCurrentIndex(list(theme.THEMES).index(theme.RED))
-    assert theme.current() == theme.RED
-    assert ACCENT_RED in window.styleSheet()
+    segments["Light"].click()
+    assert theme.current() == theme.LIGHT_GREEN     # same accent, other look
+    assert theme.accent(theme.LIGHT_GREEN) in window.styleSheet()
 
     dialog.reject()
     assert theme.current() == theme.GREEN
     assert ACCENT_GREEN in window.styleSheet()
+
+
+def test_settings_holds_show_tooltips_bound_to_the_window(window, settings):
+    from PySide6.QtWidgets import QCheckBox
+    box = settings.findChild(QCheckBox, "ShowTooltips")
+    assert box is not None
+    try:
+        box.setChecked(False)
+        assert not window.tooltips_toggle_btn.isChecked()
+        assert window.tooltips_enabled is False
+        window.tooltips_toggle_btn.setChecked(True)
+        assert box.isChecked()
+    finally:
+        window.tooltips_toggle_btn.setChecked(True)
+
+
+def test_show_tooltips_is_remembered(window):
+    """AO3: the choice survives a launch (setting show_tooltips)."""
+    try:
+        window.tooltips_toggle_btn.setChecked(False)
+        assert window.settings["show_tooltips"] is False
+    finally:
+        window.tooltips_toggle_btn.setChecked(True)
+    assert window.settings["show_tooltips"] is True
+
 
 # ── The dots ──────────────────────────────────────────────────────────
 
@@ -430,7 +469,7 @@ def _press(dots, index):
         Qt.LeftButton, Qt.LeftButton, Qt.NoModifier))
 
 
-def test_the_dots_carry_one_dot_per_accent(window):
+def test_the_dots_carry_one_dot_per_accent(window, settings):
     dots = window.theme_dots
     assert dots.isVisible() or dots.parentWidget() is not None
     # Every dot has to be reachable: the hit test walks slots, so a dot the
@@ -439,7 +478,7 @@ def test_the_dots_carry_one_dot_per_accent(window):
         set(range(len(theme.ACCENTS)))
 
 
-def test_clicking_a_dot_wears_that_theme(window):
+def test_clicking_a_dot_wears_that_theme(window, settings):
     """The click has to reach the window, not just the setting."""
     try:
         for look in theme.LOOKS:
@@ -454,7 +493,7 @@ def test_clicking_a_dot_wears_that_theme(window):
         window.apply_global_style()
 
 
-def test_clicking_the_current_dot_changes_nothing(window):
+def test_clicking_the_current_dot_changes_nothing(window, settings):
     """No repaint, no write — a click on what you already have is a no-op."""
     theme.set_current(theme.GREEN)
     window.apply_global_style()
@@ -464,7 +503,7 @@ def test_clicking_the_current_dot_changes_nothing(window):
     assert window.styleSheet() == before
 
 
-def test_arrow_keys_step_through_the_themes(window):
+def test_arrow_keys_step_through_the_themes(window, settings):
     from PySide6.QtCore import QEvent, Qt
     from PySide6.QtGui import QKeyEvent
 

@@ -76,14 +76,19 @@ class AppMark(QWidget):
         # Not a button, but VoiceOver reaches it and reads the version.
         self.setFocusPolicy(Qt.FocusPolicy.TabFocus)
         self.stale = False
+        self.display_name = "Imprint"
 
-    def set_version(self, tooltip: str, stale: bool) -> None:
+    def set_version(self, tooltip: str, stale: bool,
+                    display_name: str | None = None) -> None:
+        if display_name:
+            self.display_name = display_name
         self.stale = bool(stale)
         if self.stale:
             tooltip = (f"{tooltip}\nThis build is older than the code: "
                        "rebuild to update")
         self.setToolTip(tooltip)
-        self.setAccessibleName("Imprint" + (" (stale build)" if stale else ""))
+        self.setAccessibleName(
+            self.display_name + (" (stale build)" if stale else ""))
         self.setAccessibleDescription(tooltip)
         self.update()
 

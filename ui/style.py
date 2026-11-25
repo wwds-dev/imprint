@@ -480,10 +480,6 @@ _STYLESHEET_TEMPLATE = """
             border: 1px solid {BORDER};
             border-radius: {RADIUS_LG};
         }}
-        QFrame#HeaderDivider {{
-            background-color: {BORDER};
-            border: none;
-        }}
         QFrame#CardDivider {{
             background-color: {BORDER};
             border: none;
@@ -513,12 +509,6 @@ _STYLESHEET_TEMPLATE = """
         }}
         QLabel#StudioBrandNote {{ color: {TEXT_MUTE}; font-size: 11px; }}
 
-        QLabel#StatusPill {{
-            color: {ACCENT};
-            font-size: 12px;
-            font-weight: 600;
-            padding: 0;
-        }}
         /* The "next step" hint. Both panels carried their own copy of these
            five declarations inline. */
         QLabel#NextStepBanner {{
@@ -596,36 +586,7 @@ _STYLESHEET_TEMPLATE = """
            text with an accent underline. As pills it looked like five more
            buttons, competing with the one button on the page that spends
            money. */
-        QTabBar#WorkspaceTabs {{ background: transparent; }}
-        QTabBar#WorkspaceTabs::tab {{
-            background: transparent;
-            color: {TEXT_MUTE};
-            border: none;
-            border-bottom: 2px solid transparent;
-            border-radius: 0;
-            padding: 0 3px;
-            margin: 0 7px;
-            font-size: 12px;
-            font-weight: 550;
-        }}
-        QTabBar#WorkspaceTabs::tab:hover {{ color: {TEXT_DIM}; }}
-        QTabBar#WorkspaceTabs::tab:selected {{
-            color: {TEXT};
-            border-bottom: 2px solid {ACCENT};
-            font-weight: 650;
-        }}
         /* Overflow for workspaces that do not fit; reads as one more tab. */
-        QToolButton#WorkspaceMore {{
-            background: transparent;
-            color: {TEXT_MUTE};
-            border: none;
-            padding: 0 3px;
-            margin: 0 7px;
-            font-size: 12px;
-            font-weight: 550;
-        }}
-        QToolButton#WorkspaceMore:hover {{ color: {TEXT_DIM}; }}
-        QToolButton#WorkspaceMore::menu-indicator {{ image: none; width: 0; }}
 
         /* ── Feedback ──────────────────────────────────────────────── */
         QProgressBar {{
@@ -887,67 +848,16 @@ _STYLESHEET_TEMPLATE = """
         QSpinBox, QDoubleSpinBox, QDateTimeEdit, QDateEdit,
         QTimeEdit {{ min-height: 28px; max-height: 28px; }}
 
-        /* ── Shell chrome ──────────────────────────────────────────── */
-        /* Header and rails are one surface lifted off the page, separated by a
-           hairline rather than a gap. Three floating panes with gutters between
-           them read as three apps; one surface with divisions reads as one. */
-        /* No bottom hairline here: WorkspaceDescriptionStrip sits directly
-           below it on the same surface and carries the band's single line.
-           Both drawing one put two hairlines through the middle of the band. */
-        QFrame#AppHeader {{
-            background-color: {SURFACE};
-            border: none;
-        }}
-        /* The workspace description sits on its own strip under the header,
-           because AppHeader is a fixed-height single row that header_fit
-           measures. It continues the header's surface and carries the
-           hairline, so the two read as one band rather than two bars. */
-        QFrame#WorkspaceDescriptionStrip {{
-            background-color: {SURFACE};
-            border: none;
-            border-bottom: 1px solid {BORDER};
-        }}
-        QLabel#WorkspaceDescription {{ color: {TEXT_MUTE}; font-size: 11px; }}
-        QFrame#RailLeft {{
-            background-color: {SURFACE};
-            border: none;
-            border-right: 1px solid {BORDER};
-        }}
-        QFrame#RailRight {{
-            background-color: {SURFACE};
-            border: none;
-            border-left: 1px solid {BORDER};
-        }}
+        /* ── Shell chrome: see "The Manuscript shell" rules below. ── */
         /* Layout containers must not paint. The global QWidget background
            otherwise lands behind every helper container and stamps a page-
            coloured rectangle onto the rail surface. */
         QWidget#Transparent {{ background: transparent; }}
 
-        QLabel#Wordmark {{
-            color: {TEXT};
-            font-size: 15px;
-            font-weight: 700;
-            letter-spacing: 2.4px;
-        }}
         /* The version beside the wordmark. Quiet by default — it is
            reference, not a control — and amber when the running build is
            behind the checkout, which is the only time it wants attention. */
-        QLabel#VersionBadge {{
-            color: {TEXT_MUTE};
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.6px;
-            padding: 2px 7px;
-            border: 1px solid {BORDER};
-            border-radius: {RADIUS_SM};
-        }}
-        QLabel#VersionBadge[state="stale"] {{
-            color: {WARNING};
-            border: 1px solid {WARNING_LINE};
-            background-color: {WARNING_WASH};
-        }}
 
-        QLabel#WordmarkDot {{ color: {ACCENT}; font-size: 11px; }}
 
         /* Navigation, not action: an underline marks the current mode. A pill
            here would compete with the buttons that actually spend money. */
@@ -1057,7 +967,7 @@ _STYLESHEET_TEMPLATE = """
             border: none;
             border-radius: 10px;
         }}
-        QPushButton#AgentSegment {{
+        QPushButton#AgentSegment, QPushButton#LookSegment {{
             background-color: transparent;
             border: none;
             border-radius: 8px;
@@ -1068,13 +978,14 @@ _STYLESHEET_TEMPLATE = """
             min-height: 32px;
         }}
         QPushButton#AgentSegment[tight="true"] {{ padding: 0 8px; }}
-        QPushButton#AgentSegment:hover {{ color: {TEXT}; }}
-        QPushButton#AgentSegment:checked {{
+        QPushButton#AgentSegment:hover, QPushButton#LookSegment:hover {{ color: {TEXT}; }}
+        QPushButton#AgentSegment:checked, QPushButton#LookSegment:checked {{
             background-color: {TEXT};
             color: {SURFACE};
             font-weight: 600;
         }}
-        QPushButton#AgentSegment:focus {{ border: 2px solid {ACCENT}; }}
+        QPushButton#AgentSegment:focus, QPushButton#LookSegment:focus {{ border: 2px solid {ACCENT}; }}
+        QWidget#LookPick {{ background-color: {ELEVATED}; border-radius: 10px; }}
         QComboBox#ProjectSelector {{
             background-color: {SURFACE};
             border: 1px solid {BORDER_STRONG};
@@ -1176,23 +1087,7 @@ _STYLESHEET_TEMPLATE = """
             font-size: 12px;
         }}
 
-        /* The project rail: a list, not a boxed widget inside a boxed panel. */
-        QFrame#RailLeft QListWidget {{
-            background: transparent;
-            border: none;
-            padding: 0;
-            font-size: 13px;
-            color: {TEXT_DIM};
-        }}
-        QFrame#RailLeft QListWidget::item {{
-            padding: 7px 8px;
-            border-radius: {RADIUS_SM};
-        }}
-        QFrame#RailLeft QListWidget::item:hover {{ background-color: {ELEVATED}; }}
-        QFrame#RailLeft QListWidget::item:selected {{
-            background-color: {ACCENT_WASH};
-            color: {ACCENT};
-        }}
+
 """
 
 

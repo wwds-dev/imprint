@@ -317,6 +317,101 @@ def show_run_log(app):
     dialog.exec()
 
 
+def _build_appearance(app, dialog, grid) -> None:
+    """Settings > General > Appearance (Design S8; ADR 0006 decisions 2, 7, 9).
+
+    Look (Light | Dark), Accent (the theme dots, painted in the chosen look's
+    accents), Show tooltips (bound both ways to the window's
+    ``tooltips_toggle_btn``), Reduce motion, and the About line with the
+    version. Look and Accent preview live and Cancel puts the theme back, as
+    the old picker did. Switching is ``set_current`` plus
+    ``apply_global_style``: no ``setStyle`` call (the 2026-10-05 deadlock).
+    """
+    from PySide6.QtWidgets import QButtonGroup, QCheckBox
+    from services import version as app_version
+    from ui import motion
+    from ui.widgets import ThemeDots
+
+    theme_opened_with = theme.current()
+
+    grid.addWidget(QLabel("Look"), 0, 0)
+    look_row = QWidget()
+    look_row.setObjectName("LookPick")
+    look_layout = QHBoxLayout(look_row)
+    look_layout.setContentsMargins(0, 0, 0, 0)
+    look_layout.setSpacing(2)
+    look_group = QButtonGroup(look_row)
+    look_group.setExclusive(True)
+    look_buttons = {}
+    for look in theme.LOOKS:
+        button = QPushButton(theme.LOOK_LABELS[look])
+        button.setObjectName("LookSegment")
+        button.setCheckable(True)
+        button.setChecked(theme.look() == look)
+        look_group.addButton(button)
+        look_layout.addWidget(button)
+        look_buttons[look] = button
+    look_layout.setContentsMargins(2, 2, 2, 2)
+    grid.addWidget(look_row, 0, 1, Qt.AlignLeft | Qt.AlignVCenter)
+
+    grid.addWidget(QLabel("Accent"), 1, 0)
+    dots = ThemeDots(on_change=lambda: app.apply_global_style())
+    dots.setObjectName("AccentPick")
+    # The window's handle while Settings is open (the dots lived in the
+    # header before; tests and lessons reach them as `theme_dots`).
+    app.theme_dots = dots
+    grid.addWidget(dots, 1, 1, Qt.AlignLeft | Qt.AlignVCenter)
+
+    def choose_look(look: str) -> None:
+        key = theme.compose(look, theme.accent_of())
+        if key != theme.current():
+            theme.set_current(key)
+            app.apply_global_style()
+            dots.update()
+
+    for look, button in look_buttons.items():
+        button.clicked.connect(lambda _checked=False, name=look: choose_look(name))
+
+    def restore_theme() -> None:
+        if theme.current() != theme_opened_with:
+            theme.set_current(theme_opened_with)
+            app.apply_global_style()
+
+    dialog.rejected.connect(restore_theme)
+
+    tooltips = QCheckBox("Show tooltips")
+    tooltips.setObjectName("ShowTooltips")
+    action = getattr(app, "tooltips_toggle_btn", None)
+    if action is not None:
+        tooltips.setChecked(action.isChecked())
+        tooltips.toggled.connect(action.setChecked)
+        action.toggled.connect(tooltips.setChecked)
+    grid.addWidget(tooltips, 2, 1)
+
+    reduce_box = QCheckBox("Reduce motion")
+    reduce_box.setObjectName("ReduceMotion")
+    if motion.system_reduce_motion():
+        reduce_box.setChecked(True)
+        reduce_box.setEnabled(False)
+        reduce_box.setToolTip("macOS Reduce Motion is on")
+    else:
+        reduce_box.setChecked(motion.in_app_setting())
+        reduce_box.setToolTip(
+            "Stop the History drawer's slide and every other movement.")
+        reduce_box.toggled.connect(motion.set_in_app_setting)
+    grid.addWidget(reduce_box, 3, 1)
+
+    grid.addWidget(QLabel("About"), 4, 0)
+    about_text = f"Imprint {app_version.version_string()}"
+    if not app_version.staleness()["current"]:
+        about_text += " · this build is older than the code: rebuild to update"
+    about = QLabel(about_text)
+    about.setObjectName("SettingsAbout")
+    about.setToolTip(app_version.tooltip())
+    about.setWordWrap(True)
+    grid.addWidget(about, 4, 1)
+
+
 def show_settings(app):
     dialog = QDialog(app)
     dialog.setWindowTitle("Settings")
@@ -427,33 +522,9 @@ def show_settings(app):
     al = QGridLayout(appearance_card)
     al.setSpacing(14)
     al.setContentsMargins(18, 18, 18, 18)
-    al.addWidget(QLabel("Theme"), 0, 0)
-    theme_box = QComboBox()
-    theme_box.setObjectName("ThemePick")
-    for key in theme.THEMES:
-        theme_box.addItem(theme.LABELS[key], key)
-    theme_opened_with = theme.current()
-    theme_box.setCurrentIndex(list(theme.THEMES).index(theme_opened_with))
-    al.addWidget(theme_box, 0, 1)
+    _build_appearance(app, dialog, al)
     al.setColumnStretch(1, 1)
     general_page.addWidget(appearance_card)
-
-    def preview_theme(index: int) -> None:
-        """Repaint live, so the choice is made by looking rather than guessing.
-
-        This writes the setting immediately — that is what lets the window
-        repaint — so Cancel has to put the old one back.
-        """
-        theme.set_current(theme_box.itemData(index))
-        app.apply_global_style()
-
-    def restore_theme() -> None:
-        if theme.current() != theme_opened_with:
-            theme.set_current(theme_opened_with)
-            app.apply_global_style()
-
-    theme_box.currentIndexChanged.connect(preview_theme)
-    dialog.rejected.connect(restore_theme)
 
     general_page.addStretch()
     tabs.addTab(general_tab, "General")

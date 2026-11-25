@@ -159,15 +159,36 @@ class TestTheStampScript:
         assert data.get("major") == app_version.info()["major"]
 
 
-class TestTheHeaderShowsIt:
-    def test_the_badge_matches_the_module(self, app, window):
-        assert window.version_badge.text() == app_version.version_string()
+class TestTheShellShowsIt:
+    """The version moved from a header badge to the app mark's tooltip and
+    Settings > General > About (spec manuscript-redesign D2, Design S2/S4;
+    rewritten from TestTheHeaderShowsIt in slice 1)."""
 
-    def test_the_badge_explains_itself_on_hover(self, app, window):
-        tip = window.version_badge.toolTip()
+    def test_the_mark_carries_the_version(self, app, window):
+        tip = window.app_mark.toolTip()
         assert app_version.version_string() in tip
         # The hover is where "is this current?" gets answered.
         assert any(word in tip for word in ("Up to date", "behind", "cannot", "no version stamp"))
+        assert window.app_mark.accessibleDescription() == tip
+
+    def test_a_stale_build_shows_the_dot_and_says_so(self, app, window):
+        stale = not app_version.staleness()["current"]
+        assert window.app_mark.stale is stale
+        if stale:
+            assert "older than the code" in window.app_mark.toolTip()
+
+    def test_the_about_line_matches_the_module(self, app, window, monkeypatch):
+        from PySide6.QtWidgets import QDialog, QLabel
+        from ui import dialogs
+        opened = []
+        monkeypatch.setattr(QDialog, "exec", lambda self: opened.append(self) or 0)
+        dialogs.show_settings(window)
+        about = opened[0].findChild(QLabel, "SettingsAbout")
+        assert about is not None
+        assert about.text().startswith(f"Imprint {app_version.version_string()}")
+        assert ("older than the code" in about.text()) is \
+            (not app_version.staleness()["current"])
+        opened[0].reject()
 
 
 @pytest.fixture(scope="module")
