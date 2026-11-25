@@ -113,3 +113,12 @@ shuffled-run segfault tracked in TODO.md.
 1. Option A, B or C?
 2. Model updates: collapsed with a count pill (B) or keep open?
 3. Should Chat routing's "last provider" pill stay on the right (recommended) or move with C?
+
+## Review and Verify (2026-11-25)
+- Review: `docs/audit/rails-rebalance-review.md`; no P0/P1, P2 and two P3 fixed, one P3 deferred.
+- Native render (cocoa) at 1500x950, 1100x700, 1000x600: neither rail scrolls; chat list about
+  12 / 9 / 6 rows; no clipped text. Run against a data folder with one chat, not the owner's 743.
+- Full suite on 9037611, shuffled `--randomly-seed=424242`: 3033 passed, 17 skipped, 17 xfailed,
+  1 failed: `test_release_kit_security_fixes.py::test_say_speaks_a_dash_quote_and_writes_nothing_else`
+  (macOS `say` timed out after 60 s on a loaded machine; unrelated to the rails; passes alone,
+  23 passed). Suite then ran before ab1fca3 (docs and two tests added, both pass).
