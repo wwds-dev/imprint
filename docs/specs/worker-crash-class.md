@@ -138,7 +138,7 @@ attribute (`self._hard_exit`) so tests can observe it without ending the test pr
 the progress callback raise, which closes the streaming response (Ollama keeps the partial layers and
 resumes the pull next time).
 
-**ADR:** `docs/adr/0006-tracked-threads.md` records A1 and A5 as a rule (every QThread is a
+**ADR:** `docs/adr/0007-tracked-threads.md` records A1 and A5 as a rule (every QThread is a
 `TrackedThread`; shutdown sweeps the registry, never a list of names).
 
 **Risks.** `os._exit` skips `atexit` handlers and Qt's own teardown: checked that nothing in the app

@@ -99,7 +99,7 @@ def test_always_stores_a_rule_for_this_agent_and_the_next_job_follows_it(win, pa
     assert (rules[0].provider, rules[0].model) == SONNET
     assert win.routing_rules.get("chat", rules[0].kind) is None
     # The first job ends before the next one starts: a start while it still
-    # runs is refused as busy (spec worker-crash-class, ADR 0006).
+    # runs is refused as busy (spec worker-crash-class, ADR 0007).
     _worker().finish("<html></html>")
     QApplication.processEvents()
     FakeChatWorker.instances.clear()

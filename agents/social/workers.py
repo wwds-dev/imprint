@@ -13,7 +13,7 @@ from ui.workers import DaemonWorker
 class PublishWorker(DaemonWorker):
     """Runs one ``publisher.publish(...)`` off the UI thread.
 
-    A DaemonWorker (ADR 0006, point 4): network only, it holds no Qt objects
+    A DaemonWorker (ADR 0007, point 4): network only, it holds no Qt objects
     and writes nothing; the delivery queue is updated by the panel's slots on
     the GUI thread. Quitting mid-upload abandons the thread; the job stays
     ``publishing`` and ``queue.recover_interrupted`` marks it for review at

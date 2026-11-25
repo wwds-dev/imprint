@@ -106,7 +106,7 @@ def _app_python_files():
 # ── registry and slot rule (defects 1 and 3) ────────────────────────────────
 
 def test_no_app_class_subclasses_qthread_directly():
-    """ADR 0006 point 1: every QThread is a TrackedThread, so the registry
+    """ADR 0007 point 1: every QThread is a TrackedThread, so the registry
     holds every running worker and the quit sweep finds it."""
     offenders = []
     for path, rel in _app_python_files():
@@ -123,7 +123,7 @@ def test_no_app_class_subclasses_qthread_directly():
 
 
 def test_no_agent_stores_a_worker_in_a_host_slot_by_hand():
-    """ADR 0006 point 2: `host.<slot> = worker` replaced a running QThread
+    """ADR 0007 point 2: `host.<slot> = worker` replaced a running QThread
     (Herald: Write Posts, then Make a Clip). Only start_in_slot may store one;
     clearing a slot to None is allowed (the registry holds the thread)."""
     offenders = []

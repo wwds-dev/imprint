@@ -189,7 +189,7 @@ class SunoPanel(QWidget):
             return
         host = self.host
         panel = host.music_panel
-        # Label's plan and this draft share host.music_worker (ADR 0006).
+        # Label's plan and this draft share host.music_worker (ADR 0007).
         if refuse_if_busy(host, self.status, "music_worker"):
             return
         provider = panel.music_provider_box.currentText()

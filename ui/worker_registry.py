@@ -1,4 +1,4 @@
-"""Live-worker registry and the one slot rule (ADR 0006).
+"""Live-worker registry and the one slot rule (ADR 0007).
 
 A QThread whose Python object is destroyed while it runs aborts the process
 ("QThread: Destroyed while thread is still running", exit 134). Two things

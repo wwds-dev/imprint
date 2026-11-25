@@ -6805,13 +6805,13 @@ class GodAI(QWidget):
             if player is not None:
                 player.release()
             # Every worker, found by the live-worker registry rather than a
-            # list of names (ADR 0006; the list missed music_worker and
+            # list of names (ADR 0007; the list missed music_worker and
             # webdesign_worker). cancel() and one shared wait; never
             # terminate(). A worker that outlives the budget is left to
             # leave_if_workers_alive() in main(), which exits before Qt can
             # destroy it while running.
             # Model-list DaemonWorkers are not waited for: the interpreter
-            # abandons daemon threads at exit (ADR 0006 point 4).
+            # abandons daemon threads at exit (ADR 0007 point 4).
             still = stop_all()
             if still:
                 self._note_failure(

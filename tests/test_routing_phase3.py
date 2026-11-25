@@ -336,7 +336,7 @@ def test_the_measure_worker_runs_the_engine_off_the_gui_thread(qapp, tmp_path):
 
 
 def test_closing_the_window_cancels_a_running_measurement():
-    # The quit sweep iterates the live-worker registry (ADR 0006) instead of
+    # The quit sweep iterates the live-worker registry (ADR 0007) instead of
     # a list of names, so the measurement is covered by being a TrackedThread.
     # tests/test_worker_crash_class.py proves the sweep cancels such a worker.
     import inspect

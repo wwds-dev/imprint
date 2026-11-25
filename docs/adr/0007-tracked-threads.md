@@ -1,7 +1,8 @@
-# ADR 0006: Every QThread is a TrackedThread; shutdown sweeps the registry
+# ADR 0007: Every QThread is a TrackedThread; shutdown sweeps the registry
 
 Status: **Accepted** by the owner at the Architect gate, 2026-11-25 ("Approve as written (Recommended)"). Spec: `docs/specs/worker-crash-class.md`
-(section "Architecture", A1, A2, A5).
+(section "Architecture", A1, A2, A5). Written as 0006; renumbered 0007 at merge because
+`0006-manuscript-shell.md` reached `main` first the same day.
 
 ## Context
 A `QThread` whose Python object is destroyed while it runs aborts the process (Qt prints

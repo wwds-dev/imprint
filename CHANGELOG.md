@@ -121,7 +121,7 @@ listed under **Unreleased** until it ships.
 
 ### Fixed
 - **Starting a job while the last one is still finishing no longer aborts the app** (2026-11-25, spec
-  `worker-crash-class`, ADR 0006; audit code-review P1-1). Herald's Make a Clip while Write Posts was writing,
+  `worker-crash-class`, ADR 0007; audit code-review P1-1). Herald's Make a Clip while Write Posts was writing,
   or a second start after Stop in Kernel chat, Label, Sitebuilder, Vector, Nova and Herald, replaced a running
   background thread, and Qt ended the process. Every start now checks first and says "[Busy] The previous request
   is still finishing — one moment." before anything is priced or reserved. Press's three Shorts buttons

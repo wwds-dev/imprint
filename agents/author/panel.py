@@ -1157,7 +1157,7 @@ class AuthorPanel(QWidget):
         # Never replace a worker that is still running: dropping the old
         # QThread object while its thread is alive aborts the whole app with
         # "QThread: Destroyed while thread is still running". A cancelled
-        # worker can sit in a blocking backend call for a while (ADR 0006).
+        # worker can sit in a blocking backend call for a while (ADR 0007).
         if refuse_if_busy(self.host, self.author_status_label, "author_worker"):
             return
         self.author_status_label.setText("[Working…]")
