@@ -3853,8 +3853,18 @@ class GodAI(QWidget):
         handful of sheets that call sites build by hand, which are applied once
         at build time and would otherwise keep the old accent until relaunch.
         """
-        self.setStyleSheet(global_stylesheet())
-        theme.repaint()
+        # ADR 0006 decision 8: never restyle while Booth's media engine runs
+        # (the 2026-10-05 deadlock class; the slice-1 Booth test hung once in
+        # a full run). Release it (the playhead is saved), restyle, reload.
+        panel = getattr(self, "audiobook_panel", None)
+        player = getattr(panel, "audiobook_player", None) if panel else None
+        suspended = player.suspend() if player is not None else None
+        try:
+            self.setStyleSheet(global_stylesheet())
+            theme.repaint()
+        finally:
+            if suspended is not None:
+                player.resume(suspended)
         # The dots paint from `theme.current()`, so they also have to be told
         # when the choice was made somewhere else — the Settings picker, or the
         # restore when it is cancelled.

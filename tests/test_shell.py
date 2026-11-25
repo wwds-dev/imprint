@@ -505,7 +505,9 @@ def test_switching_all_six_themes_while_booth_plays(qapp, window, audio_file,
                                                     monkeypatch):
     """The 2026-10-05 deadlock was QComboBox.setStyle against live FFmpeg
     threads. The switch is set_current + apply_global_style, no setStyle;
-    a hang fails fast here instead of wedging the run."""
+    a hang fails fast here instead of wedging the run. This test hung once in
+    a full Build run, so the decision-8 fallback is in: the player is
+    released for the restyle and reloaded where it was."""
     import agents.audiobook.audio_player as player_module
     from PySide6.QtWidgets import QComboBox
     from ui.widgets import polish_combo
@@ -526,6 +528,9 @@ def test_switching_all_six_themes_while_booth_plays(qapp, window, audio_file,
         combo = QComboBox(window)
         polish_combo(combo)
         combo.deleteLater()
+        # The fallback (decision 8) put the listener back: same book, playing.
+        assert player._path == audio_file
+        assert player._player.audioOutput() is not None
     finally:
         player.release()
         _settle(qapp, 4)
@@ -542,3 +547,29 @@ def test_the_packaged_app_ships_the_shell_icons():
     import main
     icons = {p.stem for p in (root / "assets" / "shell").glob("*.svg")}
     assert set(main.WORKSPACE_ICONS.values()) | {"help", "settings", "history"} <= icons
+
+
+def test_a_restyle_releases_and_reloads_the_player(qapp, window, audio_file,
+                                                   monkeypatch):
+    """ADR 0006 decision 8's fallback, step by step."""
+    import agents.audiobook.audio_player as player_module
+    monkeypatch.setattr(player_module, "save_position", lambda *a, **k: None)
+    player = window.audiobook_panel.audiobook_player
+    calls = []
+    real_release, real_load = player.release, player.load
+    monkeypatch.setattr(player, "release",
+                        lambda: calls.append("release") or real_release())
+    monkeypatch.setattr(player, "load",
+                        lambda *a, **k: calls.append(("load", k.get("resume_ms")))
+                        or real_load(*a, **k))
+    window.apply_global_style()
+    assert calls == []                      # nothing loaded: nothing to do
+    real_load(audio_file, title="T", resume_ms=1500)
+    try:
+        window.apply_global_style()
+        assert calls[0] == "release"
+        assert calls[1][0] == "load"
+        assert player._path == audio_file
+    finally:
+        real_release()
+        _settle(qapp, 4)
