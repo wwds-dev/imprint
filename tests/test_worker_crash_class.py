@@ -223,6 +223,12 @@ def window(app):
     finally:
         (QMessageBox.warning, QMessageBox.question,
          QMessageBox.information) = saved
+        # This window never runs an event loop, so layout and paint events
+        # pile up. Disposed with that backlog, a later module's qWait
+        # segfaulted inside an application event filter (2026-11-25, this
+        # file followed by test_fiverr_orders.py). Drain it first.
+        for _ in range(5):
+            app.processEvents()
         dispose(win)
 
 
