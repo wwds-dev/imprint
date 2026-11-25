@@ -6,7 +6,9 @@ that a colour is defined once and every surface that uses it agrees.
 
 ## The design system
 
-Dark, low-chroma, one accent. The previous palette ran a neon green
+Low-chroma, one accent. The values written below are the authored dark-green
+set; ``ui/theme.py`` swaps them for the current theme, and since slice 1 of the
+Manuscript redesign the default is the light look (ADR 0006). The previous palette ran a neon green
 (``#3cff88``) alongside a saturated indigo "Write" button, an orange
 "Publish/Market" button and a red "Stop", so four competing hues fought for
 attention on one screen and nothing read as more important than anything else.
@@ -20,8 +22,9 @@ The rules here:
   ``WARNING`` flags an irreversible or paid step, ``INFO`` is neutral emphasis.
   A button is not coloured because it looks nice there.
 * **Elevation by surface, not by border.** Three greys (``BG`` → ``SURFACE`` →
-  ``ELEVATED``) separate page from card from input. Borders are low-alpha white
-  so they read on every surface without being redefined per card.
+  ``ELEVATED``) separate page from card from input. In the dark looks borders
+  are low-alpha white so they read on every surface; the light look gives them
+  opaque greys, and a control's edge uses ``BORDER_STRONG`` (3:1).
 * **One spacing and radius scale.** 6/8/10/12px radii by element size; padding
   in multiples of 2.
 * **Typed text is phosphor.** Editable fields carry a monospaced face in CRT
@@ -69,6 +72,11 @@ WARNING_LINE = "rgba(251, 191, 36, 0.32)"
 INFO        = "#60a5fa"
 INFO_WASH   = "rgba(96, 165, 250, 0.12)"
 INFO_LINE   = "rgba(96, 165, 250, 0.32)"
+
+# Sheen — a faint lift for a row or a pressed chip on a card. White on the
+# dark looks; the light look darkens instead (ui/theme.py).
+SHEEN        = "rgba(255, 255, 255, 0.025)"
+SHEEN_STRONG = "rgba(255, 255, 255, 0.07)"
 
 # Phosphor — the text you type, and nothing else. A terminal face in CRT
 # green, bright enough on SUNKEN to read as lit rather than painted. Kept out
@@ -744,7 +752,7 @@ _STYLESHEET_TEMPLATE = """
         /* ── Scrollbars ────────────────────────────────────────────── */
         QScrollArea {{ background: transparent; border: none; }}
         QScrollBar:vertical {{
-            background: rgba(255, 255, 255, 0.025);
+            background: {SHEEN};
             width: 12px;
             margin: 2px 1px;
         }}
@@ -755,7 +763,7 @@ _STYLESHEET_TEMPLATE = """
         }}
         QScrollBar::handle:vertical:hover {{ background-color: {TEXT_MUTE}; }}
         QScrollBar:horizontal {{
-            background: rgba(255, 255, 255, 0.025);
+            background: {SHEEN};
             height: 12px;
             margin: 1px 2px;
         }}
@@ -970,7 +978,7 @@ _STYLESHEET_TEMPLATE = """
         QPushButton#QuietAction:disabled {{ color: {TEXT_MUTE}; }}
 
         QProgressBar#BudgetBar {{
-            background-color: rgba(255, 255, 255, 0.07);
+            background-color: {SHEEN_STRONG};
             border: none;
             border-radius: 3px;
             min-height: 5px;

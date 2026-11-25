@@ -48,17 +48,20 @@ _COUNT_WORDS = {2: "two", 3: "three", 4: "four", 5: "five"}
 def appearance_intro() -> str:
     """The sentence under Settings → General → Appearance.
 
-    Counts `theme.THEMES` rather than naming a number: this copy said "two
-    themes … in both" for a week after Blue shipped (TODO, 2026-10-08), in the
-    one place a user goes to read what the choice means."""
-    count = len(theme.THEMES)
-    word = _COUNT_WORDS.get(count, str(count))
-    names = ", ".join(theme.LABELS[key] for key in theme.THEMES)
+    Counts `theme.LOOKS` and `theme.ACCENTS` rather than naming a number: this
+    copy said "two themes … in both" for a week after Blue shipped (TODO,
+    2026-10-08), in the one place a user goes to read what the choice means."""
+    looks = [theme.LOOK_LABELS[name] for name in theme.LOOKS]
+    accents = [theme.ACCENT_LABELS[name] for name in theme.ACCENTS]
+    look_word = _COUNT_WORDS.get(len(looks), str(len(looks)))
+    accent_word = _COUNT_WORDS.get(len(accents), str(len(accents)))
     return (
-        f"Imprint comes in {word} themes — {names}. Only the accent, the "
-        "phosphor you type in and the tint of the greys change; status colour "
-        "means the same thing in every theme, so a destructive action stays "
-        "red, a paid step stays amber, and an informational note stays blue."
+        f"Imprint comes in {look_word} looks, {' and '.join(looks)}, each in "
+        f"{accent_word} accents: {', '.join(accents[:-1])} and {accents[-1]}. "
+        "Status colour keeps its meaning in every theme, so a destructive "
+        "action stays red, a paid step stays amber, and an informational note "
+        "stays blue; the light look uses darker shades of them so they stay "
+        "readable on white."
     )
 
 

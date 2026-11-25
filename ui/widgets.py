@@ -816,15 +816,17 @@ def let_combos_shrink(root: QWidget, visible_chars: int = 8) -> int:
     return count
 
 class ThemeDots(QWidget):
-    """One dot per theme, in the header. Click one to wear it.
+    """One dot per accent of the current look. Click one to wear it.
 
     Each dot is painted in its own theme's accent, which is the whole
     affordance: you are picking a colour by looking at it, not reading its
     name. The current one carries a ring rather than being the only bright
     dot — three dots where two are greyed out reads as two disabled controls.
+    The look (Light or Dark) is chosen beside it in Settings; the dots always
+    offer the three accents of whichever look is worn.
 
     `on_change` is what repaints the window; the widget does not reach for the
-    main window itself, so it can be dropped into any header.
+    main window itself, so it can be dropped into any form.
     """
 
     DOT = 9             # diameter of a dot
@@ -836,7 +838,7 @@ class ThemeDots(QWidget):
         self._on_change = on_change
         self._hovered = -1
         self._span = self.DOT + 2 * self.RING
-        count = len(theme.THEMES)
+        count = len(theme.ACCENTS)
         self.setFixedSize(count * self._span + (count - 1) * self.GAP, self._span)
         self.setMouseTracking(True)
         self.setCursor(Qt.PointingHandCursor)
@@ -845,12 +847,17 @@ class ThemeDots(QWidget):
         self._describe(-1)
 
     # ── geometry ──────────────────────────────────────────────────────
+    @staticmethod
+    def _keys() -> tuple[str, ...]:
+        """The theme keys the dots stand for: the current look's accents."""
+        return theme.themes_for(theme.look())
+
     def _centre(self, index: int) -> int:
         return self._span // 2 + index * (self._span + self.GAP)
 
     def _at(self, x: int) -> int:
         """The dot under `x`, or -1. The whole slot is the target, not the 9px."""
-        for index in range(len(theme.THEMES)):
+        for index in range(len(theme.ACCENTS)):
             if abs(x - self._centre(index)) <= self._span // 2:
                 return index
         return -1
@@ -859,7 +866,7 @@ class ThemeDots(QWidget):
         if index < 0:
             self.setToolTip("Colour theme — " + theme.LABELS[theme.current()])
         else:
-            self.setToolTip(theme.LABELS[theme.THEMES[index]])
+            self.setToolTip(theme.LABELS[self._keys()[index]])
 
     # ── painting ──────────────────────────────────────────────────────
     def paintEvent(self, event):
@@ -868,7 +875,7 @@ class ThemeDots(QWidget):
         current = theme.current()
         middle = self.height() / 2
 
-        for index, name in enumerate(theme.THEMES):
+        for index, name in enumerate(self._keys()):
             colour = QColor(theme.accent(name))
             centre = QPointF(self._centre(index), middle)
 
@@ -896,7 +903,7 @@ class ThemeDots(QWidget):
 
     # ── interaction ───────────────────────────────────────────────────
     def _choose(self, index: int) -> None:
-        name = theme.THEMES[index]
+        name = self._keys()[index]
         if name == theme.current():
             return
         theme.set_current(name)
@@ -936,5 +943,6 @@ class ThemeDots(QWidget):
         if step is None:
             super().keyPressEvent(event)
             return
-        here = list(theme.THEMES).index(theme.current())
-        self._choose((here + step) % len(theme.THEMES))
+        keys = self._keys()
+        here = keys.index(theme.current())
+        self._choose((here + step) % len(keys))
