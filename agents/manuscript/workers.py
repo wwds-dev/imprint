@@ -29,10 +29,10 @@ class ShortsWorker(TrackedThread):
         self._cancel_requested = False
 
     def cancel(self):
-        """Stop before the next step (quit only; Press has no Stop button).
+        """Stop before the narration (quit only; Press has no Stop button).
 
-        The narration call itself cannot be interrupted; the render after it
-        is skipped. ffmpeg on one still image takes seconds.
+        A narration already under way, possibly paid, is not thrown away: the
+        local render after it finishes in seconds.
         """
         self._cancel_requested = True
 

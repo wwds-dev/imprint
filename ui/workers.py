@@ -245,6 +245,10 @@ class ModelPullWorker(TrackedThread):
         time."""
         self._cancel_requested = True
 
+    @property
+    def cancelled(self) -> bool:
+        return self._cancel_requested
+
     def _progress(self, status, done, total):
         if self._cancel_requested:
             raise PullCancelled(f"Download of {self._model} stopped.")

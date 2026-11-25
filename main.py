@@ -1153,8 +1153,12 @@ class GodAI(QWidget):
 
     def _on_muse_pull_error(self, message: str) -> None:
         self._end_muse_pull_progress()
-        self._set_chat_status("Muse Glimmer download failed.")
         self.get_muse_btn.setEnabled(True)
+        if getattr(self.muse_pull_worker, "cancelled", False):
+            # Stopped by quit: not a failure, and no dialog during shutdown.
+            self._set_chat_status("Muse Glimmer download stopped.")
+            return
+        self._set_chat_status("Muse Glimmer download failed.")
         QMessageBox.warning(self, "Download Failed", message)
 
     # ── Local models: discovery, picker rows, BEST FIT candidates ────────────
@@ -6806,10 +6810,9 @@ class GodAI(QWidget):
             # terminate(). A worker that outlives the budget is left to
             # leave_if_workers_alive() in main(), which exits before Qt can
             # destroy it while running.
-            daemons = list(getattr(self, "model_list_workers", {}).values())
-            still = stop_all(extra=daemons)
-            still = [name for name in still if name not in {
-                type(d).__name__ for d in daemons}]
+            # Model-list DaemonWorkers are not waited for: the interpreter
+            # abandons daemon threads at exit (ADR 0006 point 4).
+            still = stop_all()
             if still:
                 self._note_failure(
                     "shutdown: workers still running after the wait",

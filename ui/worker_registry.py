@@ -95,14 +95,13 @@ def start_in_slot(host, slot: str, worker) -> None:
     worker.start()
 
 
-def stop_all(budget_ms: int = SHUTDOWN_BUDGET_MS, extra=()) -> list[str]:
+def stop_all(budget_ms: int = SHUTDOWN_BUDGET_MS) -> list[str]:
     """Cancel every live worker and wait for them against one budget.
 
-    ``extra`` adds workers the registry does not hold (DaemonWorkers, whose
-    wait is a thread join). Returns the class names still running after the
-    budget; never terminates a thread.
+    Returns the class names still running after the budget; never
+    terminates a thread.
     """
-    workers = live_workers() + [w for w in extra if w is not None]
+    workers = live_workers()
     for worker in workers:
         if worker.isRunning() and hasattr(worker, "cancel"):
             try:
@@ -117,7 +116,16 @@ def stop_all(budget_ms: int = SHUTDOWN_BUDGET_MS, extra=()) -> list[str]:
     return [type(w).__name__ for w in workers if w.isRunning()]
 
 
-def leave_if_workers_alive(exit_fn=os._exit) -> list[str]:
+def _flush_for_exit() -> None:
+    logging.shutdown()
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.flush()
+        except Exception:   # noqa: BLE001
+            pass
+
+
+def leave_if_workers_alive(exit_fn=os._exit, flush=_flush_for_exit) -> list[str]:
     """After the event loop has ended: never let Qt destroy a running QThread.
 
     Interpreter shutdown would destroy any QThread still running, and Qt
@@ -131,11 +139,6 @@ def leave_if_workers_alive(exit_fn=os._exit) -> list[str]:
         return []
     logging.getLogger(__name__).warning(
         "Leaving with workers still running: %s", ", ".join(alive))
-    logging.shutdown()
-    for stream in (sys.stdout, sys.stderr):
-        try:
-            stream.flush()
-        except Exception:   # noqa: BLE001
-            pass
+    flush()
     exit_fn(0)
     return alive

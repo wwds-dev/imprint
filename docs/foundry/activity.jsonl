@@ -242,3 +242,6 @@
 {"ts": "2026-11-25T04:42:47", "phase": "architect", "state": "start", "spec": "worker-crash-class"}
 {"ts": "2026-11-25T04:43:06", "phase": "architect", "state": "done", "spec": "worker-crash-class"}
 {"ts": "2026-11-25T04:43:06", "phase": "build", "state": "start", "spec": "worker-crash-class"}
+{"ts": "2026-11-25T04:56:29", "phase": "build", "state": "done", "spec": "worker-crash-class"}
+{"ts": "2026-11-25T04:56:29", "phase": "review", "state": "start", "spec": "worker-crash-class"}
+{"ts": "2026-11-25T05:11:50", "phase": "review", "state": "done", "spec": "worker-crash-class"}

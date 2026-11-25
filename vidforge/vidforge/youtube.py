@@ -86,10 +86,10 @@ def _service():
                 # OAuth error when consent was refused. Either way no token
                 # exists and no upload has started.
                 raise YouTubeConsentError(
-                    "Google consent was not completed within "
-                    f"{CONSENT_TIMEOUT_S // 60} minutes, or it was refused. "
-                    "Nothing was uploaded; try again and finish the consent "
-                    "page in your browser."
+                    f"Google consent did not complete ({type(exc).__name__}: "
+                    f"{exc}). Imprint waits up to {CONSENT_TIMEOUT_S // 60} "
+                    "minutes for the consent page. Nothing was uploaded; try "
+                    "again and finish the consent page in your browser."
                 ) from exc
         token_path.write_text(creds.to_json(), encoding="utf-8")
         token_path.chmod(0o600)

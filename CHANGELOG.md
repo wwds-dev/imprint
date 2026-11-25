@@ -132,8 +132,9 @@ listed under **Unreleased** until it ships.
   retry" (nothing was uploaded) instead of hanging until force-quit. One post at a time.
 - **Quitting stops every background job and never aborts** (2026-11-25; audit architecture A-1). Quit used to
   skip Label's and Sitebuilder's workers and wait 2 s per worker before closing anyway. It now cancels every
-  running job, waits at most 3 s in total, and if one is still inside a provider call the app exits cleanly
-  instead of crashing. A Shorts render and a model download can now be cancelled at quit.
+  running job, waits for them on one 3 s budget (a running release kit first gets its own pause of up to 2 s),
+  and if one is still inside a provider call the app exits cleanly instead of crashing. A model download and a
+  Short that has not started narrating can now be cancelled at quit.
 - **Muse's Gemini Omni teaser follows Reel's rule when a quit cuts it off** (2026-11-24, owner's choice; audit
   review P2-2). Quitting while a teaser renders now asks "A Gemini Omni clip is rendering" (the same question as
   Reel's). On the next launch a saved clip lands in the media library and bills once; a call with no clip is

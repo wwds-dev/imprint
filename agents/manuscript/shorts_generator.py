@@ -49,18 +49,18 @@ def render_short(
 
     `voice_provider` names the voice explicitly (the release kit's route is a
     job field, legal L1); without it the voice is chosen from the
-    environment as before. `should_stop` (a callable) is asked between the
-    narration and the render; True raises ShortCancelled and renders nothing.
+    environment as before. `should_stop` (a callable) is asked before the
+    narration, the only step that can cost money; True raises ShortCancelled
+    and nothing is sent. Once the narration is made (and maybe paid for) the
+    render runs to the end: it is local and takes seconds.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     audio_path = output_path.with_suffix(".mp3")
 
     provider = voice_provider or get_voice_provider(use_elevenlabs)
-    provider.synthesize(quote, str(audio_path), VoiceConfig(voice_id=voice_id))
     if should_stop is not None and should_stop():
-        if audio_path.exists():
-            audio_path.unlink()
-        raise ShortCancelled("Short cancelled before rendering.")
+        raise ShortCancelled("Short cancelled before narration; nothing was sent.")
+    provider.synthesize(quote, str(audio_path), VoiceConfig(voice_id=voice_id))
 
     _ffmpeg(
         "-loop", "1", "-i", str(image_path),

@@ -282,6 +282,86 @@ def _vector_gig(window, monkeypatch):
     return panel.write_gig, panel.fiverr_status_label
 
 
+def _quill(window, monkeypatch):
+    panel = window.author_panel
+    panel.author_direction_input.setText("Continue the scene")
+    _model_box(monkeypatch, panel.author_model_box)
+    monkeypatch.setattr(panel.author_task_box, "currentText",
+                        lambda: "Continue")
+    return panel.write, panel.author_status_label
+
+
+def _quill_publish(window, monkeypatch):
+    panel = window.author_panel
+    _model_box(monkeypatch, panel.author_model_box)
+    return panel.pub_generate, panel.author_status_label
+
+
+def _quill_market(window, monkeypatch):
+    panel = window.author_panel
+    _model_box(monkeypatch, panel.author_model_box)
+    return panel.mkt_generate, panel.author_status_label
+
+
+def _press_ask(window, monkeypatch):
+    panel = window.manuscript_panel
+    panel.manuscript_query_input.setPlainText("How are sales?")
+    _model_box(monkeypatch, panel.manuscript_model_box)
+    return panel.ask, panel.manuscript_status_label
+
+
+def _press_quotes(window, monkeypatch):
+    panel = window.manuscript_panel
+    panel.quote_finder_text.setPlainText("A long passage. " * 20)
+    _model_box(monkeypatch, panel.manuscript_model_box)
+    return panel.quote_finder_suggest, panel.manuscript_status_label
+
+
+def _press_calendar(window, monkeypatch):
+    panel = window.manuscript_panel
+    monkeypatch.setattr(panel, "_calendar_quotes_from_finder",
+                        lambda: ["One line.", "Another line."])
+    panel.calendar_tiktok_check.setChecked(True)
+    _model_box(monkeypatch, panel.manuscript_model_box)
+    return panel.generate_calendar, panel.manuscript_status_label
+
+
+def _vector_logos(window, monkeypatch):
+    import services.recommendations.catalog as catalog
+    panel = window.fiverr_panel
+    monkeypatch.setattr(panel, "_get_brief", lambda: {"business_name": "Acme"})
+    monkeypatch.setattr(catalog, "provider_configured", lambda *_a: True)
+    monkeypatch.setattr(window.agent_instances["fiverr"],
+                        "build_image_prompt_request",
+                        lambda brief: [{"role": "user", "content": "x"}])
+    _model_box(monkeypatch, panel.fiverr_model_box)
+    return panel.generate_logos, panel.fiverr_status_label
+
+
+def _nova_draft(window, monkeypatch):
+    panel = window.creator_panel
+    monkeypatch.setattr(panel, "current_account", lambda: {"id": 1})
+    monkeypatch.setattr(window.agent_instances["creator"], "build_draft_prompt",
+                        lambda *a, **k: [{"role": "user", "content": "x"}])
+    _model_box(monkeypatch, panel.creator_model_box)
+    return panel.generate, panel.creator_status_label
+
+
+def _nova_video(window, monkeypatch):
+    panel = window.creator_panel
+    monkeypatch.setattr(panel, "current_account", lambda: {"id": 1})
+    # The first step after the busy check stands in for pricing here.
+    monkeypatch.setattr(window.agent_instances["creator"], "build_video_prompt",
+                        _reach_pricing)
+    return panel.generate_video, panel.creator_video_status
+
+
+def _reel_render(window, monkeypatch):
+    panel = window.video_panel
+    monkeypatch.setattr(panel, "_media_selection", _reach_pricing)
+    return panel.render, panel.video_status_label
+
+
 SITES = [
     # (name, setup, slot that is busy, slot the start would store into)
     ("herald write after stop", _herald_write, "social_worker", "social_worker"),
@@ -295,6 +375,26 @@ SITES = [
      "fiverr_text_worker"),
     ("vector gig after stop", _vector_gig, "fiverr_text_worker",
      "fiverr_text_worker"),
+    ("vector logos while prompting", _vector_logos, "fiverr_text_worker",
+     "fiverr_text_worker"),
+    ("vector logos while imaging", _vector_logos, "fiverr_image_worker",
+     "fiverr_text_worker"),
+    ("quill write after stop", _quill, "author_worker", "author_worker"),
+    ("quill publish after stop", _quill_publish, "author_pub_worker",
+     "author_pub_worker"),
+    ("quill market after stop", _quill_market, "author_mkt_worker",
+     "author_mkt_worker"),
+    ("press ask", _press_ask, "manuscript_worker", "manuscript_worker"),
+    ("press quote finder", _press_quotes, "quote_finder_worker",
+     "quote_finder_worker"),
+    ("press calendar captions", _press_calendar, "calendar_worker",
+     "calendar_worker"),
+    ("nova draft after stop", _nova_draft, "creator_worker", "creator_worker"),
+    ("nova teaser while estimating", _nova_video,
+     "creator_video_estimate_worker", "creator_video_worker"),
+    ("nova teaser while rendering", _nova_video, "creator_video_worker",
+     "creator_video_worker"),
+    ("reel render after stop", _reel_render, "video_worker", "video_worker"),
 ]
 
 
@@ -316,9 +416,16 @@ def test_a_start_into_a_busy_slot_is_refused_before_pricing(
         start()
     old = _Busy()
     monkeypatch.setattr(window, busy_slot, old, raising=False)
+    quill = window.author_panel
+    for button in (quill.author_pub_generate_btn, quill.author_mkt_generate_btn):
+        button.setEnabled(True)               # the control run disabled it
     start()                                   # must not raise _Reached
     assert getattr(window, busy_slot) is old
     assert label.text().endswith(BUSY_TEXT)
+    if name.startswith("quill publish"):
+        assert window.author_panel.author_pub_generate_btn.isEnabled()
+    if name.startswith("quill market"):
+        assert window.author_panel.author_mkt_generate_btn.isEnabled()
 
 
 def test_kernel_send_after_stop_is_refused_before_pricing(window, monkeypatch):
@@ -407,9 +514,10 @@ def test_post_now_publishes_off_the_ui_thread_and_records_the_result(
         "id": job_id, "idempotency_key": "k"})
     monkeypatch.setattr(queue, "request_args", lambda job: {})
     posted = []
-    monkeypatch.setattr(queue, "mark_posted",
-                        lambda job_id, link: posted.append((job_id, link)))
-    monkeypatch.setattr(panel, "refresh_schedule", lambda: None)
+    monkeypatch.setattr(queue, "mark_posted", lambda job_id, link: posted.append(
+        (job_id, link, threading.current_thread() is threading.main_thread())))
+    monkeypatch.setattr(panel, "refresh_schedule",
+                        lambda: panel.social_post_btn.setEnabled(True))
     monkeypatch.setattr(window, "social_publish_worker", None, raising=False)
 
     started = time.monotonic()
@@ -430,7 +538,8 @@ def test_post_now_publishes_off_the_ui_thread_and_records_the_result(
     deadline = time.monotonic() + 5
     while not posted and time.monotonic() < deadline:
         app.processEvents()
-    assert posted == [(99, "https://example.test/p")]
+    assert posted == [(99, "https://example.test/p", True)]   # on the GUI thread
+    assert panel.social_post_btn.isEnabled()
 
 
 def test_a_second_post_now_is_refused_while_one_is_publishing(
@@ -548,15 +657,17 @@ def test_stop_all_uses_one_budget_for_every_worker(app):
 
 
 def test_the_process_leaves_before_qt_can_destroy_a_running_worker(app):
-    from ui.worker_registry import leave_if_workers_alive
-    exits = []
-    assert leave_if_workers_alive(exits.append) == []
-    assert exits == []
+    from ui.worker_registry import leave_if_workers_alive, live_workers
+    exits, flushed = [], []
+    if not any(w.isRunning() for w in live_workers()):
+        assert leave_if_workers_alive(exits.append, flushed.append) == []
+        assert exits == [] and flushed == []
     worker = _blocking_thread_class()()
     worker.start()
     try:
-        assert leave_if_workers_alive(exits.append) == ["Blocking"]
-        assert exits == [0]
+        alive = leave_if_workers_alive(exits.append, lambda: flushed.append(1))
+        assert "Blocking" in alive
+        assert exits == [0] and flushed == [1]
     finally:
         worker.release.set()
         worker.wait(5000)
@@ -575,15 +686,27 @@ def test_shorts_worker_cancel_skips_the_render(tmp_path, monkeypatch):
     monkeypatch.setattr(shorts_generator, "_ffmpeg",
                         lambda *a: rendered.append(a))
 
+    narrated = []
+
     class Voice:
         def synthesize(self, text, path, config):
+            narrated.append(text)
             Path(path).write_bytes(b"mp3")
 
+    # Review P2-1: a cancel must come before the narration, the only step
+    # that can be paid; once narrated, the free render runs to the end.
     with pytest.raises(shorts_generator.ShortCancelled):
         shorts_generator.render_short(
             "q", tmp_path / "g.png", tmp_path / "s.mp4",
             voice_provider=Voice(), should_stop=lambda: True)
-    assert rendered == [] and not (tmp_path / "s.mp3").exists()
+    assert narrated == [] and rendered == []
+    asked = iter([False, True])
+    shorts_generator.render_short(
+        "q", tmp_path / "g.png", tmp_path / "s.mp4",
+        voice_provider=Voice(), should_stop=lambda: next(asked))
+    assert narrated == ["q"] and len(rendered) == 1
+    narrated.clear()
+    rendered.clear()
 
     worker = ShortsWorker("q", tmp_path / "g.png", tmp_path / "s.mp4",
                           False, "default")
@@ -593,7 +716,7 @@ def test_shorts_worker_cancel_skips_the_render(tmp_path, monkeypatch):
                         lambda *_a: Voice())
     worker.cancel()
     worker.run()                              # synchronously, on purpose
-    assert rendered == []
+    assert narrated == [] and rendered == []
     assert errors and "cancelled" in errors[0]
 
 
@@ -615,6 +738,7 @@ def test_model_pull_worker_cancel_ends_the_download(app):
     worker.run()                              # synchronously, on purpose
     assert lines == [0]
     assert done == [] and "stopped" in errors[0]
+    assert worker.cancelled
 
 
 @pytest.mark.parametrize("action", ["delete_post", "mark_posted",
