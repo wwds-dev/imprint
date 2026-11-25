@@ -1334,8 +1334,8 @@ class CreatorPanel(QWidget):
         and the provider's own job id is stored beside it when it arrives. A
         render the app died during is then never invisible: a Wan task is
         resumed from its id on the next launch, and an Omni render (one
-        synchronous call, no job to look up) is marked lost and surfaced —
-        never silently billed, the Video workspace's rule.
+        synchronous call, no job to look up) is settled by Reel's rule: a saved
+        clip bills once, no clip is counted at its confirmed cost.
         """
         import uuid
         from services.gemini_client import GeminiClientWrapper
