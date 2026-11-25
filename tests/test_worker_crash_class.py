@@ -615,3 +615,55 @@ def test_model_pull_worker_cancel_ends_the_download(app):
     worker.run()                              # synchronously, on purpose
     assert lines == [0]
     assert done == [] and "stopped" in errors[0]
+
+
+@pytest.mark.parametrize("action", ["delete_post", "mark_posted",
+                                    "delete_campaign"])
+def test_a_post_in_flight_cannot_be_deleted_or_re_marked(window, monkeypatch,
+                                                        action):
+    """Security review P2-1: with the window live during an upload, Delete,
+    Mark Posted and Delete campaign removed or overwrote the record the
+    upload's result is written to."""
+    from agents.social import store
+    panel = window.social_panel
+    touched = []
+    for name in ("delete_post", "mark_posted", "delete_campaign"):
+        monkeypatch.setattr(store, name, lambda *a, n=name: touched.append(n))
+    monkeypatch.setattr(panel, "_selected_post", lambda: {
+        "id": 7, "platform": "reddit", "status": "publishing", "body": "b"})
+    monkeypatch.setattr(panel, "current_campaign",
+                        lambda: {"id": 1, "name": "C"})
+    monkeypatch.setattr(panel, "refresh_schedule", lambda: None)
+    monkeypatch.setattr(panel, "refresh_campaigns", lambda: None)
+    monkeypatch.setattr(window, "social_publish_worker", _Busy(),
+                        raising=False)
+    getattr(panel, action)()
+    assert touched == []
+    assert "being published" in panel.social_status_label.text()
+    monkeypatch.setattr(window, "social_publish_worker", None)
+    getattr(panel, action)()
+    assert touched == [action]
+
+
+def test_a_result_whose_record_is_gone_still_reaches_the_user(window,
+                                                              monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    from agents.social import publishing, queue
+    panel = window.social_panel
+    warned, noted = [], []
+
+    def gone(*_a):
+        raise queue.QueueError("That publish job no longer exists.")
+
+    for name in ("mark_posted", "mark_retryable", "mark_uncertain"):
+        monkeypatch.setattr(queue, name, gone)
+    monkeypatch.setattr(panel, "refresh_schedule", lambda: None)
+    monkeypatch.setattr(window, "_note_failure",
+                        lambda where, exc: noted.append(where))
+    monkeypatch.setattr(QMessageBox, "warning", staticmethod(
+        lambda _p, title, *a, **k: warned.append(title)))
+    panel._on_published(1, publishing.PublishResult(permalink="https://x.test"))
+    panel._on_publish_failed(2, RuntimeError("timeout"))
+    assert warned == ["Posted, but not recorded",
+                      "Result unknown — check the platform"]
+    assert len(noted) == 2

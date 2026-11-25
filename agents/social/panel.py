@@ -399,10 +399,22 @@ class SocialPanel(QWidget):
         self.refresh_campaigns()
         self.social_status_label.setText("Saved")
 
+    def _publishing(self) -> bool:
+        """True (and a notice) while a Post Now delivery is in flight."""
+        if not slot_busy(self.host, "social_publish_worker"):
+            return False
+        self.social_status_label.setText(
+            "[Busy] A post is being published — wait for its result.")
+        return True
+
     def delete_campaign(self):
         from agents.social import store
         campaign = self.current_campaign()
         if not campaign:
+            return
+        # The window stays live during an upload now: nothing may delete or
+        # re-mark a post while its delivery is in flight (security P2-1).
+        if self._publishing():
             return
         confirm = QMessageBox.question(
             self, "Delete campaign",
@@ -1043,6 +1055,10 @@ class SocialPanel(QWidget):
         post = self._selected_post()
         if not post:
             return
+        # The window stays live during an upload now: nothing may delete or
+        # re-mark a post while its delivery is in flight (security P2-1).
+        if self._publishing():
+            return
         if post.get("status") == "needs_review":
             answer = QMessageBox.question(
                 self, "Confirm it exists on the platform",
@@ -1059,6 +1075,10 @@ class SocialPanel(QWidget):
         from agents.social import store
         post = self._selected_post()
         if not post:
+            return
+        # The window stays live during an upload now: nothing may delete or
+        # re-mark a post while its delivery is in flight (security P2-1).
+        if self._publishing():
             return
         store.delete_post(post["id"])
         self.refresh_schedule()
@@ -1177,19 +1197,35 @@ class SocialPanel(QWidget):
 
     def _on_published(self, job_id, result):
         from agents.social import queue
-        queue.mark_posted(job_id, result.permalink)
+        try:
+            queue.mark_posted(job_id, result.permalink)
+        except queue.QueueError as exc:
+            # The post is live even if its record could not be updated: say
+            # so with the link rather than fail inside the slot.
+            self.host._note_failure("social: record a finished post", exc)
+            QMessageBox.warning(
+                self, "Posted, but not recorded",
+                f"The platform accepted the post ({result.permalink or 'no link'}"
+                f"), but Imprint could not record it: {exc}")
         self.refresh_schedule()
         self.social_status_label.setText(f"Posted — {result.permalink or 'done'}")
 
     def _on_publish_failed(self, job_id, exc):
         from agents.social import publishing, queue
         safe = isinstance(exc, publishing.PublishError) and exc.safe_to_retry
+        try:
+            if safe:
+                queue.mark_retryable(job_id, str(exc))
+            else:
+                queue.mark_uncertain(job_id, str(exc))
+        except queue.QueueError as record_exc:
+            # The warning below is the guard against a duplicate post; it
+            # must show even if the record could not be updated.
+            self.host._note_failure("social: record a failed post", record_exc)
         if safe:
-            queue.mark_retryable(job_id, str(exc))
             title = "Post rejected — safe to retry"
             message = str(exc)
         else:
-            queue.mark_uncertain(job_id, str(exc))
             title = "Result unknown — check the platform"
             message = (f"{exc}\n\nImprint will not retry automatically. "
                        "Check the platform first to avoid a duplicate.")
