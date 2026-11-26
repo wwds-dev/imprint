@@ -65,6 +65,14 @@ def appearance_intro() -> str:
     )
 
 
+def _cost_cell(entry: dict) -> str:
+    """A usage row's cost. An unpriced request's €0.00 is not a price, so
+    it reads "unknown" (review P1-1; ADR 0006 decision 5)."""
+    if entry.get("cost_type") == "unpriced":
+        return "unknown"
+    return f"€{float(entry.get('cost_eur', entry.get('estimated_cost', 0.0))):.2f}"
+
+
 def _cell(value) -> str:
     """One table cell's text, escaped for the HTML these logs render."""
     return html.escape(str(value))
@@ -113,10 +121,15 @@ def show_cost_history(app):
         total_tokens = sum(int(e.get("total_tokens", 0)) for e in filtered)
         total_requests = len(filtered)
 
+        unpriced = sum(1 for e in filtered if e.get("cost_type") == "unpriced")
+        cost_text = f"€{total_cost:.2f}"
+        if unpriced:
+            cost_text += (f" + unknown ({unpriced} request"
+                          f"{'' if unpriced == 1 else 's'} without a price)")
         summary_label.setText(
             f"Requests: {total_requests} | "
             f"Tokens: {total_tokens:,} | "
-            f"Total Cost: €{total_cost:.2f}"
+            f"Total Cost: {cost_text}"
         )
 
         if not filtered:
@@ -136,7 +149,7 @@ def show_cost_history(app):
                 <td>{_cell(e.get('input_tokens', 0))}</td>
                 <td>{_cell(e.get('output_tokens', 0))}</td>
                 <td>{_cell(e.get('total_tokens', 0))}</td>
-                <td>€{float(e.get('cost_eur', e.get('estimated_cost', 0.0))):.2f}</td>
+                <td>{_cost_cell(e)}</td>
                 <td>{_cell(e.get('cost_type', ''))}</td>
             </tr>
             """

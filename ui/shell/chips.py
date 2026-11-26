@@ -77,12 +77,14 @@ def spend_chip_text(spent: float, limit: float, unpriced: int,
         amount = _amount(spent)
         spoken = _euros(spent)
 
-    if unpriced:
-        tone = "unknown"
-    elif has_limit and spent >= float(limit):
+    # The limit's state comes from the known spend first: an unknown amount
+    # only adds to it, so it must never hide "limit reached" (review P2-4).
+    if has_limit and spent >= float(limit):
         tone = "danger"
     elif has_limit and spent >= 0.8 * float(limit):
         tone = "warning"
+    elif unpriced:
+        tone = "unknown"
     else:
         tone = "normal"
 
@@ -97,9 +99,12 @@ def spend_chip_text(spent: float, limit: float, unpriced: int,
     tips = []
     if unpriced:
         noun = "request" if unpriced == 1 else "requests"
-        known = _amount(spent)
-        tips.append(f"{unpriced} {noun} today had no price, so the real "
-                    f"total is more than {known}.")
+        if round(spent, 2) == 0:
+            tips.append(f"{unpriced} {noun} today had no price, so what "
+                        "today cost is unknown.")
+        else:
+            tips.append(f"{unpriced} {noun} today had no price, so the real "
+                        f"total is more than {_amount(spent)}.")
     if tone == "danger":
         tips.append("Daily limit reached.")
     if form == COMPACT or not tips:

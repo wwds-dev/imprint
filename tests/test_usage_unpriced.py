@@ -99,3 +99,61 @@ def test_the_count_and_the_totals(no_price):
     # Totals are byte-for-byte what they were: the unpriced rows add 0.0.
     assert tracker.get_today_total() == before_total
     assert tracker.get_total_requests_today() == before_requests + 4
+
+
+# ── Every figure that shows the €0.00 says "unknown" (review P1-1) ─────────
+
+@pytest.fixture
+def qapp():
+    from PySide6.QtWidgets import QApplication
+    return QApplication.instance() or QApplication([])
+
+
+@pytest.mark.parametrize("used,unknown,text", [
+    (1.2, 0, "€1.20"),
+    (1.2, 2, "€1.20 + unknown"),
+    (0.0, 1, "Unknown"),
+    (0.004, 1, "Unknown"),
+])
+def test_a_budget_row_says_unknown(qapp, used, unknown, text):
+    from ui.rail import BudgetRow
+    row = BudgetRow("Today", "5")
+    row.set(used, 5.0, unknown=unknown)
+    assert row.value_label.text() == text
+    if unknown:
+        assert "had no price" in row.value_label.toolTip()
+        assert "€0.00" not in row.value_label.toolTip()
+    else:
+        assert row.value_label.toolTip() == ""
+
+
+def test_cost_history_reads_unknown_for_an_unpriced_row(qapp, monkeypatch):
+    from types import SimpleNamespace
+    from PySide6.QtWidgets import QDialog, QLabel, QTextBrowser, QWidget
+    from ui.dialogs import _cost_cell, show_cost_history
+
+    assert _cost_cell({"cost_type": "unpriced", "cost_eur": 0.0}) == "unknown"
+    assert _cost_cell({"cost_type": "exact", "cost_eur": 0.5}) == "€0.50"
+
+    rows = [
+        {"timestamp": "2026-11-26T10:00:00", "agent": "chat",
+         "backend": "openai", "model": "gpt-unknown-9", "input_tokens": 1,
+         "output_tokens": 2, "total_tokens": 3, "cost_eur": 0.0,
+         "cost_type": "unpriced"},
+        {"timestamp": "2026-11-26T10:01:00", "agent": "chat",
+         "backend": "openai", "model": "gpt-priced", "input_tokens": 1,
+         "output_tokens": 2, "total_tokens": 3, "cost_eur": 0.25,
+         "cost_type": "exact"},
+    ]
+    host = QWidget()
+    host.usage_tracker = SimpleNamespace(load_log=lambda: list(rows))
+    opened = []
+    monkeypatch.setattr(QDialog, "exec", lambda self: opened.append(self) or 0)
+    show_cost_history(host)
+    (dialog,) = opened
+    text = dialog.findChild(QTextBrowser).toPlainText()
+    assert "unknown" in text and "€0.25" in text
+    assert "€0.00" not in text
+    summaries = [label.text() for label in dialog.findChildren(QLabel)
+                 if "Total Cost" in label.text()]
+    assert summaries and "+ unknown (1 request without a price)" in summaries[0]

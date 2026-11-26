@@ -22,6 +22,9 @@ from ui.shell.chips import (COMPACT, FULL, SHORT, format_limit,
     (0.0, 5, 3, "Unknown of €5 today", "unknown"),
     (1.5, 1.5, 0, "€1.50 of €1.5 today", "danger"),
     (1234.56, 5000, 0, "€1234.56 of €5000 today", "normal"),
+    # An unknown amount never hides the limit's state (review P2-4).
+    (6.00, 5, 1, "€6.00 + unknown of €5 today", "danger"),
+    (4.10, 5, 2, "€4.10 + unknown of €5 today", "warning"),
 ])
 def test_every_s6_row(spent, limit, unpriced, text, tone):
     state = spend_chip_text(spent, limit, unpriced)
@@ -34,6 +37,7 @@ def test_every_s6_row(spent, limit, unpriced, text, tone):
 def test_an_unpriced_day_never_reads_as_zero(form, spent, limit):
     state = spend_chip_text(spent, limit, 1)
     assert "€0.00" not in state.text
+    assert "€0.00" not in state.tooltip
     assert "unknown" in state.text.lower()
     assert "unknown" in state.accessible
     assert "had no price" in state.tooltip
@@ -104,3 +108,12 @@ def test_the_badge_counts_waiting_updates(count, accessible):
     state = status_state("green", None, False, count)
     assert state.count == count
     assert state.accessible == accessible
+
+
+def test_over_the_limit_with_unknowns_still_says_limit_reached():
+    """Review P2-4: €6 known against €5, one request unpriced."""
+    state = spend_chip_text(6.0, 5, 1)
+    assert state.tone == "danger"
+    assert "Daily limit reached." in state.tooltip
+    assert "had no price" in state.tooltip
+    assert state.accessible.endswith("Daily limit reached")

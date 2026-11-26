@@ -219,6 +219,12 @@ class AudiobookPlayer(QWidget):
             "title": self._title,
             "position": int(self._player.position()),
             "playing": self._player.playbackState() == QMediaPlayer.PlayingState,
+            # The sleep timer survives the restyle with the time it had left:
+            # load() resets it, and a reset to Off would play on all night
+            # (review P2-2).
+            "sleep_index": self.sleep_box.currentIndex(),
+            "sleep_left_ms": (self._sleep_timer.remainingTime()
+                              if self._sleep_timer.isActive() else 0),
         }
         self.release()
         return state
@@ -230,6 +236,14 @@ class AudiobookPlayer(QWidget):
         if self._player.audioOutput() is None:
             self._player.setAudioOutput(self._audio)
         self.load(state["path"], state["title"], resume_ms=state["position"])
+        sleep_index = int(state.get("sleep_index", 0) or 0)
+        if sleep_index:
+            self.sleep_box.blockSignals(True)
+            self.sleep_box.setCurrentIndex(sleep_index)
+            self.sleep_box.blockSignals(False)
+            left = int(state.get("sleep_left_ms", 0) or 0)
+            if left > 0:
+                self._sleep_timer.start(left)
         if state["playing"]:
             self.play()
 

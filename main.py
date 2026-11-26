@@ -421,6 +421,10 @@ class GodAI(QWidget):
         self.session_cost_total = 0.0
         self.session_request_count = 0
         self.last_request_cost = 0.0
+        # A request with no price row costs "unknown", not €0.00: counted so
+        # every figure that shows the €0.00 can say so (review P1-1).
+        self.last_request_unpriced = False
+        self.session_unpriced_count = 0
         
         self.session_budget_eur = float(self.settings.get("session_budget_eur", 1.00))
         self.daily_budget_eur = float(self.settings.get("daily_budget_eur", 5.00))
@@ -918,9 +922,16 @@ class GodAI(QWidget):
             QMessageBox.information(self, "Budget Saved", "Budget limits saved.")
         return True
 
+    def _note_request_price(self, entry: dict) -> None:
+        """Remember whether the request just logged had no price."""
+        self.last_request_unpriced = entry.get("cost_type") == "unpriced"
+        if self.last_request_unpriced:
+            self.session_unpriced_count += 1
+
     def reset_session_spend(self):
         self.session_cost_total = 0.0
         self.session_request_count = 0
+        self.session_unpriced_count = 0
         self.update_usage_labels()
         self.refresh_all_recommendations()
         QMessageBox.information(self, "Session Reset", "Session spend has been reset.")
@@ -3775,13 +3786,15 @@ class GodAI(QWidget):
         if hasattr(self, "top_bar"):
             self.top_bar.fitter.fit()
 
-    def refresh_spend_chip(self, today_total: float | None = None) -> None:
+    def refresh_spend_chip(self, today_total: float | None = None,
+                           unpriced: int | None = None) -> None:
         """Today's spend against the daily limit; unknown is said, never 0."""
         if not hasattr(self, "spend_chip"):
             return
         if today_total is None:
             today_total = self.usage_tracker.get_today_total()
-        unpriced = self.usage_tracker.get_unpriced_requests_today()
+        if unpriced is None:
+            unpriced = self.usage_tracker.get_unpriced_requests_today()
         self.spend_chip.refresh(today_total, self.daily_budget_eur, unpriced)
         self.unpriced_note.setVisible(unpriced > 0)
         if unpriced:
@@ -5896,6 +5909,7 @@ class GodAI(QWidget):
         )
 
         self.last_request_cost = entry.get("cost_eur", entry.get("estimated_cost", 0.0))
+        self._note_request_price(entry)
         self.panel_routing.finished(context["agent"], self.last_request_cost)
         self.last_tool_name = f"{context['agent']}/{context['tool']} - {context['provider']}"
         self.session_cost_total += entry.get("estimated_cost", 0.0)
@@ -5979,6 +5993,7 @@ class GodAI(QWidget):
                 cost_type="partial",
             )
             self.last_request_cost = recorded
+            self.last_request_unpriced = False
             self.last_tool_name = (f"{context['agent']}/{context['tool']} - "
                                    f"{context['provider']}")
             self.session_cost_total += recorded
@@ -6106,6 +6121,7 @@ class GodAI(QWidget):
         )
 
         self.last_request_cost = usage_entry.get("cost_eur", usage_entry.get("estimated_cost", 0.0))
+        self._note_request_price(usage_entry)
         self._tally_finished_job(self.last_request_cost)
         tool = getattr(self, "pending_tool", "General Chat")
         self.last_tool_name = f"{self.pending_agent}/{tool} - {self.pending_backend}"
@@ -6239,8 +6255,15 @@ class GodAI(QWidget):
         self.request_count_stat.setToolTip(
             f"{today_requests} today · {self.session_request_count} this session")
 
-        self.last_request_stat.set_value(f"€{self.last_request_cost:.2f}")
-        self.last_request_stat.setToolTip(f"Last request ran: {tool_name}")
+        unpriced_today = self.usage_tracker.get_unpriced_requests_today()
+        if getattr(self, "last_request_unpriced", False):
+            self.last_request_stat.set_value("Unknown")
+            self.last_request_stat.setToolTip(
+                f"Last request ran: {tool_name}. It had no price, so what it "
+                "cost is unknown.")
+        else:
+            self.last_request_stat.set_value(f"€{self.last_request_cost:.2f}")
+            self.last_request_stat.setToolTip(f"Last request ran: {tool_name}")
         tally = getattr(self, "savings_tally", None)
         stat = getattr(self, "local_savings_stat", None)
         if tally is not None and stat is not None:
@@ -6254,9 +6277,11 @@ class GodAI(QWidget):
 
         # The bars show spend against the cap. Remaining is the gap, which is
         # the thing you were subtracting for by hand before.
-        self.session_meter.set(self.session_cost_total, self.session_budget_eur)
-        self.daily_meter.set(today_total, self.daily_budget_eur)
-        self.refresh_spend_chip(today_total)
+        self.session_meter.set(self.session_cost_total, self.session_budget_eur,
+                               unknown=getattr(self, "session_unpriced_count", 0))
+        self.daily_meter.set(today_total, self.daily_budget_eur,
+                             unknown=unpriced_today)
+        self.refresh_spend_chip(today_total, unpriced_today)
         project = self._active_project()
         if project and project["budget_eur"] is not None:
             project_total = self.usage_tracker.get_project_today_total(

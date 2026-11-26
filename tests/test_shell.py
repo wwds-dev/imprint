@@ -551,8 +551,11 @@ def test_the_packaged_app_ships_the_shell_icons():
 
 def test_a_restyle_releases_and_reloads_the_player(qapp, window, audio_file,
                                                    monkeypatch):
-    """ADR 0006 decision 8's fallback, step by step."""
+    """ADR 0006 decision 8's fallback, step by step: the same position, the
+    same playing state, and the sleep timer with the time it had left
+    (review P2-2, P2-3)."""
     import agents.audiobook.audio_player as player_module
+    from PySide6.QtMultimedia import QMediaPlayer
     monkeypatch.setattr(player_module, "save_position", lambda *a, **k: None)
     player = window.audiobook_panel.audiobook_player
     calls = []
@@ -562,14 +565,130 @@ def test_a_restyle_releases_and_reloads_the_player(qapp, window, audio_file,
     monkeypatch.setattr(player, "load",
                         lambda *a, **k: calls.append(("load", k.get("resume_ms")))
                         or real_load(*a, **k))
+    monkeypatch.setattr(player, "play", lambda: calls.append("play"))
     window.apply_global_style()
     assert calls == []                      # nothing loaded: nothing to do
     real_load(audio_file, title="T", resume_ms=1500)
+    # Offscreen playback does not advance, so the engine's answers are set.
+    monkeypatch.setattr(player._player, "position", lambda: 4200)
+    monkeypatch.setattr(player._player, "playbackState",
+                        lambda: QMediaPlayer.PlaybackState.PlayingState)
+    player.sleep_box.setCurrentIndex(player.sleep_box.findData(30))
+    assert player._sleep_timer.isActive()
+    # Twenty of the thirty minutes have passed: a restyle that restarted the
+    # timer would read ~30 min again, one that kept it reads ~10 min.
+    player._sleep_timer.start(10 * 60_000)
+    left_before = player._sleep_timer.remainingTime()
     try:
         window.apply_global_style()
-        assert calls[0] == "release"
-        assert calls[1][0] == "load"
+        assert calls == ["release", ("load", 4200), "play"]
         assert player._path == audio_file
+        assert player.sleep_box.currentData() == 30
+        assert player._sleep_timer.isActive()
+        # The time it had left, not a fresh 30 minutes and not Off. Qt's
+        # coarse timers may read a few ms past the nominal value.
+        left_after = player._sleep_timer.remainingTime()
+        assert left_before - 60_000 < left_after <= left_before + 1_000
     finally:
+        player._sleep_timer.stop()
+        player.sleep_box.setCurrentIndex(0)
         real_release()
         _settle(qapp, 4)
+
+
+def test_a_failed_restyle_still_reloads_the_player(qapp, window, audio_file,
+                                                   monkeypatch):
+    """The restyle raising must not leave Booth released (review P2-3)."""
+    import agents.audiobook.audio_player as player_module
+    monkeypatch.setattr(player_module, "save_position", lambda *a, **k: None)
+    player = window.audiobook_panel.audiobook_player
+    player.load(audio_file, title="T", resume_ms=0)
+
+    def boom():
+        raise RuntimeError("restyle failed")
+
+    monkeypatch.setattr(theme, "repaint", boom)
+    try:
+        with pytest.raises(RuntimeError, match="restyle failed"):
+            window.apply_global_style()
+        assert player._path == audio_file
+        assert player._player.audioOutput() is not None
+    finally:
+        player.release()
+        _settle(qapp, 4)
+
+
+
+# ── Review fixes ─────────────────────────────────────────────────────
+
+def test_the_popover_figures_say_unknown(qapp, window, monkeypatch):
+    """Review P1-1: Last request, Session and Today read "Unknown" for an
+    unpriced request, not "€0.00"."""
+    tracker = window.usage_tracker
+    monkeypatch.setattr(tracker, "get_today_total", lambda: 0.0)
+    monkeypatch.setattr(tracker, "get_unpriced_requests_today", lambda: 1)
+    saved = (window.last_request_unpriced, window.session_unpriced_count,
+             window.last_request_cost, window.session_cost_total)
+    try:
+        window.last_request_cost = 0.0
+        window.session_cost_total = 0.0
+        window.session_unpriced_count = 0
+        window._note_request_price({"cost_type": "unpriced", "cost_eur": 0.0})
+        window.update_usage_labels()
+        assert window.last_request_stat.value_label.text() == "Unknown"
+        assert window.daily_meter.value_label.text() == "Unknown"
+        assert window.session_meter.value_label.text() == "Unknown"
+        window._note_request_price({"cost_type": "exact", "cost_eur": 0.3})
+        window.last_request_cost = 0.3
+        window.update_usage_labels()
+        assert window.last_request_stat.value_label.text() == "€0.30"
+    finally:
+        (window.last_request_unpriced, window.session_unpriced_count,
+         window.last_request_cost, window.session_cost_total) = saved
+        monkeypatch.undo()
+        window.update_usage_labels()
+
+
+def test_reset_session_spend_forgets_the_unknowns(window, monkeypatch):
+    from PySide6.QtWidgets import QMessageBox
+    monkeypatch.setattr(QMessageBox, "information", staticmethod(lambda *a, **k: None))
+    monkeypatch.setattr(window, "refresh_all_recommendations", lambda: None)
+    window.session_unpriced_count = 3
+    window.reset_session_spend()
+    assert window.session_unpriced_count == 0
+
+
+def test_the_drawer_survives_the_window_being_hidden(qapp, window):
+    """Review P2-1: hide the window with History open, show it again; the
+    drawer must still be open, its scrim with it, and still close."""
+    drawer = window.history_drawer
+    drawer.open_drawer(animate=False)
+    _settle(qapp, 2)
+    window.hide()
+    _settle(qapp, 2)
+    window.show()
+    _settle(qapp, 4)
+    try:
+        assert drawer.is_open() and drawer.isVisible()
+        assert drawer.scrim.isVisible()
+        assert window.history_btn.isChecked()
+    finally:
+        drawer.close_drawer()
+        _settle(qapp, 4)
+    assert not drawer.is_open()
+    assert not window.history_btn.isChecked()
+
+
+def test_a_closing_drawer_stays_closed_after_a_window_hide(qapp, window,
+                                                           motion_allowed):
+    """Hidden mid-close, the drawer finishes closing rather than coming back
+    half-way across the panel."""
+    drawer = window.history_drawer
+    drawer.open_drawer(animate=False)
+    drawer.close_drawer()                    # a 160 ms slide starts
+    window.hide()
+    _settle(qapp, 2)
+    window.show()
+    _settle(qapp, 4)
+    assert not drawer.isVisible() and not drawer.scrim.isVisible()
+    assert motion.running() == []

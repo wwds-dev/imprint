@@ -209,10 +209,23 @@ class HistoryDrawer(QFrame):
 
     def hideEvent(self, event):  # noqa: N802 - Qt API
         super().hideEvent(event)
-        if self._open:                  # hidden from outside mid-slide
+        self._stop_slide()
+        if not self.isHidden():
+            # An ancestor hid (the window was hidden or minimised): the drawer
+            # comes back with the window, so keep its state and finish any
+            # slide where it was heading (review P2-1).
+            if self._open:
+                self._apply(1.0)
+            else:
+                self._apply(0.0)
+                self.setHidden(True)
+                self.scrim.setHidden(True)
+            return
+        if self._open:                  # hidden directly, mid-slide or open
             self._open = False
             self.progress = 0.0
             self.scrim.hide()
+            self.closed.emit()
 
     # ── keyboard ────────────────────────────────────────────────────
     def keyPressEvent(self, event):  # noqa: N802 - Qt API
