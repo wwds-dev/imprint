@@ -312,12 +312,63 @@ def test_edits_flush_before_the_workspace_switches_order(window):
     assert orders.get_order(second["id"])["delivery_text"] == ""
 
 
-def test_edit_autosave_timer_flushes_on_its_own(window, app):
+def test_edit_autosave_timer_flushes_on_its_own(window, app, request):
+    # TEMPORARY diagnostics for the macOS-runner flake (TODO, P3 testing):
+    # record when the save timer fires, the longest event-loop stall and
+    # every GC pause during the wait, and name them in the failure message.
+    import gc
+    import time
+    import warnings
+    from PySide6.QtCore import Qt, QTimer
     from PySide6.QtTest import QTest
     panel = window.fiverr_panel
     panel.clear()
     order = orders.open_order(BRIEF)
     _load_first_order(panel)
-    panel.fiverr_gig_box.setPlainText("Typed by hand.")
-    QTest.qWait(panel.EDIT_SAVE_DELAY_MS + 200)
-    assert orders.get_order(order["id"])["gig_text"] == "Typed by hand."
+    loaded_id = panel._order_id
+    timer = panel._edit_save_timer
+    t0 = time.monotonic()
+    fired, ticks, gc_pauses, gc_open = [], [], [], []
+
+    def on_fire():
+        fired.append(round((time.monotonic() - t0) * 1000))
+
+    def on_gc(phase, info):
+        if phase == "start":
+            gc_open.append(time.monotonic())
+        elif gc_open:
+            gc_pauses.append((info["generation"],
+                              round((time.monotonic() - gc_open.pop()) * 1000)))
+
+    heartbeat = QTimer()
+    heartbeat.setTimerType(Qt.PreciseTimer)
+    heartbeat.timeout.connect(lambda: ticks.append(time.monotonic()))
+    timer.timeout.connect(on_fire)
+    gc.callbacks.append(on_gc)
+    heartbeat.start(20)
+    try:
+        t0 = time.monotonic()
+        ticks.append(t0)
+        panel.fiverr_gig_box.setPlainText("Typed by hand.")
+        started = (timer.isActive(), timer.remainingTime())
+        QTest.qWait(panel.EDIT_SAVE_DELAY_MS + 200)
+        elapsed = round((time.monotonic() - t0) * 1000)
+    finally:
+        heartbeat.stop()
+        gc.callbacks.remove(on_gc)
+        timer.timeout.disconnect(on_fire)
+    gaps = [b - a for a, b in zip(ticks, ticks[1:])]
+    max_gap = round(max(gaps) * 1000) if gaps else None
+    why = (f"order {order['id']}, loaded {loaded_id}, now {panel._order_id}; "
+           f"box {panel.fiverr_gig_box.toPlainText()!r}; "
+           f"timer after typing (active, remaining ms) {started}, "
+           f"now active={timer.isActive()} remaining={timer.remainingTime()} "
+           f"type={timer.timerType()}; loading={panel._loading_order}; "
+           f"waited {elapsed} ms; timer fired at {fired} ms; "
+           f"heartbeat ticks {len(ticks) - 1}, longest gap {max_gap} ms; "
+           f"gc pauses (gen, ms) {gc_pauses}; "
+           f"seed {request.config.getoption('randomly_seed', None)}")
+    if not fired or fired[0] > panel.EDIT_SAVE_DELAY_MS + 50 or (
+            max_gap or 0) > 100:
+        warnings.warn(f"autosave timing: {why}")
+    assert orders.get_order(order["id"])["gig_text"] == "Typed by hand.", why
