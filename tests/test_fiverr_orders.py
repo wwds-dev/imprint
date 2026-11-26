@@ -313,13 +313,13 @@ def test_edits_flush_before_the_workspace_switches_order(window):
 
 
 def test_edit_autosave_timer_flushes_on_its_own(window, app):
-    # Typing arms the single-shot save timer and saves nothing yet; the
-    # timer's own timeout writes the box to the order. The timeout is fired
-    # here rather than awaited: on the CI runner the suite's leftover GodAI
-    # windows (each an application-wide event filter) stalled the event loop
-    # for up to 6.9 s inside a 1 s qWait, so an 800 ms timer could not be
-    # relied on to land within 200 ms (TODO: the suite never frees a
-    # dropped GodAI window).
+    # Typing arms the single-shot save timer and saves nothing yet; when Qt
+    # delivers the timer's timeout, the box is written to the order. The
+    # wait is counted in event-loop passes, not milliseconds: on the CI
+    # runner the suite's leftover GodAI windows (each an application-wide
+    # event filter) stalled the loop for up to 6.9 s inside a 1 s qWait, so
+    # an 800 ms timer could not be relied on to land within 200 ms (TODO:
+    # the suite never frees a dropped GodAI window).
     panel = window.fiverr_panel
     panel.clear()
     order = orders.open_order(BRIEF)
@@ -328,8 +328,12 @@ def test_edit_autosave_timer_flushes_on_its_own(window, app):
     timer = panel._edit_save_timer
     panel.fiverr_gig_box.setPlainText("Typed by hand.")
     assert timer.isActive() and timer.isSingleShot()
-    assert timer.interval() == panel.EDIT_SAVE_DELAY_MS
+    assert timer.interval() == 800   # README: saved about 0.8 s after the last keystroke
     assert orders.get_order(order["id"])["gig_text"] == ""   # not saved yet
-    timer.timeout.emit()
+    timer.setInterval(0)             # due now; Qt still has to deliver it
+    for _ in range(100):
+        if not timer.isActive():
+            break
+        app.processEvents()
     assert orders.get_order(order["id"])["gig_text"] == "Typed by hand."
-    assert not timer.isActive()          # the flush ends the pending save
+    assert not timer.isActive()
