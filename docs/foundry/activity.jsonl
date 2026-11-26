@@ -247,3 +247,4 @@
 {"ts": "2026-11-25T20:07:49", "phase": "build", "state": "done", "spec": "manuscript-redesign"}
 {"ts": "2026-11-26T15:02:16", "phase": "review", "state": "start", "spec": "manuscript-redesign"}
 {"ts": "2026-11-26T15:11:06", "phase": "review", "state": "done", "spec": "manuscript-redesign"}
+{"ts": "2026-11-26T16:04:27", "phase": "verify", "state": "start", "spec": "manuscript-redesign"}
