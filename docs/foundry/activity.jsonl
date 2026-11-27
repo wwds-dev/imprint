@@ -264,3 +264,5 @@
 {"ts": "2026-11-26T23:48:11", "phase": "verify", "state": "done"}
 {"ts": "2026-11-27T03:39:00", "phase": "secure", "state": "start", "spec": "manuscript-redesign"}
 {"ts": "2026-11-27T03:40:51", "phase": "secure", "state": "done", "spec": "manuscript-redesign"}
+{"ts": "2026-11-27T04:05:42", "phase": "document", "state": "start", "spec": "manuscript-redesign"}
+{"ts": "2026-11-27T04:23:16", "phase": "verify", "state": "done", "spec": "manuscript-redesign"}
