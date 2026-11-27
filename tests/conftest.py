@@ -172,6 +172,7 @@ def _collect_the_last_modules_windows():
     yield
     from_this_module = _live_windows()
     _TEST_WINDOWS.clear()
+    _SCOPED_WINDOWS.clear()
     if from_this_module:
         from tests.qt_teardown import dispose_windows
         dispose_windows(from_this_module)
@@ -194,17 +195,29 @@ def _live_windows() -> list:
     return live_windows(window_class)
 
 
+# Windows built by a wider-scoped fixture, even one set up from inside a
+# test through request.getfixturevalue: never filed as the test's.
+_SCOPED_WINDOWS: list = []
+
+
+def _new_since(before: list) -> list:
+    known = ({id(w) for w in before} | {id(w) for w in _TEST_WINDOWS}
+             | {id(w) for w in _SCOPED_WINDOWS})
+    return [w for w in _live_windows() if id(w) not in known]
+
+
 def _note_new_windows(before: list) -> None:
-    known = {id(w) for w in before} | {id(w) for w in _TEST_WINDOWS}
-    _TEST_WINDOWS.extend(w for w in _live_windows() if id(w) not in known)
+    _TEST_WINDOWS.extend(_new_since(before))
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_fixture_setup(fixturedef, request):
-    before = _live_windows() if fixturedef.scope == "function" else None
+    before = _live_windows()
     yield
-    if before is not None:
+    if fixturedef.scope == "function":
         _note_new_windows(before)
+    else:
+        _SCOPED_WINDOWS.extend(_new_since(before))
 
 
 def _note_peak(windows: list, where: str) -> None:

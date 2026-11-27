@@ -73,20 +73,33 @@ def dispose_windows(windows) -> int:
     cells = getattr(callback, "__closure__", None) or ()
     if any(cell.cell_contents is window for cell in cells for window in windows):
         text_fit._FILTER.explanations_enabled = None   # no deleted window's toggle
+    def release_player(window):
+        panel = getattr(window, "audiobook_panel", None)
+        player = getattr(panel, "audiobook_player", None)
+        if player is not None:
+            player.release()
+
+    def stop_timers(window):
+        for timer in window.findChildren(QTimer):
+            timer.stop()
+
+    deleted = 0
     for window in windows:
+        # Each step on its own: one that fails must not keep the window
+        # alive or leave the windows after it undisposed.
+        for step in (app.removeEventFilter, stop_timers, release_player,
+                     lambda w: w.hide()):
+            try:
+                step(window)
+            except Exception as exc:    # noqa: BLE001 - teardown goes on
+                warnings.warn(f"disposing a window: {exc!r}", RuntimeWarning,
+                              stacklevel=2)
+        if still_running:
+            continue
         try:
-            app.removeEventFilter(window)
-            for timer in window.findChildren(QTimer):
-                timer.stop()
-            panel = getattr(window, "audiobook_panel", None)
-            player = getattr(panel, "audiobook_player", None)
-            if player is not None:
-                player.release()
-            window.hide()
-            if still_running:
-                continue
             window.deleteLater()
             QCoreApplication.sendPostedEvents(window, QEvent.Type.DeferredDelete)
+            deleted += 1
         except RuntimeError:
             continue                    # its C++ side is already gone
-    return 0 if still_running else len(windows)
+    return deleted

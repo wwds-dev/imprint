@@ -14,17 +14,26 @@ import ast
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCES = [ROOT / "main.py", *sorted((ROOT / "ui").rglob("*.py")),
-           *sorted((ROOT / "agents").rglob("*.py")),
-           *sorted((ROOT / "services").rglob("*.py"))]
+_SKIP = {"tests", ".venv", "venv", "build", "dist", "output", "node_modules"}
+# Every Python file outside the tests (PySide6's overloads are positional-only,
+# so a keyword cannot hide a call; a starred argument could, and is flagged).
+SOURCES = sorted(path for path in ROOT.rglob("*.py")
+                 if not _SKIP.intersection(path.relative_to(ROOT).parts[:-1])
+                 and not any(part.startswith(".") for part in
+                             path.relative_to(ROOT).parts))
 
 
 def _calls_without_context(path):
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    except (SyntaxError, UnicodeDecodeError):
+        return
     for node in ast.walk(tree):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
-                and node.func.attr == "singleShot" and len(node.args) == 2
-                and not node.keywords):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "singleShot"):
+            continue
+        starred = any(isinstance(arg, ast.Starred) for arg in node.args)
+        if starred or (len(node.args) == 2 and not node.keywords):
             yield f"{path.relative_to(ROOT)}:{node.lineno}"
 
 
