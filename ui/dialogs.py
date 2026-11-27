@@ -48,18 +48,29 @@ _COUNT_WORDS = {2: "two", 3: "three", 4: "four", 5: "five"}
 def appearance_intro() -> str:
     """The sentence under Settings → General → Appearance.
 
-    Counts `theme.THEMES` rather than naming a number: this copy said "two
-    themes … in both" for a week after Blue shipped (TODO, 2026-10-08), in the
-    one place a user goes to read what the choice means."""
-    count = len(theme.THEMES)
-    word = _COUNT_WORDS.get(count, str(count))
-    names = ", ".join(theme.LABELS[key] for key in theme.THEMES)
+    Counts `theme.LOOKS` and `theme.ACCENTS` rather than naming a number: this
+    copy said "two themes … in both" for a week after Blue shipped (TODO,
+    2026-10-08), in the one place a user goes to read what the choice means."""
+    looks = [theme.LOOK_LABELS[name] for name in theme.LOOKS]
+    accents = [theme.ACCENT_LABELS[name] for name in theme.ACCENTS]
+    look_word = _COUNT_WORDS.get(len(looks), str(len(looks)))
+    accent_word = _COUNT_WORDS.get(len(accents), str(len(accents)))
     return (
-        f"Imprint comes in {word} themes — {names}. Only the accent, the "
-        "phosphor you type in and the tint of the greys change; status colour "
-        "means the same thing in every theme, so a destructive action stays "
-        "red, a paid step stays amber, and an informational note stays blue."
+        f"Imprint comes in {look_word} looks, {' and '.join(looks)}, each in "
+        f"{accent_word} accents: {', '.join(accents[:-1])} and {accents[-1]}. "
+        "Status colour keeps its meaning in every theme, so a destructive "
+        "action stays red, a paid step stays amber, and an informational note "
+        "stays blue; the light look uses darker shades of them so they stay "
+        "readable on white."
     )
+
+
+def _cost_cell(entry: dict) -> str:
+    """A usage row's cost. An unpriced request's €0.00 is not a price, so
+    it reads "unknown" (review P1-1; ADR 0006 decision 5)."""
+    if entry.get("cost_type") == "unpriced":
+        return "unknown"
+    return f"€{float(entry.get('cost_eur', entry.get('estimated_cost', 0.0))):.2f}"
 
 
 def _cell(value) -> str:
@@ -110,10 +121,15 @@ def show_cost_history(app):
         total_tokens = sum(int(e.get("total_tokens", 0)) for e in filtered)
         total_requests = len(filtered)
 
+        unpriced = sum(1 for e in filtered if e.get("cost_type") == "unpriced")
+        cost_text = f"€{total_cost:.2f}"
+        if unpriced:
+            cost_text += (f" + unknown ({unpriced} request"
+                          f"{'' if unpriced == 1 else 's'} without a price)")
         summary_label.setText(
             f"Requests: {total_requests} | "
             f"Tokens: {total_tokens:,} | "
-            f"Total Cost: €{total_cost:.2f}"
+            f"Total Cost: {cost_text}"
         )
 
         if not filtered:
@@ -133,7 +149,7 @@ def show_cost_history(app):
                 <td>{_cell(e.get('input_tokens', 0))}</td>
                 <td>{_cell(e.get('output_tokens', 0))}</td>
                 <td>{_cell(e.get('total_tokens', 0))}</td>
-                <td>€{float(e.get('cost_eur', e.get('estimated_cost', 0.0))):.2f}</td>
+                <td>{_cost_cell(e)}</td>
                 <td>{_cell(e.get('cost_type', ''))}</td>
             </tr>
             """
@@ -271,10 +287,13 @@ def show_run_log(app):
         rows = ""
         for e in reversed(filtered[-300:]):
             status_val = e.get("status", "")
-            color = {"success": "#3cff88", "error": "#ff5555", "cancelled": "#ffaa00"}.get(status_val, "#ffffff")
+            color = {"success": theme.token("ACCENT"),
+                     "error": theme.token("DANGER"),
+                     "cancelled": theme.token("WARNING")}.get(
+                         status_val, theme.token("TEXT"))
             # Every field is escaped: an error carries provider text, and a
             # partial-billing close appends "recorded €X of €Y" to it.
-            error_cell = f'<span style="color:#ff5555">{_cell(e.get("error", ""))}</span>' if e.get("error") else ""
+            error_cell = f'<span style="color:{theme.token("DANGER")}">{_cell(e.get("error", ""))}</span>' if e.get("error") else ""
             rows += f"""
             <tr>
                 <td>{_cell(e.get("timestamp", ""))}</td>
@@ -309,6 +328,101 @@ def show_run_log(app):
 
     render()
     dialog.exec()
+
+
+def _build_appearance(app, dialog, grid) -> None:
+    """Settings > General > Appearance (Design S8; ADR 0006 decisions 2, 7, 9).
+
+    Look (Light | Dark), Accent (the theme dots, painted in the chosen look's
+    accents), Show tooltips (bound both ways to the window's
+    ``tooltips_toggle_btn``), Reduce motion, and the About line with the
+    version. Look and Accent preview live and Cancel puts the theme back, as
+    the old picker did. Switching is ``set_current`` plus
+    ``apply_global_style``: no ``setStyle`` call (the 2026-10-05 deadlock).
+    """
+    from PySide6.QtWidgets import QButtonGroup, QCheckBox
+    from services import version as app_version
+    from ui import motion
+    from ui.widgets import ThemeDots
+
+    theme_opened_with = theme.current()
+
+    grid.addWidget(QLabel("Look"), 0, 0)
+    look_row = QWidget()
+    look_row.setObjectName("LookPick")
+    look_layout = QHBoxLayout(look_row)
+    look_layout.setContentsMargins(0, 0, 0, 0)
+    look_layout.setSpacing(2)
+    look_group = QButtonGroup(look_row)
+    look_group.setExclusive(True)
+    look_buttons = {}
+    for look in theme.LOOKS:
+        button = QPushButton(theme.LOOK_LABELS[look])
+        button.setObjectName("LookSegment")
+        button.setCheckable(True)
+        button.setChecked(theme.look() == look)
+        look_group.addButton(button)
+        look_layout.addWidget(button)
+        look_buttons[look] = button
+    look_layout.setContentsMargins(2, 2, 2, 2)
+    grid.addWidget(look_row, 0, 1, Qt.AlignLeft | Qt.AlignVCenter)
+
+    grid.addWidget(QLabel("Accent"), 1, 0)
+    dots = ThemeDots(on_change=lambda: app.apply_global_style())
+    dots.setObjectName("AccentPick")
+    # The window's handle while Settings is open (the dots lived in the
+    # header before; tests and lessons reach them as `theme_dots`).
+    app.theme_dots = dots
+    grid.addWidget(dots, 1, 1, Qt.AlignLeft | Qt.AlignVCenter)
+
+    def choose_look(look: str) -> None:
+        key = theme.compose(look, theme.accent_of())
+        if key != theme.current():
+            theme.set_current(key)
+            app.apply_global_style()
+            dots.update()
+
+    for look, button in look_buttons.items():
+        button.clicked.connect(lambda _checked=False, name=look: choose_look(name))
+
+    def restore_theme() -> None:
+        if theme.current() != theme_opened_with:
+            theme.set_current(theme_opened_with)
+            app.apply_global_style()
+
+    dialog.rejected.connect(restore_theme)
+
+    tooltips = QCheckBox("Show tooltips")
+    tooltips.setObjectName("ShowTooltips")
+    action = getattr(app, "tooltips_toggle_btn", None)
+    if action is not None:
+        tooltips.setChecked(action.isChecked())
+        tooltips.toggled.connect(action.setChecked)
+        action.toggled.connect(tooltips.setChecked)
+    grid.addWidget(tooltips, 2, 1)
+
+    reduce_box = QCheckBox("Reduce motion")
+    reduce_box.setObjectName("ReduceMotion")
+    if motion.system_reduce_motion():
+        reduce_box.setChecked(True)
+        reduce_box.setEnabled(False)
+        reduce_box.setToolTip("macOS Reduce Motion is on")
+    else:
+        reduce_box.setChecked(motion.in_app_setting())
+        reduce_box.setToolTip(
+            "Stop the History drawer's slide and every other movement.")
+        reduce_box.toggled.connect(motion.set_in_app_setting)
+    grid.addWidget(reduce_box, 3, 1)
+
+    grid.addWidget(QLabel("About"), 4, 0)
+    about_text = f"Imprint {app_version.version_string()}"
+    if not app_version.staleness()["current"]:
+        about_text += " · this build is older than the code: rebuild to update"
+    about = QLabel(about_text)
+    about.setObjectName("SettingsAbout")
+    about.setToolTip(app_version.tooltip())
+    about.setWordWrap(True)
+    grid.addWidget(about, 4, 1)
 
 
 def show_settings(app):
@@ -421,33 +535,9 @@ def show_settings(app):
     al = QGridLayout(appearance_card)
     al.setSpacing(14)
     al.setContentsMargins(18, 18, 18, 18)
-    al.addWidget(QLabel("Theme"), 0, 0)
-    theme_box = QComboBox()
-    theme_box.setObjectName("ThemePick")
-    for key in theme.THEMES:
-        theme_box.addItem(theme.LABELS[key], key)
-    theme_opened_with = theme.current()
-    theme_box.setCurrentIndex(list(theme.THEMES).index(theme_opened_with))
-    al.addWidget(theme_box, 0, 1)
+    _build_appearance(app, dialog, al)
     al.setColumnStretch(1, 1)
     general_page.addWidget(appearance_card)
-
-    def preview_theme(index: int) -> None:
-        """Repaint live, so the choice is made by looking rather than guessing.
-
-        This writes the setting immediately — that is what lets the window
-        repaint — so Cancel has to put the old one back.
-        """
-        theme.set_current(theme_box.itemData(index))
-        app.apply_global_style()
-
-    def restore_theme() -> None:
-        if theme.current() != theme_opened_with:
-            theme.set_current(theme_opened_with)
-            app.apply_global_style()
-
-    theme_box.currentIndexChanged.connect(preview_theme)
-    dialog.rejected.connect(restore_theme)
 
     general_page.addStretch()
     tabs.addTab(general_tab, "General")

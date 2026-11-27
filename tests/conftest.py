@@ -148,6 +148,32 @@ def _credential_names_stay_blanked():
                     pytrace=False)
 
 
+@pytest.fixture(autouse=True)
+def _no_popup_outlives_its_test():
+    """Close any Qt.Popup a test left open (ADR 0006, decision 4).
+
+    A popup takes all mouse and key input while it is open, so a spend or
+    status popover left showing would capture the next test's input, and Qt
+    keeps popups in a stack that a later one joins. Also stops the shell's
+    animations, so a slide cannot finish inside the next test.
+    """
+    yield
+    import sys
+    if "PySide6.QtWidgets" not in sys.modules:
+        return
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        return
+    for _ in range(10):
+        popup = app.activePopupWidget()
+        if popup is None:
+            break
+        popup.close()
+    if "ui.motion" in sys.modules:
+        sys.modules["ui.motion"].stop_all()
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _collect_the_last_modules_windows():
     """Free the previous module's widgets now, before this module builds any.
@@ -160,9 +186,36 @@ def _collect_the_last_modules_windows():
     widgets and the process segfaults: reproduced 2026-10-14 by replaying
     the `--randomly-seed=28367` order (crash in ui/widgets.py building
     test_creator_calendar's window, 3 runs of 3), gone with this collection.
+
+    The collection does not free them all: a window referenced from C++
+    signal connections survives it (a dropped `GodAI` is still alive after
+    `gc.collect()`, on main before the Manuscript shell too). By the middle of
+    a full run about fifty were still alive, visible, and each still
+    installed as an application-wide event filter, so one theme switch took
+    13 s and the shell's Booth theme test ran out of time (2026-11-25). So
+    the windows the previous modules left are retired here: their filter
+    removed, their timers stopped, hidden. Nothing is deleted.
     """
     import gc
+    import sys
     gc.collect()
+    main_module = sys.modules.get("main")
+    if main_module is not None and "PySide6.QtWidgets" in sys.modules:
+        from PySide6.QtWidgets import QApplication
+        app = QApplication.instance()
+        window_class = getattr(main_module, "GodAI", None)
+        if app is not None and window_class is not None:
+            for widget in app.topLevelWidgets():
+                if not isinstance(widget, window_class):
+                    continue
+                try:
+                    app.removeEventFilter(widget)
+                    timer = getattr(widget, "resource_timer", None)
+                    if timer is not None:
+                        timer.stop()
+                    widget.hide()
+                except RuntimeError:
+                    continue            # its C++ side is already gone
     yield
 
 

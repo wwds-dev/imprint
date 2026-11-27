@@ -21,7 +21,7 @@ course.
 | Understand files, keys, costs, or privacy | This page → Shared systems |
 | Test whether a workflow makes money | Learning Centre → Income Lab |
 
-The Docs button in the header opens the sheet for the agent currently visible;
+**Docs** in the **?** menu at the bottom of the icon rail opens the sheet for the agent currently visible;
 this overview is the first entry in its contents. The reference centre is
 searchable, so a search for an exact control name can jump directly to the
 matching heading.
@@ -74,7 +74,7 @@ video menu merely because the vendor offers both.
 
 ### Costs and limits
 
-The Spend rail shows the current session, today, request count, last request,
+The spend chip in the top bar shows today's spend, and its popover shows the current session, today, request count, last request,
 and remaining room against the session and daily limits. A pre-flight estimate
 reserves conservatively; the usage record is corrected when the provider
 returns measured usage. A zero or unavailable estimate is not proof that a
@@ -91,7 +91,7 @@ privacy, or availability.
 ### API keys
 
 Keys are loaded from the environment or Imprint's user-data `.env` file. The
-right rail reports only **Configured**, **Not configured**, or **Check failed**;
+status popover (the status chip in the top bar) reports only **Configured**, **Not configured**, or **Check failed**;
 it never displays the secret. A configured key still may lack billing, quota,
 model access, or regional availability, so the first real request remains the
 final capability check.

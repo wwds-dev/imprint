@@ -15,7 +15,9 @@ from PySide6.QtWidgets import (
 )
 
 from services.providers import uncensored_tag
-from ui.style import ACCENT, ELEVATED, TEXT, TEXT_DIM, TEXT_MUTE
+from ui.style import (ACCENT, ACCENT_WASH, BORDER, DANGER, DANGER_WASH,
+                      ELEVATED, SHEEN_MID, SHEEN_STRONG, TEXT, TEXT_DIM,
+                      TEXT_MUTE, WARNING, WARNING_WASH)
 from ui import theme
 
 
@@ -53,8 +55,8 @@ LABEL_ROLE = int(Qt.ItemDataRole.UserRole) + 109
 # tagged wherever one is named (owner's decision, 2026-10-19). The tag comes
 # from the model's name (services/providers.py), so a new download is tagged
 # with nobody remembering to. It is warning-amber, never the accent: BEST FIT is
-# advice, this is a fact about the model.
-TAG_TONE = "#d9a441"
+# advice, this is a fact about the model. The theme's WARNING, so it stays
+# readable on the light look (ADR 0006); it was a fixed #d9a441 before.
 TAG_NOTES = {
     "abliterated": "Abliterated: this model's refusal behaviour was removed. "
                    "It will answer requests a standard model declines.",
@@ -70,7 +72,7 @@ def paint_tag(painter: QPainter, font: QFont, text: str, right: int,
     from PySide6.QtGui import QFontMetrics
     width = width or QFontMetrics(font).horizontalAdvance(text) + 16
     pill = QRect(right - width, centre_y - 9, width, 18)
-    tone = QColor(TAG_TONE)
+    tone = QColor(theme.token("WARNING"))
     fill, edge = QColor(tone), QColor(tone)
     fill.setAlpha(30)
     edge.setAlpha(140)
@@ -558,46 +560,46 @@ class CollapsibleSection(QWidget):
     case, a full-width target, and an explicit open/closed state.
     """
 
-    HEADER_STYLE = """
-        QPushButton#CollapsibleHeader {
+    HEADER_STYLE = f"""
+        QPushButton#CollapsibleHeader {{
             text-align: left;
             padding: 9px 10px;
             background-color: transparent;
             border: 1px solid transparent;
             border-radius: 7px;
-            color: #9aa5b4;
+            color: {TEXT_DIM};
             font-weight: 600;
             font-size: 12px;
-        }
-        QPushButton#CollapsibleHeader:hover {
-            color: #e8ecf1;
-            background-color: #1a1f29;
-            border-color: rgba(255, 255, 255, 0.09);
-        }
-        QPushButton#CollapsibleHeader:checked {
-            color: #e8ecf1;
-            background-color: rgba(255, 255, 255, 0.035);
-        }
-        QLabel#CollapsibleSummary {
-            color: #9aa5b4;
-            background-color: rgba(255, 255, 255, 0.07);
+        }}
+        QPushButton#CollapsibleHeader:hover {{
+            color: {TEXT};
+            background-color: {ELEVATED};
+            border-color: {BORDER};
+        }}
+        QPushButton#CollapsibleHeader:checked {{
+            color: {TEXT};
+            background-color: {SHEEN_MID};
+        }}
+        QLabel#CollapsibleSummary {{
+            color: {TEXT_DIM};
+            background-color: {SHEEN_STRONG};
             border-radius: 6px;
             padding: 2px 7px;
             font-size: 10px;
             font-weight: 600;
-        }
-        QLabel#CollapsibleSummary[tone="accent"] {
-            color: #34d399;
-            background-color: rgba(52, 211, 153, 0.12);
-        }
-        QLabel#CollapsibleSummary[tone="warning"] {
-            color: #fbbf24;
-            background-color: rgba(251, 191, 36, 0.12);
-        }
-        QLabel#CollapsibleSummary[tone="danger"] {
-            color: #f87171;
-            background-color: rgba(248, 113, 113, 0.12);
-        }
+        }}
+        QLabel#CollapsibleSummary[tone="accent"] {{
+            color: {ACCENT};
+            background-color: {ACCENT_WASH};
+        }}
+        QLabel#CollapsibleSummary[tone="warning"] {{
+            color: {WARNING};
+            background-color: {WARNING_WASH};
+        }}
+        QLabel#CollapsibleSummary[tone="danger"] {{
+            color: {DANGER};
+            background-color: {DANGER_WASH};
+        }}
     """
 
     def __init__(self, title: str, expanded: bool = True, *,
@@ -709,6 +711,17 @@ class CollapsibleSection(QWidget):
         self.content.setVisible(self._expanded)
         self._update_header()
 
+    def reveal_for_lesson(self) -> None:
+        """Help lessons: open, so a control inside can be ringed."""
+        self.set_expanded(True)
+
+    def set_expanded(self, expanded: bool) -> None:
+        """Open or close the section without a click (the status popover
+        opens the one that explains the chip)."""
+        if bool(expanded) != self._expanded:
+            self._toggle()
+        self.header_btn.setChecked(self._expanded)
+
     def _update_header(self):
         arrow = "⌄" if self._expanded else "›"
         # QPushButton reads "&" as a mnemonic marker, which silently turned
@@ -816,15 +829,17 @@ def let_combos_shrink(root: QWidget, visible_chars: int = 8) -> int:
     return count
 
 class ThemeDots(QWidget):
-    """One dot per theme, in the header. Click one to wear it.
+    """One dot per accent of the current look. Click one to wear it.
 
     Each dot is painted in its own theme's accent, which is the whole
     affordance: you are picking a colour by looking at it, not reading its
     name. The current one carries a ring rather than being the only bright
     dot — three dots where two are greyed out reads as two disabled controls.
+    The look (Light or Dark) is chosen beside it in Settings; the dots always
+    offer the three accents of whichever look is worn.
 
     `on_change` is what repaints the window; the widget does not reach for the
-    main window itself, so it can be dropped into any header.
+    main window itself, so it can be dropped into any form.
     """
 
     DOT = 9             # diameter of a dot
@@ -836,7 +851,7 @@ class ThemeDots(QWidget):
         self._on_change = on_change
         self._hovered = -1
         self._span = self.DOT + 2 * self.RING
-        count = len(theme.THEMES)
+        count = len(theme.ACCENTS)
         self.setFixedSize(count * self._span + (count - 1) * self.GAP, self._span)
         self.setMouseTracking(True)
         self.setCursor(Qt.PointingHandCursor)
@@ -845,12 +860,17 @@ class ThemeDots(QWidget):
         self._describe(-1)
 
     # ── geometry ──────────────────────────────────────────────────────
+    @staticmethod
+    def _keys() -> tuple[str, ...]:
+        """The theme keys the dots stand for: the current look's accents."""
+        return theme.themes_for(theme.look())
+
     def _centre(self, index: int) -> int:
         return self._span // 2 + index * (self._span + self.GAP)
 
     def _at(self, x: int) -> int:
         """The dot under `x`, or -1. The whole slot is the target, not the 9px."""
-        for index in range(len(theme.THEMES)):
+        for index in range(len(theme.ACCENTS)):
             if abs(x - self._centre(index)) <= self._span // 2:
                 return index
         return -1
@@ -859,7 +879,7 @@ class ThemeDots(QWidget):
         if index < 0:
             self.setToolTip("Colour theme — " + theme.LABELS[theme.current()])
         else:
-            self.setToolTip(theme.LABELS[theme.THEMES[index]])
+            self.setToolTip(theme.LABELS[self._keys()[index]])
 
     # ── painting ──────────────────────────────────────────────────────
     def paintEvent(self, event):
@@ -868,7 +888,7 @@ class ThemeDots(QWidget):
         current = theme.current()
         middle = self.height() / 2
 
-        for index, name in enumerate(theme.THEMES):
+        for index, name in enumerate(self._keys()):
             colour = QColor(theme.accent(name))
             centre = QPointF(self._centre(index), middle)
 
@@ -896,7 +916,7 @@ class ThemeDots(QWidget):
 
     # ── interaction ───────────────────────────────────────────────────
     def _choose(self, index: int) -> None:
-        name = theme.THEMES[index]
+        name = self._keys()[index]
         if name == theme.current():
             return
         theme.set_current(name)
@@ -936,5 +956,6 @@ class ThemeDots(QWidget):
         if step is None:
             super().keyPressEvent(event)
             return
-        here = list(theme.THEMES).index(theme.current())
-        self._choose((here + step) % len(theme.THEMES))
+        keys = self._keys()
+        here = keys.index(theme.current())
+        self._choose((here + step) % len(keys))

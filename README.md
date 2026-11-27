@@ -5,7 +5,7 @@ publishing agents. The repository, the Python package and the data folder
 keep the short name `imprint`.
 
 
-**Version:** `v2.xxx` in the header bar, derived rather than typed — see [§18.1 Versioning](#181-versioning).  
+**Version:** `v2.xxx` on the app mark's tooltip (top of the icon rail) and in Settings → General → Appearance, derived rather than typed — see [§18.1 Versioning](#181-versioning).  
 **Stack:** Python 3.11+ · PySide6 · SQLite · local models (Ollama, LM Studio) · cloud providers you add a key for
 
 Forked from `sentinel_ai` and stripped down to the creative/publishing agents —
@@ -32,13 +32,13 @@ is reference.
 2. **Open the app:** `.venv/bin/python main.py`, or `Imprint Studio.app`.
 3. **Choose a model.** Either run one on this Mac for free (install
    [Ollama](https://ollama.com), then `ollama pull deepseek-r1:8b`, or load a
-   model in LM Studio), or add one cloud key: **Settings** (header) →
+   model in LM Studio), or add one cloud key: **Settings** (the gear at the bottom of the icon rail) →
    **API keys**, paste the key, **Test**, **Save All**
    ([§19](#environment-variables-api-keys)). A cloud provider also needs its
    permission box ticked before a request is sent
    ([§6.3](#63-control-bar--row-3-execution-mode--api-permissions)); the boxes
    start unticked at every launch.
-4. **First result.** Press **F1** (or **Learning Centre** in the left rail)
+4. **First result.** Press **F1** (or **Learning Centre** in the **?** menu at the bottom of the icon rail)
    and follow *First verified result*: one small, bounded request whose cost
    you approve before anything is sent.
 5. **Find your files.** Run from this checkout, the database, chats, logs and
@@ -93,7 +93,7 @@ and **PySide6 / Qt (LGPL-3.0)**; see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICE
 reference* is sections 14 to 19: services, database, files and tests,
 packaging, configuration. Day-to-day operating steps are in the Learning
 Centre; prices and model details are in the Model Guide and the agent sheets
-(**Docs** in the header).
+(**Docs** in the **?** menu).
 
 ---
 
@@ -104,10 +104,10 @@ Centre; prices and model details are in the Model Guide and the agent sheets
 1. [Overview](#1-overview)
 2. [Application Layout](#2-application-layout)
    - [The menu bar item](#the-menu-bar-item)
-3. [Header Bar — Modes and Chrome](#3-header-bar--modes-and-chrome)
+3. [The shell — rail, top bar and chrome](#3-the-shell--rail-top-bar-and-chrome)
    - [Themes](#themes)
-4. [Left Rail — Projects](#4-left-rail--projects)
-5. [Right Rail — Spend, Budget and Utilities](#5-right-rail--spend-budget-and-utilities)
+4. [Projects and Chats](#4-projects-and-chats)
+5. [Spend, Budget and Status](#5-spend-budget-and-status)
 6. [Centre Panel — Main Workspace](#6-centre-panel--main-workspace)
    - [Control Bar — Row 1: Tool & Command](#61-control-bar--row-1-tool--command)
    - [Control Bar — Row 2: Provider & Model](#62-control-bar--row-2-provider--model)
@@ -168,7 +168,7 @@ Centre; prices and model details are in the Model Guide and the agent sheets
 > **Part one: Using the app** (sections 1 to 13, 20 and 21).
 
 **What it is.** Imprint is a macOS desktop app (PySide6) for one author or
-creator. Ten agents in eight header workspaces help you write, publish,
+creator. Ten agents in eight workspaces help you write, publish,
 narrate, make music plans, video, social posts, brand designs and web pages:
 
 | Workspace | Agents |
@@ -210,27 +210,25 @@ research and security agents; this app kept the creative and publishing ones.
 
 ## 2. Application Layout
 
-A header bar across the top, and three columns beneath it. The outer two are a
-fixed width and cannot be dragged.
+A narrow icon rail down the left edge, a top bar over the content, and the
+current agent's panel filling the rest. There is no header row and no side
+column; [section 3](#3-the-shell--rail-top-bar-and-chrome) describes each piece.
 
-| Region | Width | Purpose |
-|--------|-------|---------|
-| **Header bar** | full width, 56 px | Wordmark, workspace tabs, agent status, theme dots, Docs / Tooltips / Settings |
-| **Left rail** | 216 px (`RAIL_LEFT_WIDTH`, `ui/forms.py`) | Project selector and its actions menu, chat search and agent filter, saved chats by day, New Chat |
+| Region | Size | Purpose |
+|--------|------|---------|
+| **Icon rail** | 72 px wide, full height | App mark, one icon per workspace, Help (**?**), Settings |
+| **Top bar** | 56 px tall, over the content | Agent switch or name, project selector and its actions menu, Chat history, spend chip, status chip |
 | **Centre** | fills the remainder | The current agent's panel |
-| **Right rail** | 244 px (`RAIL_RIGHT_WIDTH`) | Spend against editable limits, utilities, and status panels that say their state while collapsed |
 
-Everything starts from one left edge: the wordmark, the mode tabs and the page
-title are all on the same axis. Before the September 2026 GUI pass they were on
-three — wordmark pinned to the rail, tabs centred over the canvas, title a
-third of the way across — which is most of why the app read as untidy no matter
-how tidy any individual panel was.
-
-The rails are fixed rather than splitter panes on purpose. A `QSplitter` lets
-the user drag a pane below the minimum width its own children need, and Qt
-resolves that by letting widgets overlap rather than refusing; every
-overlapping-control bug this app has had started there. Both rails scroll when
-the window is short, which is the vertical half of the same problem.
+Everything that used to sit in the two side columns is one click away instead of
+always on screen: saved chats are in the History drawer, spend and status are in
+the two chips' popovers. The panel gains the width and height the old rows took.
+The rail has a fixed width and the bar a fixed height on purpose: nothing in the
+chrome can be dragged smaller than its own contents, and the layout tests run
+the rail and bar at the window's minimum size to check that every button and
+chip is fully visible. (A `QSplitter` lets a pane shrink below the width its own
+children need, and Qt resolves that by letting widgets overlap, which is where
+every overlapping-control bug this app has had started.)
 
 The window always opens fullscreen. Its minimum is 1000 × 600, and the layout
 tests run every panel down to that size. A panel taller than the room it gets
@@ -258,12 +256,12 @@ Title field showed "P…" at a 1440 px window while each dropdown beside it kept
 - **Hover shows the whole value.** When a field or dropdown cannot show all of
   its text (or its placeholder, when empty), hovering shows it, with the
   control's explanatory tooltip underneath. The full value shows even with
-  *Tooltips: Off* — it is content, not help. Password fields are never revealed.
+  *Show tooltips* off — it is content, not help. Password fields are never revealed.
   `install_text_fit()` removes and re-installs its event filter on every call,
   so it always runs ahead of the window's own tooltip-swallowing filter (Qt
   runs the last-installed filter first). Until 2026-10-09 it was installed
   once per process, which held only for the first window built — in the test
-  process every later window hid the full value under *Tooltips: Off* too.
+  process every later window hid the full value under *Show tooltips* off too.
 
 `tests/test_panel_layout.py` fails the build when any visible field in any
 panel or sub-page is below the floor at any tested window size.
@@ -298,48 +296,63 @@ than a behaviour.
 
 ---
 
-## 3. Header Bar — Modes and Chrome
+## 3. The shell — rail, top bar and chrome
 
-**Mode tabs** — `Author` · `Audio + Music` · `Video + Ads` · `Social` · `Web` · `Brand Design` · `Brand Content` · `Assistant`. Each opens the
-last tool used in that workspace. Where a workspace holds two related tools
-(Author → Quill / Press, Audio + Music → Booth / Label) a second tab row appears
-above the page title.
+Since the Manuscript redesign (slice 1, `docs/specs/manuscript-redesign.md`,
+ADR 0006) the window has no header row and no side rails. Three pieces of
+chrome remain:
 
-They are underline tabs, not filled pills: they are navigation, and a pill here
-competed with the one button on each page that actually spends money.
+**Icon rail** (left, full height) — the app mark (its tooltip is the version;
+an amber dot means this build is older than the code), one icon per workspace
+— `Author` · `Audio + Music` · `Video + Ads` · `Social` · `Web` ·
+`Brand Design` · `Brand Content` · `Assistant` — and at the bottom **Help**
+("?": this agent's **Docs**, the **Learning Centre** (F1) and **Keyboard
+shortcuts**) and **Settings**. Hovering a workspace says what it is for. Each
+opens the last tool used in that workspace; ⌘1–⌘8 do the same.
 
-**Status** — `● Ready` while idle; changes colour while a request runs or after
-one fails.
+**Top bar** (over the content) — where a workspace holds two related tools
+(Author → Quill / Press, Audio + Music → Booth / Label) a switch between them
+(⌘[ and ⌘]); otherwise the agent's name. Then the project selector and its
+**Project actions** menu (New Project, Project Overview, Save Current Setup,
+with the project budget bar at the top while a project is active), **Chat
+history** (⌘Y: a drawer with search, the agent filter, the saved chats and
+**New Chat**), and two chips:
 
-**Theme dots** — three small dots between the status pill and **Docs**, each
-painted in its own theme's accent; the current one carries a ring. Click one to
-switch, or focus the row and use ←/→ to step through them — the window repaints
-immediately, with nothing to confirm. Hover names the theme. The same choice is
-in **Settings → General → Appearance** (see [§13.3](#133-settings)).
-**Docs** — opens the documentation sheet for the current agent.
-**Tooltips: On/Off** — toggles hover help across the whole app.
-**Settings** — opens the settings dialog.
+- the **spend chip** — "€1.20 of €5 today". When a request had no price it says
+  "+ unknown" (or "Unknown"), never €0.00. It opens the spend popover: Session
+  and Today with their limit fields, the project line, Requests, Last request,
+  Saved by local, Advice spent, **Reset session spend**, **Cost History** and
+  **Run Log**;
+- the **status chip** — the worst of: machine stressed, a key check failed,
+  machine busy, working, ready, with a count when model updates are waiting.
+  It opens the status popover: System, Chat routing, API keys and Model updates.
+
+Escape closes a popover, a menu or the drawer. Hover tooltips, the look and the
+accent are set once, in **Settings → General → Appearance** (see
+[§13.3](#133-settings)).
 
 ### Themes
 
-Imprint ships three colour themes. The choice is saved in the `settings` table
-under `ui_theme` and survives a restart; Green is the default and the fallback
-for any unreadable value.
+Imprint has two looks, **Light** (the default) and **Dark**, each in three
+accents: green, rose and teal. The choice is saved in the `settings` table under
+`ui_theme` and survives a restart; Light · Green is the fallback for any
+unreadable value. The dark looks are the three themes Imprint had before
+(saved as `green`, `red`, `blue`), unchanged; an install that had saved one is
+moved once to Light with the same accent and told so, and a later choice of
+Dark is kept.
 
-| Theme | Accent | Phosphor (typed text) | Greys |
+| Look | Accent | Phosphor (typed text) | Greys |
 |---|---|---|---|
-| **Green (Matrix)** — default | emerald `#34d399` | `#00ff41` | tinted slightly blue |
-| **Red** | rose `#f43f5e` | `#ff0033` | the same values, tint rotated toward red |
-| **Blue (Cyberpunk)** | cyan `#22d3ee` | electric aqua `#00ffdd` | the same values, tint rotated toward cyan |
+| Light | green `#0b7a55`, rose `#be123c`, teal `#0e7490` | the deep accent | off-white page, white cards |
+| Dark | emerald `#34d399`, rose `#f43f5e`, cyan `#22d3ee` | `#00ff41`, `#ff0033`, `#00ffdd` | tinted toward the accent |
 
-Only the accent, the phosphor and the tint of the greys change; lightness does
-not. **Status colour is the same in every theme** — `DANGER` (coral) stops
-work, `WARNING` (amber) flags a paid or irreversible step, `INFO` (blue) is
-neutral emphasis. That is why Red's accent is rose rather than red, and Blue's
-is cyan at 188° rather than azure: an accent too close to `DANGER` or `INFO`
-would read as the same claim. Anything the docs call "green" in the status
-cards — a **Configured** key, a Resource Monitor row under threshold — is the
-accent, so it is rose or cyan under the other two themes.
+**Status colour keeps its meaning in every theme** — `DANGER` stops work,
+`WARNING` flags a paid or irreversible step, `INFO` is neutral emphasis. The
+light look uses darker shades of them so each stays readable on white
+(`tests/test_contrast.py` checks every text and indicator token against WCAG
+AA). Anything the docs call "green" in the status cards — a **Configured** key,
+a Resource Monitor row under threshold — is the accent, so it is rose or teal
+under the other accents.
 
 **The caret.** Every editable multi-line field (`QTextEdit`) draws a blinking
 underscore in the phosphor colour instead of Qt's bar: one cadence (on for
@@ -348,31 +361,33 @@ transcripts keep no caret, and single-line `QLineEdit` fields keep Qt's native
 bar because Qt offers no way to switch it off. There is deliberately no moving
 backdrop — Sentinel has one; a tool you write books in should not.
 
-**Where it lives.** `ui/theme.py` owns the three palettes, the saved choice
+**Where it lives.** `ui/theme.py` owns the six palettes (two looks, three accents), the saved choice
 (`current()` / `set_current()`), `recolour()` for colours built outside the
 main sheet, and `themed(widget, css)` — a weak-reference registry for sheets
 applied once at build time, so `repaint()` can re-apply them. `ui/style.py`
 stays the design system: its module constants hold the authored green values
 and `global_stylesheet(theme)` formats the one sheet from the current palette.
 `GodAI.apply_global_style()` re-sets that sheet and calls `theme.repaint()`.
-The header widget is `ThemeDots` in `ui/widgets.py`; the caret is
+The accent dots are `ThemeDots` in `ui/widgets.py`, shown in Settings → General; the caret is
 `ui/vibe.py` (`install_carets()` sweeps the main window once, after every
 panel exists, so an editor created later — in a dialog, say — keeps Qt's bar
 unless `install_caret()` is called on it). A
 colour written into a rule as a literal stops following the theme and no test
 will notice — always use a token. `tests/test_theme.py` pins the palettes to
 `style.py`'s constants, the accent's distance from `INFO`, and that semantic
-colours never change; `tests/test_vibe.py` pins the caret.
+colours keep one value across the accents of a look; `tests/test_vibe.py` pins the caret.
 
 ---
 
-## 4. Left Rail — Projects
+## 4. Projects and Chats
 
-Agent navigation lives in the header, so the rail is projects only.
+Agent navigation is the icon rail and the top bar's agent switch. Projects live in
+the top bar (the selector and its **Project actions** menu); saved chats live in
+the History drawer, opened with the clock button or ⌘Y.
 
-**Project selector** — choose **All projects**, **Unfiled**, or a named project.
+**Project selector** — in the top bar. Choose **All projects**, **Unfiled**, or a named project.
 Selecting a project makes its instructions, optional daily cap, and saved
-agent/provider/model defaults active. The header shows its name. **All projects**
+agent/provider/model defaults active. The selector shows its name. **All projects**
 and **Unfiled** browse without adding project context to new requests.
 The same record now also holds a work type, work title, byline or brand, and
 creative brief. In Write, choosing a project restores its own book profile,
@@ -413,7 +428,7 @@ profiles, voice and character records remain account-owned. Calendar and Media
 default to account-wide views, with a current-Project filter for each;
 deleting a Project unfiles Creator work rather than deleting the profile or
 its records.
-**Project Overview** in the left rail brings these links together: Write's
+**Project Overview** in the **Project actions** menu brings these links together: Write's
 working-draft count, files grouped by agent, and scheduled Creator content.
 It flags missing files instead of hiding them. Opening a file or its folder
 is explicit; Project deletion removes approval/export/submission records and
@@ -422,10 +437,10 @@ links, not external files. Its summary also carries a release-kit line
 made 19 Nov") and a **Release Kits…** button that opens the Release Kits
 window (see "Make Release Kit" in §7.7). The Overview itself stays read-only.
 
-**Search** — filters the list in real time, case-insensitively, against the
+**Search** — in the History drawer. Filters the list in real time, case-insensitively, against the
 chat title (agent name + first user message).
 
-**Agent filter** — the button beside Search. Its menu narrows the list to one
+**Agent filter** — the button beside Search in the drawer. Its menu narrows the list to one
 agent; it is populated from the chats that exist, so it only ever offers
 agents you have actually used. The button is highlighted while a filter is on.
 
@@ -434,8 +449,8 @@ Today, Yesterday and Earlier. Each row shows the chat's title with its agent
 beside it; a long title is cut to fit and shown whole on hover, with the date.
 Click to reopen a full conversation and type a follow-up; double-click to
 rename a chat; right-click to rename it, assign it to a project or remove it.
-Project, agent, and title-search filters intersect. The list takes the rail's
-spare height.
+Project, agent, and title-search filters intersect. The list takes the
+drawer's spare height. Opening a chat closes the drawer.
 
 **Project actions** — the button beside the project selector opens a menu.
 **New Project** creates a named context bundle and opens a clean chat. It
@@ -443,7 +458,7 @@ does not delete previous chats. **Project Overview** and **Save Current
 Setup** are available once a project is selected; Save Current Setup records
 the current agent/provider/model as that project's defaults.
 
-**New Chat** — under the list. Clears the working conversation while keeping
+**New Chat** — at the top of the History drawer. Clears the working conversation while keeping
 the selected project active.
 
 **Settings → Projects** — edit reusable instructions and a daily project
@@ -458,41 +473,58 @@ selected). Deletes that saved chat after a confirmation prompt.
 
 ---
 
-## 5. Right Rail — Spend, Budget and Utilities
+## 5. Spend, Budget and Status
 
-**Spend** — two budget rows, **Session** and **Today**: what has been spent,
-"of €" and the limit, over a bar that turns red at 100%. The limit is a field:
-type a number of 0 or more and press Enter (or click elsewhere) to save it; 0
-means no limit. Anything else is refused with a message and the limits in
-force are put back. A **Project budget** bar appears only when the active
-project has a daily limit. **Reset session spend**, in the heading row, zeroes
-the session counter only.
+Spend and status each have a chip at the right end of the top bar. A chip is a
+button: click it (or focus it and press Space or Return) to open a popover, and
+press Escape or click elsewhere to close it. Closing the spend popover saves a
+limit you were typing.
 
-**Requests · Last request · Saved by local · Advice spent** — one line each
-under the budgets. Hovering one gives the detail (session vs. today counts,
-which tool ran last, the routing totals).
+**Spend chip** — today's figure against the daily limit, for example "€1.20 of
+€5 today". It takes the warning colour from 80% of the limit and the danger colour at the limit. With no
+daily limit it reads "€1.20 today · no limit". A request whose price is not
+known is never counted as free: the chip reads "€1.20 + unknown of €5 today", or
+"Unknown of €5 today" when every request today was unpriced, and its tooltip
+says the real total is higher. In a narrow window it shortens (drops "today",
+then shows the amount only) but never disappears.
 
-**Next request** — the most the request currently configured can cost
-("up to €X", rounded up), whether it is a paid API, the provider, model, and
-the tokens it sends plus the output reserve ("+ up to 8,192").
+**Spend popover** — heading **Spend** with **Reset session spend** beside it,
+which zeroes the session counter only. Then two budget rows, **Session** and
+**Today**: what has been spent, "of €" and the limit, over a bar that turns red
+at 100%. The limit is a field: type a number of 0 or more and press Enter (or
+click elsewhere) to save it; 0 means no limit. Anything else is refused with a
+message and the limits in force are put back. While a project is active a
+**Project** line shows its spend against its daily limit. Below that,
+**Requests · Last request · Saved by local · Advice spent**, one line each;
+hovering one gives the detail (session vs. today counts, which tool ran last,
+the routing totals). When any of today's requests had no price a note says the
+totals leave them out. At the foot, **Cost History** and **Run Log** open a
+window each and change nothing.
 
-**Cost History · Run Log · Learning Centre** — utilities that open a window and
-change nothing: plain rows with a chevron rather than buttons. Since the rails
-rebalance (2026-11-24) they sit on the left rail under New Chat, with the
-Project budget bar under the project dropdown; the right rail keeps spend and
-status.
+**Project budget bar** — at the top of the **Project actions** menu ("Working in
+…" over the bar), only while the active project has a daily limit.
 
-**System · Routing · API keys · Model updates** — the first three are collapsed
-by default; **Model updates** was open by default from 2026-11-22 and is
-collapsed again since the rails rebalance, because its count pill keeps it
-visible. Each is a compact status card with separate
-values and state badges instead of a paragraph of diagnostic text. Model
-updates also shows its counts beside its title (*2 new · 1 warning*), so
-news stays visible if you close it. The other three say their state in a word
-while collapsed: System is OK, Busy or Stressed (the worst of memory,
-processor and swap), Routing names the provider of the last Chat request, and
-API keys counts the configured keys ("4 of 6").
-It covers chat models and, in a section of its own, video and image models.
+**Next request** — the most the request currently configured can cost ("up to
+€X", rounded up), or "free" for a local model, with the model and the tokens it
+sends. It is one line under the request setup in the agent panel, where the
+money is about to be spent.
+
+**Status chip** — a dot, one word and, when model updates are waiting, a count
+("Ready · 3"). The word is the worst of: **Machine stressed**, **Key check
+failed**, **Machine busy**, **Working**, **Ready**. A key that is "Not
+configured" is normal and does not count as failed. In a narrow window the chip
+shrinks to the dot and the count; the word moves to its tooltip.
+
+**Status popover** — heading **Status**, then four sections: **System**,
+**Chat routing**, **API keys** and **Model updates**. Each says its state in a
+word while closed. The section that explains the chip's state opens first, and
+**Model updates** opens whenever the count shows. The one-word states: System
+is OK, Busy or Stressed (the worst of memory, processor and swap); Chat routing
+names the provider of the last Chat request; API keys counts the configured keys
+("4 of 6"); Model updates shows its counts beside its title (*2 new · 1
+warning*). Each is a compact status card with separate values and
+state badges instead of a paragraph of diagnostic text. Model updates covers
+chat models and, in a section of its own, video and image models.
 
 ### Resource Monitor
 
@@ -505,7 +537,7 @@ Under **System**, collapsed by default. Four scannable rows update every second:
 | Swap % and GB used/total | Green < 20%, Yellow < 50%, Red ≥ 50% |
 | Battery % and charging state | Green if charging or > 40%, Yellow > 20%, Red ≤ 20% |
 
-"Green" here is the theme accent (rose or cyan under the other themes — see
+"Green" here is the theme accent (rose or teal under the other accents — see
 [Themes](#themes)); yellow and red are the shared `WARNING` and `DANGER`.
 
 **Realtime Monitor** — reserved button, currently disabled.
@@ -525,7 +557,7 @@ configured**, or **Check failed**. Secret values are never displayed.
 
 ### Documentation centre
 
-The header **Docs** button opens `ui/docs_center.py` at the active agent's
+**Docs** in the **?** menu opens `ui/docs_center.py` at the active agent's
 sheet; the shared-system overview is the first entry in its contents. It uses
 `docs/agents/manifest.json` as the navigation source and provides grouped
 contents, local heading-level search with exact anchors, an on-page outline,
@@ -888,10 +920,10 @@ A route that cannot make what was asked (a 30 s clip on a model that stops at
 
 ## 6. Centre Panel — Main Workspace
 
-The centre shows the panel of the agent picked in the header: the workspace
-tab chooses the workspace, and a workspace with two agents (Author: Quill and
-Press; Audio + Music: Booth and Label) shows one button per agent under the
-tab bar. Each agent's
+The centre shows the panel of the agent picked in the icon rail: the rail's
+buttons choose the workspace, and a workspace with two agents (Author: Quill and
+Press; Audio + Music: Booth and Label) shows a switch between them at the left
+of the top bar. Each agent's
 panel is described under its name in [section 7](#7-agents).
 
 The rest of this section describes the **Assistant** workspace (Kernel's
@@ -936,7 +968,7 @@ The last selected model for each provider is saved to `config/settings.json` and
 
 **Model Guide** — the link beside the Model label; opens the Model Guide dialog ([§13.4](#134-model-guide)).
 
-The documentation centre opens from **Docs** in the header ([§13.5](#135-docs)).
+The documentation centre opens from **Docs** in the **?** menu ([§13.5](#135-docs)).
 
 ---
 
@@ -1049,14 +1081,14 @@ The output box is also used by the Audiobook agent to display conversion logs an
 ## 7. Agents
 
 Imprint has ten agents in eight workspaces, listed in `agents/catalog.py`
-and shown as tabs in the header (the table in [section 1](#1-overview)). Each
+and shown as icons in the rail (the table in [section 1](#1-overview)). Each
 agent has its own package in `agents/<key>/`, with its own README, and its own
 panel; Chat uses the Assistant workspace's standard panel
 ([section 6](#6-centre-panel--main-workspace)). Every text agent can use the
 local providers (Ollama, LM Studio) and the cloud providers you have a key
 for, except Press and Nova, which offer no local provider. Booth narrates with
 one of three routes: OpenAI, Gemini or ElevenLabs. **F1** on a control opens
-the Learning Centre lesson for it; **Docs** in the header opens each agent's
+the Learning Centre lesson for it; **Docs** in the **?** menu opens each agent's
 sheet.
 
 The subsections below are headed with each agent's name and workspace. Their
@@ -1065,7 +1097,7 @@ older references still resolve.
 
 ### 7.1 Kernel (Assistant)
 
-**Workspace:** Assistant, in the header · **Agent:** Kernel (named Chat until 2026-11-22) · **Package:** `agents/chat/`
+**Workspace:** Assistant, in the icon rail · **Agent:** Kernel (named Chat until 2026-11-22) · **Package:** `agents/chat/`
 
 The default, general-purpose agent. Kernel is the one agent that does *not* swap in a custom panel — it runs inside the standard centre panel (Tool combo, Command combo, prompt input, output box) described in [section 6](#6-centre-panel--main-workspace). Use it for anything that doesn't have a dedicated specialist agent: open-ended questions, code help, drafting, summarisation, translation, follow-up conversation, brainstorming.
 
@@ -1097,7 +1129,7 @@ Kernel uses the **standard `normal_panel`** described in [section 6](#6-centre-p
 
 #### How to Use — Step by Step
 
-1. Click **Assistant** in the header.
+1. Click **Assistant** in the icon rail.
 2. Pick a **Tool** if you want a domain frame (e.g. Coding, Writing).
 3. Optionally pick a **Command** template.
 4. Choose **Provider** and **Model**.
@@ -1139,7 +1171,7 @@ Kernel uses the **standard `normal_panel`** described in [section 6](#6-centre-p
 
 ### 7.2 Vector (Brand Design)
 
-**Workspace:** Brand Design, in the header · **Agent:** Vector (named Stamp until 2026-11-22) · **Package:** `agents/fiverr/`
+**Workspace:** Brand Design, in the icon rail · **Agent:** Vector (named Stamp until 2026-11-22) · **Package:** `agents/fiverr/`
 
 **Vector makes PNG images, not vector files.** Trace them to SVG in a vector tool before client delivery.
 
@@ -1221,7 +1253,7 @@ Live status appears as a line under the action row.
 
 #### How to Use — Step by Step
 
-1. Open **Brand Design** in the header.
+1. Open **Brand Design** in the icon rail.
 2. Fill in **Business name**, **Industry**, **Style**, and **Primary colours**.
 3. Choose how many concepts to render (1–4) and add optional notes.
 4. Pick the **Text provider / model** for the prompt and copy, and the **Image model** for the logos.
@@ -1268,7 +1300,7 @@ Live status appears as a line under the action row.
 
 ### 7.3 Quill (Author)
 
-**Workspace:** Author, in the header · **Agent:** Quill (Press shares the workspace) · **Package:** `agents/author/`
+**Workspace:** Author, in the icon rail · **Agent:** Quill (Press shares the workspace) · **Package:** `agents/author/`
 
 A full creative writing suite for novelists, screenwriters, short-story writers, and bloggers. The panel has **three distinct modes** accessed via a toggle at the top: a manuscript workspace for drafting, and a Publish & Market system for producing everything needed to take a finished book to market — from query letters and synopses to Amazon copy and Instagram posts.
 
@@ -1464,7 +1496,7 @@ Platform format rules enforced by the Market system prompt:
 
 **Writing a new book:**
 
-1. Open the **Author** workspace in the header and pick **Quill**.
+1. Open the **Author** workspace in the icon rail and pick **Quill**.
 2. Fill in the **Project Bar**: Title, Author, Type (Fiction/Non-Fiction — this sets the Task list below), Genre, Tone, POV.
 3. Expand **Book Profile** and fill in Hook, Target Reader, Comp Titles, Publishing Path — then click **Save Profile**. Do this once; it persists across restarts and feeds Write, Publish, and Market automatically from here on.
 4. In the **Write** control column, pick Task: `Generate Outline`. Write a brief in Direction.
@@ -1555,7 +1587,7 @@ Platform format rules enforced by the Market system prompt:
 
 ### 7.4 Label (Audio + Music)
 
-**Workspace:** Audio + Music, in the header · **Agent:** Label (Booth shares the workspace) · **Package:** `agents/music/`
+**Workspace:** Audio + Music, in the icon rail · **Agent:** Label (Booth shares the workspace) · **Package:** `agents/music/`
 
 A Spotify Artist Setup specialist that produces a complete, copy-paste-ready release-and-monetisation plan for independent artists. The agent's system prompt forces every response to mark **[AI OUTPUT — COPY-PASTE READY]** vs **[HUMAN ACTION REQUIRED]** so you always know which bits to paste and which require manual steps in Spotify for Artists, DistroKid, etc.
 
@@ -1621,7 +1653,7 @@ full step-by-step.
 
 #### How to Use — Step by Step
 
-1. Open the **Audio + Music** workspace in the header and pick **Label**.
+1. Open the **Audio + Music** workspace in the icon rail and pick **Label**.
 2. Fill in **Artist / Project Name**, **Genre**, **Release Type**, **Distributor**, and **Describe your music**.
 3. (Optional) Specify **Target Audience**.
 4. Pick **Provider** and **Model** (Claude works well for long structured plans).
@@ -1671,7 +1703,7 @@ full step-by-step.
 
 ### 7.5 Sitebuilder (Web)
 
-**Workspace:** Web, in the header · **Agent:** Sitebuilder · **Package:** `agents/webdesign/`
+**Workspace:** Web, in the icon rail · **Agent:** Sitebuilder · **Package:** `agents/webdesign/`
 
 A front-end design and prototyping agent. Given a brief, Sitebuilder produces HTML / CSS / JS for landing pages, portfolios, dashboards, forms, blogs, or single components. The result is shown in three read-only review tabs and can be copied or saved as an `.html` file. Check external assets and framework dependencies before treating it as self-contained.
 
@@ -1734,7 +1766,7 @@ The panel shows the extracted HTML and any inline `<style>` / `<script>` blocks 
 
 #### How to Use — Step by Step
 
-1. Open the **Web** workspace in the header (Sitebuilder is its only agent).
+1. Open the **Web** workspace in the icon rail (Sitebuilder is its only agent).
 2. Pick **Page Type** and **Style**.
 3. Enter a **Colour Palette** (or leave blank to let the model propose one).
 4. Choose a **Framework**.
@@ -1779,7 +1811,7 @@ The panel shows the extracted HTML and any inline `<style>` / `<script>` blocks 
 
 ### 7.6 Booth (Audio + Music)
 
-**Workspace:** Audio + Music, in the header · **Agent:** Booth (Label shares the workspace) · **Package:** `agents/audiobook/`
+**Workspace:** Audio + Music, in the icon rail · **Agent:** Booth (Label shares the workspace) · **Package:** `agents/audiobook/`
 
 Converts ebook files into MP3 or M4B audiobooks, narrated by one of three routes: OpenAI, Gemini or ElevenLabs. Booth is unusual in two ways: (1) it does not stream LLM output — it runs a **conversion worker** as a subprocess, and (2) it has no system-prompt-style "agent class" beyond a thin **AudiobookConnector** that parses configuration input. Its Convert and Listen workspace lives in `agents/audiobook/panel.py`; the shared conversion engine is `services/narrator/converter.py`.
 
@@ -1939,7 +1971,7 @@ so the next play starts over instead of resuming and stopping immediately.
 
 ### 7.7 Press (Author)
 
-**Workspace:** Author, in the header · **Agent:** Press (Quill shares the workspace) · **Package:** `agents/manuscript/`
+**Workspace:** Author, in the icon rail · **Agent:** Press (Quill shares the workspace) · **Package:** `agents/manuscript/`
 
 Picks up where Quill (the writing studio) stops: real sales data, launch-content generation, and a publishing checklist. Five tabs: **Overview**, **Quote Finder**, **Quote Graphics**, **Shorts**, **Calendar**.
 
@@ -2055,7 +2087,7 @@ One action on an approved Project version makes a set of files for a release, on
 
 **Checking sales and staying on top of launch tasks:**
 
-1. Open the **Author** workspace in the header and pick **Press**.
+1. Open the **Author** workspace in the icon rail and pick **Press**.
 2. Set `PUBLISHDRIVE_API_KEY` in `.env` (once) to enable live sales data.
 3. Click **⟳ Refresh Data** for the current period, or **Ingest KDP CSV** after dropping a report into `data/kdp_reports/`.
 4. Ask a question in the Ask box ("What did I earn this month?") — answered from the fetched data, not guessed.
@@ -2136,7 +2168,7 @@ rather than as a separate agent.
 
 ### 7.9 Reel (Video + Ads)
 
-**Workspace:** Video + Ads, in the header · **Agent:** Reel · **Package:** `agents/video/`
+**Workspace:** Video + Ads, in the icon rail · **Agent:** Reel · **Package:** `agents/video/`
 
 Topic to finished video: script, narration, aligned captions, generated
 visuals, Ken Burns motion, music, loudness normalisation and a thumbnail.
@@ -2200,7 +2232,7 @@ Project. Switching Projects updates that view without relabelling old clips.
 
 ### 7.10 Herald (Social)
 
-**Workspace:** Social, in the header · **Agent:** Herald · **Package:** `agents/social/`
+**Workspace:** Social, in the icon rail · **Agent:** Herald · **Package:** `agents/social/`
 
 The public funnel for everything else in the studio. A **campaign** is one
 subject — a book, a release, a product, a gig — and its goal; posts are written
@@ -2258,7 +2290,7 @@ engagement bait, as a rule rather than a hope.
 
 ### 7.11 Nova (Brand Content)
 
-**Workspace:** Brand Content, in the header · **Agent:** Nova (named Muse until 2026-11-22) · **Package:** `agents/creator/`
+**Workspace:** Brand Content, in the icon rail · **Agent:** Nova (named Muse until 2026-11-22) · **Package:** `agents/creator/`
 
 `key: creator` · `agents/creator/agent.py` · panel `build_creator_panel()` ·
 full sheet in `docs/agents/creator.md`
@@ -2694,7 +2726,7 @@ project caps, and the Run Log shows `error` or `cancelled` with "recorded €X o
 After a successful response, `UsageTracker.log_request()` calculates the real cost:
 
 1. Token counts are sourced from the API's usage response if available (field names vary by provider: `input_tokens`, `prompt_tokens`, `prompt_token_count`, etc.). If exact data is unavailable, character-count estimation is used.
-2. The EUR/USD exchange rate and per-model pricing are read from the `pricing` and `settings` tables in the database. Token and per-unit costs share one rate reader (`services/per_unit_pricing.eur_per_usd`): a rate that is not a finite number above zero falls back to `config/pricing.json`'s, then 0.92, and Settings refuses to save one. Settings and the right rail's limit fields share one budget check (`services/validator.valid_budget_eur`) and refuse a NaN, infinite or negative Session or Daily budget, keeping the old limits.
+2. The EUR/USD exchange rate and per-model pricing are read from the `pricing` and `settings` tables in the database. Token and per-unit costs share one rate reader (`services/per_unit_pricing.eur_per_usd`): a rate that is not a finite number above zero falls back to `config/pricing.json`'s, then 0.92, and Settings refuses to save one. Settings and the spend popover's limit fields share one budget check (`services/validator.valid_budget_eur`) and refuse a NaN, infinite or negative Session or Daily budget, keeping the old limits.
 3. A row is inserted into the `usage` table with timestamp, agent, provider, model, token counts, cost, and cost type (`exact`, `estimated`, or `mixed`).
 
 ### Budget Controls
@@ -2703,7 +2735,7 @@ After a successful response, `UsageTracker.log_request()` calculates the real co
 
 **Daily budget** — Total cloud spend allowed today (per calendar day). Aggregated from the `usage` table.
 
-Budget limits are checked by the validator before each request. A refusal says what the request can cost and what the cap has left, e.g. "Not sent: this request can cost up to €0.44 and your session cap has €0.05 left (of €1.00)", and how to proceed. They are editable in the right rail's Session and Today rows (press Enter to save; applied immediately and written to the settings table) or in the Settings dialog.
+Budget limits are checked by the validator before each request. A refusal says what the request can cost and what the cap has left, e.g. "Not sent: this request can cost up to €0.44 and your session cap has €0.05 left (of €1.00)", and how to proceed. They are editable in the spend popover's Session and Today rows (press Enter to save; applied immediately and written to the settings table) or in the Settings dialog.
 
 **Reset session spend** — Resets only the in-memory session accumulator to zero. Does not delete usage log entries.
 
@@ -2743,7 +2775,7 @@ Status values are colour-coded: green (success), red (error), amber (cancelled).
 
 ### 13.3 Settings
 
-Opened by the **Settings** button in the header. A tabbed dialog with eight
+Opened by the **Settings** gear at the bottom of the icon rail (or ⌘,). A tabbed dialog with eight
 tabs (`ui/dialogs.py`), in this order: **General**, **API keys**, **Local
 models**, **Models**, **Agents**, **Tools**, **Pricing** and **Projects**.
 Each is described below.
@@ -2756,12 +2788,15 @@ Each is described below.
 | Default session budget (€) | Starting value for the session budget input on startup |
 | Default daily budget (€) | Starting value for the daily budget input on startup |
 
-**Appearance** (also on the General tab) — a **Theme** picker: Green (Matrix),
-Red, Blue (Cyberpunk). Choosing one repaints the window immediately and saves
-it, so the choice is made by looking; **Cancel** puts back the theme the dialog
-opened with. The header's theme dots do the same thing — see [Themes](#themes).
-The sentence above the picker (`ui/dialogs.appearance_intro()`) counts and
-names the themes from `ui/theme.THEMES` rather than hard-coding a number; it
+**Appearance** (also on the General tab) — **Look** (Light | Dark) and
+**Accent** (three dots, painted in the chosen look's accents; ←/→ step through
+them). Choosing either repaints the window immediately and saves it, so the
+choice is made by looking; **Cancel** puts back the theme the dialog opened
+with. See [Themes](#themes). Below them: **Show tooltips** (remembered across
+launches), **Reduce motion** (on, and fixed, while macOS Reduce Motion is on)
+and the **About** line with the running version. The sentence above
+(`ui/dialogs.appearance_intro()`) counts and names the looks and accents from
+`ui/theme.LOOKS` and `ui/theme.ACCENTS` rather than hard-coding a number; it
 said "two themes" for a week after Blue shipped.
 
 #### API keys Tab
@@ -2812,7 +2847,7 @@ Pricing rows are created during the initial migration from `config/pricing.json`
 
 **Manage Projects** opens the project manager: group saved chats, reuse
 instructions and setup, and set an optional daily project spend cap. Archiving
-hides a project without deleting its chats. See [§4](#4-left-rail--projects).
+hides a project without deleting its chats. See [§4](#4-projects-and-chats).
 
 #### Save All
 
@@ -2842,13 +2877,13 @@ Opened by the **Model Guide** button. A four-tab reference dialog.
 
 ### 13.5 Docs
 
-Opened by **Docs** in the header. It is the documentation centre
+Opened by **Docs** in the **?** menu. It is the documentation centre
 (`ui/docs_center.py`), not this README: it opens at the active agent's sheet
 from `docs/agents/` (the reference overview when the agent has none), with
 grouped contents from `docs/agents/manifest.json`, local search, an outline and
 links into the matching Learning Centre lesson. It makes no provider call. The
 operating lessons are in the Learning Centre ([section 20](#20-learning-centre)), opened
-from the left rail or with **F1**.
+from the **?** menu or with **F1**.
 
 ---
 
@@ -3165,7 +3200,7 @@ uv pip install -r requirements.txt -r requirements-dev.txt
 | `test_request_guard.py` | `authorize_request` / `record_request` / `abandon_request`. Blocked requests open no run; recording without authorising bills nothing; double-record bills once; abandoned requests stay unbilled. |
 | `test_book_pipeline.py` | Chapter detection and offsets, EPUB/DOCX/PDF export, calendar scheduling, KDP CSV summarisation, LLM list parsing, collision-proof asset paths. |
 | `test_audiobook_player.py` | Library scan, resume bookkeeping, playback against a real MP3, and `release()` — the media engine must not outlive the widget. |
-| `test_theme.py` | The three palettes match `ui/style.py`'s authored constants, semantic colours never change, the accents keep their distance from `INFO`, the choice persists and falls back to green, switching repaints every hand-built sheet, the Settings picker previews live and Cancel restores, and the header dots (click and ←/→). |
+| `test_theme.py` | The six palettes (Light and Dark, three accents each) match `ui/style.py`'s authored constants, semantic colours keep one value across a look's accents, the accents keep their distance from `INFO`, the choice persists and falls back to Light · Green, a saved dark theme moves to light once, switching repaints every hand-built sheet, the Settings Look picker previews live and Cancel restores, and the accent dots (click and ←/→). |
 | `test_vibe.py` | The underscore caret: one cadence for every theme, Qt's own caret off, follows focus and cursor, drawn in the theme phosphor, installed on every editable text box and no other, and no moving backdrop. |
 
 `tests/manual_test_cases.md` sits on top of all of this: the hand pass over the
@@ -3199,8 +3234,8 @@ UI coverage is **behavioural, not visual** — no screenshot comparisons.
 sibling widgets in a panel may occupy the same pixels, across every agent panel
 at the window's minimum size, and that no row of a panel is given less height
 than its minimum unless it can scroll — a clipped child is not a sibling of what
-clips it, so the overlap check alone never saw Quill crushed; it also covers the header's shedding order and
-the **More ▾** overflow. `test_agent_panel.py` and `test_status_cards.py` cover
+clips it, so the overlap check alone never saw Quill crushed; it also covers the icon rail and the top bar's
+collapse order (`tests/test_shell.py`). `test_agent_panel.py` and `test_status_cards.py` cover
 control state and the rail cards. What none of them can judge is whether a
 result is any good — that is what `tests/manual_test_cases.md` is for. To check
 by hand that a panel still constructs, build the window offscreen:
@@ -3353,7 +3388,7 @@ python.org framework Python (whose interpreter lives in a bundle called
 ### 18.1 Versioning
 
 Imprint's version is **`v<MAJOR>.<BUILD>`**, for example `v2.112`.
-It appears in the header bar beside the wordmark, and hovering it shows the
+It appears on the tooltip of the app mark at the top of the icon rail (and on the About line in Settings → General), and hovering shows the
 commit, the date and whether the build is current.
 
 | Part | Where it comes from | Who changes it |
@@ -3634,7 +3669,7 @@ The Audiobook agent reads its paths and defaults from `services/tool_runner.py`,
 
 ## 20. Learning Centre
 
-**Learning Centre** in the left rail (or **F1** anywhere) opens a 28-lesson operating academy
+**Learning Centre** in the **?** menu (or **F1** anywhere) opens a 28-lesson operating academy
 rendered from `docs/learn/manifest.json` and `docs/learn/modules/`:
 
 | Section | Covers |

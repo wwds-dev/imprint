@@ -101,8 +101,8 @@ resend is a second request and shows a second estimate.
 
 ### Step 1 — Start a clean project
 
-Open the project actions menu beside the project selector in the left rail,
-choose **New Project** and name it. Imprint Studio switches the project selector to
+Open the **Project actions** menu (the three dots) beside the project selector
+in the top bar, choose **New Project** and name it. Imprint Studio switches the project selector to
 it and opens a fresh chat, so this question starts without leftover context
 and everything you ask now files under it.
 
@@ -136,7 +136,7 @@ Thu — maybe drop the webinar? nobody decided. Fri — new tagline approved
 
 Click **Auto Route**. The router reads your text and moves you to the
 workspace it fits; a general question like this one stays in Kernel. The **Chat
-routing** card in the right rail fills in with the chosen agent, provider and
+routing** card in the status popover (click the status chip) fills in with the chosen agent, provider and
 model — hover it for the why and the how-sure. The tooltip names one of three
 honest tiers: *addressed* (you named a tool), *intent* (a keyword matched,
 and it says which), or *fallback* (nothing matched, so Kernel). A fallback is a
@@ -158,7 +158,7 @@ that allows cloud.
 
 Click **Estimate Cost**: provider, model, approximate tokens, and the
 estimated cost in euros — or "local execution" for Ollama and LM Studio. The same number
-sits live in the right rail as **Next request**, and it moves as you edit the
+sits live under the request setup as **Next request**, and it moves as you edit the
 prompt. It is an estimate of the request you are about to make, not a
 measurement of anything.
 
@@ -181,7 +181,7 @@ format line and send again, knowing that costs a second request.
 
 ### Step 7 — Keep or discard, deliberately
 
-The finished chat appears in the saved-chat list in the left rail, under
+The finished chat appears in the saved-chat list in the History drawer (clock button, ⌘Y), under
 Today, filed in *Field Notes* and titled by its first prompt until you rename
 it. Double-click it and name it something you will recognise, for example
 `Decisions — weekly template`; right-click to rename it, move it to another

@@ -38,9 +38,14 @@ from ui.forms import (
 )
 from ui.panels.base import AgentPanel
 from ui import theme
-from ui.style import ACCENT
+from ui.style import (ACCENT, BORDER_STRONG, SUNKEN, TEXT_DIM, TEXT_MUTE)
+
 from ui.widgets import CollapsibleSection, FlowLayout, ScrollContent, scrollable
 from ui.worker_registry import refuse_if_busy, start_in_slot
+
+# The empty preview frames: a sunken well with a firm edge, in either look.
+PREVIEW_FRAME_STYLE = (f"background: {SUNKEN}; border: 1px solid {BORDER_STRONG};"
+                       f" color: {TEXT_MUTE};")
 
 
 class _TodoList(QListWidget):
@@ -472,9 +477,7 @@ class ManuscriptPanel(QWidget):
         # Right: preview
         self.quote_graphic_preview = QLabel("Preview will appear here.")
         self.quote_graphic_preview.setAlignment(Qt.AlignCenter)
-        self.quote_graphic_preview.setStyleSheet(
-            "background: #1a1a1a; border: 1px solid #333; color: #666;"
-        )
+        theme.themed(self.quote_graphic_preview, PREVIEW_FRAME_STYLE)
         self.quote_graphic_preview.setMinimumSize(320, 320)
         row.addWidget(self.quote_graphic_preview, 1)
 
@@ -533,9 +536,7 @@ class ManuscriptPanel(QWidget):
         # Right: preview (static frame of the short — no inline video player)
         self.shorts_preview = QLabel("Preview will appear here.")
         self.shorts_preview.setAlignment(Qt.AlignCenter)
-        self.shorts_preview.setStyleSheet(
-            "background: #1a1a1a; border: 1px solid #333; color: #666;"
-        )
+        theme.themed(self.shorts_preview, PREVIEW_FRAME_STYLE)
         self.shorts_preview.setMinimumSize(320, 320)
         row.addWidget(self.shorts_preview, 1)
 
@@ -650,7 +651,7 @@ class ManuscriptPanel(QWidget):
             "Todos below for those."
         )
         note.setWordWrap(True)
-        note.setStyleSheet("color: #777; font-size: 11px;")
+        theme.themed(note, f"color: {TEXT_MUTE}; font-size: 11px;")
         self.manuscript_connections_layout.addWidget(note)
 
         host = self.host
@@ -675,7 +676,7 @@ class ManuscriptPanel(QWidget):
                 color = theme.recolour(ACCENT)
             else:
                 text = f"{name}{opt_tag} — not connected · get a key at {where}"
-                color = "#999999"
+                color = theme.recolour(TEXT_DIM)
             row = QLabel(text)
             row.setStyleSheet(f"color: {color}; font-size: 12px;")
             self.manuscript_connections_layout.addWidget(row)
@@ -973,7 +974,7 @@ class ManuscriptPanel(QWidget):
             done = status == "done"
             item.setCheckState(Qt.Checked if done else Qt.Unchecked)
             if done:
-                item.setForeground(QColor("#6b7685"))
+                item.setForeground(QColor(theme.token("TEXT_MUTE")))
                 font = item.font()
                 font.setStrikeOut(True)
                 item.setFont(font)

@@ -232,12 +232,17 @@ def test_every_uncensored_download_on_this_machine_is_tagged_and_no_other():
 # ── the pickers tag uncensored models ──────────────────────────────────────
 
 def _amber_pixels(widget) -> int:
+    """Pixels in the warning family (orange hue, saturated): the tag is the
+    theme's WARNING, amber on the dark looks and brown-orange on the light
+    one (ADR 0006), so the detector reads hue rather than one RGB box."""
     image = widget.grab().toImage()
     count = 0
     for x in range(0, image.width()):
         for y in range(0, image.height()):
             c = image.pixelColor(x, y)
-            if c.red() > 170 and 110 < c.green() < 200 and c.blue() < 110:
+            hue = c.hsvHueF() * 360
+            if 15 <= hue <= 50 and c.hsvSaturationF() > 0.45 \
+                    and c.valueF() > 0.3:
                 count += 1
     return count
 

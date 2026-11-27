@@ -1,0 +1,279 @@
+{
+  "spec": "docs/specs/manuscript-redesign.md, measure 2",
+  "taken_before": "slice 1 (Shell) changed any chrome",
+  "containers": [
+    "AppHeader",
+    "RailLeft",
+    "RailRight"
+  ],
+  "controls": {
+    "agent_docs_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "AppHeader",
+      "tooltip": "Open the documentation for the currently active agent.",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "cost_history_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailLeft",
+      "tooltip": "Open the Cost History dialog (charts and tables of past spending).",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "daily_budget_input": {
+      "kind": "field",
+      "class": "QLineEdit",
+      "where": "RailRight",
+      "tooltip": "Maximum spend allowed per day in euros. Press Enter to save; 0 means no limit.",
+      "signals": [
+        "editingFinished"
+      ]
+    },
+    "daily_meter.limit_input": {
+      "kind": "field",
+      "class": "QLineEdit",
+      "where": "RailRight",
+      "tooltip": "Maximum spend allowed per day in euros. Press Enter to save; 0 means no limit.",
+      "signals": [
+        "editingFinished"
+      ]
+    },
+    "history_agent_filter": {
+      "kind": "button",
+      "class": "MenuFilterButton",
+      "where": "RailLeft",
+      "tooltip": "Filter saved chats by agent",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "history_list": {
+      "kind": "list",
+      "class": "ChatList",
+      "where": "RailLeft",
+      "tooltip": "Click a saved chat to re-open it. Right-click to rename, assign or remove it.",
+      "signals": [
+        "itemClicked",
+        "itemDoubleClicked",
+        "customContextMenuRequested"
+      ]
+    },
+    "history_project_filter": {
+      "kind": "combo",
+      "class": "QComboBox",
+      "where": "RailLeft",
+      "tooltip": "",
+      "signals": [
+        "currentIndexChanged"
+      ]
+    },
+    "history_search": {
+      "kind": "field",
+      "class": "QLineEdit",
+      "where": "RailLeft",
+      "tooltip": "Filter saved chats by typing here.",
+      "signals": [
+        "textChanged"
+      ]
+    },
+    "learn_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailLeft",
+      "tooltip": "Open the Learning Centre \u2014 controls, income experiments, automation playbooks, measurement, and fixes.",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "model_updates_card.check_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailRight",
+      "tooltip": "Ask each provider with a key for its model list. Free: model lists are not billed.",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "model_updates_card.dismiss_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailRight",
+      "tooltip": "Clear every notice without switching to anything. The models stay in the menus and are not announced again.",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "model_updates_card.media_dismiss_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailRight",
+      "tooltip": "Clear new and removed video and image notices. Shutdown dates stay until the date has passed.",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "model_updates_card.startup_checkbox": {
+      "kind": "checkable",
+      "class": "QCheckBox",
+      "where": "RailRight",
+      "tooltip": "",
+      "signals": [
+        "toggled"
+      ]
+    },
+    "model_updates_card.update_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailRight",
+      "tooltip": "Switch agents to the marked models \u2014 only where each agent's current task is assessed (fit and real price) as best served by it: overall, or within the provider the agent is already on. Being new is not a reason to switch. Unmarked models stay as notices.",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "model_updates_section.header_btn": {
+      "kind": "checkable",
+      "class": "QPushButton",
+      "where": "RailRight",
+      "tooltip": "",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "new_chat_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailLeft",
+      "tooltip": "Start a fresh conversation (clears the current context).",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "new_project_btn": {
+      "kind": "menu_action",
+      "class": "QAction",
+      "where": "RailLeft",
+      "tooltip": "New Project",
+      "signals": [
+        "triggered"
+      ]
+    },
+    "project_defaults_btn": {
+      "kind": "menu_action",
+      "class": "QAction",
+      "where": "RailLeft",
+      "tooltip": "Use this agent, provider and model when this project is opened.",
+      "signals": [
+        "triggered"
+      ]
+    },
+    "project_menu_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailLeft",
+      "tooltip": "Project actions",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "project_overview_btn": {
+      "kind": "menu_action",
+      "class": "QAction",
+      "where": "RailLeft",
+      "tooltip": "See this Project's working draft, linked files and Creator content.",
+      "signals": [
+        "triggered"
+      ]
+    },
+    "realtime_monitor_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailRight",
+      "tooltip": "(Coming soon) Live charts of system resource usage.",
+      "signals": []
+    },
+    "reset_session_budget_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailRight",
+      "tooltip": "Reset the session spend counter back to zero.",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "run_log_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "RailLeft",
+      "tooltip": "Open the Run Log dialog (every request with status, duration, cost).",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "session_budget_input": {
+      "kind": "field",
+      "class": "QLineEdit",
+      "where": "RailRight",
+      "tooltip": "Maximum spend allowed for this session in euros. Press Enter to save; 0 means no limit.",
+      "signals": [
+        "editingFinished"
+      ]
+    },
+    "session_meter.limit_input": {
+      "kind": "field",
+      "class": "QLineEdit",
+      "where": "RailRight",
+      "tooltip": "Maximum spend allowed for this session in euros. Press Enter to save; 0 means no limit.",
+      "signals": [
+        "editingFinished"
+      ]
+    },
+    "settings_btn": {
+      "kind": "button",
+      "class": "QPushButton",
+      "where": "AppHeader",
+      "tooltip": "Open the Settings dialog (pricing, agents, tools, EUR/USD rate).",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "theme_dots": {
+      "kind": "picker",
+      "class": "ThemeDots",
+      "where": "AppHeader",
+      "tooltip": "Colour theme \u2014 Green (Matrix)",
+      "signals": []
+    },
+    "tooltips_toggle_btn": {
+      "kind": "checkable",
+      "class": "QPushButton",
+      "where": "AppHeader",
+      "tooltip": "Toggle hover tooltips across the entire app.",
+      "signals": [
+        "clicked"
+      ]
+    },
+    "workspace_more_btn": {
+      "kind": "button",
+      "class": "QToolButton",
+      "where": "AppHeader",
+      "tooltip": "Workspaces that do not fit in the header",
+      "signals": [
+        "pressed"
+      ]
+    },
+    "workspace_tabs": {
+      "kind": "tabs",
+      "class": "QTabBar",
+      "where": "AppHeader",
+      "tooltip": "",
+      "signals": [
+        "currentChanged"
+      ]
+    }
+  }
+}

@@ -542,13 +542,14 @@ def test_audiobook_refresh_controls_keep_separate_jobs(app, window):
     assert window.audiobook_panel.audiobook_library_refresh_btn.text() == "Rescan"
 
 
-def test_fixed_utility_rail_never_grows_a_horizontal_scrollbar(app, window):
-    """The right rail is deliberately one fixed width; only vertical travel is useful."""
+def test_the_status_popover_never_grows_a_horizontal_scrollbar(app, window):
+    """The right rail's reference sections live in the status popover now
+    (spec manuscript-redesign S6): one fixed width, vertical travel only.
+    Rewritten from the fixed-utility-rail test."""
     from PySide6.QtCore import Qt
-    from PySide6.QtWidgets import QScrollArea, QWidget
 
-    rail = window.findChild(QWidget, "RailRight")
-    area = rail.findChild(QScrollArea)
+    area = window.status_popover.scroll
+    assert area is not None
     assert area.horizontalScrollBarPolicy() == Qt.ScrollBarAlwaysOff
 
 
@@ -584,19 +585,36 @@ def test_author_compose_remains_whole_with_profile_open(app, window):
 
 
 def test_author_footer_prioritises_primary_actions_when_narrow(app, window):
-    """Low-priority metadata gives way before Save or Export can be clipped."""
+    """Low-priority metadata gives way before Save or Export can be clipped.
+
+    Without the side rails the centre pane is wide even at 1000 × 600, so the
+    narrow case is driven at the pane width where it starts (below 660 px)
+    rather than through the window size (rewritten in manuscript-redesign
+    slice 1)."""
     _settle(app, window, (1000, 600), "author")
     window._author_set_mode("write")
+    panel = window.author_panel
     for _ in range(6):
         app.processEvents()
+    # At the window's minimum the pane is now wide enough for everything.
+    assert panel.width() >= 660
+    assert panel.author_word_metric.isVisible()
 
-    assert not window.author_panel.author_word_metric.isVisible()
-    assert not window.author_panel.author_export_author_input.isVisible()
-    assert window.author_panel.author_save_btn.isVisible()
-    assert window.author_panel.author_export_format_box.isVisible()
-    assert window.author_panel.author_export_btn.isVisible()
-    assert window.author_panel.author_save_btn.text() == "Save"
-    assert window.author_panel.author_export_btn.text() == "Export"
+    try:
+        panel._adapt_layout(600)
+        for _ in range(6):
+            app.processEvents()
+        assert not panel.author_word_metric.isVisible()
+        assert not panel.author_export_author_input.isVisible()
+        assert panel.author_save_btn.isVisible()
+        assert panel.author_export_format_box.isVisible()
+        assert panel.author_export_btn.isVisible()
+        assert panel.author_save_btn.text() == "Save"
+        assert panel.author_export_btn.text() == "Export"
+    finally:
+        panel._adapt_layout(panel.width())
+        for _ in range(4):
+            app.processEvents()
 
 
 def test_dropdowns_use_the_shared_polished_popup(app, window):
@@ -853,41 +871,25 @@ def test_workspace_names_are_never_elided(app, window):
     ]
 
 
-def test_narrow_header_overflows_workspaces_instead_of_scrolling(app, window):
-    """Scroll arrows clipped "Assistant" to "Assist" and sat on top of it.
-
-    Narrow headers now drop chrome, then list trailing workspaces under
-    More; a tab that is shown is shown whole, and the selected workspace is
-    always a real tab.
-    """
+@pytest.mark.parametrize("size", [(1500, 950), (1100, 700), (1000, 600)],
+                         ids=lambda s: f"{s[0]}x{s[1]}")
+def test_every_workspace_button_is_whole_on_the_rail(app, window, size):
+    """Replaces the header overflow test (spec manuscript-redesign S2): the
+    icon rail never overflows, so there is no More menu. Every workspace is
+    one whole, visible button inside the rail at every size, and the selected
+    one is always a real button."""
     tabs = window.workspace_tabs
-    assert not tabs.usesScrollButtons()
-
-    _settle(app, window, (1500, 950), "author")
-    assert window.header_fitter.hidden_tabs() == []
-    assert not window.workspace_more_btn.isVisible()
-
-    for size in ((1100, 700), (1000, 600)):
-        _settle(app, window, size, "chat")
-        hidden = window.header_fitter.hidden_tabs()
-        assert hidden and window.workspace_more_btn.isVisible()
-        assert tabs.isTabVisible(tabs.currentIndex())
-        assert tabs.tabText(tabs.currentIndex()) == "Assistant"
-        assert tabs.width() >= tabs.sizeHint().width()
-        assert [a.text() for a in window.header_fitter.menu.actions()] == [
-            tabs.tabText(i) for i in hidden]
-        assert window.workspace_more_btn.geometry().right() < (
-            window.settings_btn.geometry().left())
-
-    # Picking from the menu opens that workspace and makes it a real tab.
-    target = window.header_fitter.hidden_tabs()[0]
-    window.header_fitter.menu.actions()[0].trigger()
-    for _ in range(6):
-        app.processEvents()
-    assert tabs.currentIndex() == target and tabs.isTabVisible(target)
-
-    _settle(app, window, (1500, 950), "author")
-    assert window.header_fitter.hidden_tabs() == []
+    _settle(app, window, size, "chat")
+    rail_rect = tabs.rect()
+    for index, button in enumerate(tabs.buttons):
+        assert button.isVisible(), tabs.tabText(index)
+        assert rail_rect.contains(button.geometry()), tabs.tabText(index)
+    for button in (tabs.help_btn, tabs.settings_btn):
+        assert button.isVisible() and rail_rect.contains(button.geometry())
+    assert tabs.isTabVisible(tabs.currentIndex())
+    assert tabs.tabText(tabs.currentIndex()) == "Assistant"
+    assert not hasattr(window, "workspace_more_btn")
+    assert not hasattr(window, "header_fitter")
 
 
 def test_studio_assistant_workspace_opens_the_existing_chat_panel(app, window):
@@ -1173,39 +1175,42 @@ def test_form_grid_folds_into_balanced_rows():
 
 
 @pytest.mark.parametrize("size", SIZES, ids=lambda s: f"{s[0]}x{s[1]}")
-def test_every_rail_control_fits_inside_the_rail(app, window, size):
-    """The policy test above only says no scrollbar appears — so content wider
-    than the rail was simply cut off. The text floor did exactly that to the
-    Session € / Daily € row and Save Limits (review of 9777f0c). Every control
-    must end inside the rail's viewport, with every section open."""
-    from PySide6.QtWidgets import (
-        QAbstractButton, QComboBox, QLineEdit, QScrollArea, QWidget)
+def test_every_popover_control_fits_inside_its_popover(app, window, size):
+    """The right rail's controls live in the spend and status popovers now
+    (rewritten from the rail test). The text floor once pushed the Session € /
+    Daily € row past the rail's edge (review of 9777f0c): every control must
+    end inside its popover, with every section open."""
+    from PySide6.QtWidgets import QAbstractButton, QComboBox, QLineEdit, QWidget
     from ui.widgets import CollapsibleSection
     _settle(app, window, size, "author")
-    rail = window.findChild(QWidget, "RailRight")
-    area = rail.findChild(QScrollArea)
-    opened = [sec for sec in rail.findChildren(CollapsibleSection)
-              if not sec._expanded]
-    for sec in opened:
+    sections = [sec for sec in window.status_popover.findChildren(CollapsibleSection)
+                if not sec._expanded]
+    for sec in sections:
         sec._toggle()
     try:
-        for _ in range(6):
-            app.processEvents()
-        viewport = area.viewport()
-        clipped = []
-        for child in area.widget().findChildren(QWidget):
-            if not isinstance(child, (QLineEdit, QComboBox, QAbstractButton)):
-                continue
-            if not child.isVisible():
-                continue
-            right = child.mapTo(viewport, child.rect().topRight()).x()
-            if right > viewport.width():
-                clipped.append(f"{_describe(child)} ends at {right}px "
-                               f"in a {viewport.width()}px rail")
-        assert not clipped, "; ".join(clipped[:5])
+        for popover, opener in ((window.spend_popover, window.open_spend_popover),
+                                (window.status_popover, window.open_status_popover)):
+            opener()
+            for sec in window.status_popover.findChildren(CollapsibleSection):
+                sec.set_expanded(True)
+            for _ in range(6):
+                app.processEvents()
+            body = popover.body
+            clipped = []
+            for child in body.findChildren(QWidget):
+                if not isinstance(child, (QLineEdit, QComboBox, QAbstractButton)):
+                    continue
+                if not child.isVisible():
+                    continue
+                right = child.mapTo(body, child.rect().topRight()).x()
+                if right > body.width():
+                    clipped.append(f"{_describe(child)} ends at {right}px "
+                                   f"in a {body.width()}px popover")
+            popover.hide()
+            assert not clipped, "; ".join(clipped[:5])
     finally:
-        for sec in opened:
-            sec._toggle()
+        for sec in window.status_popover.findChildren(CollapsibleSection):
+            sec.set_expanded(False)
 
 
 def test_the_text_floor_leaves_spin_box_and_date_edits_alone(app):
@@ -1406,11 +1411,11 @@ def test_no_button_or_tab_label_has_a_lone_ampersand(app, window):
     assert not offenders, offenders
 
 
-def test_window_title_and_wordmark_show_the_display_name(window):
-    """Spec rename-imprint-studio, measure 1(a)."""
-    from PySide6.QtWidgets import QLabel
+def test_window_title_and_app_mark_show_the_display_name(window):
+    """Spec rename-imprint-studio, measure 1(a). The wordmark is retired in
+    the Manuscript shell (Design S4); the app mark carries the name."""
     assert window.windowTitle() == "Imprint Studio"
-    assert window.findChild(QLabel, "Wordmark").text() == "IMPRINT STUDIO"
+    assert window.app_mark.accessibleName().startswith("Imprint Studio")
 
 
 def test_vector_panel_states_it_makes_png(window):

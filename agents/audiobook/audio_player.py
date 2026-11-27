@@ -204,6 +204,49 @@ class AudiobookPlayer(QWidget):
         self.sleep_box.setCurrentIndex(0)
         self._player.stop()
 
+    def suspend(self) -> dict | None:
+        """Release the media engine for a window-wide restyle; return what
+        `resume` needs to put the listener back where they were.
+
+        ADR 0006 decision 8: a theme switch restyles the whole window, and a
+        restyle while the FFmpeg backend's threads are live is the 2026-10-05
+        deadlock class. None when nothing is loaded.
+        """
+        if not self._path:
+            return None
+        state = {
+            "path": self._path,
+            "title": self._title,
+            "position": int(self._player.position()),
+            "playing": self._player.playbackState() == QMediaPlayer.PlayingState,
+            # The sleep timer survives the restyle with the time it had left:
+            # load() resets it, and a reset to Off would play on all night
+            # (review P2-2).
+            "sleep_index": self.sleep_box.currentIndex(),
+            "sleep_left_ms": (self._sleep_timer.remainingTime()
+                              if self._sleep_timer.isActive() else 0),
+        }
+        self.release()
+        return state
+
+    def resume(self, state: dict | None) -> None:
+        """Reload what `suspend` released, at the same position."""
+        if not state:
+            return
+        if self._player.audioOutput() is None:
+            self._player.setAudioOutput(self._audio)
+        self.load(state["path"], state["title"], resume_ms=state["position"])
+        sleep_index = int(state.get("sleep_index", 0) or 0)
+        if sleep_index:
+            self.sleep_box.blockSignals(True)
+            self.sleep_box.setCurrentIndex(sleep_index)
+            self.sleep_box.blockSignals(False)
+            left = int(state.get("sleep_left_ms", 0) or 0)
+            if left > 0:
+                self._sleep_timer.start(left)
+        if state["playing"]:
+            self.play()
+
     def release(self) -> None:
         """Shut the media engine down and stop the timers. Idempotent.
 

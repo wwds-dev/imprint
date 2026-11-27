@@ -137,12 +137,27 @@ class UsageTracker:
         usd = _row_cost_usd(row, input_tokens, output_tokens, cached_input_tokens)
         return round(usd * eur_per_usd, 6)
 
+    def price_row_found(self, backend: str, model: str) -> bool:
+        """Whether a cloud request on (backend, model) has a price row.
+
+        The same lookup `calculate_cost_eur` makes, so the two agree: when this
+        is False, that `0.0` means "unknown", not "free". Local backends are
+        free, so they count as priced.
+        """
+        if is_local_provider(backend):
+            return True
+        from services.pricing_catalog import resolve_price_row
+        with get_connection() as conn:
+            row, _source = resolve_price_row(conn, backend, model)
+        return bool(row)
+
     def log_request(self, agent: str, backend: str, model: str,
                     prompt_text: str, response_text: str, usage: dict | None = None,
                     flat_cost_eur: float | None = None,
                     project: str | None = None,
                     cost_type: str | None = None,
-                    job_id: str = "", job_item: str = "") -> dict:
+                    job_id: str = "", job_item: str = "",
+                    price_known: bool = True) -> dict:
         """Record one request and what it cost.
 
         `flat_cost_eur` is for work that is **not billed per token**: an image,
@@ -156,6 +171,12 @@ class UsageTracker:
         or batch had already spent (GodAI.record_partial). `job_id` and
         `job_item` tie the row to one release-kit item; the database allows
         one row per item (ux_usage_job_item).
+
+        An unknown price is stored as `cost_type = "unpriced"` with `cost_eur`
+        still `0.0`, so every total, cap and guard path is unchanged and the
+        spend chip can say "unknown" instead of "€0.00" (ADR 0006, decision 5):
+        on the token path when a cloud backend has no price row, and on any
+        path when the caller passes `price_known=False`.
         """
         input_tokens, output_tokens, token_cost_type = self.normalize_usage(
             usage, prompt_text, response_text)
@@ -167,6 +188,11 @@ class UsageTracker:
             cost_type = token_cost_type
             cost_eur = self.calculate_cost_eur(
                 backend, model, input_tokens, output_tokens, cached_input_tokens)
+            if backend in CLOUD_BACKENDS and not self.price_row_found(
+                    backend, model):
+                price_known = False
+        if not price_known:
+            cost_type = "unpriced"
         timestamp = datetime.now().isoformat(timespec="seconds")
 
         with get_connection() as conn:
@@ -240,6 +266,20 @@ class UsageTracker:
         with get_connection() as conn:
             row = conn.execute(
                 "SELECT COUNT(*) AS cnt FROM usage WHERE timestamp LIKE ?",
+                (f"{today}%",)
+            ).fetchone()
+        return int(row["cnt"])
+
+    def get_unpriced_requests_today(self) -> int:
+        """Today's requests whose price was unknown (cost_type "unpriced").
+
+        Counted from the recorded type, never inferred from a zero cost: a
+        free local request is also €0.00."""
+        today = datetime.now().date().isoformat()
+        with get_connection() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) AS cnt FROM usage "
+                "WHERE timestamp LIKE ? AND cost_type = 'unpriced'",
                 (f"{today}%",)
             ).fetchone()
         return int(row["cnt"])
