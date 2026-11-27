@@ -28,6 +28,8 @@ from services import local_models
 from services import local_ratings
 from services import routing_advisor
 from ui.panel_routing import PanelRouting
+from ui.worker_registry import (
+    leave_if_workers_alive, refuse_if_busy, start_in_slot, stop_all)
 from services import version as app_version
 from services.runtime_paths import (
     APP_DISPLAY_NAME, resource_base, user_data_base, ensure_seeded, is_frozen,
@@ -1191,8 +1193,12 @@ class GodAI(QWidget):
 
     def _on_muse_pull_error(self, message: str) -> None:
         self._end_muse_pull_progress()
-        self._set_chat_status("Muse Glimmer download failed.")
         self.get_muse_btn.setEnabled(True)
+        if getattr(self.muse_pull_worker, "cancelled", False):
+            # Stopped by quit: not a failure, and no dialog during shutdown.
+            self._set_chat_status("Muse Glimmer download stopped.")
+            return
+        self._set_chat_status("Muse Glimmer download failed.")
         QMessageBox.warning(self, "Download Failed", message)
 
     # ── Local models: discovery, picker rows, BEST FIT candidates ────────────
@@ -4583,6 +4589,14 @@ class GodAI(QWidget):
         if not raw_text:
             QMessageBox.warning(self, "Warning", "Please enter text first.")
             return
+        # Stop only asks the old request to cancel; a non-streaming call can
+        # sit in its backend call for minutes. Replacing it would destroy a
+        # running QThread (a Qt abort), so refuse before anything is priced.
+        status = getattr(self, "chat_status_label", None)
+        if refuse_if_busy(self, status, "chat_worker"):
+            if status is not None:
+                status.show()
+            return
 
         selected_tool = self.tool_box.currentText() if hasattr(self, "tool_box") else "General Chat"
         command_name, full_prompt = self.build_user_prompt(raw_text)
@@ -4716,14 +4730,14 @@ class GodAI(QWidget):
                 prompt_summary=full_prompt,
             )
 
-            self.chat_worker = self._new_chat_worker(final_backend, final_model, messages, full_prompt)
-            self.pending_messages = self.chat_worker.messages
-            self.chat_worker.status_signal.connect(self.handle_chat_status)
-            self.chat_worker.token_signal.connect(self.handle_chat_token)
-            self.chat_worker.finished_signal.connect(self.handle_chat_finished)
-            self.chat_worker.usage_signal.connect(self.handle_chat_usage)
-            self.chat_worker.error_signal.connect(self.handle_chat_error)
-            self.chat_worker.start()
+            worker = self._new_chat_worker(final_backend, final_model, messages, full_prompt)
+            self.pending_messages = worker.messages
+            worker.status_signal.connect(self.handle_chat_status)
+            worker.token_signal.connect(self.handle_chat_token)
+            worker.finished_signal.connect(self.handle_chat_finished)
+            worker.usage_signal.connect(self.handle_chat_usage)
+            worker.error_signal.connect(self.handle_chat_error)
+            start_in_slot(self, "chat_worker", worker)
 
         except Exception as e:
             QMessageBox.warning(self, "Request failed", str(e))
@@ -6958,34 +6972,19 @@ class GodAI(QWidget):
             player = getattr(self.audiobook_panel, "audiobook_player", None)
             if player is not None:
                 player.release()
-            # Every worker, not just chat: quitting mid-run used to leave the
-            # others' QThreads to be destroyed while still running (a Qt
-            # abort) and lose the paid request's record. cancel() + a short
-            # wait; never terminate() — that is the crash class this file
-            # just removed.
-            for attr in (
-                    "chat_worker", "author_worker", "author_pub_worker",
-                    "author_mkt_worker", "manuscript_worker",
-                    "quote_finder_worker", "calendar_worker", "shorts_worker",
-                    "social_worker", "_social_clip_worker", "creator_worker",
-                    "creator_video_estimate_worker", "creator_video_worker",
-                    "fiverr_text_worker", "fiverr_image_worker",
-                    "video_worker", "video_estimate_worker",
-                    "muse_pull_worker", "model_scan_worker",
-                    "local_measure_worker", "release_kit_worker"):
-                worker = getattr(self, attr, None)
-                if worker is not None and worker.isRunning():
-                    if hasattr(worker, "cancel"):
-                        worker.cancel()
-                    worker.wait(2000)
-            for attr in ("video_resume_workers", "creator_resume_workers"):
-                for worker in getattr(self, attr, ()):
-                    if worker is not None and worker.isRunning():
-                        worker.cancel()
-                        worker.wait(2000)
-            for worker in getattr(self, "model_list_workers", {}).values():
-                if worker is not None and worker.isRunning():
-                    worker.wait(2000)
+            # Every worker, found by the live-worker registry rather than a
+            # list of names (ADR 0007; the list missed music_worker and
+            # webdesign_worker). cancel() and one shared wait; never
+            # terminate(). A worker that outlives the budget is left to
+            # leave_if_workers_alive() in main(), which exits before Qt can
+            # destroy it while running.
+            # Model-list DaemonWorkers are not waited for: the interpreter
+            # abandons daemon threads at exit (ADR 0007 point 4).
+            still = stop_all()
+            if still:
+                self._note_failure(
+                    "shutdown: workers still running after the wait",
+                    RuntimeError(", ".join(still)))
         except Exception as exc:
             self._note_failure("shutdown: stop background work", exc)
         event.accept()
@@ -7187,3 +7186,6 @@ if __name__ == "__main__":
         menu_bar_item.show()
 
     app.exec()
+    # A worker that ignored cancel() and outlived closeEvent's wait would be
+    # destroyed while running at interpreter exit (a Qt abort): leave first.
+    leave_if_workers_alive()

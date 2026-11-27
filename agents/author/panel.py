@@ -39,6 +39,7 @@ from ui.panels.base import AgentPanel
 from ui import theme
 from ui.style import TEXT_MUTE
 from ui.widgets import ScrollContent, scrollable
+from ui.worker_registry import refuse_if_busy, start_in_slot
 
 # Draft safety (audit QB-1, docs/specs/quill-draft-safety.md). Every Write
 # task is one of three kinds: prose adds after the Draft, notes go only to
@@ -1156,10 +1157,8 @@ class AuthorPanel(QWidget):
         # Never replace a worker that is still running: dropping the old
         # QThread object while its thread is alive aborts the whole app with
         # "QThread: Destroyed while thread is still running". A cancelled
-        # worker can sit in a blocking backend call for a while.
-        if self.host.author_worker is not None and self.host.author_worker.isRunning():
-            self.author_status_label.setText(
-                "[Busy] The previous request is still finishing — one moment.")
+        # worker can sit in a blocking backend call for a while (ADR 0007).
+        if refuse_if_busy(self.host, self.author_status_label, "author_worker"):
             return
         self.author_status_label.setText("[Working…]")
         self.author_write_btn.setEnabled(False)
@@ -1185,13 +1184,12 @@ class AuthorPanel(QWidget):
         self._write_token = token
         self._begin_stream(mode)
         worker = self.host._new_chat_worker(provider, model, messages, prompt)
-        self.host.author_worker = worker
         worker.token_signal.connect(self._on_token)
         worker.finished_signal.connect(self._on_finished)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._on_error)
-        worker.start()
+        start_in_slot(self.host, "author_worker", worker)
 
     def write(self):
         direction = self.author_direction_input.text().strip()
@@ -1762,17 +1760,17 @@ class AuthorPanel(QWidget):
         messages = agent.build_publish_messages(
             prompt, book_profile_context=self._build_book_profile_block())
 
+        # Checked before the output is cleared and Generate disabled: a
+        # refused start must leave the panel as it was.
+        if refuse_if_busy(self.host, self.author_status_label,
+                          "author_pub_worker"):
+            return
         self.author_pub_output.clear()
         self.author_status_label.setText(f"[Working…] Generating {doc_type}…")
         self.author_pub_generate_btn.setEnabled(False)
         self.author_pub_stop_btn.setEnabled(True)
         self.author_pub_save_btn.setEnabled(False)
 
-        if (self.host.author_pub_worker is not None
-                and self.host.author_pub_worker.isRunning()):
-            self.author_status_label.setText(
-                "[Busy] The previous request is still finishing — one moment.")
-            return
         token = self.host.authorize_request("author", provider, model, prompt,
                                             messages=messages, resume=self.pub_generate)
         if not token:
@@ -1782,13 +1780,12 @@ class AuthorPanel(QWidget):
             return
         self._pub_token = token
         worker = self.host._new_chat_worker(provider, model, messages, prompt)
-        self.host.author_pub_worker = worker
         worker.token_signal.connect(self._pub_on_token)
         worker.finished_signal.connect(self._pub_on_finished)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._pub_on_error)
-        worker.start()
+        start_in_slot(self.host, "author_pub_worker", worker)
 
     def _pub_on_token(self, token: str):
         cursor = self.author_pub_output.textCursor()
@@ -1883,17 +1880,16 @@ class AuthorPanel(QWidget):
         messages = agent.build_market_messages(
             prompt, book_profile_context=self._build_book_profile_block())
 
+        # Checked before the output is cleared and Generate disabled.
+        if refuse_if_busy(self.host, self.author_status_label,
+                          "author_mkt_worker"):
+            return
         self.author_mkt_output.clear()
         self.author_status_label.setText(f"[Working…] Generating {platform} copy…")
         self.author_mkt_generate_btn.setEnabled(False)
         self.author_mkt_stop_btn.setEnabled(True)
         self.author_mkt_save_btn.setEnabled(False)
 
-        if (self.host.author_mkt_worker is not None
-                and self.host.author_mkt_worker.isRunning()):
-            self.author_status_label.setText(
-                "[Busy] The previous request is still finishing — one moment.")
-            return
         token = self.host.authorize_request("author", provider, model, prompt,
                                             messages=messages, resume=self.mkt_generate)
         if not token:
@@ -1903,13 +1899,12 @@ class AuthorPanel(QWidget):
             return
         self._mkt_token = token
         worker = self.host._new_chat_worker(provider, model, messages, prompt)
-        self.host.author_mkt_worker = worker
         worker.token_signal.connect(self._mkt_on_token)
         worker.finished_signal.connect(self._mkt_on_finished)
         worker.usage_signal.connect(
             lambda u, t=token: self.host.note_request_usage(t, u))
         worker.error_signal.connect(self._mkt_on_error)
-        worker.start()
+        start_in_slot(self.host, "author_mkt_worker", worker)
 
     def _mkt_on_token(self, token: str):
         cursor = self.author_mkt_output.textCursor()

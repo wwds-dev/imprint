@@ -11,14 +11,16 @@ from pathlib import Path
 
 import threading
 
-from PySide6.QtCore import QObject, QThread, Signal
+from PySide6.QtCore import QObject, Signal
+
+from ui.worker_registry import TrackedThread
 
 from services.openai_client import DEFAULT_IMAGE_MODEL
 from services.chat_projects import with_project_instructions
 from services.output_limits import stop_kind
 
 
-class ChatWorker(QThread):
+class ChatWorker(TrackedThread):
     token_signal = Signal(str)
     status_signal = Signal(str)
     finished_signal = Signal(str)
@@ -212,7 +214,11 @@ class ModelListWorker(DaemonWorker):
             self._emit(self.models_signal, self.provider, [], str(exc))
 
 
-class ModelPullWorker(QThread):
+class PullCancelled(RuntimeError):
+    """ModelPullWorker.cancel() ended a download."""
+
+
+class ModelPullWorker(TrackedThread):
     """Downloads an Ollama model off the UI thread.
 
     progress_signal carries (status, completed_bytes, total_bytes); total is 0
@@ -230,21 +236,33 @@ class ModelPullWorker(QThread):
         super().__init__()
         self._client = client
         self._model = model
+        self._cancel_requested = False
+
+    def cancel(self):
+        """Stop at the next progress line (quit). Raising inside the
+        callback leaves pull_model's `with` block, which closes the streaming
+        response; Ollama keeps the layers it has and resumes the pull next
+        time."""
+        self._cancel_requested = True
+
+    @property
+    def cancelled(self) -> bool:
+        return self._cancel_requested
+
+    def _progress(self, status, done, total):
+        if self._cancel_requested:
+            raise PullCancelled(f"Download of {self._model} stopped.")
+        self.progress_signal.emit(status, int(done or 0), int(total or 0))
 
     def run(self):
         try:
-            self._client.pull_model(
-                self._model,
-                on_progress=lambda status, done, total: self.progress_signal.emit(
-                    status, int(done or 0), int(total or 0)
-                ),
-            )
+            self._client.pull_model(self._model, on_progress=self._progress)
             self.finished_signal.emit(self._model)
         except Exception as e:
             self.error_signal.emit(str(e))
 
 
-class FiverrImageWorker(QThread):
+class FiverrImageWorker(TrackedThread):
     """Generates and saves logo images, one concept at a time."""
     image_ready_signal = Signal(str, int)   # local_path, index
     all_done_signal = Signal(list)           # all local paths
@@ -295,7 +313,7 @@ class FiverrImageWorker(QThread):
         self.all_done_signal.emit(paths)
 
 
-class HiggsfieldEstimateWorker(QThread):
+class HiggsfieldEstimateWorker(TrackedThread):
     """Upload any reference image and price the exact request off the UI thread."""
 
     status_signal = Signal(str)
@@ -351,7 +369,7 @@ class HiggsfieldEstimateWorker(QThread):
 # Videos API shutdown; no successor exists.
 
 
-class VideoGenerationWorker(QThread):
+class VideoGenerationWorker(TrackedThread):
     """Run a non-cancellable Gemini or Wan video task and save it locally."""
 
     status_signal = Signal(str)
@@ -456,7 +474,7 @@ class VideoGenerationWorker(QThread):
             self.error_signal.emit(str(exc))
 
 
-class HiggsfieldWorker(QThread):
+class HiggsfieldWorker(TrackedThread):
     """Submits a Higgsfield render, waits for it, and downloads the result.
 
     On a thread because a render takes minutes. The panel used to submit and
@@ -540,7 +558,7 @@ class HiggsfieldWorker(QThread):
             self.error_signal.emit(str(exc))
 
 
-class VideoWorker(QThread):
+class VideoWorker(TrackedThread):
     """Runs one vidforge render on a thread, reporting progress to Qt.
 
     vidforge's pipeline talks to a `Reporter` rather than printing, which is
@@ -797,7 +815,7 @@ class VoiceListWorker(DaemonWorker):
             self._emit(self.voices_signal, self.provider, [], str(exc))
 
 
-class KeyProbeWorker(QThread):
+class KeyProbeWorker(TrackedThread):
     """Settings → API keys, the Test button: one metadata call off the UI thread.
 
     The client is built on the main thread by `services.api_keys.prepare_probe`
@@ -848,7 +866,7 @@ class StartLMStudioWorker(DaemonWorker):
         self._emit(self.result_signal, started, message)
 
 
-class LocalMeasureWorker(QThread):
+class LocalMeasureWorker(TrackedThread):
     """Measure one local model against the best cloud model (routing phase 3).
 
     The whole run — local answers, reference answers, judge calls — happens

@@ -91,4 +91,8 @@ tests/test_social_onboarding.py` (the second pins the scopes-and-steps contract)
   through `host.record_partial()`, never above the confirmed total, with
   the itemised `[Billing]` line as the status tooltip. **Post Now** on
   Reddit validates the subreddit first and names `r/<name>` in its
-  confirmation.
+  confirmation. The delivery runs in a background `PublishWorker`
+  (`agents/social/workers.py`), one post at a time; the first YouTube upload
+  waits at most 5 minutes for Google's consent page
+  (`vidforge.youtube.CONSENT_TIMEOUT_S`), and a consent that never completes
+  is reported as safe to retry.

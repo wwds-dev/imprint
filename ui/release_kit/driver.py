@@ -15,7 +15,9 @@ from __future__ import annotations
 from collections import deque
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
+
+from ui.worker_registry import TrackedThread
 
 from agents.manuscript.calendar_export import (
     apply_captions, caption_items, write_calendar_csv)
@@ -34,7 +36,7 @@ ARTIFACT_KINDS = {"epub": "approved_epub", "graphics": "quote_graphic",
                   "shorts": "short", "captions": "calendar_csv"}
 
 
-class StageItemWorker(QThread):
+class StageItemWorker(TrackedThread):
     """One Qt-free callable off the GUI thread; emits its result or error."""
     done = Signal(object)
     error = Signal(str)

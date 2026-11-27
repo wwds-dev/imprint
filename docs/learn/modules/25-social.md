@@ -34,6 +34,9 @@
 5. In Accounts, distinguish **drafting available** from **posting ready**.
 6. Use Post Now only on a supported, authorised integration. Otherwise Copy Text
    and publish manually, then Mark Posted with the real state.
+   - **YouTube, first upload:** Google's consent page opens in your browser.
+     Finish it within 5 minutes; Imprint keeps working meanwhile. If you close
+     it, nothing was uploaded and the post shows **Retry available**.
    - **Retry available** means the platform definitely rejected the earlier
      attempt before accepting content; correct the cause and retry.
    - **Verify platform** means the result is unknown, commonly after a timeout

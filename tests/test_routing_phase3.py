@@ -336,9 +336,15 @@ def test_the_measure_worker_runs_the_engine_off_the_gui_thread(qapp, tmp_path):
 
 
 def test_closing_the_window_cancels_a_running_measurement():
+    # The quit sweep iterates the live-worker registry (ADR 0007) instead of
+    # a list of names, so the measurement is covered by being a TrackedThread.
+    # tests/test_worker_crash_class.py proves the sweep cancels such a worker.
     import inspect
     import main
-    assert '"local_measure_worker"' in inspect.getsource(main.GodAI.closeEvent)
+    from ui.worker_registry import TrackedThread
+    from ui.workers import LocalMeasureWorker
+    assert issubclass(LocalMeasureWorker, TrackedThread)
+    assert "stop_all(" in inspect.getsource(main.GodAI.closeEvent)
 
 
 # ── review L-1: the run is capped, billed on real usage and reserved ────────

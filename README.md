@@ -2000,7 +2000,7 @@ One action on an approved Project version makes a set of files for a release, on
 - **Shorts use the macOS `say` voice for testing only.** Apple's licence limits its built-in voices to personal, non-commercial use, so the confirmation and the report carry a notice: decide before posting these Shorts publicly. The report's "AI used in this kit" section and the CSV's **AI used** column record which model chose the quotes and wrote the captions and that the voice is synthetic. They are records of fact, not labels: no marking is embedded in any file, and each store or platform has its own rules for AI content.
 - **Release Kits window** (non-modal; from Start, **Open Release Kit…**, or **Release Kits…** in Project Overview): headline "Step 2 of 8: …", the step's progress, a table of Step · State · Spent · Line, **Stop**, **Resume**, **Discard**, **Show Folder**, **Show Report**. Closing it does not stop the kit. **Stop** deletes nothing: it finishes the current item and pauses. **Discard** asks first and keeps the files and their links.
 - **Keeps the Mac awake** while a kit runs, using `caffeinate -i -w <Imprint's pid>`: the system will not idle-sleep, the display may still sleep, a closed lid still sleeps the Mac, and the hold ends if Imprint exits or crashes. If `caffeinate` is missing the window says the Mac may sleep. Not verified on this Mac: `pmset -g assertions`, and App Nap over a whole night.
-- **Quit and resume.** Quitting while a kit runs asks "A release kit is running" (**Keep Running** or **Quit and Pause**). Every progress step is written to the database as it happens (ledger tables `release_jobs`, `release_job_approvals`, `release_job_stages`, `release_job_items`), so a crash or quit leaves a paused kit. At the next launch the Release Kits window opens once; **Resume** checks each finished file (present, SHA-256 matches), skips the good ones ("Done earlier") and runs the rest again. A local model's reply is read token by token, so **Quit and Pause** closes the stream and drops the reply, which is never recorded. Only the wait for a model's first token cannot be cut; if one is still waiting after two seconds, that item is left unfinished and runs again on Resume. A render in progress (graphic, Short) is not interrupted either; its result is not used.
+- **Quit and resume.** Quitting while a kit runs asks "A release kit is running" (**Keep Running** or **Quit and Pause**). Every progress step is written to the database as it happens (ledger tables `release_jobs`, `release_job_approvals`, `release_job_stages`, `release_job_items`), so a crash or quit leaves a paused kit. At the next launch the Release Kits window opens once; **Resume** checks each finished file (present, SHA-256 matches), skips the good ones ("Done earlier") and runs the rest again. A local model's reply is read token by token, so **Quit and Pause** closes the stream and drops the reply, which is never recorded. Only the wait for a model's first token cannot be cut; if one is still waiting when quit's shared three-second wait runs out, that item is left unfinished and runs again on Resume. A render in progress (graphic, Short) is not interrupted either; its result is not used.
 - **Pauses, never prompts:** a local model that does not answer, a render that fails, an error inside any step, a request larger than its bound, no usable quote, a stop by you, a quit or an interruption pauses the kit with the reason in the window and the report. Resume continues from there. A step is never re-routed by itself.
 - **Not in this version:** paid routes (cloud models, ElevenLabs Shorts), the audiobook step, the job-level budget reservation, "Review and Approve…", and any posting or retailer submission (PublishDrive stays out of scope). Quote Finder in Press still sends only the first ~30,000 characters; the whole-book sampling is used by the kit only.
 
@@ -3156,11 +3156,13 @@ imprint/
 
 This is the one place the suite's size and run time are recorded; other
 documents point here. Count it yourself with
-`.venv/bin/python -m pytest --collect-only -q`. Last measurement, 2026-11-22 at
-`be9f616`: 2,625 collected; a full run in random order gave 2,578 passed,
-17 skipped and 30 expected failures (the docs checks that wait for the rename)
-in 28 min 57 s. A full run takes **about 15 to 30 minutes** on the owner's Mac,
-not seconds; plan for that before starting one. Install the suite's own
+`.venv/bin/python -m pytest --collect-only -q`. Last measurement, 2026-11-25 at
+`aa4b49f`: 3,158 collected; a full run in random order
+(`--randomly-seed=2516470648`) gave 3,123 passed, 1 failed (a timing margin,
+not reproduced; `TODO.md`), 17 skipped and 17 expected failures in 58 min 13 s
+on a loaded machine; the same code before the merge passed in full in 34 min
+46 s. A full run takes **about 35 to 60 minutes** on the owner's Mac, not
+seconds; plan for that before starting one. Install the suite's own
 dependencies first — `requirements.txt` covers the app, `requirements-dev.txt`
 covers pytest, `pytest-timeout` and `pytest-randomly`:
 

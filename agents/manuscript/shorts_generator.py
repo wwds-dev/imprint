@@ -16,6 +16,10 @@ SHORTS_DIR = Path(__file__).resolve().parents[2] / "data" / "shorts"
 SHORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+class ShortCancelled(RuntimeError):
+    """render_short was asked to stop between narration and render."""
+
+
 def _ffmpeg(*args: str) -> subprocess.CompletedProcess:
     cmd = ["ffmpeg", "-y", *args]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -39,17 +43,23 @@ def render_short(
     use_elevenlabs: bool = False,
     voice_id: str = "default",
     voice_provider=None,
+    should_stop=None,
 ) -> Path:
     """Narrate `quote` and combine with the static `image_path` into a vertical MP4.
 
     `voice_provider` names the voice explicitly (the release kit's route is a
     job field, legal L1); without it the voice is chosen from the
-    environment as before.
+    environment as before. `should_stop` (a callable) is asked before the
+    narration, the only step that can cost money; True raises ShortCancelled
+    and nothing is sent. Once the narration is made (and maybe paid for) the
+    render runs to the end: it is local and takes seconds.
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     audio_path = output_path.with_suffix(".mp3")
 
     provider = voice_provider or get_voice_provider(use_elevenlabs)
+    if should_stop is not None and should_stop():
+        raise ShortCancelled("Short cancelled before narration; nothing was sent.")
     provider.synthesize(quote, str(audio_path), VoiceConfig(voice_id=voice_id))
 
     _ffmpeg(
