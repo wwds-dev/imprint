@@ -324,8 +324,24 @@ class BudgetRow(QWidget):
         self.bar.setTextVisible(False)
         layout.addWidget(self.bar)
 
-    def set(self, used: float, cap: float) -> None:
-        self.value_label.setText(f"€{used:.2f}")
+    def set(self, used: float, cap: float, unknown: int = 0) -> None:
+        """`unknown` counts requests in this total that had no price: the
+        figure then says so instead of reading as the whole spend (a zero
+        price means unknown, never free)."""
+        if unknown and round(used, 2) == 0:
+            self.value_label.setText("Unknown")
+        elif unknown:
+            self.value_label.setText(f"€{used:.2f} + unknown")
+        else:
+            self.value_label.setText(f"€{used:.2f}")
+        if unknown:
+            noun = "request" if unknown == 1 else "requests"
+            self.value_label.setToolTip(
+                f"{unknown} {noun} had no price, so "
+                + ("what was spent is unknown." if round(used, 2) == 0 else
+                   f"the real total is more than €{used:.2f}."))
+        else:
+            self.value_label.setToolTip("")
         # A zero cap is "no limit", not "fully spent" — showing a full bar there
         # would read as blocked when nothing is.
         percent = 0 if cap <= 0 else min(100, int(round(used / cap * 100)))

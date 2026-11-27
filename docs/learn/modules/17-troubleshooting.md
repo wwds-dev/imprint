@@ -52,7 +52,7 @@ fit this Mac is refused.
 request before anything was sent, so nothing was spent. The rest of the
 sentence names the cap (the agent's daily cap, the project's, the session's or
 today's) and what is left. Pick a cheaper or local model, or raise the cap: the
-session and daily caps are the limit fields under **Spend** in the right rail
+session and daily caps are the limit fields under **Spend**, opened from the spend chip
 (type a number and press Enter), an agent's cap in **Settings → Agents**. See
 [Costs, estimates, and limits](14-costs-limits.md).
 
@@ -103,7 +103,7 @@ select it and use **Revise / Improve**. See
 the live launcher writes its reason to `/tmp/imprint_launch.log`.
 
 **A status you cannot find here** Keep its exact wording, note the time, and
-open **Run Log** in the left rail: every request's lifecycle is recorded
+open **Run Log** (in the spend chip's popover): every request's lifecycle is recorded
 there. For a bug report, give that wording, the time, the agent, provider and
 model, and what you clicked last; never a key or a screenshot of Settings.
 

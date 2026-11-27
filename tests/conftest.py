@@ -148,6 +148,32 @@ def _credential_names_stay_blanked():
                     pytrace=False)
 
 
+@pytest.fixture(autouse=True)
+def _no_popup_outlives_its_test():
+    """Close any Qt.Popup a test left open (ADR 0006, decision 4).
+
+    A popup takes all mouse and key input while it is open, so a spend or
+    status popover left showing would capture the next test's input, and Qt
+    keeps popups in a stack that a later one joins. Also stops the shell's
+    animations, so a slide cannot finish inside the next test.
+    """
+    yield
+    import sys
+    if "PySide6.QtWidgets" not in sys.modules:
+        return
+    from PySide6.QtWidgets import QApplication
+    app = QApplication.instance()
+    if app is None:
+        return
+    for _ in range(10):
+        popup = app.activePopupWidget()
+        if popup is None:
+            break
+        popup.close()
+    if "ui.motion" in sys.modules:
+        sys.modules["ui.motion"].stop_all()
+
+
 @pytest.fixture(autouse=True, scope="module")
 def _collect_the_last_modules_windows():
     """Free the previous module's widgets now, before this module builds any.
@@ -162,10 +188,13 @@ def _collect_the_last_modules_windows():
     test_creator_calendar's window, 3 runs of 3), gone with this collection.
 
     The collection alone never freed them: bound methods and closures held
-    by long-lived objects keep a dropped window reachable. So when the module
-    ends, every `GodAI` it built is deleted (`tests/qt_teardown.py`,
-    `dispose_windows`), and the suite's summary reports the most windows that
-    were ever alive at once (2026-11-27: 70 on CI before this).
+    by long-lived objects keep a dropped window reachable. Mid-run about fifty
+    (seventy on CI) were alive, each an application-wide event filter, so one
+    theme switch took 13 s (2026-11-25) and qWait stalled for seconds. So
+    when the module ends, every `GodAI` it built is deleted
+    (`tests/qt_teardown.py`, `dispose_windows`; this replaces the retire-only
+    loop of 2026-11-25), and the suite's summary reports the most windows that
+    were ever alive at once.
     """
     import gc
     gc.collect()

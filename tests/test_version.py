@@ -159,15 +159,71 @@ class TestTheStampScript:
         assert data.get("major") == app_version.info()["major"]
 
 
-class TestTheHeaderShowsIt:
-    def test_the_badge_matches_the_module(self, app, window):
-        assert window.version_badge.text() == app_version.version_string()
+class TestTheShellShowsIt:
+    """The version moved from a header badge to the app mark's tooltip and
+    Settings > General > About (spec manuscript-redesign D2, Design S2/S4;
+    rewritten from TestTheHeaderShowsIt in slice 1)."""
 
-    def test_the_badge_explains_itself_on_hover(self, app, window):
-        tip = window.version_badge.toolTip()
+    def test_the_mark_carries_the_version(self, app, window):
+        tip = window.app_mark.toolTip()
         assert app_version.version_string() in tip
         # The hover is where "is this current?" gets answered.
         assert any(word in tip for word in ("Up to date", "behind", "cannot", "no version stamp"))
+        assert window.app_mark.accessibleDescription() == tip
+
+    def test_a_stale_build_shows_the_dot_and_says_so(self, app, window):
+        stale = not app_version.staleness()["current"]
+        assert window.app_mark.stale is stale
+        if stale:
+            assert "older than the code" in window.app_mark.toolTip()
+
+    @pytest.mark.parametrize("current", [True, False])
+    def test_both_build_states_reach_the_mark(self, app, window, monkeypatch,
+                                              current):
+        """QA F3: forced, not read from this checkout's real state."""
+        real = dict(app_version.staleness())
+        monkeypatch.setattr(app_version, "staleness",
+                            lambda *a, **k: {**real, "current": current})
+        try:
+            window._show_version_on_mark()
+            assert window.app_mark.stale is (not current)
+            assert ("older than the code" in window.app_mark.toolTip()) is \
+                (not current)
+            assert window.app_mark.accessibleName().endswith(
+                "(stale build)") is (not current)
+        finally:
+            monkeypatch.undo()
+            window._show_version_on_mark()
+
+    @pytest.mark.parametrize("current", [True, False])
+    def test_both_build_states_reach_the_about_line(self, app, window,
+                                                    monkeypatch, current):
+        from PySide6.QtWidgets import QDialog, QLabel
+        from ui import dialogs
+        real = dict(app_version.staleness())
+        monkeypatch.setattr(app_version, "staleness",
+                            lambda *a, **k: {**real, "current": current})
+        opened = []
+        monkeypatch.setattr(QDialog, "exec", lambda self: opened.append(self) or 0)
+        dialogs.show_settings(window)
+        try:
+            about = opened[0].findChild(QLabel, "SettingsAbout")
+            assert ("older than the code" in about.text()) is (not current)
+        finally:
+            opened[0].reject()
+
+    def test_the_about_line_matches_the_module(self, app, window, monkeypatch):
+        from PySide6.QtWidgets import QDialog, QLabel
+        from ui import dialogs
+        opened = []
+        monkeypatch.setattr(QDialog, "exec", lambda self: opened.append(self) or 0)
+        dialogs.show_settings(window)
+        about = opened[0].findChild(QLabel, "SettingsAbout")
+        assert about is not None
+        assert about.text().startswith(f"Imprint {app_version.version_string()}")
+        assert ("older than the code" in about.text()) is \
+            (not app_version.staleness()["current"])
+        opened[0].reject()
 
 
 @pytest.fixture(scope="module")

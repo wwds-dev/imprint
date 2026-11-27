@@ -14,8 +14,8 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PySide6.QtCore import QPoint, QRect, Qt, QTimer
-from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtCore import QElapsedTimer, QPoint, QRect, Qt, QTimer
+from PySide6.QtGui import QAction, QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPushButton, QScrollArea, QStackedWidget,
     QTabWidget, QVBoxLayout, QWidget,
@@ -25,6 +25,9 @@ from ui.style import ACCENT, BORDER_STRONG, ELEVATED, TEXT, TEXT_DIM
 from ui import theme
 
 RING_PAD = 5
+#: How long after it starts a spotlight reopens the popover or drawer that
+#: holds its control, if Qt closed it on a window change.
+REVEAL_RETRY_MS = 800
 CALLOUT_GAP = 10
 
 
@@ -33,8 +36,20 @@ def reveal(widget: QWidget) -> None:
     holding it, then scroll each enclosing scroll area to it.
 
     Works outward from the control, so a lesson names only the control and
-    never the tab it currently happens to live on.
+    never the tab it currently happens to live on. A container that is
+    closed until asked — the History drawer, a popover (ADR 0006, decision
+    6) — opens first: any ancestor with ``reveal_for_lesson()`` is asked,
+    outermost first, before the tabs switch and the scroll areas scroll.
     """
+    hosts = []
+    ancestor = widget
+    while ancestor is not None:
+        hook = getattr(ancestor, "reveal_for_lesson", None)
+        if callable(hook):
+            hosts.append(hook)
+        ancestor = ancestor.parentWidget()
+    for hook in reversed(hosts):
+        hook()
     child, parent = widget, widget.parentWidget()
     while parent is not None:
         if isinstance(parent, QStackedWidget) and parent.indexOf(child) >= 0:
@@ -77,9 +92,13 @@ class Spotlight(QFrame):
     """Ring one control and explain it; one at a time per window."""
 
     def __init__(self, window: QWidget, target: QWidget, title: str,
-                 detail: str = "", on_back: Callable[[], None] | None = None):
+                 detail: str = "", on_back: Callable[[], None] | None = None,
+                 ring_host: QWidget | None = None):
         super().__init__(window)
         self.window_ = window
+        # The ring is drawn in the target's own window: a control inside a
+        # popover is in a separate top-level window above the main one.
+        self.ring_host = ring_host or window
         self.target = target
         self.on_back = on_back
         self.setObjectName("Spotlight")
@@ -122,7 +141,7 @@ class Spotlight(QFrame):
         buttons.addWidget(self.close_btn)
         layout.addLayout(buttons)
 
-        self.ring = _Ring(window)
+        self.ring = _Ring(self.ring_host)
         # Follow the control rather than hook every ancestor's move: scroll
         # areas move the content, not the control, and a timer sees both.
         self.timer = QTimer(self)
@@ -134,6 +153,11 @@ class Spotlight(QFrame):
         target.destroyed.connect(self.dismiss)
 
     def start(self) -> None:
+        # A popover or drawer opened for the lesson can be closed by Qt when
+        # the active window changes — the Learning Centre closes right after
+        # it asks for the ring. For a short while, open it again.
+        self._revealing = QElapsedTimer()
+        self._revealing.start()
         self.follow()
         self.timer.start()
         self.pulse_timer.start()
@@ -147,10 +171,17 @@ class Spotlight(QFrame):
 
         Its visible region, not its size: a control half inside a scroll
         area would otherwise get a ring running out over the next panel."""
+        return self._rect_in(self.window_)
+
+    def _rect_in(self, host: QWidget) -> QRect:
         visible = self.target.visibleRegion().boundingRect()
         if visible.isEmpty():
             return QRect()
-        return visible.translated(self.target.mapTo(self.window_, QPoint(0, 0)))
+        if host is self.target.window():
+            origin = self.target.mapTo(host, QPoint(0, 0))
+        else:
+            origin = host.mapFromGlobal(self.target.mapToGlobal(QPoint(0, 0)))
+        return visible.translated(origin)
 
     def follow(self) -> None:
         """Keep the ring on the control and the callout beside it.
@@ -158,12 +189,18 @@ class Spotlight(QFrame):
         The ring goes when the control is not on screen — another workspace
         was opened — and comes back when it is; the callout stays so the way
         back to the lesson is never lost."""
+        revealing = getattr(self, "_revealing", None)
+        if (not self.target.isVisible() and revealing is not None
+                and revealing.elapsed() < REVEAL_RETRY_MS):
+            reveal(self.target)
         target = self.target_rect()
         on_screen = self.target.isVisible() and not target.isEmpty()
         rect = target.adjusted(-RING_PAD, -RING_PAD, RING_PAD, RING_PAD)
         self.ring.setVisible(on_screen)
         if on_screen:
-            self.ring.setGeometry(rect)
+            ring_rect = self._rect_in(self.ring_host).adjusted(
+                -RING_PAD, -RING_PAD, RING_PAD, RING_PAD)
+            self.ring.setGeometry(ring_rect)
             self.ring.raise_()
         self.adjustSize()
         size = self.sizeHint()
@@ -199,15 +236,47 @@ class Spotlight(QFrame):
             self.window_._spotlight = None
 
 
-def spotlight(target: QWidget, title: str, detail: str = "",
+def anchor_for(action: QAction) -> QWidget | None:
+    """The button that opens the menu holding `action`.
+
+    A lesson cannot ring a menu item: ``QMenu.exec`` is modal and would
+    swallow the callout. Actions in the "?" and project menus name their
+    opener in the ``lessonAnchor`` property (ADR 0006, decision 6)."""
+    name = action.property("lessonAnchor")
+    owner = action.parent()
+    while name and owner is not None:
+        widget = getattr(owner, name, None)
+        if isinstance(widget, QWidget):
+            return widget
+        owner = owner.parent()
+    return None
+
+
+def spotlight(target, title: str, detail: str = "",
               on_back: Callable[[], None] | None = None) -> Spotlight:
-    """Bring ``target`` into view and ring it, replacing any earlier ring."""
-    window = target.window()
+    """Bring ``target`` into view and ring it, replacing any earlier ring.
+
+    `target` may be a ``QAction`` in a menu; then its menu's button is ringed
+    and the callout says which item to pick. Before ADR 0006 this called
+    ``window()`` on the action and raised (the "Show me" crash for
+    ``new_project_btn``)."""
+    if isinstance(target, QAction):
+        anchor = anchor_for(target)
+        if anchor is None:
+            raise ValueError(f"no lessonAnchor for the action {target.text()!r}")
+        item = target.text().split("\t")[0]
+        detail = f"In this menu: {item}" + (f" · {detail}" if detail else "")
+        target = anchor
+    reveal(target)
+    ring_host = target.window()
+    window = ring_host
+    if ring_host.windowFlags() & Qt.WindowType.Popup and ring_host.parentWidget():
+        window = ring_host.parentWidget().window()
     previous = getattr(window, "_spotlight", None)
     if previous is not None:
         previous.dismiss()
-    reveal(target)
-    marker = Spotlight(window, target, title, detail, on_back)
+    marker = Spotlight(window, target, title, detail, on_back,
+                       ring_host=ring_host)
     window._spotlight = marker
     # Place it once the tab switches and scrolling have been laid out.
     QTimer.singleShot(0, marker, marker.start)

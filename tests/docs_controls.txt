@@ -40,7 +40,6 @@ Back to lesson
 Best fit
 Best for
 Blocked
-Blue (Cyberpunk)
 Book Profile
 Booth
 Brief
@@ -139,7 +138,6 @@ Gig description
 Gigs
 Google Drive folder
 Graphic
-Green (Matrix)
 HTML
 Herald
 Herald publishing
@@ -187,7 +185,6 @@ Model
 Model Guide
 Model providers
 Model updates
-More ▾
 Music
 NEW
 Narrator
@@ -369,6 +366,15 @@ Yes
 [not controls]
 # Bold phrases in a lesson's "Control atlas" that are not labels: section
 # names, states, emphasis.
+Icon rail
+Top bar
+spend chip
+status chip
+Spend chip
+Spend popover
+Status chip
+Status popover
+Project budget bar
 ⌘Z
 # Added 2026-11-22 when T4 widened to README 3-7 and 13, the sheets and
 # every lesson (review R-3): emphasis, section and widget descriptions,

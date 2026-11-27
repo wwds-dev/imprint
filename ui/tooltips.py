@@ -9,7 +9,8 @@ order the tooltips are applied in are preserved exactly.
 
 def seed_tooltips(app):
     """Apply explanatory tooltips to every important control in every
-    panel. Tooltips can be toggled off via the chip in the header bar."""
+    panel. Tooltips can be switched off with Show tooltips in
+    Settings > General > Appearance (the gear at the bottom of the icon rail)."""
     # ── Centre-panel general controls (Chat / normal panel) ──────────
     app._set_tooltips({
         "tool_box":                "System prompt frame applied to the conversation (General Chat, Writing, Coding, Summarize, Rewrite).",
@@ -36,12 +37,12 @@ def seed_tooltips(app):
         "estimate_btn":            "Show the estimated cost of the current prompt + settings before sending.",
         "export_btn":              "Export the last response to a Markdown / HTML report.",
         "tooltips_toggle_btn":     "Toggle hover tooltips across the entire app.",
-        "agent_title_label":       "Current agent. Click an agent in the left sidebar to switch.",
+        "agent_title_label":       "Current agent. Pick a workspace with the icons on the left, or the switch at the left of the top bar when the workspace has two agents.",
         "agent_subtitle_label":    "What this agent does in one line.",
-        "agent_status_pill":       "Current agent status. ●  READY = idle; flips colour when a request is running or has errored.",
+        "agent_status_pill":       "Status: the worst current state (machine stressed, key check failed, machine busy, working or ready), with a count of waiting model updates. Click it to see System, Chat routing, API keys and Model updates.",
     })
 
-    # ── Left panel ───────────────────────────────────────────────────
+    # ── Project selector, History drawer ───────────────────────────────────────────────────
     # Reuse agent_subtitles dict — set each agent button's tooltip to its description
     subtitles_for_buttons = {
         "chat":        "General-purpose conversation. Pick a tool, pick a model, talk.",
@@ -69,7 +70,7 @@ def seed_tooltips(app):
         "new_chat_btn":     "Start a fresh conversation (clears the current context).",
     })
 
-    # ── Right panel cards ────────────────────────────────────────────
+    # ── Spend and status popovers ────────────────────────────────────────────
     app._set_tooltips({
         "resource_label":           "Live RAM / CPU / SWAP / battery snapshot. Green = healthy, yellow = busy, red = stressed.",
         "realtime_monitor_btn":     "(Coming soon) Live charts of system resource usage.",

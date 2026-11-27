@@ -5,7 +5,7 @@ Needs: design, architect, build, review, verify, docs
 Status: **Define approved by the owner 2026-11-25 ("do as recommended"): D1 to D12 are decided
 as recommended, alternatives not taken.** Design for slice 1 was written 2026-11-25 at the owner's
 request, before testing ("no testing"; section "Design (slice 1)"), and approved the same day,
-owner: "Approve as recommended" (O1 to O3 as recommended). Architect for slice 1 was written 2026-11-25 (section "Architecture (slice 1)", ADR 0006) and approved the same day, owner: "Approve as recommended" (AO1 to AO3 as recommended). No Build has started. Priority: P3 (TODO.md: testing comes first; no redesign row
+owner: "Approve as recommended" (O1 to O3 as recommended). Architect for slice 1 was written 2026-11-25 (section "Architecture (slice 1)", ADR 0006) and approved the same day, owner: "Approve as recommended" (AO1 to AO3 as recommended). Build for slice 1 started 2026-11-25 at the owner's request (branch `claude/manuscript-shell-slice1`; see "Build notes (slice 1)"). Priority: P3 (TODO.md: testing comes first; no redesign row
 starts until the owner asks, after testing). Type: user-visible redesign of the whole window,
 new UI capability (stepper, next-step card, word goal, cover, focus mode, light theme), no new
 paid path, no change to what agents do. Owner session: `claude/spec-manuscript-redesign-9236ea`
@@ -739,6 +739,30 @@ Decided 2026-11-25, owner: "Approve as recommended". Each point below is decided
 - **AO3. "Show tooltips" across launches.** Today the toggle resets to On at every launch
   (`main.py:428`). In Settings that reads as broken. *Recommended:* remember it (setting
   `show_tooltips`, additive). *Alternative:* keep today's behaviour exactly.
+
+## Build notes (slice 1)
+Phase 5, `engineer`, 2026-11-25, branch `claude/manuscript-shell-slice1`. Built as approved; the
+points below are where Build met something the sections above did not say.
+
+- **Dark contrast gaps beyond AO2.** `tests/test_contrast.py` found today's dark values failing in
+  three more places: `BORDER_STRONG` in all three dark themes (about 1.5:1 against 3:1 for a
+  control edge), and in dark rose `ACCENT_DIM` (3.54:1) and `PHOSPHOR` (4.20:1). S8 keeps dark
+  values unchanged, so they are `xfail(strict=True)` like `TEXT_MUTE`, with a TODO row for the
+  owner's decision.
+- **Project selector elides.** S3 #2 makes the selector 140–260 px and eliding; with the long test
+  name it shows part of the name, so the fit test checks its width range rather than
+  `clipped_text` (the full name is on hover and in its tooltip).
+- **Icons.** The rail and History icons are line icons drawn in the repo (`assets/shell/`); the
+  mockup's own paths were not available to Build. Compare them in the native renders.
+- **Lessons.** Every help target and Show me link resolves; every one the shell holds is visible
+  after `reveal()`. Agent-panel targets hidden by the panel's own state (an idle Stop button) are
+  outside slice 1. `reveal()` also opens a collapsed `CollapsibleSection`, which
+  `model_updates_card` needed.
+- **Found and fixed on the way.** The drawer's close slide could finish after a reopen and hide
+  it; a sub-cent known spend next to an unknown one read "€0.00 + unknown" (now "Unknown"); a
+  popover a lesson opened could be closed by Qt on a window change (the spotlight reopens it for
+  800 ms).
+- **ADR number.** The unmerged branch `claude/worker-crash-class-bf3d5f` also adds an ADR 0006.
 
 ## Relation to other specs
 - `side-rails-redesign` (released) and `rails-rebalance` (verify done 2026-11-25, not released)

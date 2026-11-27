@@ -6,7 +6,9 @@ that a colour is defined once and every surface that uses it agrees.
 
 ## The design system
 
-Dark, low-chroma, one accent. The previous palette ran a neon green
+Low-chroma, one accent. The values written below are the authored dark-green
+set; ``ui/theme.py`` swaps them for the current theme, and since slice 1 of the
+Manuscript redesign the default is the light look (ADR 0006). The previous palette ran a neon green
 (``#3cff88``) alongside a saturated indigo "Write" button, an orange
 "Publish/Market" button and a red "Stop", so four competing hues fought for
 attention on one screen and nothing read as more important than anything else.
@@ -20,8 +22,9 @@ The rules here:
   ``WARNING`` flags an irreversible or paid step, ``INFO`` is neutral emphasis.
   A button is not coloured because it looks nice there.
 * **Elevation by surface, not by border.** Three greys (``BG`` → ``SURFACE`` →
-  ``ELEVATED``) separate page from card from input. Borders are low-alpha white
-  so they read on every surface without being redefined per card.
+  ``ELEVATED``) separate page from card from input. In the dark looks borders
+  are low-alpha white so they read on every surface; the light look gives them
+  opaque greys, and a control's edge uses ``BORDER_STRONG`` (3:1).
 * **One spacing and radius scale.** 6/8/10/12px radii by element size; padding
   in multiples of 2.
 * **Typed text is phosphor.** Editable fields carry a monospaced face in CRT
@@ -70,6 +73,12 @@ INFO        = "#60a5fa"
 INFO_WASH   = "rgba(96, 165, 250, 0.12)"
 INFO_LINE   = "rgba(96, 165, 250, 0.32)"
 
+# Sheen — a faint lift for a row or a pressed chip on a card. White on the
+# dark looks; the light look darkens instead (ui/theme.py).
+SHEEN        = "rgba(255, 255, 255, 0.025)"
+SHEEN_MID    = "rgba(255, 255, 255, 0.035)"
+SHEEN_STRONG = "rgba(255, 255, 255, 0.07)"
+
 # Phosphor — the text you type, and nothing else. A terminal face in CRT
 # green, bright enough on SUNKEN to read as lit rather than painted. Kept out
 # of the accent family on purpose: ACCENT says "this is current", PHOSPHOR
@@ -85,6 +94,9 @@ SUNKEN_LIT    = "#0a2414"   # a focused field, lit from behind
 RADIUS    = "8px"
 RADIUS_SM = "6px"
 RADIUS_LG = "12px"
+
+# The bundled assets folder (not a str, so it never reaches the sheet's tokens).
+ASSETS_DIR = resource_base() / "assets"
 
 CHEVRON_DOWN = (resource_base() / "assets" / "dropdown-chevron.svg").as_posix()
 # Near-black, so it reads on the accent fill and the warning fill alike.
@@ -468,10 +480,6 @@ _STYLESHEET_TEMPLATE = """
             border: 1px solid {BORDER};
             border-radius: {RADIUS_LG};
         }}
-        QFrame#HeaderDivider {{
-            background-color: {BORDER};
-            border: none;
-        }}
         QFrame#CardDivider {{
             background-color: {BORDER};
             border: none;
@@ -501,12 +509,6 @@ _STYLESHEET_TEMPLATE = """
         }}
         QLabel#StudioBrandNote {{ color: {TEXT_MUTE}; font-size: 11px; }}
 
-        QLabel#StatusPill {{
-            color: {ACCENT};
-            font-size: 12px;
-            font-weight: 600;
-            padding: 0;
-        }}
         /* The "next step" hint. Both panels carried their own copy of these
            five declarations inline. */
         QLabel#NextStepBanner {{
@@ -584,36 +586,7 @@ _STYLESHEET_TEMPLATE = """
            text with an accent underline. As pills it looked like five more
            buttons, competing with the one button on the page that spends
            money. */
-        QTabBar#WorkspaceTabs {{ background: transparent; }}
-        QTabBar#WorkspaceTabs::tab {{
-            background: transparent;
-            color: {TEXT_MUTE};
-            border: none;
-            border-bottom: 2px solid transparent;
-            border-radius: 0;
-            padding: 0 3px;
-            margin: 0 7px;
-            font-size: 12px;
-            font-weight: 550;
-        }}
-        QTabBar#WorkspaceTabs::tab:hover {{ color: {TEXT_DIM}; }}
-        QTabBar#WorkspaceTabs::tab:selected {{
-            color: {TEXT};
-            border-bottom: 2px solid {ACCENT};
-            font-weight: 650;
-        }}
         /* Overflow for workspaces that do not fit; reads as one more tab. */
-        QToolButton#WorkspaceMore {{
-            background: transparent;
-            color: {TEXT_MUTE};
-            border: none;
-            padding: 0 3px;
-            margin: 0 7px;
-            font-size: 12px;
-            font-weight: 550;
-        }}
-        QToolButton#WorkspaceMore:hover {{ color: {TEXT_DIM}; }}
-        QToolButton#WorkspaceMore::menu-indicator {{ image: none; width: 0; }}
 
         /* ── Feedback ──────────────────────────────────────────────── */
         QProgressBar {{
@@ -744,7 +717,7 @@ _STYLESHEET_TEMPLATE = """
         /* ── Scrollbars ────────────────────────────────────────────── */
         QScrollArea {{ background: transparent; border: none; }}
         QScrollBar:vertical {{
-            background: rgba(255, 255, 255, 0.025);
+            background: {SHEEN};
             width: 12px;
             margin: 2px 1px;
         }}
@@ -755,7 +728,7 @@ _STYLESHEET_TEMPLATE = """
         }}
         QScrollBar::handle:vertical:hover {{ background-color: {TEXT_MUTE}; }}
         QScrollBar:horizontal {{
-            background: rgba(255, 255, 255, 0.025);
+            background: {SHEEN};
             height: 12px;
             margin: 1px 2px;
         }}
@@ -875,67 +848,16 @@ _STYLESHEET_TEMPLATE = """
         QSpinBox, QDoubleSpinBox, QDateTimeEdit, QDateEdit,
         QTimeEdit {{ min-height: 28px; max-height: 28px; }}
 
-        /* ── Shell chrome ──────────────────────────────────────────── */
-        /* Header and rails are one surface lifted off the page, separated by a
-           hairline rather than a gap. Three floating panes with gutters between
-           them read as three apps; one surface with divisions reads as one. */
-        /* No bottom hairline here: WorkspaceDescriptionStrip sits directly
-           below it on the same surface and carries the band's single line.
-           Both drawing one put two hairlines through the middle of the band. */
-        QFrame#AppHeader {{
-            background-color: {SURFACE};
-            border: none;
-        }}
-        /* The workspace description sits on its own strip under the header,
-           because AppHeader is a fixed-height single row that header_fit
-           measures. It continues the header's surface and carries the
-           hairline, so the two read as one band rather than two bars. */
-        QFrame#WorkspaceDescriptionStrip {{
-            background-color: {SURFACE};
-            border: none;
-            border-bottom: 1px solid {BORDER};
-        }}
-        QLabel#WorkspaceDescription {{ color: {TEXT_MUTE}; font-size: 11px; }}
-        QFrame#RailLeft {{
-            background-color: {SURFACE};
-            border: none;
-            border-right: 1px solid {BORDER};
-        }}
-        QFrame#RailRight {{
-            background-color: {SURFACE};
-            border: none;
-            border-left: 1px solid {BORDER};
-        }}
+        /* ── Shell chrome: see "The Manuscript shell" rules below. ── */
         /* Layout containers must not paint. The global QWidget background
            otherwise lands behind every helper container and stamps a page-
            coloured rectangle onto the rail surface. */
         QWidget#Transparent {{ background: transparent; }}
 
-        QLabel#Wordmark {{
-            color: {TEXT};
-            font-size: 15px;
-            font-weight: 700;
-            letter-spacing: 2.4px;
-        }}
         /* The version beside the wordmark. Quiet by default — it is
            reference, not a control — and amber when the running build is
            behind the checkout, which is the only time it wants attention. */
-        QLabel#VersionBadge {{
-            color: {TEXT_MUTE};
-            font-size: 11px;
-            font-weight: 600;
-            letter-spacing: 0.6px;
-            padding: 2px 7px;
-            border: 1px solid {BORDER};
-            border-radius: {RADIUS_SM};
-        }}
-        QLabel#VersionBadge[state="stale"] {{
-            color: {WARNING};
-            border: 1px solid {WARNING_LINE};
-            background-color: {WARNING_WASH};
-        }}
 
-        QLabel#WordmarkDot {{ color: {ACCENT}; font-size: 11px; }}
 
         /* Navigation, not action: an underline marks the current mode. A pill
            here would compete with the buttons that actually spend money. */
@@ -970,7 +892,7 @@ _STYLESHEET_TEMPLATE = """
         QPushButton#QuietAction:disabled {{ color: {TEXT_MUTE}; }}
 
         QProgressBar#BudgetBar {{
-            background-color: rgba(255, 255, 255, 0.07);
+            background-color: {SHEEN_STRONG};
             border: none;
             border-radius: 3px;
             min-height: 5px;
@@ -1013,23 +935,159 @@ _STYLESHEET_TEMPLATE = """
         }}
         QPushButton#RailNav:hover {{ color: {TEXT}; background-color: {ELEVATED}; }}
 
-        /* The project rail: a list, not a boxed widget inside a boxed panel. */
-        QFrame#RailLeft QListWidget {{
+        /* ── The Manuscript shell (spec manuscript-redesign, slice 1) ── */
+        QFrame#IconRail {{
+            background-color: {SURFACE};
+            border: none;
+            border-right: 1px solid {BORDER};
+        }}
+        QToolButton#RailButton {{
+            background-color: transparent;
+            border: 2px solid transparent;
+            border-radius: 12px;
+            padding: 0;
+        }}
+        QToolButton#RailButton:hover {{ background-color: {ELEVATED}; }}
+        QToolButton#RailButton:checked {{ background-color: {ELEVATED}; }}
+        QToolButton#RailButton:pressed {{ background-color: {ACCENT_WASH}; }}
+        QToolButton#RailButton:focus {{ border-color: {ACCENT}; }}
+        QFrame#TopBar {{
+            background-color: {SURFACE};
+            border: none;
+            border-bottom: 1px solid {BORDER};
+        }}
+        QLabel#TopBarAgent {{
+            background: transparent;
+            color: {TEXT};
+            font-size: 14px;
+            font-weight: 600;
+        }}
+        QFrame#AgentSwitch {{
+            background-color: {ELEVATED};
+            border: none;
+            border-radius: 10px;
+        }}
+        QPushButton#AgentSegment, QPushButton#LookSegment {{
+            background-color: transparent;
+            border: none;
+            border-radius: 8px;
+            color: {TEXT_DIM};
+            font-size: 13px;
+            font-weight: 500;
+            padding: 0 14px;
+            min-height: 32px;
+        }}
+        QPushButton#AgentSegment[tight="true"] {{ padding: 0 8px; }}
+        QPushButton#AgentSegment:hover, QPushButton#LookSegment:hover {{ color: {TEXT}; }}
+        QPushButton#AgentSegment:checked, QPushButton#LookSegment:checked {{
+            background-color: {TEXT};
+            color: {SURFACE};
+            font-weight: 600;
+        }}
+        QPushButton#AgentSegment:focus, QPushButton#LookSegment:focus {{ border: 2px solid {ACCENT}; }}
+        QWidget#LookPick {{ background-color: {ELEVATED}; border-radius: 10px; }}
+        QComboBox#ProjectSelector {{
+            background-color: {SURFACE};
+            border: 1px solid {BORDER_STRONG};
+            border-radius: 8px;
+            color: {TEXT};
+            font-size: 13px;
+            font-weight: 600;
+            padding: 0 28px 0 10px;
+            min-height: 34px;
+        }}
+        QComboBox#ProjectSelector:focus {{ border: 2px solid {ACCENT}; }}
+        QToolButton#SpendChip {{
+            background-color: {SURFACE};
+            border: 1px solid {BORDER_STRONG};
+            border-radius: 16px;
+            color: {TEXT_DIM};
+            font-size: 13px;
+            padding: 0 12px;
+        }}
+        QToolButton#SpendChip:hover {{ background-color: {ELEVATED}; }}
+        QToolButton#SpendChip:focus {{ border: 2px solid {ACCENT}; }}
+        QToolButton#SpendChip[tone="warning"] {{
+            color: {WARNING}; border-color: {WARNING};
+        }}
+        QToolButton#SpendChip[tone="danger"] {{
+            color: {DANGER}; border-color: {DANGER};
+        }}
+        QToolButton#SpendChip[tone="unknown"] {{ color: {TEXT}; }}
+        QToolButton#TopBarIcon {{
+            background-color: transparent;
+            border: 1px solid transparent;
+            border-radius: 8px;
+        }}
+        QToolButton#TopBarIcon:hover {{ background-color: {ELEVATED}; }}
+        QToolButton#TopBarIcon:checked {{
+            background-color: {ACCENT_WASH};
+            border-color: {ACCENT_LINE};
+        }}
+        QToolButton#TopBarIcon:focus {{ border: 2px solid {ACCENT}; }}
+        QFrame#Popover {{
+            background-color: {SURFACE};
+            border: 1px solid {BORDER_STRONG};
+            border-radius: 12px;
+        }}
+        QWidget#PopoverBody, QScrollArea#PopoverScroll {{
+            background-color: transparent;
+        }}
+        QLabel#PopoverHeading, QLabel#DrawerHeading {{
+            background: transparent;
+            color: {TEXT};
+            font-size: 14px;
+            font-weight: 600;
+        }}
+        QLabel#PopoverNote, QLabel#DrawerEmpty {{
+            background: transparent;
+            color: {TEXT_DIM};
+            font-size: 12px;
+        }}
+        QFrame#PopoverRule {{ background-color: {BORDER}; border: none; }}
+        QFrame#HistoryDrawer {{
+            background-color: {SURFACE};
+            border: none;
+            border-right: 1px solid {BORDER_STRONG};
+        }}
+        QFrame#HistoryDrawer QListWidget {{
             background: transparent;
             border: none;
             padding: 0;
             font-size: 13px;
             color: {TEXT_DIM};
         }}
-        QFrame#RailLeft QListWidget::item {{
+        QFrame#HistoryDrawer QListWidget::item {{
             padding: 7px 8px;
             border-radius: {RADIUS_SM};
         }}
-        QFrame#RailLeft QListWidget::item:hover {{ background-color: {ELEVATED}; }}
-        QFrame#RailLeft QListWidget::item:selected {{
+        QFrame#HistoryDrawer QListWidget::item:hover {{ background-color: {ELEVATED}; }}
+        QFrame#HistoryDrawer QListWidget::item:selected {{
             background-color: {ACCENT_WASH};
-            color: {ACCENT};
+            color: {ACCENT_DIM};
         }}
+        QToolButton#DrawerClose {{
+            background: transparent;
+            border: 1px solid transparent;
+            border-radius: 6px;
+            color: {TEXT_DIM};
+            font-size: 18px;
+        }}
+        QToolButton#DrawerClose:hover {{ background-color: {ELEVATED}; color: {TEXT}; }}
+        QToolButton#DrawerClose:focus {{ border: 2px solid {ACCENT}; }}
+        QFrame#LightNote {{
+            background-color: {ACCENT_WASH};
+            border: 1px solid {ACCENT_LINE};
+            border-radius: 8px;
+        }}
+        QLabel#LightNoteText {{ background: transparent; color: {TEXT}; }}
+        QLabel#EstimateCaption {{
+            background: transparent;
+            color: {TEXT_DIM};
+            font-size: 12px;
+        }}
+
+
 """
 
 

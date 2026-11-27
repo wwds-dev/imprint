@@ -300,42 +300,58 @@ def test_the_system_card_reports_its_worst_reading_once(app):
 
 @pytest.mark.parametrize("size", [(1900, 1200), (1280, 820), (1000, 600)],
                          ids=lambda s: f"{s[0]}x{s[1]}")
-def test_every_left_rail_control_ends_inside_the_rail(app, window, size):
-    """The dropdown beside the actions button once asked for the whole row
-    and pushed the button 29px past the rail's edge."""
+def test_every_drawer_control_ends_inside_the_drawer(app, window, size):
+    """The chats moved from the left rail to the History drawer (spec
+    manuscript-redesign S7; rewritten from the left-rail test). The dropdown
+    beside the actions button once asked for the whole row and pushed the
+    button 29px past the rail's edge; the same must not happen in the drawer."""
     from PySide6.QtWidgets import (
-        QAbstractButton, QComboBox, QLineEdit, QListWidget, QScrollArea, QWidget)
+        QAbstractButton, QComboBox, QLineEdit, QListWidget, QWidget)
     window.resize(*size)
+    window.history_drawer.open_drawer(animate=False)
     for _ in range(6):
         app.processEvents()
-    rail = window.findChild(QWidget, "RailLeft")
-    viewport = rail.findChild(QScrollArea).viewport()
-    clipped = []
-    for child in rail.findChild(QScrollArea).widget().findChildren(QWidget):
-        if not isinstance(child, (QLineEdit, QComboBox, QAbstractButton, QListWidget)):
-            continue
-        if not child.isVisible():
-            continue
-        right = child.mapTo(viewport, child.rect().topRight()).x()
-        if right > viewport.width():
-            clipped.append(f"{type(child).__name__} ends at {right}px "
-                           f"in a {viewport.width()}px rail")
-    assert not clipped, "; ".join(clipped)
+    drawer = window.history_drawer
+    try:
+        clipped = []
+        for child in drawer.findChildren(QWidget):
+            if not isinstance(child, (QLineEdit, QComboBox, QAbstractButton, QListWidget)):
+                continue
+            if not child.isVisible():
+                continue
+            right = child.mapTo(drawer, child.rect().topRight()).x()
+            if right > drawer.width():
+                clipped.append(f"{type(child).__name__} ends at {right}px "
+                               f"in a {drawer.width()}px drawer")
+        assert not clipped, "; ".join(clipped)
+    finally:
+        drawer.close_drawer()
+        for _ in range(4):
+            app.processEvents()
 
 
-def test_no_rail_field_shows_a_cut_off_value_at_rest(app, window):
+def test_no_shell_field_shows_a_cut_off_value_at_rest(app, window):
+    """The top bar, the drawer and the spend popover hold what the rails held
+    (rewritten from the rail version)."""
     from PySide6.QtWidgets import QComboBox, QLineEdit, QWidget
     from ui.text_fit import clipped_text
     window.resize(1280, 820)
+    window.history_drawer.open_drawer(animate=False)
+    window.open_spend_popover()
     for _ in range(6):
         app.processEvents()
     cut = []
-    for name in ("RailLeft", "RailRight"):
-        rail = window.findChild(QWidget, name)
-        for child in rail.findChildren(QWidget):
-            if isinstance(child, (QComboBox, QLineEdit)) and child.isVisible():
-                if clipped_text(child):
-                    cut.append(f"{name}: {clipped_text(child)!r}")
+    try:
+        for name, root in (("top bar", window.top_bar),
+                           ("drawer", window.history_drawer),
+                           ("spend", window.spend_popover)):
+            for child in root.findChildren(QWidget):
+                if isinstance(child, (QComboBox, QLineEdit)) and child.isVisible():
+                    if clipped_text(child):
+                        cut.append(f"{name}: {clipped_text(child)!r}")
+    finally:
+        window.spend_popover.hide()
+        window.history_drawer.close_drawer()
     assert not cut, cut
     assert window.history_project_filter.currentText() == "All projects"
 
@@ -393,7 +409,9 @@ def test_the_chat_list_groups_by_day_and_stays_a_list_of_chats(
 
 
 def test_project_actions_live_in_one_menu(window):
-    labels = [a.text() for a in window.project_menu.actions()]
+    from PySide6.QtWidgets import QWidgetAction
+    labels = [a.text() for a in window.project_menu.actions()
+              if not a.isSeparator() and not isinstance(a, QWidgetAction)]
     assert labels == ["New Project", "Project Overview", "Save Current Setup"]
     assert window.new_project_btn.isEnabled()
     # The two that act on a project wait for one.
@@ -483,11 +501,10 @@ def test_the_explicit_save_still_announces_itself(limits, monkeypatch):
 
 
 def test_the_status_sections_start_with_a_state(window):
+    """In the status popover now (Design S6); each still says its state."""
     from ui.widgets import CollapsibleSection
-    rail = window.findChild(__import__("PySide6.QtWidgets").QtWidgets.QWidget,
-                            "RailRight")
     sections = {s._title.split(" · ")[0]: s
-                for s in rail.findChildren(CollapsibleSection)}
+                for s in window.status_popover.findChildren(CollapsibleSection)}
     assert sections["System"].summary_label.text() in ("OK", "Busy", "Stressed")
     assert sections["API keys"].summary_label.text().endswith(" of 6")
     # No request yet: the routing section has nothing to claim.
@@ -498,33 +515,60 @@ def test_the_status_sections_start_with_a_state(window):
     assert sections["Chat routing"].summary_label.text() == ""
 
 
-def test_each_item_sits_on_the_rail_the_rebalance_spec_gives_it(window):
-    """docs/specs/rails-rebalance.md, option B."""
-    from PySide6.QtWidgets import QWidget
-    left = window.findChild(QWidget, "RailLeft")
-    right = window.findChild(QWidget, "RailRight")
-    for name in ("cost_history_btn", "run_log_btn", "learn_btn", "project_meter"):
-        widget = getattr(window, name)
-        assert left.isAncestorOf(widget), f"{name} belongs on the left rail"
-        assert not right.isAncestorOf(widget), f"{name} left on the right rail"
-    for name in ("session_meter", "daily_meter", "model_updates_section"):
-        assert right.isAncestorOf(getattr(window, name)), f"{name} belongs on the right"
+def test_each_item_sits_where_the_shell_design_gives_it(window):
+    """docs/specs/manuscript-redesign.md, Design S4 (rewritten from the
+    rails-rebalance placement test, whose rails slice 1 removes)."""
+    spend = window.spend_popover
+    for name in ("cost_history_btn", "run_log_btn", "session_meter",
+                 "daily_meter", "reset_session_budget_btn",
+                 "request_count_stat", "last_request_stat",
+                 "local_savings_stat", "local_spent_stat"):
+        assert spend.isAncestorOf(getattr(window, name)), f"{name}: spend popover"
+    status = window.status_popover
+    for name in ("model_updates_section", "resource_status_card",
+                 "routing_status_card", "api_keys_status_card",
+                 "realtime_monitor_btn"):
+        assert status.isAncestorOf(getattr(window, name)), f"{name}: status popover"
+    drawer = window.history_drawer
+    for name in ("history_search", "history_agent_filter", "history_list",
+                 "new_chat_btn"):
+        assert drawer.isAncestorOf(getattr(window, name)), f"{name}: drawer"
+    for name in ("history_project_filter", "project_menu_btn", "history_btn",
+                 "spend_chip", "agent_status_pill"):
+        assert window.top_bar.isAncestorOf(getattr(window, name)), f"{name}: top bar"
+    header = window.project_menu_header.defaultWidget()
+    assert header.isAncestorOf(window.project_meter)
+    assert header.isAncestorOf(window.active_project_label)
+    assert window.learn_btn in window.help_menu.actions()
+    assert window.agent_docs_btn in window.help_menu.actions()
     assert not window.model_updates_section.header_btn.isChecked()
 
 
-def test_the_moved_rows_keep_the_order_the_spec_gives_them(window):
+def test_the_moved_rows_keep_the_order_the_spec_gives_them(app, window):
+    """Drawer: heading row, then search and filter, then the list (S7).
+    Spend popover: Session, Today, the figures, then Cost History beside
+    Run Log in the footer (S6). Rewritten from the rail order test."""
     from PySide6.QtCore import QPoint
-    def y(widget):
-        return widget.mapTo(window, QPoint(0, 0)).y()
-    window.project_meter.show()
+
+    def at(widget, root):
+        return widget.mapTo(root, QPoint(0, 0))
+
+    window.history_drawer.open_drawer(animate=False)
+    window.open_spend_popover()
     for _ in range(4):
-        __import__("PySide6.QtWidgets").QtWidgets.QApplication.processEvents()
+        app.processEvents()
     try:
-        assert y(window.history_project_filter) < y(window.project_meter) < y(window.history_search)
-        assert y(window.new_chat_btn) < y(window.cost_history_btn) \
-            < y(window.run_log_btn) < y(window.learn_btn)
+        drawer = window.history_drawer
+        assert at(window.new_chat_btn, drawer).y() < at(window.history_search, drawer).y() \
+            < at(window.history_list, drawer).y()
+        spend = window.spend_popover
+        assert at(window.session_meter, spend).y() < at(window.daily_meter, spend).y() \
+            < at(window.request_count_stat, spend).y() < at(window.cost_history_btn, spend).y()
+        assert at(window.cost_history_btn, spend).y() == at(window.run_log_btn, spend).y()
+        assert at(window.cost_history_btn, spend).x() < at(window.run_log_btn, spend).x()
     finally:
-        window.project_meter.hide()
+        window.spend_popover.hide()
+        window.history_drawer.close_drawer()
 
 
 def test_a_collapsed_model_updates_section_still_shows_its_count(window):

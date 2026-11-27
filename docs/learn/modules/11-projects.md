@@ -18,22 +18,23 @@ you intended to measure.
 
 ## Walkthrough
 
-1. Open the project actions menu beside the project selector in the left
-   rail, choose **New Project**, give it a stable name such as
-   `Client — deliverable — date`, and check that its name appears in the header.
+1. Open the **Project actions** menu (the three dots) beside the project
+   selector in the top bar, choose **New Project**, give it a stable name such as
+   `Client — deliverable — date`, and check that its name appears in the selector.
 2. Open **Settings → Projects**. Set the work type, title, byline or brand, and
    a short creative brief. Add only reusable instructions that really belong
    to this project; optionally set a daily euro cap. Save the current
-   agent/provider/model with **Save Current Setup** in the project actions
-   menu beside the project selector in the left rail.
+   agent/provider/model with **Save Current Setup** in the **Project actions**
+   menu beside the project selector in the top bar.
 3. New chats inherit the selected project. Use **New Chat** for a clean
-   conversation in the same project; **All projects** and **Unfiled** have no
+   conversation in the same project (**New Chat** is at the top of the History
+   drawer, the clock button or ⌘Y); **All projects** and **Unfiled** have no
    active project context. The project, agent and search filters intersect.
 4. Right-click a saved chat to assign it to another project or unfile it.
-   Click a saved chat to see its transcript, then type a new follow-up. Earlier
+   Click a saved chat in the History drawer to see its transcript, then type a new follow-up. Earlier
    turns are sent with the follow-up, so longer conversations cost more. The
    current project's instructions replace any old saved system context.
-   Click **Project Overview** in the left rail to see that Project's working
+   Click **Project Overview** in the **Project actions** menu to see that Project's working
    draft count, linked outputs and scheduled Creator content in one place.
    A missing-file label means the link remains but the external file moved or
    was removed; Refresh checks its current location again.

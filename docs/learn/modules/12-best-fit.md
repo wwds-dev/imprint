@@ -96,7 +96,7 @@ routes its paid actions compare.
 
 ## New models
 
-**Model updates**, under **API keys** in the right rail, lists models the
+**Model updates**, under **API keys** in the status popover (the status chip shows its count), lists models the
 providers behind your keys have released since Imprint last looked. It checks a
 few seconds after start-up and on **Check now**; model lists are free, so the
 check costs nothing. The first list from a provider is a silent baseline, and
@@ -173,7 +173,7 @@ under **Remembered choices** with **Remove**; when one applies, the panel
 switches its boxes and says so in its status line. If a run fails, the
 banner offers **Send to <provider>** or **Try <smaller local model>**;
 nothing is resent by itself, and **Local only** never reaches the cloud.
-The Spend rail's **Saved by local** line shows what running locally saved today.
+The spend popover's **Saved by local** line shows what running locally saved today.
 
 ## Confidence does and does not mean
 

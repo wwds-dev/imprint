@@ -8,7 +8,7 @@ support and no guaranteed response time.
 | You want | Go to |
 |---|---|
 | Help running it, or a question about how it works | the README (it is the full manual) and the in-app Learning Centre first, then a [GitHub issue](https://github.com/wwds-dev/imprint/issues) |
-| To report a bug | a GitHub issue with the version in the header bar, your macOS version, what you did, what you expected and what happened. Do not paste API keys or the contents of `.env`, manuscripts, voice samples, or anything else you would not publish |
+| To report a bug | a GitHub issue with the version (hover the app mark at the top of the icon rail, or see Settings → General → About), your macOS version, what you did, what you expected and what happened. Do not paste API keys or the contents of `.env`, manuscripts, voice samples, or anything else you would not publish |
 | To report a security problem | [SECURITY.md](SECURITY.md), privately, never in a public issue |
 | To suggest a feature | a GitHub issue; `SUGGESTIONS.md` lists what is already considered |
 

@@ -49,7 +49,7 @@ Any provider. Ollama is free/local; cloud providers need an API key (app `.env`)
 
 Choose the narrowest Tool that matches the deliverable, then state the desired
 format and acceptance criteria in the prompt. In Hybrid or Cloud mode, confirm
-that the provider is permitted and the right rail says the key is configured.
+that the provider is permitted and the status popover says the key is configured.
 Long saved conversations send more prior context and can cost more; start a new
 chat when old turns are no longer relevant.
 

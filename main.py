@@ -46,20 +46,21 @@ from dotenv import load_dotenv
 load_dotenv(user_data_base() / ".env")
 
 
-from PySide6.QtCore import Qt, QTimer, QProcess, QEvent, QPoint
-from PySide6.QtGui import QTextCursor, QColor, QKeySequence, QShortcut
+from PySide6.QtCore import Qt, QTimer, QProcess, QEvent, QPoint, QSize
+from PySide6.QtGui import (QAction, QTextCursor, QColor, QKeySequence,
+                           QShortcut)
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
 from PySide6.QtWidgets import (
     QApplication, QSizePolicy, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QTextEdit, QPushButton, QComboBox, QListWidgetItem,
     QMessageBox, QTextBrowser, QLineEdit, QProgressBar, QDialog, QTabWidget,
-    QTabBar, QFrame, QInputDialog, QMenu, QToolButton,
+    QFrame, QInputDialog, QMenu, QToolButton, QWidgetAction,
 )
 
 from ui.style import (
-    global_stylesheet, ACCENT,
+    global_stylesheet,
 )
-from ui import app_identity, appkit_guard, theme, tray, vibe
+from ui import app_identity, appkit_guard, motion, theme, tray, vibe
 from services.ollama_client import OllamaClient, MUSE_GLIMMER_VARIANTS, muse_glimmer_default
 from services.openai_client import OpenAIClientWrapper
 from services.deepseek_client import DeepSeekClientWrapper
@@ -161,9 +162,23 @@ WORKSPACE_LABELS = {
     spec.key: spec.label for spec in AGENT_SPECS if spec.workspace is not None
 }
 
-# Height of the workspace-description strip, taken out of HEADER_HEIGHT so the
-# header band as a whole does not grow and steal room from the panels.
-WORKSPACE_STRIP_HEIGHT = 20
+# The icon for each workspace in the rail (assets/shell/*.svg).
+WORKSPACE_ICONS = {
+    "Author": "author", "Audio + Music": "audio", "Video + Ads": "video",
+    "Social": "social", "Web": "web", "Brand Design": "brand_design",
+    "Brand Content": "brand_content", "Assistant": "assistant",
+}
+
+# Design S9, listed by "?" → Keyboard shortcuts.
+SHELL_SHORTCUTS = (
+    ("⌘1 – ⌘8", "Workspace 1 to 8, in rail order"),
+    ("⌘[  ⌘]", "The other agent in a two-agent workspace"),
+    ("⌘Y", "Chat history"),
+    ("⌘,", "Settings"),
+    ("F1", "Learning Centre"),
+    ("⌘?", "Help menu"),
+    ("Esc", "Close the open popover, menu or drawer"),
+)
 
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 
@@ -235,18 +250,17 @@ from ui.workers import (
     RatingsWorker, LocalDiscoveryWorker, StartLMStudioWorker, LocalMeasureWorker,
 )
 from ui.forms import (
-    HEADER_HEIGHT, LG, MD, RAIL_LEFT_WIDTH, RAIL_RIGHT_WIDTH, SM, XS,
+    LG, MD, SM, XS,
     FieldGridLayout, Meter, field, field_note, icon_button,
-    link_button, micro, quiet, rail, rule, section, toggle_chip,
+    link_button, micro, quiet, rule, toggle_chip,
 )
 from ui.rail import (
     AGENT_ROLE, DAY_ROLE, TITLE_ROLE, BudgetRow, ChatList, KeyValueRow,
-    MenuFilterButton, chat_when, day_group, format_limit, nav_row,
+    MenuFilterButton, chat_when, day_group, format_limit,
 )
 from ui.text_fit import install_text_fit
 from ui.widgets import (
-    FlowLayout, CollapsibleSection, ScrollContent, ThemeDots,
-    install_dropdown_system, scrollable,
+    FlowLayout, CollapsibleSection, ScrollContent, install_dropdown_system, scrollable,
     let_combos_shrink, RECOMMENDED_ROLE, RECOMMENDATION_REASON_ROLE,
     RECOMMENDATION_SCORE_ROLE, RECOMMENDATION_CONFIDENCE_ROLE,
     RECOMMENDATION_BADGE_ROLE, NEW_MODEL_ROLE, SECTION_ROLE, DETAIL_ROLE,
@@ -258,7 +272,9 @@ from ui.status_cards import (
 )
 from agents.social import SocialPanel
 from ui.tooltips import seed_tooltips
-from ui.header_fit import HeaderFitter
+from ui.shell import (chips as shell_chips, drawer as shell_drawer,
+                      icon_rail as shell_rail, popover as shell_popover,
+                      top_bar as shell_top_bar)
 
 class GodAI(QWidget):
     def __init__(self):
@@ -407,6 +423,10 @@ class GodAI(QWidget):
         self.session_cost_total = 0.0
         self.session_request_count = 0
         self.last_request_cost = 0.0
+        # A request with no price row costs "unknown", not €0.00: counted so
+        # every figure that shows the €0.00 can say so (review P1-1).
+        self.last_request_unpriced = False
+        self.session_unpriced_count = 0
         
         self.session_budget_eur = float(self.settings.get("session_budget_eur", 1.00))
         self.daily_budget_eur = float(self.settings.get("daily_budget_eur", 5.00))
@@ -426,8 +446,13 @@ class GodAI(QWidget):
         self.pending_prompt = ""
         self.pending_messages = []
 
-        # Tooltip state — toggled via the chip in the centre header bar
-        self.tooltips_enabled = True
+        # Tooltip state — Settings > General, "Show tooltips" (remembered, AO3)
+        self.tooltips_enabled = bool(self.settings.get("show_tooltips", True))
+
+        # Light is the default look; an install that saved a dark theme moves
+        # to light once and is told so (O2).
+        self._show_light_note = theme.adopt_light_once()
+        motion.install(QApplication.instance())
 
         self.build_ui()
         from ui.learning_center import install_learning_targets
@@ -481,12 +506,20 @@ class GodAI(QWidget):
                 tab_bar.setUsesScrollButtons(True)
 
     # ── Tooltips ────────────────────────────────────────────────────────────
-    def _toggle_tooltips(self):
-        """Enable or disable hover tooltips application-wide."""
+    def _toggle_tooltips(self, *_args):
+        """Enable or disable hover tooltips application-wide, and remember it
+        across launches (setting show_tooltips, AO3)."""
         self.tooltips_enabled = self.tooltips_toggle_btn.isChecked()
         self.tooltips_toggle_btn.setText(
             "Tooltips: On" if self.tooltips_enabled else "Tooltips: Off"
         )
+        if bool(self.settings.get("show_tooltips", True)) != self.tooltips_enabled:
+            self.settings["show_tooltips"] = self.tooltips_enabled
+            try:
+                with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+                    json.dump(self.settings, f, indent=2)
+            except OSError as exc:
+                self._note_failure("settings: tooltips", exc)
 
     def eventFilter(self, obj, event):
         """Handle the global tooltip policy.
@@ -891,9 +924,16 @@ class GodAI(QWidget):
             QMessageBox.information(self, "Budget Saved", "Budget limits saved.")
         return True
 
+    def _note_request_price(self, entry: dict) -> None:
+        """Remember whether the request just logged had no price."""
+        self.last_request_unpriced = entry.get("cost_type") == "unpriced"
+        if self.last_request_unpriced:
+            self.session_unpriced_count += 1
+
     def reset_session_spend(self):
         self.session_cost_total = 0.0
         self.session_request_count = 0
+        self.session_unpriced_count = 0
         self.update_usage_labels()
         self.refresh_all_recommendations()
         QMessageBox.information(self, "Session Reset", "Session spend has been reset.")
@@ -1030,7 +1070,7 @@ class GodAI(QWidget):
             if verdict is None:
                 continue
             if verdict["level"] == "too_big":
-                combo.setItemData(i, QColor("#666666"), Qt.ForegroundRole)
+                combo.setItemData(i, QColor(theme.token("TEXT_MUTE")), Qt.ForegroundRole)
                 combo.setItemData(i, f"⚠ {verdict['message']}", Qt.ToolTipRole)
             elif verdict["level"] == "tight":
                 combo.setItemData(i, f"⚠ {verdict['message']}", Qt.ToolTipRole)
@@ -2439,34 +2479,60 @@ class GodAI(QWidget):
                     lambda *_args: self.refresh_all_recommendations())
 
     def build_ui(self):
-        """Header bar over three columns; the outer two are fixed.
+        """The Manuscript shell: icon rail, top bar, content (ADR 0006).
 
-        This replaced a QSplitter. A splitter lets the user drag a pane below
-        the minimum width its own children need, and Qt resolves that by
-        letting widgets overlap rather than by refusing — which is where every
-        overlapping-control bug in this app came from. Two widths you cannot
-        drag are worth more than three you can.
+        Rail on the left for the full height; the top bar over the content
+        column only; no side rails. Every control the header and the two
+        rails held keeps its attribute, handler, tooltip and help entry; it
+        now lives in the top bar, a popover, the History drawer or a menu
+        (spec manuscript-redesign, Design S4). The columns stay fixed widths
+        rather than a splitter: a splitter lets the user drag a pane below
+        the minimum its children need, and Qt resolves that by overlapping.
         """
-        outer_layout = QVBoxLayout(self)
+        outer_layout = QHBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
         outer_layout.setSpacing(0)
 
-        header = self.build_header_bar()
-        left_widget = self.build_left_panel()
+        rail_widget = self.build_icon_rail()
+        self.build_project_controls()
         center_widget = self.build_center_panel()
-        right_widget = self.build_right_panel()
+        self.build_spend_and_status()
+        top_bar = self.build_top_bar()
         self.update_recommendation_label()
 
-        body = QHBoxLayout()
-        body.setContentsMargins(0, 0, 0, 0)
-        body.setSpacing(0)
-        body.addWidget(left_widget)
-        body.addWidget(center_widget, 1)
-        body.addWidget(right_widget)
+        column = QWidget()
+        column.setObjectName("Transparent")
+        column_layout = QVBoxLayout(column)
+        column_layout.setContentsMargins(0, 0, 0, 0)
+        column_layout.setSpacing(0)
+        column_layout.addWidget(top_bar)
+        self.light_look_note = self._build_light_look_note()
+        column_layout.addWidget(self.light_look_note)
+        # The drawer overlays this host, below the top bar; it never reflows
+        # the panel under it (Design S7, D5).
+        self.content_host = QWidget()
+        self.content_host.setObjectName("Transparent")
+        host_layout = QVBoxLayout(self.content_host)
+        host_layout.setContentsMargins(0, 0, 0, 0)
+        host_layout.addWidget(center_widget)
+        column_layout.addWidget(self.content_host, 1)
+        self.history_drawer = shell_drawer.HistoryDrawer(self.content_host)
+        self.history_drawer.set_contents(
+            self.new_chat_btn, self.history_search,
+            self.history_agent_filter, self.history_list)
+        self.history_drawer.opener = self.history_btn
+        self.history_drawer.opened.connect(
+            lambda: self.history_btn.setChecked(True))
+        self.history_drawer.closed.connect(
+            lambda: self.history_btn.setChecked(False))
+        # Opening a chat closes the drawer (S7).
+        self.history_list.itemClicked.connect(
+            lambda _item: self.history_drawer.close_drawer())
 
-        outer_layout.addWidget(header)
-        outer_layout.addWidget(self.build_workspace_description())
-        outer_layout.addLayout(body, 1)
+        outer_layout.addWidget(rail_widget)
+        outer_layout.addWidget(column, 1)
+
+        self._install_shell_shortcuts()
 
         # Apply the stylesheet before installing the custom combo delegate.
         # Qt replaces item delegates while polishing a new stylesheet.
@@ -2482,180 +2548,150 @@ class GodAI(QWidget):
         # the fields off down the right-hand edge.
         let_combos_shrink(self)
 
-    def build_workspace_description(self) -> QWidget:
-        """One line under the tab bar saying what the open workspace is for.
-
-        The header itself is a fixed-height single row that ui/header_fit.py
-        measures, so this is its own strip beneath it rather than a second
-        line inside it. It exists because agent labels are codenames now:
-        "Brand Content" holding "Nova" tells a new user nothing on its own.
-        """
-        strip = QFrame()
-        strip.setObjectName("WorkspaceDescriptionStrip")
-        strip.setFixedHeight(WORKSPACE_STRIP_HEIGHT)
-        layout = QHBoxLayout(strip)
-        layout.setContentsMargins(LG, 0, LG, 3)
-        layout.setSpacing(0)
-        self.workspace_description_label = QLabel("")
-        self.workspace_description_label.setObjectName("WorkspaceDescription")
-        layout.addWidget(self.workspace_description_label)
-        layout.addStretch()
-        return strip
-
-    def build_header_bar(self) -> QWidget:
-        """Brand, mode tabs, status and utilities on one line.
-
-        These three were previously on three different alignment axes — the
-        wordmark pinned to the far left of the rail, the mode tabs centred over
-        the canvas, and the page title starting a third of the way across. One
-        row, one left edge, and the eye has a single place to start.
-        """
-        header = QFrame()
-        header.setObjectName("AppHeader")
-        # The description strip below shares this band's height rather than
-        # adding to it — see build_workspace_description.
-        header.setFixedHeight(HEADER_HEIGHT - WORKSPACE_STRIP_HEIGHT)
-        row = QHBoxLayout(header)
-        row.setContentsMargins(LG, 0, LG, 0)
-        row.setSpacing(0)
-
-        dot = QLabel("●")
-        dot.setObjectName("WordmarkDot")
-        row.addWidget(dot)
-        row.addSpacing(SM)
-        brand = QLabel(APP_DISPLAY_NAME.upper())
-        brand.setObjectName("Wordmark")
-        row.addWidget(brand)
-
-        # The running version, beside the name. Derived from the repository
-        # rather than typed, so it cannot drift from the code it labels — see
-        # services/version.py. It answers two questions at a glance: which
-        # build is open, and whether that build is the current one. A stale
-        # bundle says so in amber instead of looking identical to a fresh one.
-        row.addSpacing(SM)
-        self.version_badge = QLabel(app_version.version_string())
-        self.version_badge.setObjectName("VersionBadge")
-        self.version_badge.setToolTip(app_version.tooltip())
-        if not app_version.staleness()["current"]:
-            self.version_badge.setProperty("state", "stale")
-        row.addWidget(self.version_badge)
-
-        row.addSpacing(LG)
-        divider = QFrame()
-        divider.setObjectName("HeaderDivider")
-        divider.setFixedSize(1, 22)
-        row.addWidget(divider)
-        row.addSpacing(MD)
-
-        # Five outcome-oriented workspaces replace Sentinel's long agent menu.
-        self.workspace_tabs = QTabBar()
-        self.workspace_tabs.setObjectName("WorkspaceTabs")
-        self.workspace_tabs.setExpanding(False)
-        self.workspace_tabs.setDrawBase(False)
-        # These are product areas, not disposable document tabs. Qt's default
-        # ElideRight turned "Audio & Music" and "Video & Ads" into ambiguous
-        # labels even when the header had enough room. Keep the complete names.
-        # No scroll arrows either: they clipped the last tab mid-word and sat
-        # on top of it. A narrow header overflows into a More menu instead —
-        # see ui/header_fit.py.
-        self.workspace_tabs.setElideMode(Qt.ElideNone)
-        self.workspace_tabs.setUsesScrollButtons(False)
-        self.workspace_tabs.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        for workspace_name in WORKSPACES:
-            self.workspace_tabs.addTab(workspace_name)
-        # Connected only after every tab exists: addTab on an empty bar sets the
-        # current index and would fire the handler before the panels are built.
+    def build_icon_rail(self) -> QWidget:
+        """The 72 px rail: app mark, one button per workspace, "?" and the
+        gear (Design S2). The rail is ``workspace_tabs``."""
+        self.workspace_tabs = shell_rail.WorkspaceRail(
+            [(name, WORKSPACE_ICONS.get(name, "assistant"))
+             for name in WORKSPACES])
+        # The text the description strip showed is each button's tooltip and
+        # accessible description now: agent labels are codenames, and
+        # "Brand Content" holding "Nova" tells a new user nothing on its own.
+        for index, name in enumerate(WORKSPACES):
+            self.workspace_tabs.set_description(
+                index, workspace_description(name))
+        # Connected only after every button exists, as with the old QTabBar.
         self.workspace_tabs.currentChanged.connect(self._workspace_changed)
-        row.addWidget(self.workspace_tabs, 0, Qt.AlignVCenter)
 
-        self.workspace_more_btn = QToolButton()
-        self.workspace_more_btn.setObjectName("WorkspaceMore")
-        self.workspace_more_btn.setText("More ▾")
-        self.workspace_more_btn.setToolTip("Workspaces that do not fit in the header")
-        row.addWidget(self.workspace_more_btn, 0, Qt.AlignVCenter)
+        # The running version, derived from the repository rather than typed:
+        # on the mark's tooltip, with a dot when this build is stale.
+        self.app_mark = self.workspace_tabs.app_mark
+        self._show_version_on_mark()
 
-        row.addStretch()
-
-        self.project_context_pill = QLabel("")
-        self.project_context_pill.setObjectName("StatusPill")
-        self.project_context_pill.setMaximumWidth(145)
-        self.project_context_pill.hide()
-        row.addWidget(self.project_context_pill)
-        row.addSpacing(SM)
-
-        self.agent_status_pill = QLabel("●  Ready")
-        self.agent_status_pill.setObjectName("StatusPill")
-        row.addWidget(self.agent_status_pill)
-        row.addSpacing(LG)
-
-        # The themes, as themselves. A picker also lives in Settings, which
-        # is where someone goes to *read* what the choice means; this is for
-        # changing your mind about it mid-sentence.
-        self.theme_dots = ThemeDots(on_change=self.apply_global_style)
-        row.addWidget(self.theme_dots, 0, Qt.AlignVCenter)
-        row.addSpacing(MD)
-
-        self.agent_docs_btn = quiet("Docs")
-        self.agent_docs_btn.setFixedWidth(56)
-        self.agent_docs_btn.clicked.connect(self.show_agent_docs)
-        row.addWidget(self.agent_docs_btn)
-
-        self.tooltips_toggle_btn = quiet("Tooltips: On")
-        self.tooltips_toggle_btn.setFixedWidth(110)
-        self.tooltips_toggle_btn.setCheckable(True)
-        self.tooltips_toggle_btn.setChecked(True)
-        self.tooltips_toggle_btn.clicked.connect(self._toggle_tooltips)
-        row.addWidget(self.tooltips_toggle_btn)
-
-        self.settings_btn = quiet("Settings")
-        self.settings_btn.setFixedWidth(78)
+        self.settings_btn = self.workspace_tabs.settings_btn
         self.settings_btn.clicked.connect(self.show_settings)
-        row.addWidget(self.settings_btn)
 
-        # The pill only ever reads "Ready" and the version is also in the
-        # window title, so both give way before any workspace does. The
-        # wordmark carries the version tooltip so hovering still answers it.
-        brand.setToolTip(self.version_badge.toolTip())
-        self.header_fitter = HeaderFitter(
-            header, self.workspace_tabs, self.workspace_more_btn,
-            sheddable=[self.agent_status_pill, self.version_badge])
+        # "?": this agent's docs and the Learning Centre (D2).
+        self.help_btn = self.workspace_tabs.help_btn
+        self.help_menu = QMenu(self)
+        self.help_menu.setToolTipsVisible(True)
+        self.agent_docs_btn = self.help_menu.addAction("Docs")
+        self.agent_docs_btn.setProperty("lessonAnchor", "help_btn")
+        self.agent_docs_btn.triggered.connect(self.show_agent_docs)
+        self.learn_btn = self.help_menu.addAction("Learning Centre")
+        self.learn_btn.setProperty("lessonAnchor", "help_btn")
+        # Shown in the menu; the window-wide F1 shortcut stays the one that
+        # fires (a menu-only context, so the two never compete).
+        self.learn_btn.setShortcut(QKeySequence("F1"))
+        self.learn_btn.setShortcutContext(Qt.ShortcutContext.WidgetShortcut)
+        self.learn_btn.triggered.connect(lambda: self.show_learning_center())
+        self.help_menu.addSeparator()
+        self.shortcuts_action = self.help_menu.addAction("Keyboard shortcuts")
+        self.shortcuts_action.setProperty("lessonAnchor", "help_btn")
+        self.shortcuts_action.triggered.connect(self.show_keyboard_shortcuts)
+        self.help_btn.clicked.connect(self._open_help_menu)
 
-        return header
+        # Hover tooltips on or off: set once, in Settings (D2). The window
+        # keeps the checkable control so _toggle_tooltips reads isChecked().
+        self.tooltips_toggle_btn = QAction("Tooltips: On", self)
+        self.tooltips_toggle_btn.setCheckable(True)
+        self.tooltips_toggle_btn.setChecked(
+            bool(self.settings.get("show_tooltips", True)))
+        self.tooltips_toggle_btn.toggled.connect(self._toggle_tooltips)
+        self._toggle_tooltips()
+        return self.workspace_tabs
 
-    def build_left_panel(self) -> QWidget:
-        """The project rail. Projects, chats and the window links (Cost History, Run Log, Learning Centre); workspace navigation lives in the header."""
-        left_widget = rail("RailLeft", RAIL_LEFT_WIDTH)
-        left_outer = QVBoxLayout(left_widget)
-        left_outer.setContentsMargins(0, 0, 0, 0)
-        left_body = QWidget()
-        left_body.setObjectName("Transparent")
-        left_outer.addWidget(scrollable(left_body))
-        left_layout = QVBoxLayout(left_body)
-        left_layout.setContentsMargins(MD, LG, MD, LG)
-        left_layout.setSpacing(MD)
+    def _show_version_on_mark(self) -> None:
+        """The version on the app mark's tooltip; a dot when this build is
+        older than the code (Design S2, the old badge's stale state)."""
+        self.app_mark.set_version(
+            app_version.tooltip(), not app_version.staleness()["current"],
+            APP_DISPLAY_NAME)
 
-        # Agent navigation lives in the workspace tabs. The rail is reserved
-        # for projects, where persistent context is genuinely useful.
+    def _open_help_menu(self):
+        button = self.help_btn
+        self.help_menu.exec(button.mapToGlobal(QPoint(button.width() + 4, 0)))
+
+    def show_keyboard_shortcuts(self):
+        QMessageBox.information(
+            self, "Keyboard shortcuts",
+            "\n".join(f"{keys}\t{action}" for keys, action in SHELL_SHORTCUTS))
+
+    def build_top_bar(self) -> QWidget:
+        """Agent switch or name, project selector and actions, History, the
+        spend chip and the status chip (Design S3)."""
+        # The stage switcher between two related tools (Quill / Press,
+        # Booth / Label). Its old name stays: the row is the switch, the dict
+        # holds its segments, each still calling select_agent.
+        self.workspace_tool_row = shell_top_bar.AgentSwitch()
+        self.workspace_tool_buttons = {}
+        for agent_name, label in WORKSPACE_LABELS.items():
+            button = self.workspace_tool_row.add_segment(QPushButton(label))
+            button.clicked.connect(
+                lambda _checked, name=agent_name: self.select_agent(name)
+            )
+            self.workspace_tool_buttons[agent_name] = button
+
+        self.history_btn = QToolButton()
+        self.history_btn.setObjectName("TopBarIcon")
+        self.history_btn.setCheckable(True)
+        self.history_btn.setFixedSize(32, 32)
+        self.history_btn.setIconSize(QSize(18, 18))
+        self.history_btn.setToolTip("Chat history (⌘Y)")
+        self.history_btn.setAccessibleName("Chat history")
+        self.history_btn.clicked.connect(self.toggle_history)
+
+        self.top_bar = shell_top_bar.TopBar(
+            switch=self.workspace_tool_row,
+            project_selector=self.history_project_filter,
+            project_button=self.project_menu_btn,
+            history_button=self.history_btn,
+            spend_chip=self.spend_chip,
+            status_chip=self.agent_status_pill,
+        )
+        self._restyle_shell_icons()
+        return self.top_bar
+
+    def toggle_history(self):
+        self.history_drawer.toggle()
+
+    def build_project_controls(self) -> None:
+        """Projects and saved chats. The selector and its actions go in the
+        top bar, the chats in the History drawer (Design S4, S5, S7)."""
+        # Agent navigation lives in the rail and the switch.
         self.agent_buttons = {}
 
-        # Project: the dropdown is the heading. What you do *to* a project is
+        # Project: the selector is the heading. What you do *to* a project is
         # three rare actions, so they share one button instead of three rows.
-        project_row = QHBoxLayout()
-        project_row.setContentsMargins(0, 0, 0, 0)
-        project_row.setSpacing(SM)
         self.history_project_filter = QComboBox()
         self.history_project_filter.setAccessibleName("Project")
-        # Shares a 184px row with the actions button. The compact chevron
-        # leaves "All projects" its full width; its own minimum, because a
-        # combo's default one (eight wide characters plus the arrow) is the
-        # whole row and pushed the button past the rail's edge.
-        self.history_project_filter.setObjectName("CompactCombo")
-        self.history_project_filter.setMinimumWidth(96)
+        self.history_project_filter.setToolTip("No project selected")
         self.history_project_filter.currentIndexChanged.connect(self._switch_project)
-        project_row.addWidget(self.history_project_filter, 1)
 
-        self.project_menu = QMenu(left_widget)
+        self.project_menu = QMenu(self)
         self.project_menu.setToolTipsVisible(True)
+        # The header: "Working in …" over the project budget bar, shown only
+        # while a project is active (S5, D2).
+        header = QWidget()
+        header.setObjectName("Transparent")
+        header_layout = QVBoxLayout(header)
+        header_layout.setContentsMargins(12, 8, 12, 8)
+        header_layout.setSpacing(6)
+        # Says something only while a project is active ("Working in …").
+        self.active_project_label = QLabel("No project context")
+        self.active_project_label.setObjectName("SettingsHelp")
+        self.active_project_label.setWordWrap(True)
+        self.active_project_label.hide()
+        header_layout.addWidget(self.active_project_label)
+        # Project budget: measures the active project, so it sits with the
+        # project and shows only while one is active.
+        self.project_meter = Meter("Project budget")
+        self.project_meter.hide()
+        header_layout.addWidget(self.project_meter)
+        self.project_menu_header = QWidgetAction(self.project_menu)
+        self.project_menu_header.setDefaultWidget(header)
+        self.project_menu.addAction(self.project_menu_header)
+        self.project_menu_rule = self.project_menu.addSeparator()
         self.new_project_btn = self.project_menu.addAction("New Project")
         self.new_project_btn.triggered.connect(self.create_project)
         self.project_overview_btn = self.project_menu.addAction("Project Overview")
@@ -2669,34 +2705,18 @@ class GodAI(QWidget):
         )
         self.project_defaults_btn.setEnabled(False)
         self.project_defaults_btn.triggered.connect(self.save_project_defaults)
+        for action in (self.new_project_btn, self.project_overview_btn,
+                       self.project_defaults_btn):
+            action.setProperty("lessonAnchor", "project_menu_btn")
         # Opened on click, not through setMenu(): the menu indicator Qt adds
         # pushes the icon off centre.
         self.project_menu_btn = icon_button("more", "Project actions")
         self.project_menu_btn.clicked.connect(self._open_project_menu)
-        project_row.addWidget(self.project_menu_btn)
-        left_layout.addLayout(project_row)
 
-        # Says something only while a project is active ("Working in …").
-        self.active_project_label = QLabel("No project context")
-        self.active_project_label.setObjectName("SettingsHelp")
-        self.active_project_label.setWordWrap(True)
-        self.active_project_label.hide()
-        left_layout.addWidget(self.active_project_label)
-
-        # Project budget: measures the active project, so it sits with the
-        # project and shows only while one is active.
-        self.project_meter = Meter("Project budget")
-        self.project_meter.hide()
-        left_layout.addWidget(self.project_meter)
-
-        search_row = QHBoxLayout()
-        search_row.setContentsMargins(0, 0, 0, 0)
-        search_row.setSpacing(SM)
         self.history_search = QLineEdit()
         self.history_search.setPlaceholderText("Search chats")
         self.history_search.setAccessibleName("Search saved chats")
         self.history_search.textChanged.connect(self.load_history_list)
-        search_row.addWidget(self.history_search, 1)
 
         # Narrow the list to one agent. Populated from the chats that exist, so
         # it only ever offers agents you have actually used.
@@ -2704,8 +2724,6 @@ class GodAI(QWidget):
             ALL_AGENTS_FILTER, "Filter saved chats by agent",
             label_for=self._agent_label)
         self.history_agent_filter.currentTextChanged.connect(self.load_history_list)
-        search_row.addWidget(self.history_agent_filter)
-        left_layout.addLayout(search_row)
 
         self.history_list = ChatList()
         self.history_list.setAccessibleName("Saved chats")
@@ -2721,36 +2739,76 @@ class GodAI(QWidget):
             shortcut = QShortcut(key, self.history_list)
             shortcut.setContext(Qt.ShortcutContext.WidgetShortcut)
             shortcut.activated.connect(self._delete_current_chat)
-        # The list takes the rail's spare height rather than being capped at
-        # 200px with the buttons stranded at the bottom of the window.
         self.history_list.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         self.history_list.setMinimumHeight(150)
-        left_layout.addWidget(self.history_list, 1)
 
-        self.new_chat_btn = QPushButton("New Chat")
+        self.new_chat_btn = quiet("New Chat")
         self.new_chat_btn.clicked.connect(self.new_chat)
-        left_layout.addWidget(self.new_chat_btn)
 
-        # Places that open a window: navigation, so they live with the chats
-        # (rails-rebalance, option B).
-        links = QVBoxLayout()
-        links.setSpacing(0)
-        self.cost_history_btn = nav_row("Cost History")
-        self.cost_history_btn.clicked.connect(self.show_cost_history)
-        links.addWidget(self.cost_history_btn)
+    def _build_light_look_note(self) -> QWidget:
+        """The one-time note after an install moved to the light look (O2)."""
+        note = QFrame()
+        note.setObjectName("LightNote")
+        row = QHBoxLayout(note)
+        row.setContentsMargins(LG, SM, SM, SM)
+        row.setSpacing(SM)
+        text = QLabel(
+            "Imprint has a new light look. Dark is in Settings > General.")
+        text.setObjectName("LightNoteText")
+        text.setWordWrap(True)
+        row.addWidget(text, 1)
+        dismiss = link_button("Dismiss")
+        dismiss.setAccessibleName("Dismiss the new look note")
+        dismiss.clicked.connect(note.hide)
+        row.addWidget(dismiss, 0, Qt.AlignVCenter)
+        self.light_look_dismiss_btn = dismiss
+        note.setVisible(getattr(self, "_show_light_note", False))
+        return note
 
-        self.run_log_btn = nav_row("Run Log")
-        self.run_log_btn.clicked.connect(self.show_run_log)
-        links.addWidget(self.run_log_btn)
+    def _install_shell_shortcuts(self) -> None:
+        """S9: ⌘1–⌘8, ⌘[ and ⌘], ⌘Y, ⌘, and ⌘? (F1 is installed in __init__)."""
+        self.shell_shortcuts = []
 
-        self.learn_btn = nav_row("Learning Centre")
-        self.learn_btn.clicked.connect(lambda: self.show_learning_center())
-        links.addWidget(self.learn_btn)
-        left_layout.addLayout(links)
+        def bind(keys, handler):
+            shortcut = QShortcut(QKeySequence(keys), self)
+            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+            shortcut.activated.connect(handler)
+            self.shell_shortcuts.append(shortcut)
 
-        return left_widget
+        for index in range(min(9, len(WORKSPACES))):
+            bind(f"Ctrl+{index + 1}",
+                 lambda i=index: self.workspace_tabs.setCurrentIndex(i))
+        bind("Ctrl+[", lambda: self._step_agent_switch(-1))
+        bind("Ctrl+]", lambda: self._step_agent_switch(1))
+        bind("Ctrl+Y", self.toggle_history)
+        bind("Ctrl+,", self.show_settings)
+        bind("Ctrl+?", self._open_help_menu)
+        bind("Ctrl+Shift+/", self._open_help_menu)
+
+    def _step_agent_switch(self, step: int) -> None:
+        """⌘[ and ⌘]: the other agent of a two-agent workspace."""
+        current = getattr(self, "_current_agent", "")
+        workspace = next((agents for agents in WORKSPACES.values()
+                          if current in agents), ())
+        if len(workspace) < 2:
+            return
+        index = (workspace.index(current) + step) % len(workspace)
+        self.select_agent(workspace[index])
+
+    def _restyle_shell_icons(self) -> None:
+        """Icons are drawn in the theme's colours; redraw them on a change."""
+        if hasattr(self, "workspace_tabs"):
+            self.workspace_tabs.restyle()
+        if hasattr(self, "history_btn"):
+            self.history_btn.setIcon(
+                shell_rail.shell_icon("history", theme.token("TEXT_DIM"), 18))
 
     def _open_project_menu(self):
+        # The header ("Working in …" and the budget bar) only while a
+        # project is active; without one the menu starts with New Project.
+        active = not self.active_project_label.isHidden()
+        self.project_menu_header.setVisible(active)
+        self.project_menu_rule.setVisible(active)
         button = self.project_menu_btn
         self.project_menu.exec(button.mapToGlobal(QPoint(0, button.height() + 2)))
 
@@ -2771,26 +2829,6 @@ class GodAI(QWidget):
         center_layout = QVBoxLayout(center_widget)
         center_layout.setContentsMargins(LG + SM, LG + SM, LG + SM, LG + SM)
         center_layout.setSpacing(MD)
-
-        # The workspace tabs moved to the header bar. What stays here is the
-        # stage switcher, which appears only when a workspace contains two
-        # related tools (Draft/Publish or Audiobooks/Music).
-        self.workspace_tool_row = QWidget()
-        tool_row = QHBoxLayout(self.workspace_tool_row)
-        tool_row.setContentsMargins(0, 0, 0, 0)
-        tool_row.setSpacing(6)
-        self.workspace_tool_buttons = {}
-        for agent_name, label in WORKSPACE_LABELS.items():
-            button = QPushButton(label)
-            button.setObjectName("WorkspaceTool")
-            button.setCheckable(True)
-            button.clicked.connect(
-                lambda _checked, name=agent_name: self.select_agent(name)
-            )
-            tool_row.addWidget(button)
-            self.workspace_tool_buttons[agent_name] = button
-        tool_row.addStretch()
-        center_layout.addWidget(self.workspace_tool_row)
 
         # ── Page title ──────────────────────────────────────────────────
         # Docs, tooltips and the status pill moved to the header bar: they are
@@ -2917,6 +2955,14 @@ class GodAI(QWidget):
         setup_widget.setObjectName("Transparent")
         setup_widget.setLayout(setup)
         normal_layout.addWidget(setup_widget)
+
+        # What the next request would cost, under the request setup, where
+        # the money is about to be spent (O1; slice 2 moves it beside the
+        # model chip). Its updater, update_live_cost_estimate, is unchanged.
+        self.live_estimate_label = QLabel("No request pending")
+        self.live_estimate_label.setObjectName("EstimateLine")
+        self.live_estimate_label.setWordWrap(True)
+        normal_layout.addWidget(self.live_estimate_label)
 
         # Offers a one-click pull of Meta's Muse Glimmer. Hidden once the model
         # is installed, since it is then just another entry in the model box.
@@ -3505,51 +3551,41 @@ class GodAI(QWidget):
     def manuscript_export_calendar_csv(self):
         self.manuscript_panel.export_calendar_csv()
 
-    def build_right_panel(self) -> QWidget:
-        """Spend, limits, and the utilities that open a window.
+    def build_spend_and_status(self) -> None:
+        """The spend chip and the status chip, and the popovers they open.
 
-        This was five cards — SYSTEM, ROUTING, SPEND, ACTIONS, API KEYS — each
-        with its own border and title bar, stacked inside a scroll area inside
-        a panel. The spend card alone was nine lines of prose at one weight
-        ("Session Cost: €0.00", "Cost Today: €0.00", …), which is five
-        sentences to read before you know whether you can afford a request.
-
-        Now: four numbers, two bars, and the limits that set them. The
-        reference material that is only wanted when something looks wrong
-        (system load, routing, key status) stays, collapsed, at the bottom.
+        The spend popover holds what the spend rail held: Session and Today
+        with their limit fields, the project line, the figures, and Cost
+        History and Run Log. The status popover holds the four reference
+        sections, each still saying its state in a word while closed
+        (Design S6; D3).
         """
-        right_widget = rail("RailRight", RAIL_RIGHT_WIDTH)
-        # The rail scrolls. A QVBoxLayout given less height than its children
-        # need compresses them past their own minimums rather than clipping,
-        # and at the window's 600px minimum that drew "€0.00" over the caption
-        # under it. Same failure the panels already use scrollable() for.
-        rail_outer = QVBoxLayout(right_widget)
-        rail_outer.setContentsMargins(0, 0, 0, 0)
-        rail_body = QWidget()
-        rail_body.setObjectName("Transparent")
-        rail_scroll = scrollable(rail_body)
-        # This rail has a fixed width and every component is designed for it;
-        # a one-pixel size-hint mismatch must not create a horizontal scrollbar.
-        rail_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        rail_outer.addWidget(rail_scroll)
-        layout = QVBoxLayout(rail_body)
-        layout.setContentsMargins(MD + XS, LG, MD + XS, LG)
-        layout.setSpacing(MD)
+        self.spend_chip = shell_chips.SpendChip()
+        self.spend_chip.clicked.connect(
+            lambda: self.open_spend_popover(from_keyboard=False))
+        self.agent_status_pill = shell_chips.StatusChip()
+        # Design S3: the chip keeps the pill's name; `status_chip` is an alias.
+        self.status_chip = self.agent_status_pill
+        self.agent_status_pill.clicked.connect(
+            lambda: self.open_status_popover(from_keyboard=False))
+
+        # ── Spend ──
+        self.spend_popover = shell_popover.Popover(self, "Spend", 320)
+        self.spend_popover.set_anchor(self.spend_chip)
+        layout = self.spend_popover.layout_
 
         # Heading row: the one action on the whole block sits in it as a link.
         spend_head = QHBoxLayout()
         spend_head.setContentsMargins(0, 0, 0, 0)
-        spend_head.addWidget(section("Spend"))
+        spend_head.addWidget(self.spend_popover.heading("Spend"))
         spend_head.addStretch()
         self.reset_session_budget_btn = link_button("Reset session spend")
         self.reset_session_budget_btn.clicked.connect(self.reset_session_spend)
         spend_head.addWidget(self.reset_session_budget_btn, 0, Qt.AlignBottom)
         layout.addLayout(spend_head)
 
-        # "Session remaining: €1 / €1" is two numbers you have to subtract. A
-        # bar answers the question before you have read anything — and the
-        # cap beside it is the field that sets it, so there is no second
-        # Limits block repeating the same two numbers under a Save button.
+        # A bar answers the question before you have read anything — and the
+        # cap beside it is the field that sets it.
         self.session_meter = BudgetRow(
             "Session", format_limit(self.session_budget_eur))
         self.daily_meter = BudgetRow("Today", format_limit(self.daily_budget_eur))
@@ -3560,36 +3596,64 @@ class GodAI(QWidget):
             budget_input.editingFinished.connect(self._commit_budget_limits)
         layout.addWidget(self.session_meter)
         layout.addWidget(self.daily_meter)
+        # Closing the popover commits an edit in progress, one event-loop turn
+        # later, so the invalid-value warning never opens inside a hide.
+        self.spend_popover.closed.connect(
+            lambda: QTimer.singleShot(0, self, self._commit_budget_limits))
 
-        # The numbers you glance at, not act on: one line each. Detail (which
-        # tool ran last, the routing totals) is on hover.
+        # The numbers you glance at, not act on: one line each.
         figures = QVBoxLayout()
         figures.setContentsMargins(0, 0, 0, 0)
         figures.setSpacing(XS + 2)
+        # The project's spend as one read-only line; the bar stays in the
+        # project menu (O3).
+        self.project_spend_stat = KeyValueRow("Project", "—")
+        self.project_spend_stat.hide()
         self.request_count_stat = KeyValueRow("Requests", "0")
         self.last_request_stat = KeyValueRow("Last request", "—")
         # Hybrid routing: saved by running local, spent on suggestions you
         # accepted (services/routing_advisor.SavingsTally); totals on hover.
         self.local_savings_stat = KeyValueRow("Saved by local", "€0.00")
         self.local_spent_stat = KeyValueRow("Advice spent", "€0.00")
-        for row in (self.request_count_stat, self.last_request_stat,
-                    self.local_savings_stat, self.local_spent_stat):
+        for row in (self.project_spend_stat, self.request_count_stat,
+                    self.last_request_stat, self.local_savings_stat,
+                    self.local_spent_stat):
             figures.addWidget(row)
         layout.addLayout(figures)
 
-        self.live_estimate_label = QLabel("No request pending")
-        self.live_estimate_label.setObjectName("EstimateLine")
-        self.live_estimate_label.setWordWrap(True)
-        layout.addWidget(self.live_estimate_label)
+        self.unpriced_note = QLabel("")
+        self.unpriced_note.setObjectName("PopoverNote")
+        self.unpriced_note.setWordWrap(True)
+        self.unpriced_note.hide()
+        layout.addWidget(self.unpriced_note)
 
-        # ── Reference: wanted only when something looks wrong. Each section
-        # says its state in a word while closed, so "wrong" is visible
-        # without opening four of them. ──
-        layout.addWidget(section("Status"))
+        footer_rule = QFrame()
+        footer_rule.setObjectName("PopoverRule")
+        footer_rule.setFixedHeight(1)
+        layout.addWidget(footer_rule)
+        footer = QHBoxLayout()
+        footer.setContentsMargins(0, 0, 0, 0)
+        footer.setSpacing(MD)
+        self.cost_history_btn = link_button("Cost History")
+        self.cost_history_btn.clicked.connect(self.show_cost_history)
+        footer.addWidget(self.cost_history_btn)
+        self.run_log_btn = link_button("Run Log")
+        self.run_log_btn.clicked.connect(self.show_run_log)
+        footer.addWidget(self.run_log_btn)
+        footer.addStretch()
+        layout.addLayout(footer)
+
+        # ── Status ──
+        self.status_popover = shell_popover.Popover(self, "Status", 340,
+                                      max_height_ratio=0.7)
+        self.status_popover.set_anchor(self.agent_status_pill)
+        layout = self.status_popover.layout_
+        layout.addWidget(self.status_popover.heading("Status"))
         reference = QVBoxLayout()
         reference.setSpacing(0)
 
         system_card = CollapsibleSection("System", expanded=False)
+        self.system_section = system_card
         system_body = QWidget()
         system_body.setObjectName("Transparent")
         system_layout = QVBoxLayout(system_body)
@@ -3597,6 +3661,8 @@ class GodAI(QWidget):
         system_layout.setSpacing(SM)
         self.resource_status_card = ResourceStatusCard()
         self.resource_status_card.summary_changed.connect(system_card.set_summary)
+        self.resource_status_card.summary_changed.connect(
+            lambda *_a: self.refresh_status_chip())
         theme.themed(self.resource_status_card, STATUS_CARD_STYLES)
         # Compatibility alias for tooltips and existing extensions.  The old
         # object was one long rich-text QLabel; the new card owns four rows.
@@ -3609,6 +3675,7 @@ class GodAI(QWidget):
         reference.addWidget(system_card)
 
         routing_card = CollapsibleSection("Chat routing", expanded=False)
+        self.routing_section = routing_card
         routing_body = QWidget()
         routing_body.setObjectName("Transparent")
         routing_layout = QVBoxLayout(routing_body)
@@ -3626,6 +3693,7 @@ class GodAI(QWidget):
         reference.addWidget(routing_card)
 
         keys_card = CollapsibleSection("API keys", expanded=False)
+        self.keys_section = keys_card
         keys_body = QWidget()
         keys_body.setObjectName("Transparent")
         keys_layout = QVBoxLayout(keys_body)
@@ -3634,6 +3702,8 @@ class GodAI(QWidget):
         self.api_keys_status_card = ApiKeysStatusCard(
             ("OpenAI", "DeepSeek", "Kimi", "Gemini", "Anthropic", "Qwen"))
         self.api_keys_status_card.summary_changed.connect(keys_card.set_summary)
+        self.api_keys_status_card.summary_changed.connect(
+            lambda *_a: self.refresh_status_chip())
         theme.themed(self.api_keys_status_card, STATUS_CARD_STYLES)
         key_classes = {
             "OpenAI": OpenAIClientWrapper, "DeepSeek": DeepSeekClientWrapper,
@@ -3656,8 +3726,8 @@ class GodAI(QWidget):
         reference.addWidget(keys_card)
 
         # Beside the keys: what the providers behind them have shipped since
-        # Imprint last looked. Collapsed like its neighbours now that the
-        # title carries the count as a pill (rails-rebalance, option B).
+        # Imprint last looked. The count also rides on the status chip, so
+        # updates are visible without opening anything (D3).
         self.model_updates_section = CollapsibleSection(
             "Model updates", expanded=False, summary_from_title=True)
         updates_body = QWidget()
@@ -3685,8 +3755,65 @@ class GodAI(QWidget):
 
         layout.addLayout(reference)
         layout.addStretch()
+        self.model_updates_waiting = 0
 
-        return right_widget
+    def open_spend_popover(self, from_keyboard: bool = False) -> None:
+        self.update_usage_labels()
+        self.spend_popover.open_below(self.spend_chip,
+                                      from_keyboard=from_keyboard)
+
+    def open_status_popover(self, from_keyboard: bool = False) -> None:
+        """Open with the section that explains the chip expanded (S6)."""
+        state = self.agent_status_pill.state
+        expand = {
+            "Machine stressed": self.system_section,
+            "Machine busy": self.system_section,
+            "Key check failed": self.keys_section,
+        }.get(state.word)
+        for section_widget in (self.system_section, self.routing_section,
+                               self.keys_section, self.model_updates_section):
+            section_widget.set_expanded(
+                section_widget is expand
+                or (section_widget is self.model_updates_section
+                    and state.count > 0))
+        self.status_popover.open_below(self.agent_status_pill,
+                                       from_keyboard=from_keyboard)
+
+    def refresh_status_chip(self) -> None:
+        """The worst state wins (S6), from values the window already holds."""
+        if not hasattr(self, "agent_status_pill"):
+            return
+        level = {"danger": "red", "warning": "yellow"}.get(
+            (getattr(self.resource_status_card, "_summary", None)
+             or ("", ""))[1], "green")
+        keys_tone = self.api_keys_status_card.summary()[1] or None
+        worker = getattr(self, "chat_worker", None)
+        try:
+            busy = worker is not None and worker.isRunning()
+        except RuntimeError:
+            busy = False
+        self.agent_status_pill.set_state(shell_chips.status_state(
+            level, keys_tone, busy, getattr(self, "model_updates_waiting", 0)))
+        if hasattr(self, "top_bar"):
+            self.top_bar.fitter.fit()
+
+    def refresh_spend_chip(self, today_total: float | None = None,
+                           unpriced: int | None = None) -> None:
+        """Today's spend against the daily limit; unknown is said, never 0."""
+        if not hasattr(self, "spend_chip"):
+            return
+        if today_total is None:
+            today_total = self.usage_tracker.get_today_total()
+        if unpriced is None:
+            unpriced = self.usage_tracker.get_unpriced_requests_today()
+        self.spend_chip.refresh(today_total, self.daily_budget_eur, unpriced)
+        self.unpriced_note.setVisible(unpriced > 0)
+        if unpriced:
+            noun = "request" if unpriced == 1 else "requests"
+            self.unpriced_note.setText(
+                f"{unpriced} {noun} had no price; totals exclude them.")
+        if hasattr(self, "top_bar"):
+            self.top_bar.fitter.fit()
 
     def load_provider_models(self):
         if not hasattr(self, "provider_box") or not hasattr(self, "model_box"):
@@ -3750,13 +3877,27 @@ class GodAI(QWidget):
         handful of sheets that call sites build by hand, which are applied once
         at build time and would otherwise keep the old accent until relaunch.
         """
-        self.setStyleSheet(global_stylesheet())
-        theme.repaint()
+        # ADR 0006 decision 8: never restyle while Booth's media engine runs
+        # (the 2026-10-05 deadlock class; the slice-1 Booth test hung once in
+        # a full run). Release it (the playhead is saved), restyle, reload.
+        panel = getattr(self, "audiobook_panel", None)
+        player = getattr(panel, "audiobook_player", None) if panel else None
+        suspended = player.suspend() if player is not None else None
+        try:
+            self.setStyleSheet(global_stylesheet())
+            theme.repaint()
+        finally:
+            if suspended is not None:
+                player.resume(suspended)
         # The dots paint from `theme.current()`, so they also have to be told
         # when the choice was made somewhere else — the Settings picker, or the
         # restore when it is cancelled.
-        if hasattr(self, "theme_dots"):
-            self.theme_dots.update()
+        if getattr(self, "theme_dots", None) is not None:
+            try:
+                self.theme_dots.update()
+            except RuntimeError:
+                self.theme_dots = None      # its Settings dialog has gone
+        self._restyle_shell_icons()
 
     # ── Bug Bounty handlers ───────────────────────────────────────────────────
     # ──────────────────────────────────────────────────────────────────
@@ -3827,17 +3968,18 @@ class GodAI(QWidget):
         self.workspace_tabs.setCurrentIndex(target_index)
         self._syncing_workspace_tabs = False
 
-        if hasattr(self, "workspace_description_label"):
-            self.workspace_description_label.setText(
-                workspace_description(workspace_name))
-
         agents_in_workspace = WORKSPACES[workspace_name]
         for name, button in self.workspace_tool_buttons.items():
             button.setVisible(name in agents_in_workspace)
             button.setChecked(name == agent_name)
 
-        # Single-tool workspaces do not need a redundant second navigation row.
-        self.workspace_tool_row.setVisible(len(agents_in_workspace) > 1)
+        # A two-agent workspace gets the switch; a one-agent workspace shows
+        # the agent's name in its place (Design S3).
+        if hasattr(self, "top_bar"):
+            self.top_bar.show_switch(len(agents_in_workspace) > 1,
+                                     WORKSPACE_LABELS.get(agent_name, ""))
+        else:
+            self.workspace_tool_row.setVisible(len(agents_in_workspace) > 1)
 
     def update_agent_ui(self, agent_name):
         self._current_agent = agent_name  # track for show_agent_docs()
@@ -3851,9 +3993,10 @@ class GodAI(QWidget):
                 spec.label if spec else agent_name.title())
         if hasattr(self, "agent_subtitle_label"):
             self.agent_subtitle_label.setText(spec.description if spec else "")
-        if hasattr(self, "agent_status_pill"):
-            self.agent_status_pill.setText("●  Ready")
-            self.agent_status_pill.setStyleSheet("")
+        if hasattr(self, "agent_docs_btn"):
+            self.agent_docs_btn.setText(
+                f"{spec.label if spec else agent_name.title()} docs")
+        self.refresh_status_chip()
 
         # One list, not a chain of `is_x` booleans repeated in two blocks.
         # Adding an agent used to mean editing both, and forgetting one is
@@ -5526,6 +5669,8 @@ class GodAI(QWidget):
         if warnings:
             title += f" · {warnings} warning" + ("s" if warnings > 1 else "")
         self.model_updates_section.set_title(title)
+        self.model_updates_waiting = new_count
+        self.refresh_status_chip()
 
         checked = self.model_watch.last_checked
         if checked:
@@ -5783,6 +5928,7 @@ class GodAI(QWidget):
         )
 
         self.last_request_cost = entry.get("cost_eur", entry.get("estimated_cost", 0.0))
+        self._note_request_price(entry)
         self.panel_routing.finished(context["agent"], self.last_request_cost)
         self.last_tool_name = f"{context['agent']}/{context['tool']} - {context['provider']}"
         self.session_cost_total += entry.get("estimated_cost", 0.0)
@@ -5866,6 +6012,7 @@ class GodAI(QWidget):
                 cost_type="partial",
             )
             self.last_request_cost = recorded
+            self.last_request_unpriced = False
             self.last_tool_name = (f"{context['agent']}/{context['tool']} - "
                                    f"{context['provider']}")
             self.session_cost_total += recorded
@@ -5993,6 +6140,7 @@ class GodAI(QWidget):
         )
 
         self.last_request_cost = usage_entry.get("cost_eur", usage_entry.get("estimated_cost", 0.0))
+        self._note_request_price(usage_entry)
         self._tally_finished_job(self.last_request_cost)
         tool = getattr(self, "pending_tool", "General Chat")
         self.last_tool_name = f"{self.pending_agent}/{tool} - {self.pending_backend}"
@@ -6102,6 +6250,8 @@ class GodAI(QWidget):
         stats = self.monitor.snapshot()
         if hasattr(self, "resource_status_card"):
             self.resource_status_card.set_snapshot(stats)
+            # The chip's "Working" follows the request on the same tick.
+            self.refresh_status_chip()
             return
 
         # Compatibility for lightweight hosts that still expose the old label.
@@ -6124,8 +6274,15 @@ class GodAI(QWidget):
         self.request_count_stat.setToolTip(
             f"{today_requests} today · {self.session_request_count} this session")
 
-        self.last_request_stat.set_value(f"€{self.last_request_cost:.2f}")
-        self.last_request_stat.setToolTip(f"Last request ran: {tool_name}")
+        unpriced_today = self.usage_tracker.get_unpriced_requests_today()
+        if getattr(self, "last_request_unpriced", False):
+            self.last_request_stat.set_value("Unknown")
+            self.last_request_stat.setToolTip(
+                f"Last request ran: {tool_name}. It had no price, so what it "
+                "cost is unknown.")
+        else:
+            self.last_request_stat.set_value(f"€{self.last_request_cost:.2f}")
+            self.last_request_stat.setToolTip(f"Last request ran: {tool_name}")
         tally = getattr(self, "savings_tally", None)
         stat = getattr(self, "local_savings_stat", None)
         if tally is not None and stat is not None:
@@ -6139,17 +6296,29 @@ class GodAI(QWidget):
 
         # The bars show spend against the cap. Remaining is the gap, which is
         # the thing you were subtracting for by hand before.
-        self.session_meter.set(self.session_cost_total, self.session_budget_eur)
-        self.daily_meter.set(today_total, self.daily_budget_eur)
+        self.session_meter.set(self.session_cost_total, self.session_budget_eur,
+                               unknown=getattr(self, "session_unpriced_count", 0))
+        self.daily_meter.set(today_total, self.daily_budget_eur,
+                             unknown=unpriced_today)
+        self.refresh_spend_chip(today_total, unpriced_today)
         project = self._active_project()
         if project and project["budget_eur"] is not None:
-            self.project_meter.set(
-                self.usage_tracker.get_project_today_total(project["id"]),
-                float(project["budget_eur"]),
-            )
+            project_total = self.usage_tracker.get_project_today_total(
+                project["id"])
+            self.project_meter.set(project_total, float(project["budget_eur"]))
             self.project_meter.show()
+            self.project_spend_stat.set_value(
+                f"€{project_total:.2f} of "
+                f"{format_limit(float(project['budget_eur']))}"
+                if float(project["budget_eur"]) > 0 else
+                f"€{project_total:.2f}")
+            self.project_spend_stat.show()
         else:
             self.project_meter.hide()
+            self.project_spend_stat.setVisible(bool(project))
+            if project:
+                self.project_spend_stat.set_value(
+                    f"€{self.usage_tracker.get_project_today_total(project['id']):.2f}")
 
     def start_resource_timer(self):
         self.resource_timer = QTimer(self)
@@ -6290,17 +6459,11 @@ class GodAI(QWidget):
                 self.history_project_filter.blockSignals(False)
                 QMessageBox.information(self, "Finish the current request", str(exc))
                 return
-        if hasattr(self, "project_context_pill"):
-            self.project_context_pill.setVisible(bool(project))
-            if project:
-                self.project_context_pill.setText(
-                    self.project_context_pill.fontMetrics().elidedText(
-                        f"Project: {project['name']}", Qt.ElideRight, 135
-                    )
-                )
-                self.project_context_pill.setToolTip(
-                    f"Active context: {project['name']}"
-                )
+        # The selector shows the project in the bar at all times; the pill
+        # that repeated it is gone, its tooltip moved here (Design S4).
+        self.history_project_filter.setToolTip(
+            f"Working in {project['name']}" if project
+            else "No project selected")
         if hasattr(self, "active_project_label"):
             self.active_project_label.setText(
                 f"Working in {project['name']}" if project else "No project context"
@@ -6576,6 +6739,10 @@ class GodAI(QWidget):
                 f"Expected either `{doc_path}` or `{project_doc_path}`"
             )
 
+        # The viewer reads in either look, so every colour is a token of the
+        # current theme (ADR 0006, the literal sweep).
+        t = theme.palette()
+
         # Convert markdown to basic HTML (handles headings, bold, tables, code, lists)
         def md_to_html(text: str) -> str:
             import re
@@ -6589,7 +6756,7 @@ class GodAI(QWidget):
                 # Code block
                 if line.startswith("```"):
                     if not in_code:
-                        html_lines.append('<pre style="background:#1e1e1e;color:#d4d4d4;padding:10px;border-radius:6px;font-size:12px;overflow:auto;">')
+                        html_lines.append(f'<pre style="background:{t["ELEVATED"]};color:{t["TEXT"]};padding:10px;border-radius:6px;font-size:12px;overflow:auto;">')
                         in_code = True
                     else:
                         html_lines.append("</pre>")
@@ -6614,7 +6781,7 @@ class GodAI(QWidget):
                                 i + 1 < len(lines) and re.match(r"^\|[-| :]+\|$", lines[i+1]) if i+1 < len(lines) else False
                     tag = "th" if is_header else "td"
                     row_html = "".join(
-                        f'<{tag} style="border:1px solid #333;padding:6px 10px;text-align:left;">{c}</{tag}>'
+                        f'<{tag} style="border:1px solid {t["BORDER_STRONG"]};padding:6px 10px;text-align:left;">{c}</{tag}>'
                         for c in cells
                     )
                     html_lines.append(f"<tr>{row_html}</tr>")
@@ -6626,22 +6793,22 @@ class GodAI(QWidget):
                         in_table = False
                 # Headings
                 if line.startswith("#### "):
-                    html_lines.append(f'<h4 style="color:#e8e8e8;margin:10px 0 4px;">{line[5:]}</h4>')
+                    html_lines.append(f'<h4 style="color:{t["TEXT"]};margin:10px 0 4px;">{line[5:]}</h4>')
                 elif line.startswith("### "):
-                    html_lines.append(f'<h3 style="color:{ACCENT};margin:14px 0 6px;">{line[4:]}</h3>')
+                    html_lines.append(f'<h3 style="color:{t["ACCENT"]};margin:14px 0 6px;">{line[4:]}</h3>')
                 elif line.startswith("## "):
-                    html_lines.append(f'<h2 style="color:#ffffff;border-bottom:1px solid #333;padding-bottom:4px;margin:18px 0 8px;">{line[3:]}</h2>')
+                    html_lines.append(f'<h2 style="color:{t["TEXT"]};border-bottom:1px solid {t["BORDER_STRONG"]};padding-bottom:4px;margin:18px 0 8px;">{line[3:]}</h2>')
                 elif line.startswith("# "):
-                    html_lines.append(f'<h1 style="color:{ACCENT};font-size:20px;margin:0 0 4px;">{line[2:]}</h1>')
+                    html_lines.append(f'<h1 style="color:{t["ACCENT"]};font-size:20px;margin:0 0 4px;">{line[2:]}</h1>')
                 # Blockquote / warning
                 elif line.startswith("> "):
-                    html_lines.append(f'<blockquote style="border-left:3px solid #f0a000;padding:6px 12px;margin:6px 0;background:#1e1a00;color:#f0c050;">{line[2:]}</blockquote>')
+                    html_lines.append(f'<blockquote style="border-left:3px solid {t["WARNING"]};padding:6px 12px;margin:6px 0;background:{t["ELEVATED"]};color:{t["WARNING"]};">{line[2:]}</blockquote>')
                 # Unordered list
                 elif line.startswith("- ") or line.startswith("* "):
                     html_lines.append(f'<li style="margin:2px 0;">{line[2:]}</li>')
                 # Horizontal rule
                 elif line.startswith("---"):
-                    html_lines.append('<hr style="border:none;border-top:1px solid #333;margin:12px 0;">')
+                    html_lines.append(f'<hr style="border:none;border-top:1px solid {t["BORDER_STRONG"]};margin:12px 0;">')
                 # Blank line
                 elif line.strip() == "":
                     html_lines.append("<br>")
@@ -6656,13 +6823,13 @@ class GodAI(QWidget):
             html = "\n".join(html_lines)
             # Inline: **bold**, `code`, *italic*
             html = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", html)
-            html = re.sub(r"`([^`]+)`", r'<code style="background:#2a2a2a;padding:1px 5px;border-radius:3px;font-size:12px;">\1</code>', html)
+            html = re.sub(r"`([^`]+)`", rf'<code style="background:{t["ELEVATED"]};padding:1px 5px;border-radius:3px;font-size:12px;">\1</code>', html)
             html = re.sub(r"\*(.+?)\*", r"<i>\1</i>", html)
             return html
 
         html_content = md_to_html(raw_md)
         full_html = f"""
-        <html><body style="background:#111111;color:#cccccc;font-family:sans-serif;font-size:13px;padding:4px 8px;">
+        <html><body style="background:{t['SURFACE']};color:{t['TEXT_DIM']};font-family:sans-serif;font-size:13px;padding:4px 8px;">
         {html_content}
         </body></html>
         """
@@ -6677,7 +6844,7 @@ class GodAI(QWidget):
         dialog = QDialog(self)
         dialog.setWindowTitle(f"Docs — {title}")
         dialog.resize(760, 620)
-        dialog.setStyleSheet("background-color: #111111;")
+        dialog.setStyleSheet(f"background-color: {t['SURFACE']};")
 
         layout = QVBoxLayout(dialog)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -6686,9 +6853,9 @@ class GodAI(QWidget):
         browser = QTextBrowser()
         browser.setHtml(full_html)
         browser.setStyleSheet(
-            "QTextBrowser { background: #111111; color: #cccccc; border: none; }"
-            "QScrollBar:vertical { background: #1a1a1a; width: 10px; }"
-            "QScrollBar::handle:vertical { background: #333333; border-radius: 5px; }"
+            f"QTextBrowser {{ background: {t['SURFACE']}; color: {t['TEXT_DIM']}; border: none; }}"
+            f"QScrollBar:vertical {{ background: {t['ELEVATED']}; width: 10px; }}"
+            f"QScrollBar::handle:vertical {{ background: {t['BORDER_STRONG']}; border-radius: 5px; }}"
         )
         browser.setOpenExternalLinks(True)
         layout.addWidget(browser)
@@ -6788,6 +6955,7 @@ class GodAI(QWidget):
                 event.ignore()
                 return
             driver.stop_now("quit")
+        motion.stop_all()
         try:
             self.author_panel._project_save_timer.stop()
             self.author_panel._persist_project_state()
