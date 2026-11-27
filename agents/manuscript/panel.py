@@ -913,7 +913,7 @@ class ManuscriptPanel(QWidget):
         # the item's own itemChanged emission.
         from PySide6.QtCore import QTimer
         todo_id = item.data(Qt.UserRole)
-        QTimer.singleShot(0, lambda: self._set_todo_status(
+        QTimer.singleShot(0, self, lambda: self._set_todo_status(
             todo_id, "done" if done else "pending"))
 
     _TODO_MAX_ROWS = 8

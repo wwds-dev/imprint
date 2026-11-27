@@ -14,3 +14,62 @@ def dispose(widget):
     widget.close()
     widget.deleteLater()
     QCoreApplication.sendPostedEvents(widget, QEvent.Type.DeferredDelete)
+
+
+def live_windows(window_class) -> list:
+    """The live top-level `window_class` windows."""
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        return []
+    return [w for w in app.topLevelWidgets() if isinstance(w, window_class)]
+
+
+def dispose_windows(windows) -> int:
+    """Delete these `main.GodAI` windows now; return how many.
+
+    A dropped `main.GodAI` is never freed by the collector: bound methods
+    and closures held by long-lived objects keep its wrapper reachable, so
+    its C++ side lived on, each one still an application-wide event filter
+    with about 88 top-level widgets. By the middle of a CI run 70 windows and
+    6,571 top-level widgets were alive; `qWait` stalled for up to 6.9 s in
+    `GodAI.eventFilter` and the runner was killed for memory (exit 137).
+
+    The order matters. Workers are stopped first (`stop_all`, the quit path's
+    cancel-and-wait, never `terminate()`), so no thread emits into a window
+    being destroyed. Then each window stops being an app filter and stops its
+    timers before it is deleted, and the flush names each window as receiver
+    (see `dispose`). `closeEvent` is not called: it can open a modal box.
+    The Python wrapper may outlive this; it no longer owns any Qt object.
+
+    Deleting a window used to segfault the next module's `qWait`: a
+    context-less `QTimer.singleShot` lambda fired on the deleted panel, and
+    its RuntimeError reached Shiboken inside the next Python application
+    event filter. App timers now name a context
+    (`tests/test_single_shot_context.py`)."""
+    from PySide6.QtCore import QTimer
+    from PySide6.QtWidgets import QApplication
+
+    from ui.worker_registry import stop_all
+
+    app = QApplication.instance()
+    windows = list(windows)
+    if app is None or not windows:
+        return 0
+    stop_all()
+    for window in windows:
+        try:
+            app.removeEventFilter(window)
+            for timer in window.findChildren(QTimer):
+                timer.stop()
+            panel = getattr(window, "audiobook_panel", None)
+            player = getattr(panel, "audiobook_player", None)
+            if player is not None:
+                player.release()
+            window.hide()
+            window.deleteLater()
+            QCoreApplication.sendPostedEvents(window, QEvent.Type.DeferredDelete)
+        except RuntimeError:
+            continue                    # its C++ side is already gone
+    return len(windows)
