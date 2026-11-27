@@ -2560,9 +2560,7 @@ class GodAI(QWidget):
         # The running version, derived from the repository rather than typed:
         # on the mark's tooltip, with a dot when this build is stale.
         self.app_mark = self.workspace_tabs.app_mark
-        self.app_mark.set_version(
-            app_version.tooltip(), not app_version.staleness()["current"],
-            APP_DISPLAY_NAME)
+        self._show_version_on_mark()
 
         self.settings_btn = self.workspace_tabs.settings_btn
         self.settings_btn.clicked.connect(self.show_settings)
@@ -2596,6 +2594,13 @@ class GodAI(QWidget):
         self.tooltips_toggle_btn.toggled.connect(self._toggle_tooltips)
         self._toggle_tooltips()
         return self.workspace_tabs
+
+    def _show_version_on_mark(self) -> None:
+        """The version on the app mark's tooltip; a dot when this build is
+        older than the code (Design S2, the old badge's stale state)."""
+        self.app_mark.set_version(
+            app_version.tooltip(), not app_version.staleness()["current"],
+            APP_DISPLAY_NAME)
 
     def _open_help_menu(self):
         button = self.help_btn

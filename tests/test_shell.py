@@ -692,3 +692,118 @@ def test_a_closing_drawer_stays_closed_after_a_window_hide(qapp, window,
     _settle(qapp, 4)
     assert not drawer.isVisible() and not drawer.scrim.isVisible()
     assert motion.running() == []
+
+
+# ── QA F1: the collapse order, on a bar narrow enough to need it ─────
+
+@pytest.fixture
+def narrow_bar(qapp):
+    """A top bar on its own, with S3's long values: the window's 1000 px
+    minimum leaves the real bar at level 0, so the steps are driven here."""
+    from PySide6.QtWidgets import QComboBox, QPushButton, QToolButton, QWidget
+    from ui.shell.chips import SpendChip, StatusChip
+    from ui.shell.top_bar import AgentSwitch, TopBar
+
+    from PySide6.QtCore import QSize
+
+    class WideSelector(QComboBox):
+        """Asks for 300 px whatever the app-wide dropdown polish did to its
+        size policy (that polish runs only once a window exists, so the
+        real combo's hint depends on test order)."""
+
+        def sizeHint(self):  # noqa: N802 - Qt API
+            return QSize(300, 36)
+
+    host = QWidget()
+    switch = AgentSwitch()
+    for label in ("Quill", "Press"):
+        switch.add_segment(QPushButton(label))
+    selector = WideSelector()
+    selector.addItem(LONG_PROJECT)
+    spend, status = SpendChip(), StatusChip()
+    spend.refresh(1234.56, 5000, 0)
+    status.set_state(status_state(None, "warning", False, 12))
+    project, history = QPushButton("…"), QToolButton()
+    bar = TopBar(switch=switch, project_selector=selector,
+                 project_button=project, history_button=history,
+                 spend_chip=spend, status_chip=status, parent=host)
+    host.resize(1200, 56)
+    host.show()
+    _settle(qapp, 2)
+    yield bar
+    host.close()
+    host.deleteLater()
+    _settle(qapp, 2)
+
+
+def _forms(bar):
+    return {
+        "spend_short": bar.spend_chip.form != FULL,
+        "selector_min": bar.project_selector.maximumWidth() == 140,
+        "status_compact": bar.status_chip.compact,
+        "spend_compact": bar.spend_chip.form == COMPACT,
+        "switch_tight": bool(bar.switch.property("tight")),
+    }
+
+
+def test_the_collapse_steps_come_in_s3_order(qapp, narrow_bar):
+    """Each step first appears at a strictly narrower width than the one
+    before it, in S3's order, and none is undone while the bar narrows."""
+    bar = narrow_bar
+    order = ["spend_short", "selector_min", "status_compact",
+             "spend_compact", "switch_tight"]
+    first_seen = {}
+    previous = {name: False for name in order}
+    for width in range(1100, 300, -2):
+        bar.resize(width, bar.height())
+        bar.fitter.fit()
+        forms = _forms(bar)
+        for name in order:
+            assert not (previous[name] and not forms[name]), (
+                f"{name} undone at {width}px")
+            if forms[name] and name not in first_seen:
+                first_seen[name] = width
+        previous = forms
+        # The money figure never disappears.
+        assert "1234.56" in bar.spend_chip.text()
+    assert list(first_seen) == order, first_seen
+    widths = [first_seen[name] for name in order]
+    assert widths == sorted(widths, reverse=True) and len(set(widths)) == 5, (
+        first_seen)
+    assert bar.fitter.level == bar.fitter.LEVELS - 1
+
+    # Widening undoes them all.
+    bar.resize(1100, bar.height())
+    bar.fitter.fit()
+    assert bar.fitter.level == 0 and not any(_forms(bar).values())
+
+
+def test_each_level_fits_where_it_is_chosen(qapp, narrow_bar):
+    bar = narrow_bar
+    for width in range(1100, 300, -10):
+        bar.resize(width, bar.height())
+        bar.fitter.fit()
+        level = bar.fitter.level
+        room = width - 2 * bar.fitter._padding()   # padding follows the window
+        if level < bar.fitter.LEVELS - 1:
+            assert bar.fitter.required(level) <= room, (width, level)
+        if level > 0:
+            # It collapsed only because the level above did not fit.
+            assert bar.fitter.required(level - 1) > room, (width, level)
+
+
+def test_hiding_the_open_drawer_directly_unchecks_history(qapp, window):
+    """QA F2 (mutant M24): a direct hide of the open drawer reports it closed,
+    so the History button is not left checked."""
+    drawer = window.history_drawer
+    closed = []
+    drawer.closed.connect(lambda: closed.append(1))
+    drawer.open_drawer(animate=False)
+    _settle(qapp, 2)
+    assert window.history_btn.isChecked()
+    drawer.hide()
+    _settle(qapp, 2)
+    assert closed == [1]
+    assert not drawer.is_open()
+    assert not window.history_btn.isChecked()
+    assert not drawer.scrim.isVisible()

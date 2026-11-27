@@ -177,6 +177,41 @@ class TestTheShellShowsIt:
         if stale:
             assert "older than the code" in window.app_mark.toolTip()
 
+    @pytest.mark.parametrize("current", [True, False])
+    def test_both_build_states_reach_the_mark(self, app, window, monkeypatch,
+                                              current):
+        """QA F3: forced, not read from this checkout's real state."""
+        real = dict(app_version.staleness())
+        monkeypatch.setattr(app_version, "staleness",
+                            lambda *a, **k: {**real, "current": current})
+        try:
+            window._show_version_on_mark()
+            assert window.app_mark.stale is (not current)
+            assert ("older than the code" in window.app_mark.toolTip()) is \
+                (not current)
+            assert window.app_mark.accessibleName().endswith(
+                "(stale build)") is (not current)
+        finally:
+            monkeypatch.undo()
+            window._show_version_on_mark()
+
+    @pytest.mark.parametrize("current", [True, False])
+    def test_both_build_states_reach_the_about_line(self, app, window,
+                                                    monkeypatch, current):
+        from PySide6.QtWidgets import QDialog, QLabel
+        from ui import dialogs
+        real = dict(app_version.staleness())
+        monkeypatch.setattr(app_version, "staleness",
+                            lambda *a, **k: {**real, "current": current})
+        opened = []
+        monkeypatch.setattr(QDialog, "exec", lambda self: opened.append(self) or 0)
+        dialogs.show_settings(window)
+        try:
+            about = opened[0].findChild(QLabel, "SettingsAbout")
+            assert ("older than the code" in about.text()) is (not current)
+        finally:
+            opened[0].reject()
+
     def test_the_about_line_matches_the_module(self, app, window, monkeypatch):
         from PySide6.QtWidgets import QDialog, QLabel
         from ui import dialogs
