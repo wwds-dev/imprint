@@ -255,3 +255,5 @@
 {"ts": "2026-11-25T06:34:57", "phase": "verify", "state": "done", "spec": "worker-crash-class"}
 {"ts": "2026-11-25T15:39:53", "phase": "architect", "state": "start", "spec": "manuscript-redesign"}
 {"ts": "2026-11-25T15:46:33", "phase": "architect", "state": "done", "spec": "manuscript-redesign"}
+{"ts": "2026-11-26T14:22:31", "phase": "verify", "state": "start"}
+{"ts": "2026-11-26T23:48:11", "phase": "verify", "state": "done"}
