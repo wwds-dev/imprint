@@ -370,6 +370,11 @@ Icon rail
 Top bar
 spend chip
 status chip
+Spend chip
+Spend popover
+Status chip
+Status popover
+Project budget bar
 ⌘Z
 # Added 2026-11-22 when T4 widened to README 3-7 and 13, the sheets and
 # every lesson (review R-3): emphasis, section and widget descriptions,

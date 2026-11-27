@@ -17,7 +17,7 @@
 | Provider is permitted | The current execution policy allows that provider to be used. |
 | Route is eligible | Credential, permission, capability, availability, and budget checks passed. |
 
-The **API keys** rail card reports detected readiness. It is not the secret editor: keys are pasted in **Settings → API keys** ([Add a key](#add-a-key)).
+The **API keys** card in the status popover reports detected readiness. It is not the secret editor: keys are pasted in **Settings → API keys** ([Add a key](#add-a-key)).
 The generic Chat exposes local/hybrid/cloud execution policy and
 provider permission controls; dedicated agent selectors expose only their real
 implemented routes and recommendations.
@@ -68,7 +68,7 @@ Mac* in the model menus. Settings → **Local models** shows what Imprint found.
 1. Get the key from the provider's own account page (for example
    console.anthropic.com or platform.openai.com). Never paste it into a
    prompt, a project or a chat.
-2. Click **Settings** in the header and open the **API keys** tab.
+2. Click **Settings** (the gear at the bottom of the icon rail) and open the **API keys** tab.
 3. Paste the key into that provider's field. Every value is one line; a
    two-line paste is refused with "must be one line only" and nothing is
    saved.
@@ -81,7 +81,7 @@ Mac* in the model menus. Settings → **Local models** shows what Imprint found.
 6. Open the **Assistant** workspace and tick the provider's box under
    **Cloud text models** (or **Paid media** for Higgsfield and ElevenLabs).
    The boxes start unticked at every launch and apply to every agent.
-7. Check the **API keys** card in the right rail: the provider now shows
+7. Click the status chip in the top bar and check the **API keys** card: the provider now shows
    **Configured**.
 
 Where the `.env` lives: in the project folder when Imprint runs from a

@@ -5,8 +5,8 @@ All notable changes to Imprint, newest first. The format follows
 
 ## How versions are numbered
 
-Imprint's version is `v<MAJOR>.<BUILD>` (for example `v2.400`), shown in the
-header bar. `MAJOR` is the single integer in the `VERSION` file (currently 2).
+Imprint's version is `v<MAJOR>.<BUILD>` (for example `v2.400`), shown on the
+app mark's tooltip (top of the icon rail) and on the About line in Settings. `MAJOR` is the single integer in the `VERSION` file (currently 2).
 `BUILD` is the number of commits on the branch (`git rev-list --count HEAD`),
 so it goes up by one with every commit and is never typed by hand. This is
 not semantic versioning: the number says which commit you run, not what
@@ -29,6 +29,24 @@ listed under **Unreleased** until it ships.
 ## Unreleased
 
 ### Changed
+- **The Manuscript shell: a new look and a new frame for the window (slice 1 of the redesign)**
+  (2026-11-27, spec `manuscript-redesign`, ADR 0006). Light is now the default look; Dark is one
+  switch away in Settings → General → Appearance, each in green, rose or teal, and an install that
+  had saved a dark theme moves to light once, with a note you can dismiss. The header row, the
+  description strip and both side rails are gone. In their place: a narrow icon rail (the app mark,
+  whose tooltip is the version, one icon per workspace, a **?** menu for Docs, the Learning Centre
+  and Keyboard shortcuts, and Settings) and a top bar (the agent switch or name, the project
+  selector and its actions, a History drawer for saved chats, a spend chip and a status chip).
+  The spend chip opens Session and Today with their limits, Requests, Cost History and Run Log;
+  the status chip shows the worst state and a count of waiting model updates, and opens System,
+  Chat routing, API keys and Model updates. A request with no price now reads "Unknown" or
+  "+ unknown" in the chip, the popover, Last request and Cost History, never €0.00, and an unpriced
+  request no longer hides "limit reached". New keys: ⌘1 to ⌘8, ⌘[ and ⌘], ⌘Y, ⌘, and ⌘?. Only the
+  History drawer moves (160 ms), and not under Reduce Motion. Switching the look while Booth plays
+  keeps Booth playing. Review and QA fixes: the drawer no longer stays half-open after the window is
+  hidden and shown, and the top bar's shortening steps are now tested. The composer and every
+  agent panel are unchanged; the next-request estimate is now one line under the request setup.
+  The Learning Centre lessons, the README and the agent sheets describe the new frame.
 - **Every image and video route checks the prompt; Alibaba's watermark stays on** (2026-11-24,
   spec `ai-act-safeguards`): Higgsfield's local prompt check now runs on the Gemini Omni and Wan
   teasers, every direct video and the topic of narrated videos before anything is reserved, and on

@@ -53,6 +53,15 @@ headings such as “Conversion settings” look like misplaced form labels.
 > (`forms.link_button`) or as an icon beside the control (`forms.icon_button`),
 > and FlowLayout rows that sit buttons on the controls' line. The section below
 > is kept as the alternative that was considered.
+>
+> **Reversed for the ask bar only, 2026-11-25** (spec `manuscript-redesign`,
+> decision D10, approved by the owner). The Manuscript redesign's single ask bar
+> with a model chip is this run bar: the chip shows provider and model with BEST
+> FIT, and its popover holds provider, model, refresh, Tool, the provider
+> permission chips and Auto-Apply. Forms inside stages keep the aligned form. The
+> ask bar arrives in slice 2; until then the composer is the aligned form
+> described above. Nothing in slice 1 touches it, except one caption line (see
+> "The shell" below).
 
 Collapse the three control rows into a single bar: **agent chip · provider ·
 model · live cost · Run**. Everything else — execution mode, the five provider
@@ -74,9 +83,41 @@ music, inv and more. The work is a renderer, not an analysis.
 
 ### Figures, not sentences, in the right rail
 
+> **Update (slice 1, 2026-11-25):** the right rail no longer exists. These
+> figures now live in the spend popover and the status popover (see "The shell"
+> below); the principle (bars with the number beside them, no prose around
+> them) is unchanged.
+
 Memory, swap and budget are all "x of y" — draw them as bars. A budget that is
 84% spent should be visible without reading. Keep the numeric value next to the
 bar; drop the prose around it.
+
+### The shell (Manuscript redesign, slice 1)
+
+Slice 1 of the Manuscript redesign (`docs/specs/manuscript-redesign.md`, ADR
+0006) replaced the window's chrome. The header row, the workspace description
+strip and both side rails are gone. What stands in their place:
+
+| Piece | What it is |
+|---|---|
+| Icon rail | 72 px wide, full height. App mark (its tooltip is the version; an amber dot means a stale build), one icon per workspace, **?** (agent Docs, Learning Centre, Keyboard shortcuts) and the Settings gear. |
+| Top bar | 56 px tall, over the content. Agent switch (or the agent's name), project selector with its **Project actions** menu, History (a drawer: search, agent filter, saved chats, New Chat), spend chip, status chip. |
+| Spend chip and popover | Today against the daily limit; the popover holds Session and Today with their limit fields, the project line, the figures, Reset session spend, Cost History and Run Log. A request with no price reads "unknown", never €0.00. |
+| Status chip and popover | The worst of: machine stressed, key check failed, machine busy, working, ready, with a count of waiting model updates. The popover holds System, Chat routing, API keys and Model updates. |
+
+The chips shorten as the window narrows (spend chip drops "today", then shows
+the amount only; status chip shows the dot and count) and nothing goes into an
+overflow menu. The look is Light by default, with Dark as the alternative, each
+in three accents, chosen in Settings → General → Appearance. The rail and top
+bar use the same type scale and spacing scale below; chips and the project
+selector are 13 px, the agent name and the drawer heading 14 px at weight 600.
+
+Motion: the History drawer slides open for 160 ms and nothing else moves. Under
+Reduce Motion (macOS's setting, or the in-app switch) it appears at once. This
+is the one exception to "Animation" in the list at the end of this page.
+
+The one change inside the centre panel: the live cost estimate ("Next request:
+…") is a caption line under the composer's request setup.
 
 ### One spacing scale
 
@@ -123,7 +164,8 @@ end in a concrete action or stop/continue rule.
 
 1. Type scale + spacing scale in `ui/style.py` — one file, immediately visible,
    trivially revertible.
-2. Right-rail figures — small, self-contained, high perceived payoff.
+2. Right-rail figures — small, self-contained, high perceived payoff. (Done, then
+   moved into the spend and status popovers by the shell, slice 1.)
 3. Run bar — restructures the chat panel only.
 4. Section renderer — build it for one agent (osint has the smallest vertical at
    227 lines), then reuse for the other 11.
@@ -137,4 +179,6 @@ after the refactor's phase 4, when each panel is its own module.
   goodwill on the one thing that is not broken.
 - **A command palette.** Tempting, but the sidebar is not the bottleneck — the
   control rows are. Revisit once the run bar exists.
-- **Animation.** Nothing here is slow enough to need it.
+- **Animation.** Nothing here is slow enough to need it. (Slice 1's History
+  drawer slide is the single, user-triggered exception; it respects Reduce
+  Motion.)
