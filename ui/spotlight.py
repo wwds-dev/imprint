@@ -223,7 +223,7 @@ class Spotlight(QFrame):
         self.dismiss()
         if callback is not None:
             # After this event returns: the lesson opens modally.
-            QTimer.singleShot(0, callback)
+            QTimer.singleShot(0, self.window_, callback)
 
     def dismiss(self, *_args) -> None:
         self.timer.stop()
@@ -279,5 +279,5 @@ def spotlight(target, title: str, detail: str = "",
                        ring_host=ring_host)
     window._spotlight = marker
     # Place it once the tab switches and scrolling have been laid out.
-    QTimer.singleShot(0, marker.start)
+    QTimer.singleShot(0, marker, marker.start)
     return marker

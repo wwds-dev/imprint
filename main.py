@@ -483,14 +483,14 @@ class GodAI(QWidget):
         # Reconcile provider renders that outlived the previous process —
         # real money may be in flight. One event-loop turn later so the
         # first paint is not blocked by job bookkeeping.
-        QTimer.singleShot(0, self._resume_provider_jobs)
-        QTimer.singleShot(0, self.start_local_discovery)
+        QTimer.singleShot(0, self, self._resume_provider_jobs)
+        QTimer.singleShot(0, self, self.start_local_discovery)
         # Model updates: what earlier sessions found and nobody dismissed,
         # then a fresh check a few seconds in — after the first paint and
         # the panels' own model fetches, which matter more.
         self.refresh_model_updates()
         if self.settings.get("model_check_on_startup", True):
-            QTimer.singleShot(MODEL_CHECK_DELAY_MS, self.check_for_new_models)
+            QTimer.singleShot(MODEL_CHECK_DELAY_MS, self, self.check_for_new_models)
 
     def _polish_tab_widgets(self):
         """Disable text elision and enable scroll buttons on every QTabWidget
@@ -1495,7 +1495,7 @@ class GodAI(QWidget):
         else:
             self._set_chat_status(f"{name} stays unrated: {result.reason}.")
         self._local_ratings_changed()
-        QTimer.singleShot(0, self.maybe_measure_local_models)
+        QTimer.singleShot(0, self, self.maybe_measure_local_models)
 
     def _local_ratings_changed(self, rerank: bool = True) -> None:
         """A rating, a refusal or progress changed: badges and the page follow."""
@@ -3599,7 +3599,7 @@ class GodAI(QWidget):
         # Closing the popover commits an edit in progress, one event-loop turn
         # later, so the invalid-value warning never opens inside a hide.
         self.spend_popover.closed.connect(
-            lambda: QTimer.singleShot(0, self._commit_budget_limits))
+            lambda: QTimer.singleShot(0, self, self._commit_budget_limits))
 
         # The numbers you glance at, not act on: one line each.
         figures = QVBoxLayout()

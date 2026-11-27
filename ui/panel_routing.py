@@ -120,7 +120,7 @@ class PanelRouting:
             self.held[agent] = {"context": context, "resume": resume}
             self._point(agent, target)
             self._status(agent, advice.message)
-            QTimer.singleShot(0, lambda: self._resume(
+            QTimer.singleShot(0, self.host, lambda: self._resume(
                 agent, target, accepted=advice.rule is not None))
             return False
         self.held[agent] = {"context": context, "resume": resume}

@@ -207,7 +207,7 @@ class ReleaseKitDriver(QObject):
     def _schedule(self, fn) -> None:
         fn = self._guarded(fn)
         if not self.run_inline:
-            QTimer.singleShot(0, fn)
+            QTimer.singleShot(0, self, fn)
             return
         # Inline (tests): a trampoline, so a long kit never recurses deeply.
         self._queue.append(fn)

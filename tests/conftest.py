@@ -187,36 +187,104 @@ def _collect_the_last_modules_windows():
     the `--randomly-seed=28367` order (crash in ui/widgets.py building
     test_creator_calendar's window, 3 runs of 3), gone with this collection.
 
-    The collection does not free them all: a window referenced from C++
-    signal connections survives it (a dropped `GodAI` is still alive after
-    `gc.collect()`, on main before the Manuscript shell too). By the middle of
-    a full run about fifty were still alive, visible, and each still
-    installed as an application-wide event filter, so one theme switch took
-    13 s and the shell's Booth theme test ran out of time (2026-11-25). So
-    the windows the previous modules left are retired here: their filter
-    removed, their timers stopped, hidden. Nothing is deleted.
+    The collection alone never freed them: bound methods and closures held
+    by long-lived objects keep a dropped window reachable. Mid-run about fifty
+    (seventy on CI) were alive, each an application-wide event filter, so one
+    theme switch took 13 s (2026-11-25) and qWait stalled for seconds. So
+    when the module ends, every `GodAI` it built is deleted
+    (`tests/qt_teardown.py`, `dispose_windows`; this replaces the retire-only
+    loop of 2026-11-25), and the suite's summary reports the most windows that
+    were ever alive at once.
     """
     import gc
-    import sys
     gc.collect()
-    main_module = sys.modules.get("main")
-    if main_module is not None and "PySide6.QtWidgets" in sys.modules:
+    yield
+    from_this_module = _live_windows()
+    _TEST_WINDOWS.clear()
+    _SCOPED_WINDOWS.clear()
+    if from_this_module:
+        from tests.qt_teardown import dispose_windows
+        dispose_windows(from_this_module)
+
+
+# ── Windows built by one test are freed when that test ends ──────────────────
+# A window a function-scoped fixture or the test itself builds is deleted at
+# the test's teardown, after its own fixtures' finalizers; a module- or
+# class-scoped one at the module's end (above). Before this, a function-scoped
+# fixture (test_release_kit_e2e's `kit`) left 18 windows alive in one module.
+_TEST_WINDOWS: list = []
+_PEAK_WINDOWS = {"windows": 0, "top_level": 0, "where": ""}
+
+
+def _live_windows() -> list:
+    window_class = getattr(sys.modules.get("main"), "GodAI", None)
+    if window_class is None or "PySide6.QtWidgets" not in sys.modules:
+        return []
+    from tests.qt_teardown import live_windows
+    return live_windows(window_class)
+
+
+# Windows built by a wider-scoped fixture, even one set up from inside a
+# test through request.getfixturevalue: never filed as the test's.
+_SCOPED_WINDOWS: list = []
+
+
+def _new_since(before: list) -> list:
+    known = ({id(w) for w in before} | {id(w) for w in _TEST_WINDOWS}
+             | {id(w) for w in _SCOPED_WINDOWS})
+    return [w for w in _live_windows() if id(w) not in known]
+
+
+def _note_new_windows(before: list) -> None:
+    _TEST_WINDOWS.extend(_new_since(before))
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_fixture_setup(fixturedef, request):
+    before = _live_windows()
+    yield
+    if fixturedef.scope == "function":
+        _note_new_windows(before)
+    else:
+        _SCOPED_WINDOWS.extend(_new_since(before))
+
+
+def _note_peak(windows: list, where: str) -> None:
+    if len(windows) > _PEAK_WINDOWS["windows"]:
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
-        window_class = getattr(main_module, "GodAI", None)
-        if app is not None and window_class is not None:
-            for widget in app.topLevelWidgets():
-                if not isinstance(widget, window_class):
-                    continue
-                try:
-                    app.removeEventFilter(widget)
-                    timer = getattr(widget, "resource_timer", None)
-                    if timer is not None:
-                        timer.stop()
-                    widget.hide()
-                except RuntimeError:
-                    continue            # its C++ side is already gone
+        top = len(app.topLevelWidgets()) if app is not None else 0
+        _PEAK_WINDOWS.update(windows=len(windows), top_level=top, where=where)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    before = _live_windows()
     yield
+    _note_new_windows(before)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_teardown(item, nextitem):
+    # Counted here, after the test body and before any fixture is finalized:
+    # the most windows this test ever had alive at once, short of one it
+    # built and deleted itself mid-body.
+    _note_peak(_live_windows(), item.nodeid)
+    yield
+    if _TEST_WINDOWS:
+        alive = {id(w) for w in _live_windows()}
+        built = [w for w in _TEST_WINDOWS if id(w) in alive]
+        _TEST_WINDOWS.clear()
+        if built:
+            from tests.qt_teardown import dispose_windows
+            dispose_windows(built)
+
+
+def pytest_terminal_summary(terminalreporter):
+    peak = _PEAK_WINDOWS
+    terminalreporter.write_line(
+        f"peak live GodAI windows: {peak['windows']} "
+        f"({peak['top_level']} top-level widgets) at {peak['where'] or '-'}")
 
 
 @pytest.fixture(autouse=True)

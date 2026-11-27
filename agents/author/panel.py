@@ -784,9 +784,11 @@ class AuthorPanel(QWidget):
         super().resizeEvent(event)
         # Defer until Qt has finished the resize pass. Changing visibility
         # while a layout is calculating its geometry can otherwise leave
-        # controls at their previous positions for one frame.
+        # controls at their previous positions for one frame. The panel is
+        # the timer's context, so Qt drops the call if the panel is deleted
+        # first (tests/test_single_shot_context.py).
         width = event.size().width()
-        QTimer.singleShot(0, lambda w=width: self._adapt_layout(w))
+        QTimer.singleShot(0, self, lambda w=width: self._adapt_layout(w))
 
     def _adapt_layout(self, width: int):
         """Keep the document actions usable when the centre pane is narrow."""
