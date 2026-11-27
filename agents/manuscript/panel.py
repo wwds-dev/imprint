@@ -897,6 +897,11 @@ class ManuscriptPanel(QWidget):
         self._set_todo_status(item.data(Qt.UserRole), "done")
 
     def _set_todo_status(self, todo_id, status: str) -> None:
+        self._write_todo_status(todo_id, status)
+        self.load_todos()
+
+    @staticmethod
+    def _write_todo_status(todo_id, status: str) -> None:
         from services.database import DB_PATH
         conn = sqlite3.connect(DB_PATH)
         conn.execute(
@@ -905,16 +910,17 @@ class ManuscriptPanel(QWidget):
         )
         conn.commit()
         conn.close()
-        self.load_todos()
 
     def _on_todo_toggled(self, item) -> None:
         done = item.checkState() == Qt.Checked
-        # Deferred: reloading clears the list, which must not happen inside
-        # the item's own itemChanged emission.
+        # Saved now; only the reload is deferred, because reloading clears
+        # the list, which must not happen inside the item's own itemChanged
+        # emission. The panel is the timer's context, so a reload due after
+        # the panel is gone is dropped; the tick is already saved.
         from PySide6.QtCore import QTimer
-        todo_id = item.data(Qt.UserRole)
-        QTimer.singleShot(0, self, lambda: self._set_todo_status(
-            todo_id, "done" if done else "pending"))
+        self._write_todo_status(item.data(Qt.UserRole),
+                                "done" if done else "pending")
+        QTimer.singleShot(0, self, self.load_todos)
 
     _TODO_MAX_ROWS = 8
     # The seeded checklist alone is 24 rows, so a fixed eight put the Press

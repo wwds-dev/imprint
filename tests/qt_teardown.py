@@ -1,5 +1,7 @@
 """Shared teardown for tests that build a parentless panel or window."""
 
+import warnings
+
 from PySide6.QtCore import QCoreApplication, QEvent
 
 
@@ -57,7 +59,20 @@ def dispose_windows(windows) -> int:
     windows = list(windows)
     if app is None or not windows:
         return 0
-    stop_all()
+    # Process-wide on purpose: the test (or module) that built these windows
+    # is over, so any worker still running is its leftover.
+    still_running = stop_all()
+    if still_running:
+        # Never delete a host under a live worker. The windows are only
+        # retired; the warning names the worker so it can be fixed.
+        warnings.warn(f"workers still running after stop_all: "
+                      f"{', '.join(still_running)}; their windows were "
+                      "retired, not deleted", RuntimeWarning, stacklevel=2)
+    from ui import text_fit
+    callback = getattr(text_fit._FILTER, "explanations_enabled", None)
+    cells = getattr(callback, "__closure__", None) or ()
+    if any(cell.cell_contents is window for cell in cells for window in windows):
+        text_fit._FILTER.explanations_enabled = None   # no deleted window's toggle
     for window in windows:
         try:
             app.removeEventFilter(window)
@@ -68,8 +83,10 @@ def dispose_windows(windows) -> int:
             if player is not None:
                 player.release()
             window.hide()
+            if still_running:
+                continue
             window.deleteLater()
             QCoreApplication.sendPostedEvents(window, QEvent.Type.DeferredDelete)
         except RuntimeError:
             continue                    # its C++ side is already gone
-    return len(windows)
+    return 0 if still_running else len(windows)

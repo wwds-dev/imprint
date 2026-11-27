@@ -207,22 +207,27 @@ def pytest_fixture_setup(fixturedef, request):
         _note_new_windows(before)
 
 
-@pytest.hookimpl(hookwrapper=True)
-def pytest_runtest_call(item):
-    before = _live_windows()
-    if before:
+def _note_peak(windows: list, where: str) -> None:
+    if len(windows) > _PEAK_WINDOWS["windows"]:
         from PySide6.QtWidgets import QApplication
         app = QApplication.instance()
         top = len(app.topLevelWidgets()) if app is not None else 0
-        if len(before) > _PEAK_WINDOWS["windows"]:
-            _PEAK_WINDOWS.update(windows=len(before), top_level=top,
-                                 where=item.nodeid)
+        _PEAK_WINDOWS.update(windows=len(windows), top_level=top, where=where)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_call(item):
+    before = _live_windows()
     yield
     _note_new_windows(before)
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_teardown(item, nextitem):
+    # Counted here, after the test body and before any fixture is finalized:
+    # the most windows this test ever had alive at once, short of one it
+    # built and deleted itself mid-body.
+    _note_peak(_live_windows(), item.nodeid)
     yield
     if _TEST_WINDOWS:
         alive = {id(w) for w in _live_windows()}
