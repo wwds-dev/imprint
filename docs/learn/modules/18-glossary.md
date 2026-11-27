@@ -83,7 +83,7 @@ during preflight. [Costs, estimates, and limits](14-costs-limits.md).
 
 ### Project
 
-A named container in the left rail that groups chats, drafts, outputs and an
+A named container, chosen in the top bar's project selector, that groups chats, drafts, outputs and an
 optional daily spend cap for one piece of work.
 [Projects, saving, and exports](11-projects.md).
 
